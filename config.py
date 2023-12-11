@@ -4,14 +4,17 @@ GITHUB_REPOS_LINKS = {
     'seaborn':'https://github.com/mwaskom/seaborn',
     'vscode':'https://github.com/microsoft/vscode',
     'cloc':'https://github.com/AlDanial/cloc',
+    'nocodb':'https://github.com/nocodb/nocodb',
+    'final-db-proj':'https://github.com/ghazalrafiei/Final-DB-Project'
 }
 
+#TODO: covern to variables
 REPOS_STATS_COLUMNS = [
     'name',
-    'version',
-    'lines_of_code',
-    'date',
-    'languages_in_order',
+    'tag', #version
+    'SLOC',
+    'release_date',
+    'top_languages_in_order',
 ]
 
 DATA_DIR = '../datasets/'
