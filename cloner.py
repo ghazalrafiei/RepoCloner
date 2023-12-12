@@ -5,6 +5,7 @@ What does this files do?
 
 TODO:
 Add version --> in tags
+What is code complexity? SCC
 """
 
 import pandas as pd
@@ -12,14 +13,14 @@ import os
 import shutil
 import git
 import subprocess
-from config import GITHUB_REPOS_LINKS, STATS_FILE_DIR, DATA_DIR
+from config import GITHUB_REPOS_LINKS, STATS_FILE_DIR, DATA_DIR, REPO_SIZE_LABELS
 
 def get_version():
     pass
 
 def get_sloc(repo_dir):
     output = os.popen(f'scc {repo_dir} -w').read()
-    return output.splitlines()[-8].split()[5]
+    return int(output.splitlines()[-8].split()[5])
 
 def get_top_languages(repo_dir, k=3):
     #TODO: check k is not less than languages
@@ -37,6 +38,15 @@ def get_tag(repo_dir):
     except:
         return ''
 
+def get_size_label(repo_dir, sloc=None):
+    if sloc is None:
+        sloc = get_sloc(repo_dir)
+    
+    for label, sloc_range in REPO_SIZE_LABELS.items():
+        if sloc < sloc_range[1] and sloc > sloc_range[0]:
+            return label
+    return f'not defined - {sloc}'
+
 
 if __name__ == '__main__':
 
@@ -47,12 +57,13 @@ if __name__ == '__main__':
         if not os.path.exists(repo_dir):
             # shutil.rmtree(repo_dir)
             # print(f'{repname} directory was removed.')
+            print(f'Cloning {repname} ...')
             git.Repo.clone_from(replink, repo_dir)
-            print(f'{repname} is cloned.')
 
         stat = {}
         stat['name'] = repname
         stat['SLOC'] = get_sloc(repo_dir)
+        stat['size_label'] = get_size_label(repo_dir, stat['SLOC'])
         stat['top_k_languages'] = str(get_top_languages(repo_dir))
         stat['tag'] = get_tag(repo_dir)
         stat['link'] = replink
