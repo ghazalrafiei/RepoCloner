@@ -9,6 +9,7 @@ GITHUB_REPOS_LINKS = {
     'final-db-proj':'https://github.com/ghazalrafiei/Final-DB-Project',
     'tgdesktop':'https://github.com/telegramdesktop/tdesktop',
     'htop':'https://github.com/htop-dev/htop',
+    'k8s':'https://github.com/kubernetes/kubernetes'
 }
 REPO_DOCUMENTS = {
     'seaborn':'doc/',
@@ -38,6 +39,6 @@ REPO_SIZE_LABELS={
     'huge':(1_000_000,10_000_000)
 }
 
-DATA_DIR = '../datasets/'
+DATA_DIR = './datasets/'
 STATS_FILE_DIR =  os.path.join(DATA_DIR, 'stats.csv')
 GH_TOKEN_DIR = './token.txt'
