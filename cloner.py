@@ -10,9 +10,7 @@ What is code complexity? SCC
 
 import pandas as pd
 import os
-import shutil
 import git
-import subprocess
 from config import GITHUB_REPOS_LINKS, STATS_FILE_DIR, DATA_DIR, REPO_SIZE_LABELS
 
 def get_version():
@@ -23,7 +21,6 @@ def get_sloc(repo_dir):
     return int(output.splitlines()[-8].split()[5])
 
 def get_top_languages(repo_dir, k=3):
-    #TODO: check k is not less than languages
     output = os.popen(f'scc {repo_dir} -w --sort code').read()
     try:
         top_langs = [line.split()[0] for line in output.splitlines()[3:3+k]]
@@ -55,8 +52,6 @@ if __name__ == '__main__':
     for repname, replink in GITHUB_REPOS_LINKS.items():
         repo_dir = os.path.join(DATA_DIR, repname)
         if not os.path.exists(repo_dir):
-            # shutil.rmtree(repo_dir)
-            # print(f'{repname} directory was removed.')
             print(f'Cloning {repname} ...')
             git.Repo.clone_from(replink, repo_dir)
 
@@ -70,5 +65,7 @@ if __name__ == '__main__':
 
         stat_df = pd.concat([stat_df, pd.DataFrame.from_records([stat])], ignore_index=True)
     
+    stat_df.sort_values(by='SLOC', inplace=True)
     stat_df.to_csv(STATS_FILE_DIR)
     print(f'Stats saved to {STATS_FILE_DIR}')
+    print(stat_df)
