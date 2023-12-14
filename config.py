@@ -76,8 +76,10 @@ NOT_CODE_FILE_FORMATS = [
     'CloudFormation (YAML)',
     'JSON',
     'AsciiDoc', #documentation?
+    'CMake',
+    'CSV'
 ]
 
 DATA_DIR = './datasets/'
-STATS_FILE_DIR = os.path.join(DATA_DIR, 'stats.csv')
+STATS_FILE_DIR = './stats.csv'
 GH_TOKEN_DIR = './token.txt'
