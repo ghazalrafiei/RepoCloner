@@ -28,7 +28,8 @@ GITHUB_REPOS_LINKS = {
     'neovim':'https://github.com/neovim/neovim',
     'localsend':'https://github.com/localsend/localsend',
     'pyrandwalk':'https://github.com/sadrasabouri/pyrandwalk',
-    'cowsay':'https://github.com/piuccio/cowsay'
+    'cowsay':'https://github.com/piuccio/cowsay',
+    'scc':'https://github.com/boyter/scc'
 }
 
 REPO_DOCUMENTS = {
