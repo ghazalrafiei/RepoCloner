@@ -1,6 +1,8 @@
-# Repo Cloner
+# Document Evaluation
 
-A tool as a part of the project [Document Evaluator]() to clone GitHub repositories and save these metadata for each repo.
+## 1. Repo Gatherer
+
+A tool as a part of the project [Document Evaluator]() to clone GitHub repositories and store these metadata for each repo in a csv file.
 
 ```
 name
@@ -13,16 +15,31 @@ size label (defind in config.py)
 link
 ```
 
-## Config
+### Config
 Add your repository names and http links to them in the `config.py`.
 
-## Run
+### Run
+
+To clone repos and analyse summarize them
 ```
-python3 cloner.py
+python cloner.py
 ```
 
-### Output
-See [stats.csv](https://github.com/ghazalrafiei/RepoCloner/blob/main/stats.csv).
+#### Output
+See [stats.csv](https://github.com/ghazalrafiei/RepoGatherer/blob/main/stats.csv).
 
-## Description
+### Description
 Default: keeps the current version of the repo and downloads only when the repo doesn't exist.
+
+## 2. Document Extractor
+
+### Run
+```
+python document_extractor.py
+```
+#### Output
+See [documentations/]().
+
+### Naive Documentation Extractor:
+
+1. Extract all `.md` files, with the same structure in the doc directory.

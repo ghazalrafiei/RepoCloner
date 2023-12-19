@@ -80,6 +80,7 @@ NOT_CODE_FILE_FORMATS = [
     'CSV'
 ]
 
-DATA_DIR = './datasets/'
+DATA_DIR = './data/datasets/'
+DOCS_DIR = './data/documentations/'
 STATS_FILE_DIR = './stats.csv'
 GH_TOKEN_DIR = './token.txt'
