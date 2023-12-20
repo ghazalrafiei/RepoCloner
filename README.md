@@ -43,3 +43,7 @@ See [documentations/]().
 ### Naive Documentation Extractor:
 
 1. Extract all `.md` files, with the same structure in the doc directory.
+
+## 3. Preprocessor
+
+1. Convert `.ipynb` to `.md` using [nbconvert](https://github.com/jupyter/nbconvert).

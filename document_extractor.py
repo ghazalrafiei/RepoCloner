@@ -1,15 +1,7 @@
 import os
-import glob
 import shutil
 from config import GITHUB_REPOS_LINKS, DATA_DIR, DOCS_DIR
-
-def recursive_file_finder(dir, file_format):
-    """
-    dir: str
-    file_format: str
-    """
-
-    return glob.glob(f'{dir}/**/*{file_format}', recursive=True)
+from utils import recursive_file_finder
 
 def copy_files_with_same_structure(src_dir, dst_dir, file_format):
     """
