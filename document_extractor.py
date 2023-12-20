@@ -1,5 +1,6 @@
 import os
 import glob
+import shutil
 from config import GITHUB_REPOS_LINKS, DATA_DIR, DOCS_DIR
 
 def recursive_file_finder(dir, file_format):
@@ -17,11 +18,11 @@ def copy_files_with_same_structure(src_dir, dst_dir, file_format):
     file_format: str
     """
     files = recursive_file_finder(src_dir, file_format)
-    for file in files:
-        file = file.replace(src_dir, dst_dir)
-        os.makedirs(os.path.dirname(file), exist_ok=True)
-        with open(file, 'w') as f:
-            f.write('')
+    for src in files:
+        dest = src.replace(src_dir, dst_dir)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copy2(src, dest)
+
 
 def naive_document_extractor(repo_dir):
     """
