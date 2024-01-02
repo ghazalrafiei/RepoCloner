@@ -32,12 +32,11 @@ def naive_document_extractor(repo_dir):
     for file_format in DOC_FILE_FORMATS:
         copy_files_with_same_structure(repo_dir, doc_dir, file_format)
     
-    #in the list of doc_folder_names, find the first one that exists in the repo_dir and copy it to doc_dir
     for doc_folder_name in DOC_FOLDER_NAMES:
         src_dir = os.path.join(repo_dir, doc_folder_name)
         if os.path.exists(src_dir):
-            copy_files_with_same_structure(src_dir, doc_dir, '.**')
-            # break
+            dest_dir = os.path.join(doc_dir, repo_name)
+            shutil.copytree(src_dir, dest_dir, dirs_exist_ok=True)
 
 def raw_comment_extractor(repo_dir):
     """
@@ -68,7 +67,7 @@ def main():
     for repo in GITHUB_REPOS_LINKS.keys():
         repo_dir = os.path.join(DATA_DIR, repo)
         naive_document_extractor(repo_dir)
-        raw_comment_extractor(repo_dir)
+        # raw_comment_extractor(repo_dir)
 
 if __name__ == '__main__':
     main()

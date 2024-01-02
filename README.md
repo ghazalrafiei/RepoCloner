@@ -43,12 +43,13 @@ See [documentations/]().
 #### Methods
 ```
 naive_document_extractor()
-comment_document_extractor()
+raw_comment_extractor()
 ```
 
 ### Naive Documentation Extractor:
 
 1. Extract all `.md` files, with the same structure in the doc directory.
+2. Copy the folder named one of ['doc/', 'docs/' ... ]
 
 ## 3. Preprocessor
 
