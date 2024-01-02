@@ -46,6 +46,9 @@ def raw_comment_extractor(repo_dir):
 
     files = recursive_file_finder(repo_dir,'.**')
     for src in files:
+        src_format = src.split('.')[-1]
+        if src_format in DOC_FILE_FORMATS:
+            continue
         repo_name = repo_dir.split('/')[-1]
         doc_dir = os.path.join(DOCS_DIR, repo_name)
         dest = src.replace(repo_dir, doc_dir)
@@ -67,7 +70,7 @@ def main():
     for repo in GITHUB_REPOS_LINKS.keys():
         repo_dir = os.path.join(DATA_DIR, repo)
         naive_document_extractor(repo_dir)
-        # raw_comment_extractor(repo_dir)
+        raw_comment_extractor(repo_dir)
 
 if __name__ == '__main__':
     main()
