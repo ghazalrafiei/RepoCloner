@@ -1,0 +1,36 @@
+['text':'/ An index representing a specific stream.  A StreamId is not independently','line_number':7,'multiline':False]['text':'/ meaningful without knowing the Device it is associated with; try to','line_number':8,'multiline':False]['text':'/ use Stream rather than StreamId directly.','line_number':9,'multiline':False]['text':'/','line_number':10,'multiline':False]['text':'/ StreamIds are opaque; they are assigned by some DeviceType-specific','line_number':11,'multiline':False]['text':'/ numbering system which is not visible to the user.  HOWEVER, we','line_number':12,'multiline':False]['text':'/ guarantee that StreamId 0 is always a valid stream, and corresponds','line_number':13,'multiline':False]['text':'/ to some sort of "default" stream.','line_number':14,'multiline':False]['text':' NB: I decided not to call the above StreamIndex to avoid confusion with','line_number':23,'multiline':False]['text':' DeviceIndex.  This way, you access device index with index(), and stream id','line_number':24,'multiline':False]['text':' with id()','line_number':25,'multiline':False]['text':'*
+ * A stream is a software mechanism used to synchronize launched kernels
+ * without requiring explicit synchronizations between kernels.  The basic
+ * model is that every kernel launch is associated with a stream: every
+ * kernel on the same stream is implicitly synchronized so that if I launch
+ * kernels A and B on the same stream, A is guaranteed to finish before B
+ * launches.  If I want B to run concurrently with A, I must schedule
+ * it on a different stream.
+ *
+ * The Stream class is a backend agnostic value class representing a stream
+ * which I may schedule a kernel on.  Every stream is associated with a device,
+ * which is recorded in stream, which is used to avoid confusion about which
+ * device a stream refers to.
+ *
+ * Streams are explicitly thread-safe, in the sense that it is OK to pass
+ * a Stream from one thread to another, and kernels queued from two different
+ * threads will still get serialized appropriately.  (Of course, the
+ * time when the kernels get queued is undetermined unless you synchronize
+ * host side ;)
+ *
+ * Stream does NOT have a default constructor.  Streams are for expert
+ * users; if you want to use Streams, we're going to assume you know
+ * how to deal with C++ template error messages if you try to
+ * resize() a vector of Streams.
+ *
+ * Known instances of streams in backends:
+ *
+ *  - cudaStream_t (CUDA)
+ *  - hipStream_t (HIP)
+ *  - cl_command_queue (OpenCL)  (NB: Caffe2's existing OpenCL integration
+ *    does NOT support command queues.)
+ *
+ * Because this class is device agnostic, it cannot provide backend-specific
+ * functionality (e.g., get the cudaStream_t of a CUDA stream.)  There are
+ * wrapper classes which provide this functionality, e.g., CUDAStream.
+ ','line_number':27,'multiline':True]['text':'/ Unsafely construct a stream from a Device and a StreamId.  In','line_number':72,'multiline':False]['text':'/ general, only specific implementations of streams for a','line_number':73,'multiline':False]['text':'/ backend should manufacture Stream directly in this way; other users','line_number':74,'multiline':False]['text':'/ should use the provided APIs to get a stream.  In particular,','line_number':75,'multiline':False]['text':'/ we don't require backends to give any guarantees about non-zero','line_number':76,'multiline':False]['text':'/ StreamIds; they are welcome to allocate in whatever way they like.','line_number':77,'multiline':False]['text':'/ Construct the default stream of a Device.  The default stream is','line_number':81,'multiline':False]['text':'/ NOT the same as the current stream; default stream is a fixed stream','line_number':82,'multiline':False]['text':'/ that never changes, whereas the current stream may be changed by','line_number':83,'multiline':False]['text':'/ StreamGuard.','line_number':84,'multiline':False]['text':' Enqueues a wait instruction in the stream's work queue.','line_number':107,'multiline':False]['text':' This instruction is a no-op unless the event is marked','line_number':108,'multiline':False]['text':' for recording. In that case the stream stops processing','line_number':109,'multiline':False]['text':' until the event is recorded.','line_number':110,'multiline':False]['text':' Return whether all asynchronous work previously enqueued on this stream','line_number':116,'multiline':False]['text':' has completed running on the device.','line_number':117,'multiline':False]['text':' Wait (by blocking the calling thread) until all asynchronous work enqueued','line_number':120,'multiline':False]['text':' on this stream has completed running on the device.','line_number':121,'multiline':False]['text':' The purpose of this function is to more conveniently permit binding','line_number':124,'multiline':False]['text':' of Stream to and from Python.  Without packing, I have to setup a whole','line_number':125,'multiline':False]['text':' class with two fields (device and stream id); with packing I can just','line_number':126,'multiline':False]['text':' store a single uint64_t.','line_number':127,'multiline':False]['text':'','line_number':128,'multiline':False]['text':' The particular way we pack streams into a uint64_t is considered an','line_number':129,'multiline':False]['text':' implementation detail and should not be relied upon.','line_number':130,'multiline':False]['text':' Concat these together into a 64-bit integer','line_number':132,'multiline':False]['text':' Remove the sign extension part of the 64-bit address because','line_number':135,'multiline':False]['text':' the id might be used to hold a pointer.','line_number':136,'multiline':False]['text':' I decided NOT to provide setters on this class, because really,','line_number':153,'multiline':False]['text':' why would you change the device of a stream?  Just construct','line_number':154,'multiline':False]['text':' it correctly from the beginning dude.','line_number':155,'multiline':False]['text':' namespace c10','line_number':160,'multiline':False]['text':' namespace std','line_number':169,'multiline':False]

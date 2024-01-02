@@ -1,0 +1,236 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * __rts_btree_abort_update --
+ *     Abort updates in an update change with timestamps newer than the rollback timestamp. Also,
+ *     clear the history store flag for the first stable update in the update.
+ ','line_number':11,'multiline':True]['text':' Skip the updates that are aborted. ','line_number':32,'multiline':True]['text':'
+         * An unstable update needs to be aborted if any of the following are true:
+         * 1. An update is invisible based on the checkpoint snapshot during recovery.
+         * 2. The update durable timestamp is greater than the stable timestamp.
+         * 3. The update is a prepared update.
+         *
+         * Usually during recovery, there are no in memory updates present on the page. But
+         * whenever an unstable fast truncate operation is written to the disk, as part
+         * of the rollback to stable page read, it instantiates the tombstones on the page.
+         * The transaction id validation is ignored in all scenarios except recovery.
+         ','line_number':36,'multiline':True]['text':' Valid update is found. ','line_number':65,'multiline':True]['text':'
+     * Clear the history store flags for the stable update to indicate that this update should be
+     * written to the history store later. The next time when this update is moved into the history
+     * store, it will have a different stop time point.
+     ','line_number':77,'multiline':True]['text':' Find the update following a stable tombstone. ','line_number':84,'multiline':True]['text':'
+             * Delete the first stable update and any newer update from the history store. If the
+             * update following the stable tombstone is removed by obsolete check, no need to remove
+             * that update from the history store as it has a globally visible tombstone. In that
+             * case, it is enough to delete everything up until to the tombstone timestamp.
+             ','line_number':98,'multiline':True]['text':'
+             * Clear the history store flags for the first stable update. Otherwise, it will not be
+             * moved to history store again.
+             ','line_number':107,'multiline':True]['text':'
+             * History store will have a combination of both tombstone and update/modify types in
+             * the update list to represent the time window of an update. When we are aborting the
+             * tombstone, make sure to remove all of the remaining updates also. In most of the
+             * scenarios, there will be only one update present except when the data store is a
+             * prepared commit where it is possible to have more than one update. The existing
+             * on-disk versions are removed while processing the on-disk entries.
+             ','line_number':118,'multiline':True]['text':'
+ * __rts_btree_abort_insert_list --
+ *     Apply the update abort check to each entry in an insert skip list. Return how many entries
+ *     had stable updates.
+ ','line_number':137,'multiline':True]['text':'
+ * __rts_btree_col_modify --
+ *     Add the provided update to the head of the update list.
+ ','line_number':189,'multiline':True]['text':' Search the page. ','line_number':205,'multiline':True]['text':' Apply the modification. ','line_number':208,'multiline':True]['text':' Free any resources that may have been cached in the cursor. ','line_number':213,'multiline':True]['text':'
+ * __rts_btree_row_modify --
+ *     Add the provided update to the head of the update list.
+ ','line_number':219,'multiline':True]['text':' Search the page. ','line_number':235,'multiline':True]['text':' Apply the modification. ','line_number':238,'multiline':True]['text':' Free any resources that may have been cached in the cursor. ','line_number':243,'multiline':True]['text':'
+ * __rts_btree_ondisk_fixup_key --
+ *     Abort updates in the history store and replace the on-disk value with an update that
+ *     satisfies the given timestamp.
+ ','line_number':249,'multiline':True]['text':' Allocate buffers for the data store and history store key. ','line_number':290,'multiline':True]['text':' Unpack a row key. ','line_number':298,'multiline':True]['text':' Manufacture a column key. ','line_number':303,'multiline':True]['text':'
+     * We can read overflow removed value if checkpoint has run before rollback to stable. In this
+     * case, we have already appended the on page value to the update chain. At this point, we have
+     * visited the update chain and decided the value is not stable. In addition, checkpoint must
+     * have moved this value to the history store as a full value. Therefore, we can safely ignore
+     * the on page value if it is overflow removed.
+     ','line_number':317,'multiline':True]['text':' Retrieve the time window from the unpacked value cell. ','line_number':329,'multiline':True]['text':' Open a history store table cursor. ','line_number':336,'multiline':True]['text':'
+     * Rollback-to-stable operates exclusively (i.e., it is the only active operation in the system)
+     * outside the constraints of transactions. Therefore, there is no need for snapshot based
+     * visibility checks.
+     ','line_number':338,'multiline':True]['text':'
+     * Scan the history store for the given btree and key with maximum start timestamp to let the
+     * search point to the last version of the key and start traversing backwards to find out the
+     * satisfying record according the given timestamp. Any satisfying history store record is moved
+     * into data store and removed from history store. If none of the history store records satisfy
+     * the given timestamp, the key is removed from data store.
+     ','line_number':345,'multiline':True]['text':' Get current value and convert to full update if it is a modify. ','line_number':357,'multiline':True]['text':' Retrieve the time window from the history cursor. ','line_number':362,'multiline':True]['text':'
+         * We have a tombstone on the history update and it is obsolete according to the timestamp
+         * and txnid, so no need to restore it. These obsolete updates are written to the disk when
+         * they are not obsolete at the time of reconciliation by an eviction thread and later they
+         * become obsolete according to the checkpoint.
+         ','line_number':365,'multiline':True]['text':'
+         * Do not include history store updates greater than on-disk data store version to construct
+         * a full update to restore except when the on-disk update is prepared. Including more
+         * recent updates than the on-disk version shouldn't be problem as the on-disk version in
+         * history store is always a full update. It is better to not to include those updates as it
+         * unnecessarily increases the rollback to stable time.
+         *
+         * Comparing with timestamps here has no problem unlike in search flow where the timestamps
+         * may be reset during reconciliation. RTS detects an on-disk update is unstable based on
+         * the written proper timestamp, so comparing against it with history store shouldn't have
+         * any problem.
+         ','line_number':385,'multiline':True]['text':'
+         * Verify the history store timestamps are in order. The start timestamp may be equal to the
+         * stop timestamp if the original update's commit timestamp is in order. We may see records
+         * newer than or equal to the onpage value if eviction runs concurrently with checkpoint. In
+         * that case, don't verify the first record.
+         *
+         * It is possible during a prepared transaction rollback, the history store update that have
+         * its own stop timestamp doesn't get removed leads to duplicate records in history store
+         * after further operations on that same key. Rollback to stable should ignore such records
+         * for timestamp ordering verification.
+         *
+         * It is possible that there can be an update in the history store with a max stop timestamp
+         * in the middle of the same key updates. This occurs when the checkpoint writes the
+         * committed prepared update and further updates on that key including the history store
+         * changes before the transaction fixes the history store update to have a proper stop
+         * timestamp. It is a rare scenario.
+         ','line_number':412,'multiline':True]['text':'
+         * Validate the timestamps in the key and the cell are same. This must be validated only
+         * after verifying it's stop time window is not globally visible. The start timestamps of
+         * the time window are cleared when they are globally visible and there will be no stop
+         * timestamp in the history store whenever a prepared update is written to the data store.
+         ','line_number':438,'multiline':True]['text':'
+         * Stop processing when we find a stable update according to the given timestamp and
+         * transaction id.
+         ','line_number':450,'multiline':True]['text':'
+         * Start time point of the current record may be used as stop time point of the previous
+         * record. Save it to verify against the previous record and check if we need to append the
+         * stop time point as a tombstone when we rollback the history store record.
+         ','line_number':472,'multiline':True]['text':'
+     * If we found a history value that satisfied the given timestamp, add it to the update list.
+     * Otherwise remove the key by adding a tombstone.
+     ','line_number':486,'multiline':True]['text':' Retrieve the time window from the history cursor. ','line_number':491,'multiline':True]['text':'
+         * Set the transaction id of updates to WT_TXN_NONE when called from recovery, because the
+         * connections write generation will be initialized after rollback to stable and the updates
+         * in the cache will be problematic. The transaction id of pages which are in disk will be
+         * automatically reset as part of unpacking cell when loaded to cache.
+         ','line_number':496,'multiline':True]['text':'
+         * Set the flag to indicate that this update has been restored from history store for the
+         * rollback to stable operation.
+         ','line_number':514,'multiline':True]['text':'
+         * We have a tombstone on the original update chain and it is stable according to the
+         * timestamp and txnid, we need to restore that as well.
+         ','line_number':521,'multiline':True]['text':'
+             * The restoring tombstone timestamp must be zero or less than previous update start
+             * timestamp.
+             ','line_number':527,'multiline':True]['text':'
+             * Set the transaction id of updates to WT_TXN_NONE when called from recovery, because
+             * the connections write generation will be initialized after rollback to stable and the
+             * updates in the cache will be problematic. The transaction id of pages which are in
+             * disk will be automatically reset as part of unpacking cell when loaded to cache.
+             ','line_number':536,'multiline':True]['text':'
+             * Set the flag to indicate that this update has been restored from history store for
+             * the rollback to stable operation.
+             ','line_number':554,'multiline':True]['text':' Finally remove that update from history store. ','line_number':576,'multiline':True]['text':' Avoid freeing the updates while still in use if hs_cursor->remove fails. ','line_number':579,'multiline':True]['text':'
+         * Dry runs don't modify the database so any upd structure allocated by this function is not
+         * in use and must be cleaned up.
+         ','line_number':601,'multiline':True]['text':'
+ * __rts_btree_abort_ondisk_kv --
+ *     Fix the on-disk K/V version according to the given timestamp.
+ ','line_number':609,'multiline':True]['text':' Initialize the on-disk stable version flag. ','line_number':633,'multiline':True]['text':' Retrieve the time window from the unpacked value cell. ','line_number':637,'multiline':True]['text':'
+         * Abort the history store update with stop durable timestamp greater than the stable
+         * timestamp or the updates with max stop timestamp which implies that they are associated
+         * with prepared transactions.
+         ','line_number':642,'multiline':True]['text':'
+             * In-memory database don't have a history store to provide a stable update, so remove
+             * the key. Note that an in-memory database will have saved old values in the update
+             * chain, so we should only get here for a key/value that never existed at all as of the
+             * rollback timestamp; thus, deleting it is the correct response.
+             ','line_number':677,'multiline':True]['text':'
+         * For prepared transactions, it is possible that both the on-disk key start and stop time
+         * windows can be the same. To abort these updates, check for any stable update from history
+         * store or remove the key.
+         ','line_number':689,'multiline':True]['text':'
+                 * In-memory database don't have a history store to provide a stable update, so
+                 * remove the key.
+                 ','line_number':701,'multiline':True]['text':'
+             * Clear the remove operation from the key by inserting the original on-disk value as a
+             * standard update.
+             ','line_number':709,'multiline':True]['text':'
+             * Set the transaction id of updates to WT_TXN_NONE when called from recovery, because
+             * the connections write generation will be initialized after rollback to stable and the
+             * updates in the cache will be problematic. The transaction id of pages which are in
+             * disk will be automatically reset as part of unpacking cell when loaded to cache.
+             ','line_number':719,'multiline':True]['text':' Stable version according to the timestamp. ','line_number':747,'multiline':True]['text':' Unpack a row key. ','line_number':757,'multiline':True]['text':' Manufacture a column key. ','line_number':762,'multiline':True]['text':'
+ * __rts_btree_abort_col_var --
+ *     Abort updates on a variable length col leaf page with timestamps newer than the rollback
+ *     timestamp.
+ ','line_number':790,'multiline':True]['text':'
+     * If a disk image exists, start from the provided recno; or else start from 0.
+     ','line_number':809,'multiline':True]['text':' Review the changes to the original on-page data items. ','line_number':817,'multiline':True]['text':' Unpack the cell. We need its RLE count whether or not we're going to iterate it. ','line_number':826,'multiline':True]['text':'
+             * Each key whose on-disk value is not stable and has no stable update on the update
+             * list must be processed downstream.
+             *
+             * If we can determine that the cell's on-disk value is stable, we can skip iterating
+             * over the cell; likewise, if we can determine that every key in the cell has a stable
+             * update on the update list, we can skip the iteration. Otherwise we have to try each
+             * key.
+             *
+             * If the on-disk cell is deleted, it is stable, because cells only appear as deleted
+             * when there is no older value that might need to be restored.
+             *
+             * Note that in a purely timestamped world, the presence of any stable update for any
+             * key in the cell means the on-disk value must be stable, because the update must be
+             * newer than the on-disk value. However, this is no longer true if the stable update
+             * has no timestamp. It may also not be true if the on-disk value is prepared, or other
+             * corner cases. Therefore, we must iterate the cell unless _every_ key has a stable
+             * update.
+             *
+             * We can, however, stop iterating as soon as the downstream code reports back that the
+             * on-disk value is actually stable.
+             ','line_number':831,'multiline':True]['text':' If the update list goes past the end of the cell, something's wrong. ','line_number':861,'multiline':True]['text':' Process all the keys before this update. ','line_number':864,'multiline':True]['text':' We can stop right away if the on-disk version is stable. ','line_number':868,'multiline':True]['text':' If this key has a stable update, skip over it. ','line_number':876,'multiline':True]['text':' Process the rest of the keys. ','line_number':882,'multiline':True]['text':' We can stop right away if the on-disk version is stable. ','line_number':886,'multiline':True]['text':' Review the append list ','line_number':900,'multiline':True]['text':'
+ * __rts_btree_abort_col_fix_one --
+ *     Handle one possibly unstable on-disk time window.
+ ','line_number':907,'multiline':True]['text':' Unpack the cell to get the time window. ','line_number':924,'multiline':True]['text':' Fake up the value (which is not physically in the cell) in case it's wanted. ','line_number':928,'multiline':True]['text':'
+ * __rts_btree_abort_col_fix --
+ *     Abort updates on a fixed length col leaf page with timestamps newer than the rollback
+ *     timestamp.
+ ','line_number':937,'multiline':True]['text':'
+     * Review the changes to the original on-page data items. Note that while this can report back
+     * to us whether it saw a stable update, that information doesn't do us any good -- unlike in
+     * VLCS where the uniformity of cells lets us reason about the timestamps of all of them based
+     * on the timestamp of an update to any of them, in FLCS everything is just thrown together, so
+     * we'll need to iterate over all the keys anyway.
+     ','line_number':954,'multiline':True]['text':'
+     * Iterate over all the keys, stopping only on keys that (a) have a time window on disk, and
+     * also (b) do not have a stable update remaining in the update list. Keys with no on-disk time
+     * window are stable. And we must not try to adjust the on-disk value for keys with stable
+     * updates, because the downstream code assumes that has already been checked and in some cases
+     * (e.g. in-memory databases) the wrong thing will happen.
+     *
+     * Iterate over the update list and carry along the iteration over the time window list in
+     * parallel, even though the code would perhaps make more sense the other way around, because
+     * this allows using the skiplist iterator macro instead of an open-coded mess.
+     ','line_number':964,'multiline':True]['text':' Process all the keys before this update entry. ','line_number':980,'multiline':True]['text':' If this key has a stable update, skip over it. ','line_number':993,'multiline':True]['text':' Process the rest of the keys with time windows. ','line_number':999,'multiline':True]['text':' Review the append list. ','line_number':1006,'multiline':True]['text':'
+ * __rts_btree_abort_row_leaf --
+ *     Abort updates on a row leaf page with timestamps newer than the rollback timestamp.
+ ','line_number':1013,'multiline':True]['text':'
+     * Review the insert list for keys before the first entry on the disk page.
+     ','line_number':1036,'multiline':True]['text':'
+     * Review updates that belong to keys that are on the disk image, as well as for keys inserted
+     * since the page was read from disk.
+     ','line_number':1042,'multiline':True]['text':'
+         * If there is no stable update found in the update list, abort any on-disk value.
+         ','line_number':1069,'multiline':True]['text':'
+ * __wt_rts_btree_abort_updates --
+ *     Abort updates on this page newer than the timestamp.
+ ','line_number':1095,'multiline':True]['text':'
+     * If we have a ref with clean page, find out whether the page has any modifications that are
+     * newer than the given timestamp. As eviction writes the newest version to page, even a clean
+     * page may also contain modifications that need rollback.
+     ','line_number':1108,'multiline':True]['text':' This function is not called for internal pages. ','line_number':1139,'multiline':True]['text':' Fall through. ','line_number':1141,'multiline':True]['text':' Mark the page as dirty to reconcile the page. ','line_number':1146,'multiline':True]

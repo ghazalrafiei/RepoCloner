@@ -1,0 +1,71 @@
+['text':'*
+ *    Copyright (C) 2020-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':' namespace','line_number':111,'multiline':False]['text':' Resharding oplog application does two kinds of writes:','line_number':214,'multiline':False]['text':'','line_number':215,'multiline':False]['text':' 1) The (obvious) write for applying oplog entries to documents being resharded.','line_number':216,'multiline':False]['text':' 2) A find on document in the output collection transformed into an unreplicated no-op','line_number':217,'multiline':False]['text':' write on the same document to ensure serialization of concurrent oplog appliers reading','line_number':218,'multiline':False]['text':' on the same doc.','line_number':219,'multiline':False]['text':'','line_number':220,'multiline':False]['text':' Some of the code paths can end up where only the second kind of write is made. In','line_number':221,'multiline':False]['text':' that case, there is no timestamp associated with the write. This results in a','line_number':222,'multiline':False]['text':' mixed-mode update chain within WT that is problematic with durable history. We','line_number':223,'multiline':False]['text':' roll back those transactions by only committing the `WriteUnitOfWork` when there','line_number':224,'multiline':False]['text':' is a timestamp set.','line_number':225,'multiline':False]['text':'*
+     * The rules to apply ordinary insert operations are as follows:
+     *
+     * Note that [op _id] refers to the value of op["o"]["_id"].
+     *
+     * 1. If there exists a document with _id == [op _id] in the conflict stash collection, replace
+     * the contents of the doc in the conflict stash collection for this donor shard with the
+     * contents of 'op'.
+     * 2. If there does NOT exist a document with _id == [op _id] in the output collection, insert
+     * the contents of 'op' into the output collection.
+     * 3. If there exists a document with _id == [op _id] in the output collection and it is owned
+     * by this donor shard, replace the contents of the doc in the output collection with the
+     * contents of 'op'.
+     * 4. If there exists a document with _id == [op _id] in the output collection and it is NOT
+     * owned by this donor shard, insert the contents of 'op' into the conflict stash collection.
+     ','line_number':234,'multiline':True]['text':' If the 'o' field does not have an _id, the oplog entry is corrupted.','line_number':253,'multiline':False]['text':' First, query the conflict stash collection using [op _id] as the query. If a doc exists,','line_number':263,'multiline':False]['text':' apply rule #1 and run a replacement update on the stash collection.','line_number':264,'multiline':False]['text':' Query the output collection for a doc with _id == [op _id]. If a doc does not exist, apply','line_number':282,'multiline':False]['text':' rule #2 and insert this doc into the output collection.','line_number':283,'multiline':False]['text':' A doc with [op _id] already exists in the output collection. Check whether this doc belongs','line_number':296,'multiline':False]['text':' to '_donorShardId' under the original shard key. If it does, apply rule #3 and run a','line_number':297,'multiline':False]['text':' replacement update on the output collection.','line_number':298,'multiline':False]['text':' The doc does not belong to '_donorShardId' under the original shard key, so apply rule #4','line_number':315,'multiline':False]['text':' and insert the contents of 'op' to the stash collection.','line_number':316,'multiline':False]['text':'*
+     * The rules to apply ordinary update operations are as follows:
+     *
+     * Note that [op _id] refers to the value of op["o"]["_id"].
+     *
+     * 1. If there exists a document with _id == [op _id] in the conflict stash collection, update
+     * the document from this collection.
+     * 2. If there does NOT exist a document with _id == [op _id] in the output collection, do
+     * nothing.
+     * 3. If there exists a document with _id == [op _id] in the output collection but it is NOT
+     * owned by this donor shard, do nothing.
+     * 4. If there exists a document with _id == [op _id] in the output collection and it is owned
+     * by this donor shard, update the document from this collection.
+     ','line_number':326,'multiline':True]['text':' If the 'o2' field does not have an _id, the oplog entry is corrupted.','line_number':346,'multiline':False]['text':' First, query the conflict stash collection using [op _id] as the query. If a doc exists,','line_number':357,'multiline':False]['text':' apply rule #1 and update the doc from the stash collection.','line_number':358,'multiline':False]['text':' Query the output collection for a doc with _id == [op _id].','line_number':376,'multiline':False]['text':' Either a doc with _id == [op _id] does not exist in the output collection (rule','line_number':385,'multiline':False]['text':' #2) or a doc does exist, but it does not belong to '_donorShardId' under the','line_number':386,'multiline':False]['text':' original shard key (rule #3). In either case, do nothing.','line_number':387,'multiline':False]['text':' A doc with _id == [op _id] exists and is owned by '_donorShardId'. Apply rule #4 and update','line_number':393,'multiline':False]['text':' the doc in the ouput collection.','line_number':394,'multiline':False]['text':'*
+     * The rules to apply ordinary delete operations are as follows:
+     *
+     * Note that [op _id] refers to the value of op["o"]["_id"].
+     *
+     * 1. If there exists a document with _id == [op _id] in the conflict stash collection, delete
+     * the document from this collection.
+     * 2. If there does NOT exist a document with _id == [op _id] in the output collection, do
+     * nothing.
+     * 3. If there exists a document with _id == [op _id] in the output collection but it is NOT
+     * owned by this donor shard, do nothing.
+     * 4. If there exists a document with _id == [op _id] in the output collection and it is owned
+     * by this donor shard, atomically delete the doc from the output collection, choose a doc with
+     * _id == [op _id] arbitrarily from among all resharding conflict stash collections to delete
+     * from that resharding conflict stash collection and insert into the output collection.
+     ','line_number':410,'multiline':True]['text':' If the 'o' field does not have an _id, the oplog entry is corrupted.','line_number':429,'multiline':False]['text':' First, query the conflict stash collection using [op _id] as the query. If a doc exists,','line_number':439,'multiline':False]['text':' apply rule #1 and delete the doc from the stash collection.','line_number':440,'multiline':False]['text':' justOne ','line_number':458,'multiline':True]['text':' Now run 'findByIdAndNoopUpdate' to figure out which of rules #2, #3, and #4 we must apply.','line_number':470,'multiline':False]['text':' We must run 'findByIdAndNoopUpdate' in the same storage transaction as the ops run in the','line_number':471,'multiline':False]['text':' single replica set transaction that is executed if we apply rule #4, so we therefore must run','line_number':472,'multiline':False]['text':' 'findByIdAndNoopUpdate' as a part of the single replica set transaction.','line_number':473,'multiline':False]['text':' Query the output collection for a doc with _id == [op _id].','line_number':489,'multiline':False]['text':' Either a doc with _id == [op _id] does not exist in the output collection (rule','line_number':498,'multiline':False]['text':' #2) or a doc does exist, but it does not belong to '_donorShardId' under the','line_number':499,'multiline':False]['text':' original shard key (rule #3). In either case, do nothing.','line_number':500,'multiline':False]['text':' A doc with _id == [op _id] exists and is owned by '_donorShardId'. Apply rule #4 and','line_number':506,'multiline':False]['text':' atomically:','line_number':507,'multiline':False]['text':' 1. Delete the doc from '_outputNss'','line_number':508,'multiline':False]['text':' 2. Choose a document with _id == [op _id] arbitrarily from among all resharding conflict','line_number':509,'multiline':False]['text':' stash collections to delete from that resharding conflict stash collection','line_number':510,'multiline':False]['text':' 3. Insert the doc just deleted into the output collection','line_number':511,'multiline':False]['text':' Delete from the output collection','line_number':513,'multiline':False]['text':' justOne ','line_number':514,'multiline':True]['text':' Attempt to delete a doc from one of the stash collections. Once we've matched a doc in','line_number':517,'multiline':False]['text':' one collection, we'll break.','line_number':518,'multiline':False]['text':' verbosity ','line_number':554,'multiline':True]['text':' We matched a document and deleted it, so break.','line_number':561,'multiline':False]['text':' Insert the doc we just deleted from one of the stash collections into the output','line_number':570,'multiline':False]['text':' collection.','line_number':571,'multiline':False]['text':' namespace mongo','line_number':591,'multiline':False]

@@ -1,0 +1,188 @@
+['text':'
+ * DType related API shared by the (experimental) public API And internal API.
+ ','line_number':1,'multiline':True]['text':'
+ * Largely opaque struct for DType classes (i.e. metaclass instances).
+ * The internal definition is currently in `ndarraytypes.h` (export is a bit
+ * more complex because `PyArray_Descr` is a DTypeMeta internally but not
+ * externally).
+ ','line_number':12,'multiline':True]['text':'
+        * Most DTypes will have a singleton default instance, for the
+        * parametric legacy DTypes (bytes, string, void, datetime) this
+        * may be a pointer to the *prototype* instance?
+        ','line_number':23,'multiline':True]['text':' Copy of the legacy DTypes type number, usually invalid. ','line_number':29,'multiline':True]['text':' The type object of the scalar instances (may be NULL?) ','line_number':32,'multiline':True]['text':'
+        * DType flags to signal legacy, parametric, or
+        * abstract.  But plenty of space for additional information/flags.
+        ','line_number':34,'multiline':True]['text':'
+        * Use indirection in order to allow a fixed size for this struct.
+        * A stable ABI size makes creating a static DType less painful
+        * while also ensuring flexibility for all opaque API (with one
+        * indirection due the pointer lookup).
+        ','line_number':40,'multiline':True]['text':' Allow growing (at the moment also beyond this) ','line_number':47,'multiline':True]['text':' not internal build ','line_number':51,'multiline':True]['text':'
+ * ******************************************************
+ *         ArrayMethod API (Casting and UFuncs)
+ * ******************************************************
+ ','line_number':53,'multiline':True]['text':'
+ * NOTE: Expected changes:
+ *       * probably split runtime and general flags into two
+ *       * should possibly not use an enum for typedef for more stable ABI?
+ ','line_number':58,'multiline':True]['text':' Flag for whether the GIL is required ','line_number':64,'multiline':True]['text':'
+     * Some functions cannot set floating point error flags, this flag
+     * gives us the option (not requirement) to skip floating point error
+     * setup/check. No function should set error flags and ignore them
+     * since it would interfere with chaining operations (e.g. casting).
+     ','line_number':66,'multiline':True]['text':' Whether the method supports unaligned access (not runtime) ','line_number':73,'multiline':True]['text':'
+     * Used for reductions to allow reordering the operation.  At this point
+     * assume that if set, it also applies to normal operations though!
+     ','line_number':75,'multiline':True]['text':'
+     * Private flag for now for *logic* functions.  The logical functions
+     * `logical_or` and `logical_and` can always cast the inputs to booleans
+     * "safely" (because that is how the cast to bool is defined).
+     * @seberg: I am not sure this is the best way to handle this, so its
+     * private for now (also it is very limited anyway).
+     * There is one "exception". NA aware dtypes cannot cast to bool
+     * (hopefully), so the `??->?` loop should error even with this flag.
+     * But a second NA fallback loop will be necessary.
+     ','line_number':80,'multiline':True]['text':' All flags which can change at runtime ','line_number':92,'multiline':True]['text':' The caller, which is typically the original ufunc.  May be NULL ','line_number':100,'multiline':True]['text':' The method "self".  Currently an opaque object. ','line_number':102,'multiline':True]['text':' Operand descriptors, filled in by resolve_descriptors ','line_number':105,'multiline':True]['text':' Structure may grow (this is harmless for DType authors) ','line_number':107,'multiline':True]['text':'
+ * The main object for creating a new ArrayMethod. We use the typical `slots`
+ * mechanism used by the Python limited API (see below for the slot defs).
+ ','line_number':111,'multiline':True]['text':'
+ * ArrayMethod slots
+ * -----------------
+ *
+ * SLOTS IDs For the ArrayMethod creation, once fully public, IDs are fixed
+ * but can be deprecated and arbitrarily extended.
+ ','line_number':125,'multiline':True]['text':' We may want to adapt the `get_loop` signature a bit: ','line_number':134,'multiline':True]['text':' specific loops for constructions/default get_loop: ','line_number':137,'multiline':True]['text':'
+ * The resolve descriptors function, must be able to handle NULL values for
+ * all output (but not input) `given_descrs` and fill `loop_descrs`.
+ * Return -1 on error or 0 if the operation is not possible without an error
+ * set.  (This may still be in flux.)
+ * Otherwise must return the "casting safety", for normal functions, this is
+ * almost always "safe" (or even "equivalent"?).
+ *
+ * `resolve_descriptors` is optional if all output DTypes are non-parametric.
+ ','line_number':144,'multiline':True]['text':' "method" is currently opaque (necessary e.g. to wrap Python) ','line_number':155,'multiline':True]['text':' DTypes the method was created for ','line_number':157,'multiline':True]['text':' Input descriptors (instances).  Outputs may be NULL. ','line_number':159,'multiline':True]['text':' Exact loop descriptors to use, must not hold references on error ','line_number':161,'multiline':True]['text':'
+ * Rarely needed, slightly more powerful version of `resolve_descriptors`.
+ * See also `resolve_descriptors_function` for details on shared arguments.
+ *
+ * NOTE: This function is private now as it is unclear how and what to pass
+ *       exactly as additional information to allow dealing with the scalars.
+ *       See also gh-24915.
+ ','line_number':166,'multiline':True]['text':' Unlike above, these can have any DType and we may allow NULL. ','line_number':177,'multiline':True]['text':'
+         * Input scalars or NULL.  Only ever passed for python scalars.
+         * WARNING: In some cases, a loop may be explicitly selected and the
+         *     value passed is not available (NULL) or does not have the
+         *     expected type.
+         ','line_number':179,'multiline':True]['text':'*
+ * Query an ArrayMethod for the initial value for use in reduction.
+ *
+ * @param context The arraymethod context, mainly to access the descriptors.
+ * @param reduction_is_empty Whether the reduction is empty. When it is, the
+ *     value returned may differ.  In this case it is a "default" value that
+ *     may differ from the "identity" value normally used.  For example:
+ *     - `0.0` is the default for `sum([])`.  But `-0.0` is the correct
+ *       identity otherwise as it preserves the sign for `sum([-0.0])`.
+ *     - We use no identity for object, but return the default of `0` and `1`
+ *       for the empty `sum([], dtype=object)` and `prod([], dtype=object)`.
+ *       This allows `np.sum(np.array(["a", "b"], dtype=object))` to work.
+ *     - `-inf` or `INT_MIN` for `max` is an identity, but at least `INT_MIN`
+ *       not a good *default* when there are no items.
+ * @param initial Pointer to initial data to be filled (if possible)
+ *
+ * @returns -1, 0, or 1 indicating error, no initial value, and initial being
+ *     successfully filled.  Errors must not be given where 0 is correct, NumPy
+ *     may call this even when not strictly necessary.
+ ','line_number':203,'multiline':True]['text':'
+ * The following functions are only used by the wrapping array method defined
+ * in umath/wrapping_array_method.c
+ ','line_number':227,'multiline':True]['text':'
+ * The function to convert the given descriptors (passed in to
+ * `resolve_descriptors`) and translates them for the wrapped loop.
+ * The new descriptors MUST be viewable with the old ones, `NULL` must be
+ * supported (for outputs) and should normally be forwarded.
+ *
+ * The function must clean up on error.
+ *
+ * NOTE: We currently assume that this translation gives "viewable" results.
+ *       I.e. there is no additional casting related to the wrapping process.
+ *       In principle that could be supported, but not sure it is useful.
+ *       This currently also means that e.g. alignment must apply identically
+ *       to the new dtypes.
+ *
+ * TODO: Due to the fact that `resolve_descriptors` is also used for `can_cast`
+ *       there is no way to "pass out" the result of this function.  This means
+ *       it will be called twice for every ufunc call.
+ *       (I am considering including `auxdata` as an "optional" parameter to
+ *       `resolve_descriptors`, so that it can be filled there if not NULL.)
+ ','line_number':232,'multiline':True]['text':'*
+ * The function to convert the actual loop descriptors (as returned by the
+ * original `resolve_descriptors` function) to the ones the output array
+ * should use.
+ * This function must return "viewable" types, it must not mutate them in any
+ * form that would break the inner-loop logic.  Does not need to support NULL.
+ *
+ * The function must clean up on error.
+ *
+ * @param nargs Number of arguments
+ * @param new_dtypes The DTypes of the output (usually probably not needed)
+ * @param given_descrs Original given_descrs to the resolver, necessary to
+ *        fetch any information related to the new dtypes from the original.
+ * @param original_descrs The `loop_descrs` returned by the wrapped loop.
+ * @param loop_descrs The output descriptors, compatible to `original_descrs`.
+ *
+ * @returns 0 on success, -1 on failure.
+ ','line_number':256,'multiline':True]['text':'
+ * A traverse loop working on a single array. This is similar to the general
+ * strided-loop function. This is designed for loops that need to visit every
+ * element of a single array.
+ *
+ * Currently this is used for array clearing, via the NPY_DT_get_clear_loop
+ * API hook, and zero-filling, via the NPY_DT_get_fill_zero_loop API hook.
+ * These are most useful for handling arrays storing embedded references to
+ * python objects or heap-allocated data.
+ *
+ * The `void *traverse_context` is passed in because we may need to pass in
+ * Interpreter state or similar in the future, but we don't want to pass in
+ * a full context (with pointers to dtypes, method, caller which all make
+ * no sense for a traverse function).
+ *
+ * We assume for now that this context can be just passed through in the
+ * the future (for structured dtypes).
+ *
+ ','line_number':279,'multiline':True]['text':'
+ * Simplified get_loop function specific to dtype traversal
+ *
+ * It should set the flags needed for the traversal loop and set out_loop to the
+ * loop function, which must be a valid traverse_loop_function
+ * pointer. Currently this is used for zero-filling and clearing arrays storing
+ * embedded references.
+ *
+ ','line_number':303,'multiline':True]['text':'
+ * ****************************
+ *          DTYPE API
+ * ****************************
+ ','line_number':319,'multiline':True]['text':'
+ * These correspond to slots in the NPY_DType_Slots struct and must
+ * be in the same order as the members of that struct. If new slots
+ * get added or old slots get removed NPY_NUM_DTYPE_SLOTS must also
+ * be updated
+ ','line_number':329,'multiline':True]['text':' this slot is considered private because its API hasn't been decided','line_number':337,'multiline':False]['text':' These PyArray_ArrFunc slots will be deprecated and replaced eventually','line_number':349,'multiline':False]['text':' getitem and setitem can be defined as a performance optimization;','line_number':350,'multiline':False]['text':' by default the user dtypes call `legacy_getitem_using_DType` and','line_number':351,'multiline':False]['text':' `legacy_setitem_using_DType`, respectively. This functionality is','line_number':352,'multiline':False]['text':' only supported for basic NumPy DTypes.','line_number':353,'multiline':False]['text':' used to separate dtype slots from arrfuncs slots','line_number':356,'multiline':False]['text':' intended only for internal use but defined here for clarity','line_number':357,'multiline':False]['text':' Cast is disabled','line_number':360,'multiline':False]['text':' #define NPY_DT_PyArray_ArrFuncs_cast 0 + _NPY_DT_ARRFUNCS_OFFSET','line_number':361,'multiline':False]['text':' Casting related slots are disabled. See','line_number':379,'multiline':False]['text':' https://github.com/numpy/numpy/pull/23173#discussion_r1101098163','line_number':380,'multiline':False]['text':' #define NPY_DT_PyArray_ArrFuncs_castdict 15 + _NPY_DT_ARRFUNCS_OFFSET','line_number':381,'multiline':False]['text':' #define NPY_DT_PyArray_ArrFuncs_scalarkind 16 + _NPY_DT_ARRFUNCS_OFFSET','line_number':382,'multiline':False]['text':' #define NPY_DT_PyArray_ArrFuncs_cancastscalarkindto 17 + _NPY_DT_ARRFUNCS_OFFSET','line_number':383,'multiline':False]['text':' #define NPY_DT_PyArray_ArrFuncs_cancastto 18 + _NPY_DT_ARRFUNCS_OFFSET','line_number':384,'multiline':False]['text':' These are deprecated in NumPy 1.19, so are disabled here.','line_number':386,'multiline':False]['text':' #define NPY_DT_PyArray_ArrFuncs_fastclip 19 + _NPY_DT_ARRFUNCS_OFFSET','line_number':387,'multiline':False]['text':' #define NPY_DT_PyArray_ArrFuncs_fastputmask 20 + _NPY_DT_ARRFUNCS_OFFSET','line_number':388,'multiline':False]['text':' #define NPY_DT_PyArray_ArrFuncs_fasttake 21 + _NPY_DT_ARRFUNCS_OFFSET','line_number':389,'multiline':False]['text':' TODO: These slots probably still need some thought, and/or a way to "grow"?','line_number':392,'multiline':False]['text':' type of python scalar or NULL ','line_number':394,'multiline':True]['text':' flags, including parametric and abstract ','line_number':395,'multiline':True]['text':' NULL terminated cast definitions. Use NULL for the newly created DType ','line_number':396,'multiline':True]['text':' Baseclass or NULL (will always subclass `np.dtype`) ','line_number':399,'multiline':True]['text':'
+ * Before making this public, we should decide whether it should pass
+ * the type, or allow looking at the object. A possible use-case:
+ * `np.array(np.array([0]), dtype=np.ndarray)`
+ * Could consider arrays that are not `dtype=ndarray` "scalars".
+ ','line_number':407,'multiline':True]['text':'
+ * Returns either a new reference to *dtype* or a new descriptor instance
+ * initialized with the same parameters as *dtype*. The caller cannot know
+ * which choice a dtype will make. This function is called just before the
+ * array buffer is created for a newly created array, it is not called for
+ * views and the descriptor returned by this function is attached to the array.
+ ','line_number':422,'multiline':True]['text':'
+ * TODO: These two functions are currently only used for experimental DType
+ *       API support.  Their relation should be "reversed": NumPy should
+ *       always use them internally.
+ *       There are open points about "casting safety" though, e.g. setting
+ *       elements is currently always unsafe.
+ ','line_number':431,'multiline':True]['text':'
+ * Convenience utility for getting a reference to the DType metaclass associated
+ * with a dtype instance.
+ ','line_number':441,'multiline':True]['text':' NUMPY_CORE_INCLUDE_NUMPY___DTYPE_API_H_ ','line_number':453,'multiline':True]

@@ -1,0 +1,59 @@
+['text':'
+ * This file is similar to the low-level loops for data type transfer
+ * in `dtype_transfer.c` but for those which only require visiting
+ * a single array (and mutating it in-place).
+ *
+ * As of writing, it is only used for CLEARing, which means mainly
+ * Python object DECREF/dealloc followed by NULL'ing the data
+ * (to support double clearing and ensure data is again in a usable state).
+ * However, memory initialization and traverse follows similar
+ * protocols (although traversal needs additional arguments).
+ ','line_number':1,'multiline':True]['text':' Buffer size with the same use case as the one in dtype_transfer.c ','line_number':30,'multiline':True]['text':'
+ * Generic Clear function helpers:
+ ','line_number':39,'multiline':True]['text':' not that cleanup code bothers to check e.g. for floating point flags ','line_number':50,'multiline':True]['text':' callee should clean up, but make sure outside debug mode ','line_number':63,'multiline':True]['text':'
+ * Helper to set up a strided loop used for clearing.  Clearing means
+ * deallocating any references (e.g. via Py_DECREF) and resetting the data
+ * back into a usable/initialized state (e.g. by NULLing any references).
+ *
+ * The function will error when called on a dtype which does not have
+ * references (and thus the get_clear_loop slot NULL).
+ * Note that old-style user-dtypes use the "void" version.
+ *
+ * NOTE: This function may have a use for a `traverse_context` at some point
+ *       but right now, it is always NULL and only exists to allow adding it
+ *       in the future without changing the strided-loop signature.
+ ','line_number':74,'multiline':True]['text':'
+ * Generic zerofill/fill function helper:
+ ','line_number':96,'multiline':True]['text':' not that filling code bothers to check e.g. for floating point flags ','line_number':107,'multiline':True]['text':' Allowed to be NULL (and accept it here) ','line_number':112,'multiline':True]['text':' callee should clean up, but make sure outside debug mode ','line_number':118,'multiline':True]['text':' Zerofill also may return func=NULL without an error. ','line_number':124,'multiline':True]['text':'***************** Python Object clear **********************','line_number':135,'multiline':True]['text':' Release the reference in src and set it to NULL ','line_number':145,'multiline':True]['text':'*************** Python Object zero fill ********************','line_number':170,'multiline':True]['text':' assumes `data` doesn't have a pre-existing object inside it','line_number':181,'multiline':False]['text':'*************** Structured DType generic functionality **************','line_number':203,'multiline':True]['text':'
+ * Note that legacy user dtypes also make use of this.  Someone managed to
+ * hack objects into them by adding a field that contains objects and this
+ * remains (somewhat) valid.
+ * (Unlike our voids, those fields must be hardcoded probably, but...)
+ *
+ * The below functionality mirrors the casting functionality relatively
+ * closely.
+ ','line_number':205,'multiline':True]['text':' traverse data free function ','line_number':227,'multiline':True]['text':' traverse data copy function (untested due to no direct use currently) ','line_number':240,'multiline':True]['text':' Allocate the data and populate it ','line_number':250,'multiline':True]['text':' Copy all the fields transfer data ','line_number':258,'multiline':True]['text':' Do the traversing a block at a time for better memory caching ','line_number':285,'multiline':True]['text':' Over-allocating here: less fields may be used ','line_number':331,'multiline':True]['text':' Allocate the data and populate it ','line_number':334,'multiline':True]['text':' No need to do clearing (could change to use NULL return) ','line_number':356,'multiline':True]['text':' zerofill allows NULL func as "default" memset to zero ','line_number':367,'multiline':True]['text':' traverse data free function ','line_number':390,'multiline':True]['text':'
+ * We seem to be neither using nor exposing this right now, so leave it NULL.
+ * (The implementation below should be functional.)
+ ','line_number':401,'multiline':True]['text':' traverse data copy function ','line_number':408,'multiline':True]['text':' Allocate the data and populate it ','line_number':414,'multiline':True]['text':' zerofill allows func to be NULL, in which we need not do anything ','line_number':481,'multiline':True]['text':'
+     * If there are no references, it's a nop.  This path should not be hit
+     * but structured dtypes are tricky when a dtype which included references
+     * was sliced to not include any.
+     ','line_number':509,'multiline':True]['text':' If there are fields, need to do each field ','line_number':539,'multiline':True]['text':' 
+         * Void dtypes can have "ghosts" of objects marking the dtype because
+         * holes (or the raw bytes if fields are gone) may include objects.
+         * Paths that need those flags should probably be considered incorrect.
+         * But as long as this can happen (a V8 that indicates references)
+         * we need to make it a no-op here.
+         ','line_number':549,'multiline':True]['text':'*************** Structured DType zero fill **************','line_number':567,'multiline':True]['text':'
+     * TODO: We could optimize this by chunking, but since we currently memset
+     *       each element always, just loop manually.
+     ','line_number':578,'multiline':True]['text':'
+ * Similar to other (e.g. clear) traversal loop getter, but unlike it, we
+ * do need to take care of zeroing out everything (in principle not gaps).
+ * So we add a memset before calling the actual traverse function for the
+ * structured path.
+ ','line_number':593,'multiline':True]['text':' If there are fields, need to do each field ','line_number':625,'multiline':True]['text':' If there are no fields, just return NULL for zerofill ','line_number':633,'multiline':True]['text':' 
+         * Traversal skips fields that have no custom zeroing, so we need
+         * to take care of it.
+         ','line_number':639,'multiline':True]['text':' Otherwise, assume there is nothing to do (user dtypes reach here) ','line_number':647,'multiline':True]

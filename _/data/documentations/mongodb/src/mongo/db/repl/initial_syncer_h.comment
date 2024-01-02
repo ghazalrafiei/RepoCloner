@@ -1,0 +1,283 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':' TODO: Remove forward declares once we remove rs_initialsync.cpp and other dependents.','line_number':82,'multiline':False]['text':' Failpoint which fails initial sync and leaves an oplog entry in the buffer.','line_number':83,'multiline':False]['text':' Failpoint which causes the initial sync function to hang before copying databases.','line_number':86,'multiline':False]['text':' Failpoint which stops the applier.','line_number':89,'multiline':False]['text':'*
+ * The initial syncer provides services to keep collection in sync by replicating
+ * changes via an oplog source to the local system storage.
+ *
+ * This class will use existing machinery like the Executor to schedule work and
+ * network tasks, as well as provide serial access and synchronization of state.
+ *
+ *
+ * Entry Points:
+ *      -- startup: Start initial sync.
+ ','line_number':97,'multiline':True]['text':'*
+     * Callback completion guard for initial syncer.
+     ','line_number':113,'multiline':True]['text':' We delegate to the default strategy when it's a non-network error.','line_number':146,'multiline':False]['text':' The operation, if any, currently being retried because of a network error.','line_number':149,'multiline':False]['text':'*
+     * Returns true if an initial sync is currently running or in the process of shutting down.
+     ','line_number':175,'multiline':True]['text':'*
+     * Returns internal state in a loggable format.
+     ','line_number':192,'multiline':True]['text':'*
+     *
+     * Overrides how the initial syncer creates the client.
+     *
+     * For testing only
+     ','line_number':201,'multiline':True]['text':'*
+     *
+     * Overrides how the initial syncer creates the OplogFetcher.
+     *
+     * For testing only.
+     ','line_number':209,'multiline':True]['text':'*
+     *
+     * Get a raw pointer to the OplogFetcher. Block up to 10s until the underlying OplogFetcher has
+     * started. It is the caller's responsibility to not reuse this pointer beyond the lifetime of
+     * the underlying OplogFetcher.
+     *
+     * For testing only.
+     ','line_number':217,'multiline':True]['text':'*
+     *
+     * Provides a separate executor for the cloners, so network operations based on
+     * TaskExecutor::scheduleRemoteCommand() can use the NetworkInterfaceMock while the cloners
+     * are stopped on a failpoint.
+     *
+     * For testing only
+     ','line_number':227,'multiline':True]['text':'*
+     *
+     * Wait for the cloner thread to finish.
+     *
+     * For testing only
+     ','line_number':237,'multiline':True]['text':' State transitions:','line_number':245,'multiline':False]['text':' PreStart --> Running --> ShuttingDown --> Complete','line_number':246,'multiline':False]['text':' It is possible to skip intermediate states. For example, calling shutdown() when the data','line_number':247,'multiline':False]['text':' replicator has not started will transition from PreStart directly to Complete.','line_number':248,'multiline':False]['text':'*
+     * Returns current initial syncer state.
+     * For testing only.
+     ','line_number':251,'multiline':True]['text':'*
+     * Returns the wall clock time component of _lastApplied.
+     * For testing only.
+     ','line_number':257,'multiline':True]['text':'*
+     * Sets the allowed outage duration in _sharedData.
+     * For testing only.
+     ','line_number':263,'multiline':True]['text':'*
+     * Returns true if we are still processing initial sync tasks (_state is either Running or
+     * Shutdown).
+     ','line_number':275,'multiline':True]['text':'*
+     * Cancels all outstanding work.
+     * Used by shutdown() and CompletionGuard::setResultAndCancelRemainingWork().
+     ','line_number':281,'multiline':True]['text':'*
+     * Returns true if the initial syncer has received a shutdown request (_state is ShuttingDown).
+     ','line_number':287,'multiline':True]['text':'*
+     * Initial sync flowchart:
+     *
+     *     start()
+     *         |
+     *         |
+     *         V
+     *     _setUp_inlock()
+     *         |
+     *         |
+     *         V
+     *    _startInitialSyncAttemptCallback()
+     *         |
+     *         |
+     *         |<-------+
+     *         |        |
+     *         |        | (bad sync source)
+     *         |        |
+     *         V        |
+     *    _chooseSyncSourceCallback()
+     *         |
+     *         |
+     *         | (good sync source found)
+     *         |
+     *         |
+     *         V
+     *    _truncateOplogAndDropReplicatedDatabases()
+     *         |
+     *         |
+     *         V
+     *    _rollbackCheckerResetCallback()
+     *         |
+     *         |
+     *         V
+     *   _lastOplogEntryFetcherCallbackForDefaultBeginFetchingOpTime()
+     *         |
+     *         |
+     *         V
+     *   _getBeginFetchingOpTimeCallback()
+     *         |
+     *         |
+     *         V
+     *    _lastOplogEntryFetcherCallbackForBeginApplyingTimestamp()
+     *         |
+     *         |
+     *         V
+     *    _fcvFetcherCallback()
+     *         |
+     *         |
+     *         +------------------------------+
+     *         |                              |
+     *         |                              |
+     *         V                              V
+     *    _oplogFetcherCallback()         _allDatabaseClonerCallback
+     *         |                              |
+     *         |                              |
+     *         |                              V
+     *         |                          _lastOplogEntryFetcherCallbackForStopTimestamp()
+     *         |                              |       |
+     *         |                              |       |
+     *         |            (no ops to apply) |       | (have ops to apply)
+     *         |                              |       |
+     *         |                              |       V
+     *         |                              |   _getNextApplierBatchCallback()
+     *         |                              |       |                       ^
+     *         |                              |       |                       |
+     *         |                              |       |             (end ts not reached)
+     *         |                              |       |                       |
+     *         |                              |       V                       |
+     *         |                              |   _multiApplierCallback()-----+
+     *         |                              |       |
+     *         |                              |       |
+     *         |                        (reached end timestamp)
+     *         |                              |       |
+     *         |                              V       V
+     *         |                _rollbackCheckerCheckForRollbackCallback()
+     *         |                              |
+     *         |                              |
+     *         +------------------------------+
+     *         |
+     *         |
+     *         V
+     *    _finishInitialSyncAttempt()
+     *         |
+     *         |
+     *         V
+     *    _finishCallback()
+     ','line_number':293,'multiline':True]['text':'*
+     * Sets up internal state to begin initial sync.
+     ','line_number':382,'multiline':True]['text':'*
+     * Tears down internal state before reporting final status to caller.
+     ','line_number':387,'multiline':True]['text':'*
+     * Callback to start a single initial sync attempt.
+     ','line_number':393,'multiline':True]['text':'*
+     * Callback to obtain sync source from sync source selector.
+     * For every initial sync attempt, we will try up to 'numInitialSyncConnectAttempts' times (at
+     * an interval of '_opts.syncSourceRetryWait' ms) to obtain a valid sync source before giving up
+     * and returning ErrorCodes::InitialSyncOplogSourceMissing.
+     ','line_number':400,'multiline':True]['text':'*
+     * This function does the following:
+     *      1.) Truncate oplog.
+     *      2.) Drop user databases (replicated dbs).
+     ','line_number':411,'multiline':True]['text':'*
+     * Callback for rollback checker's first replSetGetRBID command before starting data cloning.
+     ','line_number':418,'multiline':True]['text':'*
+     * Callback for first '_lastOplogEntryFetcher' callback. A successful response lets us
+     * determine the default starting point for tailing the oplog using the OplogFetcher if there
+     * are no active transactions on the sync source. This will be used as the default for the
+     * beginFetchingTimestamp.
+     ','line_number':424,'multiline':True]['text':'*
+     * Schedules a remote command to issue a find command on sync source's transaction table, which
+     * will get us the optime of the oldest active transaction on that node. It will be used as the
+     * beginFetchingTimestamp.
+     ','line_number':434,'multiline':True]['text':'*
+     * Callback that gets the optime of the oldest active transaction in the sync source's
+     * transaction table. It will be used as the beginFetchingTimestamp.
+     ','line_number':443,'multiline':True]['text':'*
+     * Callback for second '_lastOplogEntryFetcher' callback. A successful response lets us
+     * determine the starting point for applying oplog entries during the oplog application phase
+     * as well as setting a reference point for the state of the sync source's oplog when data
+     * cloning completes.
+     ','line_number':451,'multiline':True]['text':'*
+     * Callback for the '_fCVFetcher'. A successful response lets us check if the remote node
+     * is in a currently acceptable fCV and if it has a 'targetVersion' set.
+     ','line_number':462,'multiline':True]['text':'*
+     * Callback for oplog fetcher.
+     ','line_number':471,'multiline':True]['text':'*
+     * Callback for DatabasesCloner.
+     ','line_number':477,'multiline':True]['text':'*
+     * Callback for second '_lastOplogEntryFetcher' callback. This is scheduled to obtain the stop
+     * timestamp after DatabasesCloner has completed and enables us to determine if the oplog on
+     * the sync source has advanced since we started cloning the databases.
+     ','line_number':483,'multiline':True]['text':'*
+     * Callback to obtain next batch of operations to apply.
+     ','line_number':492,'multiline':True]['text':'*
+     * Callback for MultiApplier completion.
+     ','line_number':499,'multiline':True]['text':'*
+     * Callback for rollback checker's last replSetGetRBID command after cloning data and applying
+     * operations.
+     ','line_number':507,'multiline':True]['text':'*
+     * Reports result of current initial sync attempt. May schedule another initial sync attempt
+     * depending on shutdown state and whether we've exhausted all initial sync retries.
+     ','line_number':515,'multiline':True]['text':'*
+     * Invokes completion callback and transitions state to State::kComplete.
+     ','line_number':521,'multiline':True]['text':' Obtains a valid sync source from the sync source selector.','line_number':526,'multiline':False]['text':' Returns error if a sync source cannot be found.','line_number':527,'multiline':False]['text':'*
+     * Pushes documents from oplog fetcher to blocking queue for
+     * applier to consume.
+     *
+     * Returns a status even though it always returns OK, to conform the interface OplogFetcher
+     * expects for the EnqueueDocumentsFn.
+     ','line_number':530,'multiline':True]['text':'*
+     * Schedules a fetcher to get the last oplog entry from the sync source.
+     *
+     * If 'retryStrategy' is 'kFetcherHandlesRetries', the fetcher will retry up to the server
+     * parameter 'numInitialSyncOplogFindAttempts' times. Otherwise any failures must be handled by
+     * the caller.
+     ','line_number':546,'multiline':True]['text':'*
+     * Checks the current oplog application progress (begin and end timestamps).
+     * If necessary, schedules a _getNextApplierBatchCallback() task.
+     * If the stop and end timestamps are inconsistent or if there is an issue scheduling the task,
+     * we set the error status in 'onCompletionGuard' and shut down the OplogFetcher.
+     * Passes 'lock' through to completion guard.
+     ','line_number':556,'multiline':True]['text':'*
+     * Schedules a rollback checker to get the rollback ID after data cloning or applying. This
+     * helps us check if a rollback occurred on the sync source.
+     * If we fail to schedule the rollback checker, we set the error status in 'onCompletionGuard'
+     * and shut down the OplogFetcher.
+     * Passes 'lock' through to completion guard.
+     ','line_number':566,'multiline':True]['text':'*
+     * Check if a status is one which means there's a retriable error and we should retry the
+     * current operation, and records whether an operation is currently being retried.  Note this
+     * can only handle one operation at a time (i.e. it should not be used in both parts of the
+     * "split" section of Initial Sync)
+     ','line_number':576,'multiline':True]['text':'*
+     * Indicates we are no longer handling a retriable error.
+     ','line_number':584,'multiline':True]['text':'*
+     * Checks the given status (or embedded status inside the callback args) and current data
+     * replicator shutdown state. If the given status is not OK or if we are shutting down, returns
+     * a new error status that should be passed to _finishCallback. The reason in the new error
+     * status will include 'message'.
+     * Otherwise, returns Status::OK().
+     ','line_number':589,'multiline':True]['text':'*
+     * Schedules work to be run by the task executor.
+     * Saves handle if work was successfully scheduled.
+     * Returns scheduleWork status (without the handle).
+     ','line_number':601,'multiline':True]['text':'*
+     * Cancels task executor callback handle if not null.
+     ','line_number':614,'multiline':True]['text':'*
+     * Starts up component and checks initial syncer's shutdown state at the same time.
+     * If component's startup() fails, resets 'component' (which is assumed to be a unique_ptr
+     * to the component type).
+     ','line_number':619,'multiline':True]['text':'*
+     * Shuts down component if not null.
+     ','line_number':627,'multiline':True]['text':' Counts how many documents have been refetched from the source in the current batch.','line_number':633,'multiline':False]['text':'','line_number':636,'multiline':False]['text':' All member variables are labeled with one of the following codes indicating the','line_number':637,'multiline':False]['text':' synchronization rules for accessing them.','line_number':638,'multiline':False]['text':'','line_number':639,'multiline':False]['text':' (R)  Read-only in concurrent operation; no synchronization required.','line_number':640,'multiline':False]['text':' (S)  Self-synchronizing; access in any way from any context.','line_number':641,'multiline':False]['text':' (M)  Reads and writes guarded by _mutex','line_number':642,'multiline':False]['text':' (X)  Reads and writes must be performed in a callback in _exec','line_number':643,'multiline':False]['text':' (MX) Must hold _mutex and be in a callback in _exec to write; must either hold','line_number':644,'multiline':False]['text':'      _mutex or be in a callback in _exec to read.','line_number':645,'multiline':False]['text':' (S)','line_number':647,'multiline':False]['text':' (R)','line_number':648,'multiline':False]['text':' (R)','line_number':649,'multiline':False]['text':' (R)','line_number':650,'multiline':False]['text':' (X)','line_number':651,'multiline':False]['text':' The executor that the Cloner thread runs on.  In production code this is the same as _exec,','line_number':652,'multiline':False]['text':' but for unit testing, _exec is single-threaded and our NetworkInterfaceMock runs it in','line_number':653,'multiline':False]['text':' lockstep with the unit test code.  If we pause the cloners using failpoints','line_number':654,'multiline':False]['text':' NetworkInterfaceMock is unaware of this and this causes our unit tests to deadlock.','line_number':655,'multiline':False]['text':' (R)','line_number':656,'multiline':False]['text':' (X)','line_number':657,'multiline':False]['text':' (R)','line_number':658,'multiline':False]['text':' (R)','line_number':659,'multiline':False]['text':' (S)','line_number':660,'multiline':False]['text':' This is invoked with the final status of the initial sync. If startup() fails, this callback','line_number':662,'multiline':False]['text':' is never invoked. The caller gets the last applied optime when the initial sync completes','line_number':663,'multiline':False]['text':' successfully or an error status.','line_number':664,'multiline':False]['text':' '_onCompletion' is cleared on completion (in _finishCallback()) in order to release any','line_number':665,'multiline':False]['text':' resources that might be held by the callback function object.','line_number':666,'multiline':False]['text':' (M)','line_number':667,'multiline':False]['text':' Handle to currently scheduled _startInitialSyncAttemptCallback() task.','line_number':669,'multiline':False]['text':' (M)','line_number':670,'multiline':False]['text':' Handle to currently scheduled _chooseSyncSourceCallback() task.','line_number':672,'multiline':False]['text':' (M)','line_number':673,'multiline':False]['text':' RollbackChecker to get rollback ID before and after each initial sync attempt.','line_number':675,'multiline':False]['text':' (M)','line_number':676,'multiline':False]['text':' Handle returned from RollbackChecker::reset().','line_number':678,'multiline':False]['text':' (M)','line_number':679,'multiline':False]['text':' Handle returned from RollbackChecker::checkForRollback().','line_number':681,'multiline':False]['text':' (M)','line_number':682,'multiline':False]['text':' Handle to currently scheduled _getNextApplierBatchCallback() task.','line_number':684,'multiline':False]['text':' (M)','line_number':685,'multiline':False]['text':' The operation, if any, currently being retried because of a network error.','line_number':687,'multiline':False]['text':' (M)','line_number':688,'multiline':False]['text':' (M)','line_number':690,'multiline':False]['text':' (S)','line_number':691,'multiline':False]['text':' (S)','line_number':692,'multiline':False]['text':' (S)','line_number':693,'multiline':False]['text':' (S)','line_number':694,'multiline':False]['text':' (M)','line_number':695,'multiline':False]['text':' (M)','line_number':696,'multiline':False]['text':' (M)','line_number':697,'multiline':False]['text':' (MX)','line_number':698,'multiline':False]['text':' (MX)','line_number':699,'multiline':False]['text':' (M)','line_number':701,'multiline':False]['text':' (M)','line_number':702,'multiline':False]['text':' Used to signal changes in _state.','line_number':704,'multiline':False]['text':' Current initial syncer state. See comments for State enum class for details.','line_number':707,'multiline':False]['text':' (M)','line_number':708,'multiline':False]['text':' Used to create the DBClientConnection for the cloners','line_number':710,'multiline':False]['text':' Used to create the OplogFetcher for the InitialSyncer.','line_number':713,'multiline':False]['text':' Contains stats on the current initial sync request (includes all attempts).','line_number':716,'multiline':False]['text':' To access these stats in a user-readable format, use getInitialSyncProgress().','line_number':717,'multiline':False]['text':' (M)','line_number':718,'multiline':False]['text':' Data shared by cloners and fetcher.  Follow InitialSyncSharedData synchronization rules.','line_number':720,'multiline':False]['text':' (S)','line_number':721,'multiline':False]['text':' Amount of time an outage is allowed to continue before the initial sync attempt is marked','line_number':723,'multiline':False]['text':' as failed.','line_number':724,'multiline':False]['text':' (M)','line_number':725,'multiline':False]['text':' The initial sync attempt has been canceled','line_number':727,'multiline':False]['text':' (X)','line_number':728,'multiline':False]['text':' namespace repl','line_number':731,'multiline':False]['text':' namespace mongo','line_number':732,'multiline':False]

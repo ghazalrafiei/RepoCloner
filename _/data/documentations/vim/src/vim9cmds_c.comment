@@ -1,0 +1,196 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]['text':'
+ * vim9cmds.c: Dealing with commands of a compiled function
+ ','line_number':10,'multiline':True]['text':' When not generating protos this is included in proto.h','line_number':19,'multiline':False]['text':'
+ * Get the index of the current instruction.
+ * This compensates for a preceding ISN_CMDMOD and ISN_PROF_START.
+ ','line_number':24,'multiline':True]['text':'
+ * Remove local variables above "new_top".
+ * Do this by clearing the name.  If "keep" is TRUE do not reset the length, a
+ * closure may still need location of the variable.
+ ','line_number':58,'multiline':True]['text':'
+ * Free all local variables.
+ ','line_number':76,'multiline':True]['text':'
+ * Check if "name" can be "unlet".
+ ','line_number':87,'multiline':True]['text':' "unlet s:var" is allowed in legacy script.','line_number':101,'multiline':False]['text':'
+ * Callback passed to ex_unletlock().
+ ','line_number':110,'multiline':True]['text':' :unlet $ENV_VAR','line_number':132,'multiline':False]['text':' This is similar to assigning: lookup the list/dict, compile the','line_number':139,'multiline':False]['text':' idx/key.  Then instead of storing the value unlet the item.','line_number':140,'multiline':False]['text':' unlet {list}[idx]','line_number':141,'multiline':False]['text':' unlet {dict}[key]  dict.key','line_number':142,'multiline':False]['text':'','line_number':143,'multiline':False]['text':' Figure out the LHS type and other properties.','line_number':144,'multiline':False]['text':'','line_number':145,'multiline':False]['text':' Use the info in "lhs" to unlet the item at the index in the','line_number':148,'multiline':False]['text':' list or dict.','line_number':149,'multiline':False]['text':' Normal name.  Only supports g:, w:, t: and b: namespaces.','line_number':169,'multiline':False]['text':'
+ * Callback passed to ex_unletlock().
+ ','line_number':177,'multiline':True]['text':' Cannot use :lockvar and :unlockvar on local variables.','line_number':211,'multiline':False]['text':' The most important point is that something like','line_number':216,'multiline':False]['text':' name[idx].member... needs to be resolved at runtime, get_lval(),','line_number':217,'multiline':False]['text':' starting from the root "name".','line_number':218,'multiline':False]['text':' These checks are reminiscent of the variable_exists function.','line_number':220,'multiline':False]['text':' But most of the matches require special handling.','line_number':221,'multiline':False]['text':' If bare name is is locally accessible, except for local var,','line_number':223,'multiline':False]['text':' then put it on the stack to use with ISN_LOCKUNLOCK.','line_number':224,'multiline':False]['text':' This could be v.memb, v[idx_key]; bare class variable,','line_number':225,'multiline':False]['text':' function arg. The item on the stack, will be passed','line_number':226,'multiline':False]['text':' to ex_lockvar() indirectly and be used as the root for get_lval.','line_number':227,'multiline':False]['text':' A bare script variable name needs no special handling.','line_number':228,'multiline':False]['text':' Handle "this", "this.val", "anyvar[idx]"','line_number':235,'multiline':False]['text':' Push the local on the stack, could be "this".','line_number':242,'multiline':False]['text':' Push the class of the bare class variable name','line_number':255,'multiline':False]['text':' Can lockvar any function arg.','line_number':267,'multiline':False]['text':' No special handling for a bare script variable; but','line_number':279,'multiline':False]['text':' if followed by '[' or '.', it's a root for get_lval().','line_number':280,'multiline':False]['text':' Checking is done at runtime.','line_number':301,'multiline':False]['text':'
+ * compile "unlet var", "lock var" and "unlock var"
+ * "arg" points to "var".
+ ','line_number':327,'multiline':True]['text':'
+ * Generate a jump to the ":endif"/":endfor"/":endwhile"/":finally"/":endtry".
+ * "funcref_idx" is used for JUMP_WHILE_FALSE
+ ','line_number':356,'multiline':True]['text':'
+ * Create a new scope and set up the generic items.
+ ','line_number':412,'multiline':True]['text':'
+ * Free the current scope and go back to the outer scope.
+ ','line_number':431,'multiline':True]['text':'
+ * compile "if expr"
+ *
+ * "if expr" Produces instructions:
+ *	EVAL expr		Push result of "expr"
+ *	JUMP_IF_FALSE end
+ *	... body ...
+ * end:
+ *
+ * "if expr | else" Produces instructions:
+ *	EVAL expr		Push result of "expr"
+ *	JUMP_IF_FALSE else
+ *	... body ...
+ *	JUMP_ALWAYS end
+ * else:
+ *	... body ...
+ * end:
+ *
+ * "if expr1 | elseif expr2 | else" Produces instructions:
+ *	EVAL expr		Push result of "expr"
+ *	JUMP_IF_FALSE elseif
+ *	... body ...
+ *	JUMP_ALWAYS end
+ * elseif:
+ *	EVAL expr		Push result of "expr"
+ *	JUMP_IF_FALSE else
+ *	... body ...
+ *	JUMP_ALWAYS end
+ * else:
+ *	... body ...
+ * end:
+ ','line_number':477,'multiline':True]['text':' The expression results in a constant.','line_number':537,'multiline':False]['text':' Not a constant, generate instructions for the expression.','line_number':546,'multiline':False]['text':' CMDMOD_REV must come before the jump','line_number':554,'multiline':False]['text':' "is_had_return" will be reset if any block does not end in :return','line_number':561,'multiline':False]['text':' "where" is set when ":elseif", "else" or ":endif" is found','line_number':566,'multiline':False]['text':' generated a profile start, need to generate a profile end, since it','line_number':577,'multiline':False]['text':' won't be done after returning','line_number':578,'multiline':False]['text':' previous block was executed, this one and following will not','line_number':610,'multiline':False]['text':' A previous block was executed, skip over expression and bail out.','line_number':616,'multiline':False]['text':' Do not count the "elseif" for profiling and cmdmod','line_number':617,'multiline':False]['text':' Move any CMDMOD instruction to after the jump','line_number':630,'multiline':False]['text':' Remove the already generated ISN_DEBUG, it is written below the','line_number':641,'multiline':False]['text':' ISN_FOR instruction.','line_number':642,'multiline':False]['text':' previous "if" or "elseif" jumps here','line_number':655,'multiline':False]['text':' move the debug instruction here','line_number':664,'multiline':False]['text':' compile "expr"; if we know it evaluates to FALSE skip the block','line_number':672,'multiline':False]['text':' the previous block was skipped, need to profile this line','line_number':679,'multiline':False]['text':' the previous block was skipped, may want to debug this line','line_number':683,'multiline':False]['text':' The expression result is a constant.','line_number':707,'multiline':False]['text':' Not a constant, generate instructions for the expression.','line_number':720,'multiline':False]['text':' CMDMOD_REV must come before the jump','line_number':727,'multiline':False]['text':' "where" is set when ":elseif", "else" or ":endif" is found','line_number':730,'multiline':False]['text':' the previous block was executed, do not count "else" for','line_number':762,'multiline':False]['text':' profiling','line_number':763,'multiline':False]['text':' the previous block was not executed, this one will, do count the','line_number':767,'multiline':False]['text':' "else" for profiling','line_number':768,'multiline':False]['text':' jump from previous block to the end, unless the else block is empty','line_number':779,'multiline':False]['text':' previous "if" or "elseif" jumps here','line_number':792,'multiline':False]['text':' previous "if" or "elseif" jumps here','line_number':829,'multiline':False]['text':' Fill in the "end" label in jumps at the end of the blocks.','line_number':833,'multiline':False]['text':' even when skipping we count the endif as executed, unless the block it's','line_number':837,'multiline':False]['text':' in is skipped','line_number':838,'multiline':False]['text':' If all the blocks end in :return and there is an :else then the','line_number':848,'multiline':False]['text':' had_return flag is set.','line_number':849,'multiline':False]['text':'
+ * Save the info needed for ENDLOOP.  Used by :for and :while.
+ ','line_number':856,'multiline':True]['text':'
+ * Compile "for var in expr":
+ *
+ * Produces instructions:
+ *       STORE -1 in loop-idx	Set index to -1
+ *       EVAL expr		Result of "expr" on top of stack
+ * top:  FOR loop-idx, end	Increment index, use list on bottom of stack
+ *				- if beyond end, jump to "end"
+ *				- otherwise get item from list and push it
+ *				- store ec_funcrefs in var "loop-idx" + 1
+ *       STORE var		Store item in "var"
+ *       ... body ...
+ *       ENDLOOP funcref-idx off count	Only if closure uses local var
+ *       JUMP top			Jump back to repeat
+ * end:	 DROP				Drop the result of "expr"
+ *
+ * Compile "for [var1, var2] in expr" - as above, but instead of "STORE var":
+ *	 UNPACK 2		Split item in 2
+ *       STORE var1		Store item in "var1"
+ *       STORE var2		Store item in "var2"
+ ','line_number':867,'multiline':True]['text':' loop iteration variable','line_number':903,'multiline':False]['text':' variable for "var"','line_number':907,'multiline':False]['text':' can also be a list of one variable','line_number':919,'multiline':False]['text':' consume "in"','line_number':921,'multiline':False]['text':' Find the already generated ISN_DEBUG to get the line number for the','line_number':937,'multiline':False]['text':' instruction written below the ISN_FOR instruction.','line_number':938,'multiline':False]['text':' Reserve a variable to store the loop iteration counter and initialize it','line_number':958,'multiline':False]['text':' to -1.','line_number':959,'multiline':False]['text':' out of memory','line_number':964,'multiline':False]['text':' get the index before a following reserve_local() makes the lval invalid','line_number':966,'multiline':False]['text':' Reserve a variable to store ec_funcrefs.ga_len, used in ISN_ENDLOOP.','line_number':970,'multiline':False]['text':' The variable index is always the loop var index plus one.','line_number':971,'multiline':False]['text':' It is not used when no closures are encountered, we don't know yet.','line_number':972,'multiline':False]['text':' out of memory','line_number':977,'multiline':False]['text':' get the index before a following reserve_local() makes the lval invalid','line_number':979,'multiline':False]['text':' compile "expr", it remains on the stack until "endfor"','line_number':982,'multiline':False]['text':' If we know the type of "var" and it is not a supported type we can','line_number':993,'multiline':False]['text':' give an error now.','line_number':994,'multiline':False]['text':' CMDMOD_REV must come before the FOR instruction.','line_number':1022,'multiline':False]['text':' "for_end" is set when ":endfor" is found','line_number':1025,'multiline':False]['text':' Add ISN_DEBUG here, before deciding to end the loop.  There will','line_number':1033,'multiline':False]['text':' be another ISN_DEBUG before the next instruction.','line_number':1034,'multiline':False]['text':' Use the prev_lnum from the ISN_DEBUG instruction removed above.','line_number':1035,'multiline':False]['text':' Increment the variable count so that the loop variable can be','line_number':1036,'multiline':False]['text':' inspected.','line_number':1037,'multiline':False]['text':' skip white after '['','line_number':1050,'multiline':False]['text':' drop the list item','line_number':1052,'multiline':False]['text':' add type of the items','line_number':1055,'multiline':False]['text':' Assigning to "_": drop the value.','line_number':1104,'multiline':False]['text':' Script var is not supported.','line_number':1110,'multiline':False]['text':' Reserve a variable to store "var".','line_number':1125,'multiline':False]['text':' out of memory or used as an argument','line_number':1140,'multiline':False]['text':' remember the number of variables and closures, used for ENDLOOP','line_number':1154,'multiline':False]['text':'
+ * Used when ending a loop of :for and :while: Generate an ISN_ENDLOOP
+ * instruction if any variable was declared that could be used by a new
+ * closure.
+ ','line_number':1167,'multiline':True]['text':'
+ * compile "endfor"
+ ','line_number':1181,'multiline':True]['text':' Handle the case that any local variables were declared that might be','line_number':1204,'multiline':False]['text':' used in a closure.','line_number':1205,'multiline':False]['text':' At end of ":for" scope jump back to the FOR instruction.','line_number':1211,'multiline':False]['text':' Fill in the "end" label in the FOR statement so it can jump here.','line_number':1214,'multiline':False]['text':' In debug mode an ISN_DEBUG was inserted.','line_number':1215,'multiline':False]['text':' Fill in the "end" label any BREAK statements','line_number':1220,'multiline':False]['text':' Below the ":for" scope drop the "expr" list from the stack.','line_number':1223,'multiline':False]['text':'
+ * compile "while expr"
+ *
+ * Produces instructions:
+ * top:  EVAL expr			Push result of "expr"
+ *	 WHILE funcref-idx  end		Jump if false
+ *	 ... body ...
+ *       ENDLOOP funcref-idx off count	only if closure uses local var
+ *	 JUMP top			Jump back to repeat
+ * end:
+ *
+ ','line_number':1233,'multiline':True]['text':' "endwhile" jumps back here, one before when profiling or using cmdmods','line_number':1265,'multiline':False]['text':' Reserve a variable to store ec_funcrefs.ga_len, used in ISN_ENDLOOP.','line_number':1268,'multiline':False]['text':' It is not used when no closures are encountered, we don't know yet.','line_number':1269,'multiline':False]['text':' out of memory','line_number':1274,'multiline':False]['text':' get the index before a following reserve_local() makes the lval invalid','line_number':1276,'multiline':False]['text':' remember the number of variables and closures, used for ENDLOOP','line_number':1279,'multiline':False]['text':' compile "expr"','line_number':1283,'multiline':False]['text':' CMDMOD_REV must come before the jump','line_number':1298,'multiline':False]['text':' "while_end" is set when ":endwhile" is found','line_number':1301,'multiline':False]['text':'
+ * compile "endwhile"
+ ','line_number':1310,'multiline':True]['text':' Handle the case that any local variables were declared that might be','line_number':1331,'multiline':False]['text':' used in a closure.','line_number':1332,'multiline':False]['text':' count the endwhile before jumping','line_number':1339,'multiline':False]['text':' At end of ":for" scope jump back to the FOR instruction.','line_number':1343,'multiline':False]['text':' Fill in the "end" label in the WHILE statement so it can jump here.','line_number':1346,'multiline':False]['text':' And in any jumps for ":break"','line_number':1347,'multiline':False]['text':'
+ * Get the current information about variables declared inside a loop.
+ * Returns TRUE if there are any and fills "lvi".
+ ','line_number':1357,'multiline':True]['text':' :while reserves one variable for funcref count','line_number':1383,'multiline':False]['text':' :for reserves three variable: loop count, funcref count and loop','line_number':1389,'multiline':False]['text':' var','line_number':1390,'multiline':False]['text':'
+ * Get the index of the variable "idx" in a loop, if any.
+ ','line_number':1412,'multiline':True]['text':'
+ * Common for :break, :continue and :return
+ ','line_number':1438,'multiline':True]['text':' where to jump to or NULL','line_number':1443,'multiline':False]['text':' end label or NULL','line_number':1444,'multiline':False]['text':' :try scopes encountered or NULL','line_number':1445,'multiline':False]['text':' error to use when no scope found','line_number':1446,'multiline':False]['text':'
+ * compile "continue"
+ ','line_number':1488,'multiline':True]['text':' Inside one or more try/catch blocks we first need to jump to the','line_number':1501,'multiline':False]['text':' "finally" or "endtry" to cleanup.','line_number':1502,'multiline':False]['text':' Jump back to the FOR or WHILE instruction.','line_number':1505,'multiline':False]['text':'
+ * compile "break"
+ ','line_number':1511,'multiline':True]['text':' Inside one or more try/catch blocks we first need to jump to the','line_number':1528,'multiline':False]['text':' "finally" or "endtry" to cleanup.  Then come to the next JUMP','line_number':1529,'multiline':False]['text':' instruction, which we don't know the index of yet.','line_number':1530,'multiline':False]['text':' Jump to the end of the FOR or WHILE loop.  The instruction index will be','line_number':1533,'multiline':False]['text':' filled in later.','line_number':1534,'multiline':False]['text':'
+ * compile "{" start of block
+ ','line_number':1541,'multiline':True]['text':'
+ * compile end of block: drop one scope
+ ','line_number':1552,'multiline':True]['text':'
+ * Compile "try".
+ * Creates a new scope for the try-endtry, pointing to the first catch and
+ * finally.
+ * Creates another scope for the "try" block itself.
+ * TRY instruction sets up exception handling at runtime.
+ *
+ *	"try"
+ *	    TRY -> catch1, -> finally  push trystack entry
+ *	    ... try block
+ *	"throw {exception}"
+ *	    EVAL {exception}
+ *	    THROW		create exception
+ *	    ... try block
+ *	" catch {expr}"
+ *	    JUMP -> finally
+ * catch1:  PUSH exception
+ *	    EVAL {expr}
+ *	    MATCH
+ *	    JUMP nomatch -> catch2
+ *	    CATCH   remove exception
+ *	    ... catch block
+ *	" catch"
+ *	    JUMP -> finally
+ * catch2:  CATCH   remove exception
+ *	    ... catch block
+ *	" finally"
+ * finally:
+ *	    ... finally block
+ *	" endtry"
+ *	    ENDTRY  pop trystack entry, may rethrow
+ ','line_number':1565,'multiline':True]['text':' scope that holds the jumps that go to catch/finally/endtry','line_number':1607,'multiline':False]['text':' "try_catch" is set when the first ":catch" is found or when no catch','line_number':1616,'multiline':False]['text':' is found and ":finally" is found.','line_number':1617,'multiline':False]['text':' "try_finally" is set when ":finally" is found','line_number':1618,'multiline':False]['text':' "try_endtry" is set when ":endtry" is found','line_number':1619,'multiline':False]['text':' scope for the try block itself','line_number':1628,'multiline':False]['text':'
+ * Compile "catch {expr}".
+ ','line_number':1636,'multiline':True]['text':' end block scope from :try or :catch','line_number':1650,'multiline':False]['text':' Error if not in a :try scope','line_number':1655,'multiline':False]['text':' the profile-start should be after the jump','line_number':1674,'multiline':False]['text':' Jump from end of previous block to :finally or :endtry','line_number':1681,'multiline':False]['text':' End :try or :catch scope: set value in ISN_TRY instruction','line_number':1686,'multiline':False]['text':' Previous catch without match jumps here','line_number':1692,'multiline':False]['text':' a "throw" that jumps here needs to be counted','line_number':1699,'multiline':False]['text':' the "catch" is also counted','line_number':1701,'multiline':False]['text':' Push v:exception, push {expr} and MATCH','line_number':1723,'multiline':False]['text':' end block scope from :try or :catch','line_number':1772,'multiline':False]['text':' Error if not in a :try scope','line_number':1777,'multiline':False]['text':' End :catch or :finally scope: set value in ISN_TRY instruction','line_number':1786,'multiline':False]['text':' jump to the profile start of the "finally"','line_number':1800,'multiline':False]['text':' jump to the profile end above it','line_number':1803,'multiline':False]['text':' Fill in the "end" label in jumps at the end of the blocks.','line_number':1810,'multiline':False]['text':' If there is no :catch then an exception jumps to :finally.','line_number':1814,'multiline':False]['text':' Previous catch without match jumps here','line_number':1820,'multiline':False]['text':' end block scope from :catch or :finally','line_number':1843,'multiline':False]['text':' Error if not in a :try scope','line_number':1848,'multiline':False]['text':' move the profile start after "endtry" so that it's not counted when','line_number':1876,'multiline':False]['text':' the exception is rethrown.','line_number':1877,'multiline':False]['text':' Fill in the "end" label in jumps at the end of the blocks, if not','line_number':1881,'multiline':False]['text':' done by ":finally".','line_number':1882,'multiline':False]['text':' Last catch without match jumps here','line_number':1888,'multiline':False]['text':' If there is a finally clause that ends in return then we will return.','line_number':1895,'multiline':False]['text':' If one of the blocks didn't end in "return" or we did not catch all','line_number':1896,'multiline':False]['text':' exceptions reset the had_return flag.','line_number':1897,'multiline':False]['text':' End :catch or :finally scope: set instruction index in ISN_TRY','line_number':1907,'multiline':False]['text':' instruction','line_number':1908,'multiline':False]['text':'
+ * compile "throw {expr}"
+ ','line_number':1920,'multiline':True]['text':'
+ * Compile an expression or function call.
+ ','line_number':1940,'multiline':True]['text':' find_ex_command() will consider a variable name an expression, assuming','line_number':1950,'multiline':False]['text':' that something follows on the next line.  Check that something actually','line_number':1951,'multiline':False]['text':' follows, otherwise it's probably a misplaced command.','line_number':1952,'multiline':False]['text':' drop the result','line_number':1964,'multiline':False]['text':'
+ * Get the local variable index for deferred function calls.
+ * Reserve it when not done already.
+ * Returns zero for failure.
+ ','line_number':1970,'multiline':True]['text':'
+ * Compile "defer func(arg)".
+ ','line_number':1991,'multiline':True]['text':' Get a funcref for the function name.','line_number':2004,'multiline':False]['text':' TODO: better way to find the "(".','line_number':2005,'multiline':False]['text':' TODO: better type','line_number':2015,'multiline':False]['text':' check for function type','line_number':2022,'multiline':False]['text':' compile the arguments','line_number':2030,'multiline':False]['text':'
+ * compile "echo expr"
+ * compile "echomsg expr"
+ * compile "echoerr expr"
+ * compile "echoconsole expr"
+ * compile "echowindow expr" - may have cmd_count set
+ * compile "execute expr"
+ ','line_number':2057,'multiline':True]['text':' check for non-void type','line_number':2090,'multiline':False]['text':' Use the line number where the command started.','line_number':2108,'multiline':False]['text':'
+ * If "eap" has a range that is not a constant generate an ISN_RANGE
+ * instruction to compute it and return OK.
+ * Otherwise return FAIL, the caller must deal with any range.
+ ','line_number':2131,'multiline':True]['text':'
+ * :put r
+ * :put ={expr}
+ ','line_number':2147,'multiline':True]['text':' Either no range or a number.','line_number':2178,'multiline':False]['text':' "errormsg" will not be set because the range is ADDR_LINES.','line_number':2179,'multiline':False]['text':' cannot happen','line_number':2181,'multiline':False]['text':'
+ * A command that is not compiled, execute with legacy code.
+ ','line_number':2195,'multiline':True]['text':' If there was a prececing command modifier, drop it and include it in the','line_number':2211,'multiline':False]['text':' EXEC command.','line_number':2212,'multiline':False]['text':' If the command can be followed by a bar, find the bar and truncate','line_number':2235,'multiline':False]['text':' it, so that the following command can be compiled.','line_number':2236,'multiline':False]['text':' The '|' is overwritten with a NUL, it is put back below.','line_number':2237,'multiline':False]['text':' :w !filter or :r !filter or :r! filter','line_number':2240,'multiline':False]['text':' If there is a trailing '{' read lines until the '}'','line_number':2265,'multiline':False]['text':' unused','line_number':2272,'multiline':False]['text':' expand filename in "syntax include [@group] filename"','line_number':2295,'multiline':False]['text':' :cmd xxx`=expr1`yyy`=expr2`zzz','line_number':2335,'multiline':False]['text':' PUSHS ":cmd xxx"','line_number':2336,'multiline':False]['text':' eval expr1','line_number':2337,'multiline':False]['text':' PUSHS "yyy"','line_number':2338,'multiline':False]['text':' eval expr2','line_number':2339,'multiline':False]['text':' PUSHS "zzz"','line_number':2340,'multiline':False]['text':' EXECCONCAT 5','line_number':2341,'multiline':False]['text':' the parser expects a pointer to the bar, put it back','line_number':2385,'multiline':False]['text':'
+ * A script command with heredoc, e.g.
+ *	ruby << EOF
+ *	   command
+ *	EOF
+ * Has been turned into one long line with NL characters by
+ * get_function_body():
+ *	ruby << EOF<NL>   command<NL>EOF
+ ','line_number':2394,'multiline':True]['text':'
+ * :s/pat/repl/
+ ','line_number':2418,'multiline':True]['text':' There is a \=expr, find it in the substitute part.','line_number':2431,'multiline':False]['text':' Temporarily reset the list of instructions so that the jump','line_number':2446,'multiline':False]['text':' labels are correct.','line_number':2447,'multiline':False]['text':' Move the generated instructions into the ISN_SUBSTITUTE','line_number':2467,'multiline':False]['text':' instructions, then restore the list of instructions before','line_number':2468,'multiline':False]['text':' adding the ISN_SUBSTITUTE instruction.','line_number':2469,'multiline':False]['text':' skip over flags','line_number':2487,'multiline':False]['text':' First load the current variable value.','line_number':2513,'multiline':False]['text':' Gets the redirected text and put it on the stack, then store','line_number':2519,'multiline':False]['text':' it in the variable.','line_number':2520,'multiline':False]['text':' Use the info in "lhs" to store the value at the index in','line_number':2528,'multiline':False]['text':' the list or dict.','line_number':2529,'multiline':False]['text':' redirect to a variable is compiled','line_number':2550,'multiline':False]['text':' other redirects are handled like at script level','line_number':2584,'multiline':False]['text':'
+ * Compile "return [expr]".
+ * When "legacy" is TRUE evaluate [expr] with legacy syntax
+ ','line_number':2618,'multiline':True]['text':' For a lambda, "return expr" is always used, also when "expr" results','line_number':2631,'multiline':False]['text':' in a void.','line_number':2632,'multiline':False]['text':' compile return argument into instructions','line_number':2653,'multiline':False]['text':' "check_return_type" with uf_ret_type set to &t_unknown is used','line_number':2660,'multiline':False]['text':' for an inline function without a specified return type.  Set the','line_number':2661,'multiline':False]['text':' return type here.','line_number':2662,'multiline':False]['text':' "check_return_type" cannot be TRUE, only used for a lambda which','line_number':2681,'multiline':False]['text':' always has an argument.','line_number':2682,'multiline':False]['text':' For a class new() constructor, return an object of the class.','line_number':2692,'multiline':False]['text':' No argument, return zero.','line_number':2698,'multiline':False]['text':' may need ENDLOOP when inside a :for or :while loop','line_number':2702,'multiline':False]['text':' Undo any command modifiers.','line_number':2705,'multiline':False]['text':' "return val | endif" is possible','line_number':2711,'multiline':False]['text':'
+ * Check if the separator for a :global or :substitute command is OK.
+ ','line_number':2715,'multiline':True]['text':' defined(FEAT_EVAL)','line_number':2735,'multiline':False]

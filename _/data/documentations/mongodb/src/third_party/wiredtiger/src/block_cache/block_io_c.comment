@@ -1,0 +1,78 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * Define functions that increment histogram statistics compression ratios for block reads and block
+ * writes.
+ ','line_number':11,'multiline':True]['text':'
+ * __blkcache_read_corrupt --
+ *     Handle a failed read.
+ ','line_number':18,'multiline':True]['text':'
+ * __wt_blkcache_read --
+ *     Read an address-cookie referenced block into a buffer.
+ ','line_number':44,'multiline':True]['text':'
+     * If anticipating a compressed or encrypted block, start with a scratch buffer and convert into
+     * the caller's buffer. Else, start with the caller's buffer.
+     ','line_number':76,'multiline':True]['text':' Check for mapped blocks. ','line_number':87,'multiline':True]['text':' Check the block cache. ','line_number':95,'multiline':True]['text':' Copy to the caller's buffer before releasing our reference. ','line_number':103,'multiline':True]['text':' Read the block. ','line_number':110,'multiline':True]['text':'
+     * If the block is encrypted, copy the skipped bytes of the image into place, then decrypt. DRAM
+     * block-cache blocks are never encrypted.
+     ','line_number':132,'multiline':True]['text':'
+             * If checksums were turned off because we're depending on decryption to fail on any
+             * corrupted data, we'll end up here on corrupted data.
+             ','line_number':143,'multiline':True]['text':' Store the decrypted, possibly compressed, block in the block_cache. ','line_number':158,'multiline':True]['text':' Odd error handling structure to avoid static analyzer complaints. ','line_number':167,'multiline':True]['text':' Size the buffer based on the in-memory bytes we're expecting from decompression. ','line_number':171,'multiline':True]['text':'
+         * Note the source length is NOT the number of compressed bytes, it's the length of the
+         * block we just read (minus the skipped bytes). We don't store the number of compressed
+         * bytes: some compression engines need that length stored externally, they don't have
+         * markers in the stream to signal the end of the compressed bytes. Those engines must store
+         * the compressed byte length somehow, see the snappy compression extension for an example.
+         * In other words, the "tmp" in the decompress call isn't a mistake.
+         ','line_number':174,'multiline':True]['text':'
+         * If checksums were turned off because we're depending on decompression to fail on any
+         * corrupted data, we'll end up here on corrupted data.
+         ','line_number':190,'multiline':True]['text':'
+         * If we uncompressed above, the page is in the correct buffer. If we get here the data may
+         * be in the wrong buffer and the buffer may be the wrong size. If needed, get the page into
+         * the destination buffer.
+         ','line_number':202,'multiline':True]['text':' If the handle is a verify handle, verify the physical page. ','line_number':212,'multiline':True]['text':' If we pulled the block from the block cache, decrement its reference count. ','line_number':221,'multiline':True]['text':'
+ * __wt_blkcache_write --
+ *     Write a buffer into a block, returning the block's address cookie.
+ ','line_number':230,'multiline':True]['text':' Extension API, so not a bool. ','line_number':250,'multiline':True]['text':'
+     * Optionally stream-compress the data, but don't compress blocks that are already as small as
+     * they're going to get.
+     ','line_number':261,'multiline':True]['text':' Skip the header bytes of the source data. ','line_number':271,'multiline':True]['text':'
+         * Compute the size needed for the destination buffer. We only allocate enough memory for a
+         * copy of the original by default, if any compressed version is bigger than the original,
+         * we won't use it. However, some compression engines (snappy is one example), may need more
+         * memory because they don't stop just because there's no more memory into which to
+         * compress.
+         ','line_number':275,'multiline':True]['text':' Skip the header bytes of the destination data. ','line_number':292,'multiline':True]['text':'
+         * If compression fails, or doesn't gain us at least one unit of allocation, fallback to the
+         * original version. This isn't unexpected: if compression doesn't work for some chunk of
+         * data for some reason (noting likely additional format/header information which compressed
+         * output requires), it just means the uncompressed version is as good as it gets, and
+         * that's what we use.
+         ','line_number':301,'multiline':True]['text':' Copy in the skipped header bytes and set the final data size. ','line_number':318,'multiline':True]['text':' Set the disk header flags. ','line_number':323,'multiline':True]['text':' Optionally return the compressed size. ','line_number':327,'multiline':True]['text':'
+     * Optionally encrypt the data. We need to add in the original length, in case both compression
+     * and encryption are done.
+     ','line_number':333,'multiline':True]['text':'
+         * Get size needed for encrypted buffer.
+         ','line_number':338,'multiline':True]['text':' Set the disk header flags. ','line_number':350,'multiline':True]['text':' Determine if the data requires a checksum. ','line_number':357,'multiline':True]['text':' Set outside the switch to avoid compiler and analyzer complaints. ','line_number':361,'multiline':True]['text':' Call the block manager to write the block. ','line_number':374,'multiline':True]['text':'
+     * The page image must have a proper write generation number before writing it to disk. The page
+     * images that are created during recovery may have the write generation number less than the
+     * btree base write generation number, so don't verify it.
+     ','line_number':387,'multiline':True]['text':'
+     * Store a copy of the compressed buffer in the block cache.
+     *
+     * Optional if the write is part of a checkpoint. Hot blocks get written and over-written a lot
+     * as part of checkpoint, so we don't want to cache them, because (a) they are in the in-memory
+     * cache anyway, and (b) they are likely to be overwritten again in the next checkpoint. Writes
+     * that are not part of checkpoint I/O are done in the service of eviction. Those are the blocks
+     * that the in-memory cache would like to keep but can't, and we definitely want to keep them.
+     *
+     * Optional on normal writes (vs. reads) if the no-write-allocate setting is on.
+     *
+     * Ignore the final checkpoint writes.
+     ','line_number':400,'multiline':True]

@@ -1,0 +1,310 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * Handling of regular expressions: vim_regcomp(), vim_regexec(), vim_regsub()
+ ','line_number':1,'multiline':True]['text':' By default: do not create debugging logs or files related to regular','line_number':6,'multiline':False]['text':' expressions, even when compiling with -DDEBUG.','line_number':7,'multiline':False]['text':' Uncomment the second line to get the regexp debugging.','line_number':8,'multiline':False]['text':' #define DEBUG','line_number':10,'multiline':False]['text':' show/save debugging data when BT engine is used','line_number':15,'multiline':False]['text':' save the debugging data to a file instead of displaying it','line_number':17,'multiline':False]['text':'
+ * Magic characters have a special meaning, they don't match literally.
+ * Magic characters are negative.  This separates them from literal characters
+ * (possibly multi-byte).  Only ASCII characters can be Magic.
+ ','line_number':28,'multiline':True]['text':'
+ * Start a timer that will cause the regexp to abort after "msec".
+ * This doesn't work well recursively.  In case it happens anyway, the first
+ * set timeout will prevail, nested ones are ignored.
+ * The caller must make sure there is a matching disable_regexp_timeout() call!
+ ','line_number':56,'multiline':True]['text':'
+ * Used at the debug prompt: disable the timeout so that expression evaluation
+ * can used patterns.
+ * Must be followed by calling restore_timeout_for_debugging().
+ ','line_number':88,'multiline':True]['text':'
+ * The first byte of the BT regexp internal "program" is actually this magic
+ * number; the start node begins in the second byte.  It's used to catch the
+ * most severe mutilation of the program by the caller.
+ ','line_number':111,'multiline':True]['text':'
+ * Utility definitions.
+ ','line_number':119,'multiline':True]['text':' Used for an error (down from) vim_regcomp(): give the error message, set','line_number':124,'multiline':False]['text':' rc_did_emsg and return NULL','line_number':125,'multiline':False]['text':' return values for regmatch()','line_number':141,'multiline':False]['text':' something failed, abort','line_number':142,'multiline':False]['text':' continue in inner loop','line_number':143,'multiline':False]['text':' break inner loop','line_number':144,'multiline':False]['text':' successful match','line_number':145,'multiline':False]['text':' didn't match','line_number':146,'multiline':False]['text':'
+ * Return NOT_MULTI if c is not a "multi" operator.
+ * Return MULTI_ONE if c is a single "multi" operator.
+ * Return MULTI_MULT if c is a multi "multi" operator.
+ ','line_number':148,'multiline':True]['text':'
+ * REGEXP_INRANGE contains all characters which are always special in a []
+ * range after '\'.
+ * REGEXP_ABBR contains all characters which act as abbreviations after '\'.
+ * These are:
+ *  \n	- New line (NL).
+ *  \r	- Carriage Return (CR).
+ *  \t	- Tab (TAB).
+ *  \e	- Escape (ESC).
+ *  \b	- Backspace (Ctrl_H).
+ *  \d  - Character code in decimal, eg \d123
+ *  \o	- Character code in octal, eg \o80
+ *  \x	- Character code in hex, eg \x4a
+ *  \u	- Multibyte character code, eg \u20ac
+ *  \U	- Long multibyte character code, eg \U12345678
+ ','line_number':165,'multiline':True]['text':'
+ * Translate '\x' to its control character, except "\n", which is Magic.
+ ','line_number':184,'multiline':True]['text':'
+ * Check for a character class name "[:name:]".  "pp" points to the '['.
+ * Returns one of the CLASS_ items. CLASS_NONE means that no item was
+ * recognized.  Otherwise "pp" is advanced to after the item.
+ ','line_number':200,'multiline':True]['text':'
+ * Specific version of character class functions.
+ * Using a table to keep this fast.
+ ','line_number':264,'multiline':True]['text':' flags for regflags','line_number':323,'multiline':False]['text':' ignore case','line_number':324,'multiline':False]['text':' don't ignore case','line_number':325,'multiline':False]['text':' can match a NL','line_number':326,'multiline':False]['text':' ignore combining characters','line_number':327,'multiline':False]['text':' uses "\@<=" or "\@<!"','line_number':328,'multiline':False]['text':'
+ * Global work variables for vim_regcomp().
+ ','line_number':330,'multiline':True]['text':' Input-scan pointer.','line_number':334,'multiline':False]['text':' () count.','line_number':335,'multiline':False]['text':' regex should use NFA engine','line_number':336,'multiline':False]['text':' \z() count.','line_number':338,'multiline':False]['text':' \z item detected','line_number':339,'multiline':False]['text':' RF_ flags for prog','line_number':341,'multiline':False]['text':' TRUE when EOL found by vim_regcomp()','line_number':343,'multiline':False]['text':' magicness of the pattern','line_number':346,'multiline':False]['text':' matching with a string instead of a buffer','line_number':348,'multiline':False]['text':' line','line_number':349,'multiline':False]['text':' "[abc" is illegal','line_number':350,'multiline':False]['text':'
+ * META contains all characters that may be magic, except '^' and '$'.
+ ','line_number':352,'multiline':True]['text':' META[] is used often enough to justify turning it into a table.','line_number':356,'multiline':False]['text':'		   %  &     (  )  *  +	      .','line_number':360,'multiline':False]['text':'     1  2  3	4  5  6  7  8  9	<  =  >  ?','line_number':362,'multiline':False]['text':'  @  A     C	D     F     H  I     K	L  M	 O','line_number':364,'multiline':False]['text':'  P	     S	   U  V  W  X	  Z  [		 _','line_number':366,'multiline':False]['text':'     a     c	d     f     h  i     k	l  m  n  o','line_number':368,'multiline':False]['text':'  p	     s	   u  v  w  x	  z  {	|     ~','line_number':370,'multiline':False]['text':' currently parsed character','line_number':374,'multiline':False]['text':' Previous character.  Note: prevchr is sometimes -1 when we are not at the','line_number':375,'multiline':False]['text':' start, eg in /[ ^I]^ the pattern was never found even if it existed,','line_number':376,'multiline':False]['text':' because ^ was taken to be magic -- webb','line_number':377,'multiline':False]['text':' previous-previous character','line_number':379,'multiline':False]['text':' used for ungetchr()','line_number':380,'multiline':False]['text':' arguments for reg()','line_number':382,'multiline':False]['text':' toplevel reg()','line_number':383,'multiline':False]['text':' \(\)','line_number':384,'multiline':False]['text':' \z(\)','line_number':385,'multiline':False]['text':' \%(\)','line_number':386,'multiline':False]['text':'
+ * Return TRUE if compiled regular expression "prog" can match a line break.
+ ','line_number':423,'multiline':True]['text':'
+ * Check for an equivalence class name "[=a=]".  "pp" points to the '['.
+ * Returns a character representing the class. Zero means that no item was
+ * recognized.  Otherwise "pp" is advanced to after the item.
+ ','line_number':432,'multiline':True]['text':'
+ * Check for a collating element "[.a.]".  "pp" points to the '['.
+ * Returns a character. Zero means that no item was recognized.  Otherwise
+ * "pp" is advanced to after the item.
+ * Currently only single characters are recognized!
+ ','line_number':461,'multiline':True]['text':' 'cpoptions' contains 'l' flag','line_number':491,'multiline':False]['text':' 'cpoptions' contains '\' flag','line_number':492,'multiline':False]['text':'
+ * Skip over a "[]" range.
+ * "p" must point to the character after the '['.
+ * The returned pointer is on the matching ']', or the terminating NUL.
+ ','line_number':501,'multiline':True]['text':' Complement of range.','line_number':511,'multiline':False]['text':' it is not a class name and not NUL','line_number':537,'multiline':False]['text':'
+ * Skip past regular expression.
+ * Stop at end of "startp" or where "delim" is found ('/', '?', etc).
+ * Take care of characters with a backslash in front of it.
+ * Skip strings inside [ and ].
+ ','line_number':546,'multiline':True]['text':'
+ * Call skip_regexp() and when the delimiter does not match give an error and
+ * return NULL.
+ ','line_number':561,'multiline':True]['text':'
+ * skip_regexp() with extra arguments:
+ * When "newp" is not NULL and "dirc" is '?', make an allocated copy of the
+ * expression and change "\?" to "?".  If "*newp" is not NULL the expression
+ * is changed in-place.
+ * If a "\?" is changed to "?" then "dropped" is incremented, unless NULL.
+ * If "magic_val" is not NULL, returns the effective magicness of the pattern
+ ','line_number':581,'multiline':True]['text':' found end of regexp','line_number':609,'multiline':False]['text':' change "\?" to "?", make a copy first.','line_number':622,'multiline':False]['text':' skip next character','line_number':637,'multiline':False]['text':'
+ * Functions for getting characters from the regexp input.
+ ','line_number':649,'multiline':True]['text':' byte length of previous char','line_number':652,'multiline':False]['text':' True when on the first character','line_number':653,'multiline':False]['text':' True when on the second character','line_number':654,'multiline':False]['text':'
+ * Start parsing at "str".
+ ','line_number':656,'multiline':True]['text':'
+ * Save the current parse state, so that it can be restored and parsing
+ * starts in the same state again.
+ ','line_number':669,'multiline':True]['text':'
+ * Restore a previously saved parse state.
+ ','line_number':687,'multiline':True]['text':'
+ * Get the next character without advancing.
+ ','line_number':705,'multiline':True]['text':' magic when 'magic' is on','line_number':721,'multiline':False]['text':' future ext.','line_number':738,'multiline':False]['text':' future ext.','line_number':739,'multiline':False]['text':' future ext.','line_number':740,'multiline':False]['text':' future ext.','line_number':741,'multiline':False]['text':' future ext.','line_number':742,'multiline':False]['text':' future ext.','line_number':743,'multiline':False]['text':' future ext.','line_number':744,'multiline':False]['text':' future ext.','line_number':745,'multiline':False]['text':' Can't be used in / command','line_number':746,'multiline':False]['text':' magic only after "\v"','line_number':747,'multiline':False]['text':' * is not magic as the very first character, eg "?*ptr", when','line_number':752,'multiline':False]['text':' after '^', eg "/^*ptr" and when after "\(", "\|", "\&".  But','line_number':753,'multiline':False]['text':' "\(\*" is not magic, thus must be magic if "after_slash"','line_number':754,'multiline':False]['text':' '^' is only magic as the very first character and if it's after','line_number':765,'multiline':False]['text':' "\(", "\|", "\&' or "\n"','line_number':766,'multiline':False]['text':' '$' is only magic as the very last char and if it's in front of','line_number':783,'multiline':False]['text':' either "\|", "\)", "\&", or "\n"','line_number':784,'multiline':False]['text':' ignore \c \C \m \M \v \V and \Z after '$'','line_number':790,'multiline':False]['text':' trailing '\'','line_number':816,'multiline':False]['text':'
+		     * META contains everything that may be magic sometimes,
+		     * except ^ and $ ("\^" and "\$" are only magic after
+		     * "\V").  We now fetch the next character and toggle its
+		     * magicness.  Therefore, \ is so meta-magic that it is
+		     * not in META.
+		     ','line_number':819,'multiline':True]['text':' be able to say "/\*ptr"','line_number':828,'multiline':False]['text':'
+		     * Handle abbreviations, like "\t" for TAB -- webb
+		     ','line_number':838,'multiline':True]['text':'
+		     * Next character can never be (made) magic?
+		     * Then backslashing it won't do anything.
+		     ','line_number':847,'multiline':True]['text':'
+ * Eat one lexed character.  Do this in a way that we can undo it.
+ ','line_number':867,'multiline':True]['text':' peekchr() eats a backslash, do the same here','line_number':873,'multiline':False]['text':' exclude composing chars that mb_ptr2len does include','line_number':881,'multiline':False]['text':' use previously unget char, or -1','line_number':893,'multiline':False]['text':'
+ * Skip a character while keeping the value of prev_at_start for at_start.
+ * prevchr and prevprevchr are also kept.
+ ','line_number':897,'multiline':True]['text':'
+ * Get the next character from the pattern. We know about magic and such, so
+ * therefore we need a lexical analyzer.
+ ','line_number':914,'multiline':True]['text':'
+ * put character back.  Works only once!
+ ','line_number':927,'multiline':True]['text':' Backup regparse, so that it's at the same position as before the','line_number':939,'multiline':False]['text':' getchr().','line_number':940,'multiline':False]['text':'
+ * Get and return the value of the hex string at the current position.
+ * Return -1 if there is no valid hex number.
+ * The position is updated:
+ *     blahblah\%x20asdf
+ *	   before-^ ^-after
+ * The parameter controls the maximum number of input characters. This will be
+ * 2 when reading a \%x20 sequence and 4 when reading a \%u20AC sequence.
+ ','line_number':944,'multiline':True]['text':'
+ * Get and return the value of the decimal string immediately after the
+ * current position. Return -1 for invalid.  Consumes all digits.
+ ','line_number':975,'multiline':True]['text':' no longer valid','line_number':994,'multiline':False]['text':'
+ * get and return the value of the octal string immediately after the current
+ * position. Return -1 for invalid, or 0-255 for valid. Smart enough to handle
+ * numbers > 377 correctly (for example, 400 is treated as 40) and doesn't
+ * treat 8 or 9 as recognised characters. Position is updated:
+ *     blahblah\%o210asdf
+ *	   before-^  ^-after
+ ','line_number':1002,'multiline':True]['text':'
+ * read_limits - Read two integers to be taken as a minimum and maximum.
+ * If the first character is '-', then the range is reversed.
+ * Should end with 'end'.  If minval is missing, zero is default, if maxval is
+ * missing, a very big number is the default.
+ ','line_number':1032,'multiline':True]['text':' Starts with '-', so reverse the range later','line_number':1047,'multiline':False]['text':' There is a comma','line_number':1053,'multiline':False]['text':' It was \{n} or \{-n}','line_number':1061,'multiline':False]['text':' It was \{} or \{-}','line_number':1063,'multiline':False]['text':' Allow either \{...} or \{...\}','line_number':1065,'multiline':False]['text':'
+     * Reverse the range if there was a '-', or make sure it is in the right
+     * order otherwise.
+     ','line_number':1070,'multiline':True]['text':' let's be friends with the lexer again','line_number':1080,'multiline':False]['text':'
+ * vim_regexec and friends
+ ','line_number':1084,'multiline':True]['text':'
+ * Global work variables for vim_regexec().
+ ','line_number':1088,'multiline':True]['text':'
+ * Sometimes need to save a copy of a line.  Since alloc()/free() is very
+ * slow, we keep one allocated piece of memory and only re-allocate it when
+ * it's too small.  It's freed in bt_regexec_both() when finished.
+ ','line_number':1098,'multiline':True]['text':'
+ * Structure used to store the execution state of the regex engine.
+ * Which ones are set depends on whether a single-line or multi-line match is
+ * done:
+ *			single-line		multi-line
+ * reg_match		&regmatch_T		NULL
+ * reg_mmatch		NULL			&regmmatch_T
+ * reg_startp		reg_match->startp	<invalid>
+ * reg_endp		reg_match->endp		<invalid>
+ * reg_startpos		<invalid>		reg_mmatch->startpos
+ * reg_endpos		<invalid>		reg_mmatch->endpos
+ * reg_win		NULL			window in which to search
+ * reg_buf		curbuf			buffer in which to search
+ * reg_firstlnum	<invalid>		first line in which to search
+ * reg_maxline		0			last line nr
+ * reg_line_lbr		FALSE or TRUE		FALSE
+ ','line_number':1106,'multiline':True]['text':' "\n" in string is line break','line_number':1136,'multiline':False]['text':' The current match-position is stord in these variables:','line_number':1138,'multiline':False]['text':' line number, relative to first line','line_number':1139,'multiline':False]['text':' start of current line','line_number':1140,'multiline':False]['text':' current input, points into "line"','line_number':1141,'multiline':False]['text':' subexpressions still need to be cleared','line_number':1143,'multiline':False]['text':' extmatch subexpressions still need to be','line_number':1145,'multiline':False]['text':' cleared','line_number':1146,'multiline':False]['text':' Internal copy of 'ignorecase'.  It is set at each call to vim_regexec().','line_number':1149,'multiline':False]['text':' Normally it gets the value of "rm_ic" or "rmm_ic", but when the pattern','line_number':1150,'multiline':False]['text':' contains '\c' or '\C' the value is overruled.','line_number':1151,'multiline':False]['text':' Similar to "reg_ic", but only for 'combining' characters.  Set with \Z','line_number':1154,'multiline':False]['text':' flag in the regexp.  Defaults to false, always.','line_number':1155,'multiline':False]['text':' Copy of "rmm_maxcol": maximum column to search for a match.  Zero when','line_number':1158,'multiline':False]['text':' there is no maximum.','line_number':1159,'multiline':False]['text':' State for the NFA engine regexec.','line_number':1162,'multiline':False]['text':' NFA regexp \ze operator encountered.','line_number':1163,'multiline':False]['text':' NFA regexp \1 .. \9 encountered.','line_number':1164,'multiline':False]['text':' Number of sub expressions actually being used','line_number':1165,'multiline':False]['text':' during execution. 1 if only the whole match','line_number':1166,'multiline':False]['text':' (subexpr 0) is used.','line_number':1167,'multiline':False]['text':' listid is global, so that it increases on recursive calls to','line_number':1168,'multiline':False]['text':' nfa_regmatch(), which means we don't have to clear the lastlist field of','line_number':1169,'multiline':False]['text':' all the states.','line_number':1170,'multiline':False]['text':' NFA regexp has \z( ), set zsubexpr.','line_number':1175,'multiline':False]['text':'
+ * Return TRUE if character 'c' is included in 'iskeyword' option for
+ * "reg_buf" buffer.
+ ','line_number':1182,'multiline':True]['text':'
+ * Get pointer to the line "lnum", which is relative to "reg_firstlnum".
+ ','line_number':1192,'multiline':True]['text':' when looking behind for a match/no-match lnum is negative.  But we','line_number':1198,'multiline':False]['text':' can't go before line 1','line_number':1199,'multiline':False]['text':' Must have matched the "\n" in the last line.','line_number':1203,'multiline':False]['text':' Workspace to mark beginning','line_number':1209,'multiline':False]['text':'   and end of \z(...\) matches','line_number':1210,'multiline':False]['text':' idem, beginning pos','line_number':1211,'multiline':False]['text':' idem, end pos','line_number':1212,'multiline':False]['text':' TRUE if using multi-line regexp.','line_number':1215,'multiline':False]['text':'
+ * Create a new extmatch and mark it as referenced once.
+ ','line_number':1219,'multiline':True]['text':'
+ * Add a reference to an extmatch.
+ ','line_number':1233,'multiline':True]['text':'
+ * Remove a reference to an extmatch.  If there are no references left, free
+ * the info.
+ ','line_number':1244,'multiline':True]['text':'
+ * Get class of previous character.
+ ','line_number':1262,'multiline':True]['text':'
+ * Return TRUE if the current rex.input position matches the Visual area.
+ ','line_number':1274,'multiline':True]['text':' Check if the buffer is the current buffer and not using a string.','line_number':1290,'multiline':False]['text':' getvvcol() flushes rex.line, need to get it again','line_number':1346,'multiline':False]['text':'
+ * Check the regexp program for its magic number.
+ * Return TRUE if it's wrong.
+ ','line_number':1357,'multiline':True]['text':' For NFA matcher we don't check the magic','line_number':1368,'multiline':False]['text':'
+ * Cleanup the subexpressions, if this wasn't done yet.
+ * This construction is used to clear the subexpressions only when they are
+ * used (to increase speed).
+ ','line_number':1379,'multiline':True]['text':' Use 0xff to set lnum to -1','line_number':1392,'multiline':False]['text':' Use 0xff to set lnum to -1','line_number':1413,'multiline':False]['text':'
+ * Advance rex.lnum, rex.line and rex.input to the next line.
+ ','line_number':1426,'multiline':True]['text':'
+ * Check whether a backreference matches.
+ * Returns RA_FAIL, RA_NOMATCH or RA_MATCH.
+ * If "bytelen" is not NULL, it is set to the byte length of the match in the
+ * last line.
+ ','line_number':1437,'multiline':True]['text':' Since getting one line may invalidate the other, need to make copy.','line_number':1460,'multiline':False]['text':' Slow!','line_number':1461,'multiline':False]['text':' get some extra','line_number':1467,'multiline':False]['text':' out of memory!','line_number':1471,'multiline':False]['text':' Get the line to compare with.','line_number':1479,'multiline':False]['text':' doesn't match','line_number':1487,'multiline':False]['text':' match and at end!','line_number':1491,'multiline':False]['text':' text too short','line_number':1493,'multiline':False]['text':' Advance to next line.','line_number':1495,'multiline':False]['text':' found a match!  Note that rex.line may now point to a copy of the line,','line_number':1505,'multiline':False]['text':' that should not matter.','line_number':1506,'multiline':False]['text':'
+ * Used in a place where no * or \+ can follow.
+ ','line_number':1510,'multiline':True]['text':' 0xfb20 - 0xfb4f','line_number':1531,'multiline':False]['text':' 0xfb20	alt ayin','line_number':1534,'multiline':False]['text':' 0xfb21	alt alef','line_number':1535,'multiline':False]['text':' 0xfb22	alt dalet','line_number':1536,'multiline':False]['text':' 0xfb23	alt he','line_number':1537,'multiline':False]['text':' 0xfb24	alt kaf','line_number':1538,'multiline':False]['text':' 0xfb25	alt lamed','line_number':1539,'multiline':False]['text':' 0xfb26	alt mem-sofit','line_number':1540,'multiline':False]['text':' 0xfb27	alt resh','line_number':1541,'multiline':False]['text':' 0xfb28	alt tav','line_number':1542,'multiline':False]['text':' 0xfb29	alt plus','line_number':1543,'multiline':False]['text':' 0xfb2a	shin+shin-dot','line_number':1544,'multiline':False]['text':' 0xfb2b	shin+sin-dot','line_number':1545,'multiline':False]['text':' 0xfb2c	shin+shin-dot+dagesh','line_number':1546,'multiline':False]['text':' 0xfb2d	shin+sin-dot+dagesh','line_number':1547,'multiline':False]['text':' 0xfb2e	alef+patah','line_number':1548,'multiline':False]['text':' 0xfb2f	alef+qamats','line_number':1549,'multiline':False]['text':' 0xfb30	alef+hiriq','line_number':1550,'multiline':False]['text':' 0xfb31	bet+dagesh','line_number':1551,'multiline':False]['text':' 0xfb32	gimel+dagesh','line_number':1552,'multiline':False]['text':' 0xfb33	dalet+dagesh','line_number':1553,'multiline':False]['text':' 0xfb34	he+dagesh','line_number':1554,'multiline':False]['text':' 0xfb35	vav+dagesh','line_number':1555,'multiline':False]['text':' 0xfb36	zayin+dagesh','line_number':1556,'multiline':False]['text':' 0xfb37 -- UNUSED','line_number':1557,'multiline':False]['text':' 0xfb38	tet+dagesh','line_number':1558,'multiline':False]['text':' 0xfb39	yud+dagesh','line_number':1559,'multiline':False]['text':' 0xfb3a	kaf sofit+dagesh','line_number':1560,'multiline':False]['text':' 0xfb3b	kaf+dagesh','line_number':1561,'multiline':False]['text':' 0xfb3c	lamed+dagesh','line_number':1562,'multiline':False]['text':' 0xfb3d -- UNUSED','line_number':1563,'multiline':False]['text':' 0xfb3e	mem+dagesh','line_number':1564,'multiline':False]['text':' 0xfb3f -- UNUSED','line_number':1565,'multiline':False]['text':' 0xfb40	nun+dagesh','line_number':1566,'multiline':False]['text':' 0xfb41	samech+dagesh','line_number':1567,'multiline':False]['text':' 0xfb42 -- UNUSED','line_number':1568,'multiline':False]['text':' 0xfb43	pe sofit+dagesh','line_number':1569,'multiline':False]['text':' 0xfb44	pe+dagesh','line_number':1570,'multiline':False]['text':' 0xfb45 -- UNUSED','line_number':1571,'multiline':False]['text':' 0xfb46	tsadi+dagesh','line_number':1572,'multiline':False]['text':' 0xfb47	qof+dagesh','line_number':1573,'multiline':False]['text':' 0xfb48	resh+dagesh','line_number':1574,'multiline':False]['text':' 0xfb49	shin+dagesh','line_number':1575,'multiline':False]['text':' 0xfb4a	tav+dagesh','line_number':1576,'multiline':False]['text':' 0xfb4b	vav+holam','line_number':1577,'multiline':False]['text':' 0xfb4c	bet+rafe','line_number':1578,'multiline':False]['text':' 0xfb4d	kaf+rafe','line_number':1579,'multiline':False]['text':' 0xfb4e	pe+rafe','line_number':1580,'multiline':False]['text':' 0xfb4f	alef-lamed','line_number':1581,'multiline':False]['text':'
+ * Compare two strings, ignore case if rex.reg_ic set.
+ * Return 0 if strings match, non-zero otherwise.
+ * Correct the length "*n" when composing characters are ignored.
+ ','line_number':1603,'multiline':True]['text':' if it failed and it's utf8 and we want to combineignore:','line_number':1618,'multiline':False]['text':' we have to handle the strcmp ourselves, since it is necessary to','line_number':1625,'multiline':False]['text':' deal with the composing characters by ignoring them:','line_number':1626,'multiline':False]['text':' Decompose the character if necessary, into 'base' characters.','line_number':1635,'multiline':False]['text':' Currently hard-coded for Hebrew, Arabic to be done...','line_number':1636,'multiline':False]['text':' decomposition necessary?','line_number':1639,'multiline':False]['text':'
+ * cstrchr: This function is used a lot for simple searches, keep it fast!
+ ','line_number':1657,'multiline':True]['text':' tolower() and toupper() can be slow, comparing twice should be a lot','line_number':1669,'multiline':False]['text':' faster (esp. when using MS Visual C++!).','line_number':1670,'multiline':False]['text':' For UTF-8 need to use folded case.','line_number':1671,'multiline':False]['text':' Do not match an illegal byte.  E.g. 0xff matches 0xc3 0xbf,','line_number':1690,'multiline':False]['text':' not 0xff.','line_number':1691,'multiline':False]['text':' Faster version for when there are no multi-byte characters.','line_number':1700,'multiline':False]['text':'//////////////////////////////////////////////////////////////','line_number':1708,'multiline':False]['text':'		      regsub stuff			      //','line_number':1709,'multiline':False]['text':'//////////////////////////////////////////////////////////////','line_number':1710,'multiline':False]['text':'
+ * regtilde(): Replace tildes in the pattern by the old pattern.
+ *
+ * Short explanation of the tilde: It stands for the previous replacement
+ * pattern.  If that previous pattern also contains a ~ we should go back a
+ * step further...  But we insert the previous pattern into the current one
+ * and remember that.
+ * This still does not handle the case where "magic" changes.  So require the
+ * user to keep his hands off of "magic".
+ *
+ * The tildes are parsed once before the first call to vim_regsub().
+ ','line_number':1728,'multiline':True]['text':' length = len(newsub) - 1 + len(prev_sub) + 1','line_number':1752,'multiline':False]['text':' Avoid making the text longer than MAXCOL, it will cause','line_number':1753,'multiline':False]['text':' trouble at some point.','line_number':1754,'multiline':False]['text':' copy prefix','line_number':1767,'multiline':False]['text':' not including ~','line_number':1768,'multiline':False]['text':' interpret tilde','line_number':1770,'multiline':False]['text':' copy postfix','line_number':1773,'multiline':False]['text':' back off backslash','line_number':1775,'multiline':False]['text':' allocated newsub before','line_number':1778,'multiline':False]['text':' remove '~'','line_number':1785,'multiline':False]['text':' remove '\~'','line_number':1787,'multiline':False]['text':' skip escaped characters','line_number':1792,'multiline':False]['text':' Store a copy of newsub  in reg_prev_sub.  It is always allocated,','line_number':1799,'multiline':False]['text':' because recursive calls may make the returned string invalid.','line_number':1800,'multiline':False]['text':' TRUE when submatch() can be used','line_number':1808,'multiline':False]['text':' These pointers are used for reg_submatch().  Needed for when the','line_number':1810,'multiline':False]['text':' substitution string is an expression that contains a call to substitute()','line_number':1811,'multiline':False]['text':' and submatch().','line_number':1812,'multiline':False]['text':' can only be used when can_f_submatch is TRUE','line_number':1821,'multiline':False]['text':'
+ * Put the submatches in "argv[argskip]" which is a list passed into
+ * call_func() by vim_regsub_both().
+ ','line_number':1826,'multiline':True]['text':' called function doesn't take a submatches argument','line_number':1839,'multiline':False]['text':' Relies on sl_list to be the first item in staticList10_T.','line_number':1842,'multiline':False]['text':' There are always 10 list items in staticList10_T.','line_number':1845,'multiline':False]['text':'
+ * vim_regsub() - perform substitutions after a vim_regexec() or
+ * vim_regexec_multi() match.
+ *
+ * If "flags" has REGSUB_COPY really copy into "dest[destlen]".
+ * Otherwise nothing is copied, only compute the length of the result.
+ *
+ * If "flags" has REGSUB_MAGIC then behave like 'magic' is set.
+ *
+ * If "flags" has REGSUB_BACKSLASH a backslash will be removed later, need to
+ * double them to keep them, and insert a backslash before a CR to avoid it
+ * being replaced with a line break later.
+ *
+ * Note: The matched text must not change between the call of
+ * vim_regexec()/vim_regexec_multi() and vim_regsub()!  It would make the back
+ * references invalid!
+ *
+ * Returns the size of the replacement, including terminating NUL.
+ ','line_number':1871,'multiline':True]['text':' Being called recursively, save the state.','line_number':1904,'multiline':False]['text':' Being called recursively, save the state.','line_number':1936,'multiline':False]['text':' always works on the current buffer!','line_number':1942,'multiline':False]['text':' When nesting more than a couple levels it's probably a mistake.','line_number':1956,'multiline':False]['text':' init for GCC','line_number':1988,'multiline':False]['text':' init for GCC','line_number':1989,'multiline':False]['text':' Be paranoid...','line_number':1996,'multiline':False]['text':'
+     * When the substitute part starts with "\=" evaluate it as an expression.
+     ','line_number':2015,'multiline':True]['text':' To make sure that the length doesn't change between checking the','line_number':2021,'multiline':False]['text':' length and copying the string, and to speed up things, the','line_number':2022,'multiline':False]['text':' resulting string is saved from the call with','line_number':2023,'multiline':False]['text':' "flags & REGSUB_COPY" == 0 to the call with','line_number':2024,'multiline':False]['text':' "flags & REGSUB_COPY" != 0.','line_number':2025,'multiline':False]['text':' The expression may contain substitute(), which calls us','line_number':2043,'multiline':False]['text':' recursively.  Make sure submatch() gets the text from the first','line_number':2044,'multiline':False]['text':' level.','line_number':2045,'multiline':False]['text':' Although unlikely, it is possible that the expression invokes a','line_number':2055,'multiline':False]['text':' substitute command (it might fail, but still).  Therefore keep','line_number':2056,'multiline':False]['text':' an array of eval results.','line_number':2057,'multiline':False]['text':' fill_submatch_list() was called','line_number':2094,'multiline':False]['text':' something failed, no need to report another error','line_number':2098,'multiline':False]['text':' Execute instructions from ISN_SUBSTITUTE.','line_number':2109,'multiline':False]['text':' Change NL to CR, so that it becomes a line break,','line_number':2121,'multiline':False]['text':' unless called from vim_regexec_nl().','line_number':2122,'multiline':False]['text':' Skip over a backslashed character.','line_number':2123,'multiline':False]['text':' Change NL to CR here too, so that this works:
+			 * :s/abc\\\ndef/\="aaa\\\nbbb"/  on text:
+			 *   abc\
+			 *   def
+			 * Not when called from vim_regexec_nl().
+			 ','line_number':2129,'multiline':True]['text':' Backslashes will be consumed, need to double them.','line_number':2142,'multiline':False]['text':' Ordinary character.','line_number':2194,'multiline':False]['text':' Copy a special key as-is.','line_number':2198,'multiline':False]['text':' Check for abbreviations -- webb','line_number':2220,'multiline':False]['text':' Oh no!  \e already has meaning in subst pat :-(','line_number':2226,'multiline':False]['text':' case 'e':   c = ESC;	++src;	break;','line_number':2227,'multiline':False]['text':' If "backslash" is TRUE the backslash will be removed','line_number':2230,'multiline':False]['text':' later.  Used to insert a literal CR.','line_number':2231,'multiline':False]['text':' Write to buffer, if copy is set.','line_number':2251,'multiline':False]['text':' just copy','line_number':2259,'multiline':False]['text':' If the character length is shorter than "totlen", there','line_number':2281,'multiline':False]['text':' are composing characters; copy them as-is.','line_number':2282,'multiline':False]['text':' we hit NUL.','line_number':2365,'multiline':False]['text':'
+			     * Insert a backslash in front of a CR, otherwise
+			     * it will be replaced by a line break.
+			     * Number of backslashes will be halved later,
+			     * double them here.
+			     ','line_number':2376,'multiline':True]['text':' just copy','line_number':2408,'multiline':False]['text':' Copy composing characters separately, one','line_number':2416,'multiline':False]['text':' at a time.','line_number':2417,'multiline':False]['text':'
+ * Call reg_getline() with the line numbers from the submatch.  If a
+ * substitute() was used the reg_maxline and other values have been
+ * overwritten.
+ ','line_number':2465,'multiline':True]['text':'
+ * Used for the submatch() function: get the string from the n'th submatch in
+ * allocated memory.
+ * Returns NULL when not in a ":s" command and for a non-existing submatch.
+ ','line_number':2487,'multiline':True]['text':'
+	 * First round: compute the length and allocate memory.
+	 * Second round: copy the text.
+	 ','line_number':2506,'multiline':True]['text':' anti-crash check, cannot happen?','line_number':2517,'multiline':False]['text':' Within one line: take form start to end col.','line_number':2522,'multiline':False]['text':' Multiple lines: take start line from start col, middle','line_number':2531,'multiline':False]['text':' lines completely and end line up to end col.','line_number':2532,'multiline':False]['text':'
+ * Used for the submatch() function with the optional non-zero argument: get
+ * the list of strings from the n'th submatch in allocated memory with NULs
+ * represented in NLs.
+ * Returns a list of allocated strings.  Returns NULL when not in a ":s"
+ * command, for a non-existing submatch and for any error.
+ ','line_number':2580,'multiline':True]['text':'
+ * Initialize the values used for matching against multiple lines
+ ','line_number':2660,'multiline':True]['text':' window in which to search or NULL','line_number':2666,'multiline':False]['text':' buffer in which to search','line_number':2667,'multiline':False]['text':' nr of line to start looking for match','line_number':2668,'multiline':False]['text':' Which regexp engine to use? Needed for vim_regcomp().','line_number':2702,'multiline':False]['text':' Must match with 'regexpengine'.','line_number':2703,'multiline':False]['text':'
+ * Compile a regular expression into internal code.
+ * Returns the program in allocated memory.
+ * Use vim_regfree() to free the memory.
+ * Returns NULL for an error.
+ ','line_number':2714,'multiline':True]['text':' Check for prefix "\%#=", that sets the regexp engine','line_number':2729,'multiline':False]['text':' reg_iswordc() uses rex.reg_buf','line_number':2755,'multiline':False]['text':'
+     * First try the NFA engine, unless backtracking was requested.
+     ','line_number':2758,'multiline':True]['text':' Check for error compiling regexp with initial engine.','line_number':2768,'multiline':False]['text':' debugging log for BT engine','line_number':2772,'multiline':False]['text':'
+	 * If the NFA engine failed, try the backtracking engine.
+	 * The NFA engine also fails for patterns that it can't handle well
+	 * but are still valid patterns, thus a retry should work.
+	 * But don't try if an error message was given.
+	 ','line_number':2786,'multiline':True]['text':' Store the info needed to call regcomp() again when the engine turns','line_number':2805,'multiline':False]['text':' out to be very slow when executing it.','line_number':2806,'multiline':False]['text':'
+ * Free a compiled regexp program, returned by vim_regcomp().
+ ','line_number':2814,'multiline':True]['text':'
+ * Return whether "prog" is currently being executed.
+ ','line_number':2850,'multiline':True]['text':'
+ * Match a regexp against a string.
+ * "rmp->regprog" must be a compiled regexp as returned by vim_regcomp().
+ * Note: "rmp->regprog" may be freed and changed.
+ * Uses curbuf for line count and 'iskeyword'.
+ * When "nl" is TRUE consider a "\n" in "line" to be a line break.
+ *
+ * Return TRUE if there is a match, FALSE if not.
+ ','line_number':2860,'multiline':True]['text':' string to match against','line_number':2872,'multiline':False]['text':' column to start looking for match','line_number':2873,'multiline':False]['text':' Cannot use the same prog recursively, it contains state.','line_number':2880,'multiline':False]['text':' Being called recursively, save the state.','line_number':2889,'multiline':False]['text':' NFA engine aborted because it's very slow.','line_number':2901,'multiline':False]['text':'
+ * Note: "*prog" may be freed and changed.
+ * Return TRUE if there is a match, FALSE if not.
+ ','line_number':2937,'multiline':True]['text':'
+ * Note: "rmp->regprog" may be freed and changed.
+ * Return TRUE if there is a match, FALSE if not.
+ ','line_number':2959,'multiline':True]['text':'
+ * Like vim_regexec(), but consider a "\n" in "line" to be a line break.
+ * Note: "rmp->regprog" may be freed and changed.
+ * Return TRUE if there is a match, FALSE if not.
+ ','line_number':2969,'multiline':True]['text':'
+ * Match a regexp against multiple lines.
+ * "rmp->regprog" must be a compiled regexp as returned by vim_regcomp().
+ * Note: "rmp->regprog" may be freed and changed, even set to NULL.
+ * Uses curbuf for line count and 'iskeyword'.
+ *
+ * Return zero if there is no match.  Return number of lines contained in the
+ * match otherwise.
+ ','line_number':2980,'multiline':True]['text':' window in which to search or NULL','line_number':2992,'multiline':False]['text':' buffer in which to search','line_number':2993,'multiline':False]['text':' nr of line to start looking for match','line_number':2994,'multiline':False]['text':' column to start looking for match','line_number':2995,'multiline':False]['text':' flag is set when timeout limit reached','line_number':2996,'multiline':False]['text':' Cannot use the same prog recursively, it contains state.','line_number':3002,'multiline':False]['text':' Being called recursively, save the state.','line_number':3011,'multiline':False]['text':' NFA engine aborted because it's very slow.','line_number':3019,'multiline':False]['text':' checking for \z misuse was already done when compiling for NFA,','line_number':3036,'multiline':False]['text':' allow all here','line_number':3037,'multiline':False]['text':' Somehow compiling the pattern failed now, put back the','line_number':3046,'multiline':False]['text':' previous one to avoid "regprog" becoming NULL.','line_number':3047,'multiline':False]

@@ -1,0 +1,168 @@
+['text':' © 2017 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]['text':' ucptrie_impl.h (modified from utrie2_impl.h)','line_number':4,'multiline':False]['text':' created: 2017dec29 Markus W. Scherer','line_number':5,'multiline':False]['text':' UCPTrie signature values, in platform endianness and opposite endianness.','line_number':15,'multiline':False]['text':' The UCPTrie signature ASCII byte values spell "Tri3".','line_number':16,'multiline':False]['text':'*
+ * Header data for the binary, memory-mappable representation of a UCPTrie/CodePointTrie.
+ * @internal
+ ','line_number':20,'multiline':True]['text':'* "Tri3" in big-endian US-ASCII (0x54726933) ','line_number':25,'multiline':True]['text':'*
+     * Options bit field:
+     * Bits 15..12: Data length bits 19..16.
+     * Bits 11..8: Data null block offset bits 19..16.
+     * Bits 7..6: UCPTrieType
+     * Bits 5..3: Reserved (0).
+     * Bits 2..0: UCPTrieValueWidth
+     ','line_number':28,'multiline':True]['text':'* Total length of the index tables. ','line_number':38,'multiline':True]['text':'* Data length bits 15..0. ','line_number':41,'multiline':True]['text':'* Index-3 null block offset, 0x7fff or 0xffff if none. ','line_number':44,'multiline':True]['text':'* Data null block offset bits 15..0, 0xfffff if none. ','line_number':47,'multiline':True]['text':'*
+     * First code point of the single-value range ending with U+10ffff,
+     * rounded up and then shifted right by UCPTRIE_SHIFT_2.
+     ','line_number':50,'multiline':True]['text':'*
+ * Constants for use with UCPTrieHeader.options.
+ * @internal
+ ','line_number':57,'multiline':True]['text':'*
+     * Value for index3NullOffset which indicates that there is no index-3 null block.
+     * Bit 15 is unused for this value because this bit is used if the index-3 contains
+     * 18-bit indexes.
+     ','line_number':66,'multiline':True]['text':' Internal constants.','line_number':75,'multiline':False]['text':'* The length of the BMP index table. 1024=0x400 ','line_number':77,'multiline':True]['text':'* Shift size for getting the index-3 table offset. ','line_number':83,'multiline':True]['text':'* Shift size for getting the index-2 table offset. ','line_number':86,'multiline':True]['text':'* Shift size for getting the index-1 table offset. ','line_number':89,'multiline':True]['text':'*
+     * Difference between two shift sizes,
+     * for getting an index-2 offset from an index-3 offset. 5=9-4
+     ','line_number':92,'multiline':True]['text':'*
+     * Difference between two shift sizes,
+     * for getting an index-1 offset from an index-2 offset. 5=14-9
+     ','line_number':98,'multiline':True]['text':'*
+     * Number of index-1 entries for the BMP. (4)
+     * This part of the index-1 table is omitted from the serialized form.
+     ','line_number':104,'multiline':True]['text':'* Number of entries in an index-2 block. 32=0x20 ','line_number':110,'multiline':True]['text':'* Mask for getting the lower bits for the in-index-2-block offset. ','line_number':113,'multiline':True]['text':'* Number of code points per index-2 table entry. 512=0x200 ','line_number':116,'multiline':True]['text':'* Number of entries in an index-3 block. 32=0x20 ','line_number':119,'multiline':True]['text':'* Mask for getting the lower bits for the in-index-3-block offset. ','line_number':122,'multiline':True]['text':'* Number of entries in a small data block. 16=0x10 ','line_number':125,'multiline':True]['text':'* Mask for getting the lower bits for the in-small-data-block offset. ','line_number':128,'multiline':True]['text':'
+ * Format of the binary, memory-mappable representation of a UCPTrie/CodePointTrie.
+ * For overview information see http://site.icu-project.org/design/struct/utrie
+ *
+ * The binary trie data should be 32-bit-aligned.
+ * The overall layout is:
+ *
+ * UCPTrieHeader header; -- 16 bytes, see struct definition above
+ * uint16_t index[header.indexLength];
+ * uintXY_t data[header.dataLength];
+ *
+ * The trie data array is an array of uint16_t, uint32_t, or uint8_t,
+ * specified via the UCPTrieValueWidth when building the trie.
+ * The data array is 32-bit-aligned for uint32_t, otherwise 16-bit-aligned.
+ * The overall length of the trie data is a multiple of 4 bytes.
+ * (Padding is added at the end of the index array and/or near the end of the data array as needed.)
+ *
+ * The length of the data array (dataLength) is stored as an integer split across two fields
+ * of the header struct (high bits in header.options).
+ *
+ * The trie type can be "fast" or "small" which determines the index structure,
+ * specified via the UCPTrieType when building the trie.
+ *
+ * The type and valueWidth are stored in the header.options.
+ * There are reserved type and valueWidth values, and reserved header.options bits.
+ * They could be used in future format extensions.
+ * Code reading the trie structure must fail with an error when unknown values or options are set.
+ *
+ * Values for ASCII character (U+0000..U+007F) can always be found at the start of the data array.
+ *
+ * Values for code points below a type-specific fast-indexing limit are found via two-stage lookup.
+ * For a "fast" trie, the limit is the BMP/supplementary boundary at U+10000.
+ * For a "small" trie, the limit is UCPTRIE_SMALL_MAX+1=U+1000.
+ *
+ * All code points in the range highStart..U+10FFFF map to a single highValue
+ * which is stored at the second-to-last position of the data array.
+ * (See UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET.)
+ * The highStart value is header.shiftedHighStart<<UCPTRIE_SHIFT_2.
+ * (UCPTRIE_SHIFT_2=9)
+ *
+ * Values for code points fast_limit..highStart-1 are found via four-stage lookup.
+ * The data block size is smaller for this range than for the fast range.
+ * This together with more index stages with small blocks makes this range
+ * more easily compactable.
+ *
+ * There is also a trie error value stored at the last position of the data array.
+ * (See UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET.)
+ * It is intended to be returned for inputs that are not Unicode code points
+ * (outside U+0000..U+10FFFF), or in string processing for ill-formed input
+ * (unpaired surrogate in UTF-16, ill-formed UTF-8 subsequence).
+ *
+ * For a "fast" trie:
+ *
+ * The index array starts with the BMP index table for BMP code point lookup.
+ * Its length is 1024=0x400.
+ *
+ * The supplementary index-1 table follows the BMP index table.
+ * Variable length, for code points up to highStart-1.
+ * Maximum length 64=0x40=0x100000>>UCPTRIE_SHIFT_1.
+ * (For 0x100000 supplementary code points U+10000..U+10ffff.)
+ *
+ * After this index-1 table follow the variable-length index-3 and index-2 tables.
+ *
+ * The supplementary index tables are omitted completely
+ * if there is only BMP data (highStart<=U+10000).
+ *
+ * For a "small" trie:
+ *
+ * The index array starts with a fast-index table for lookup of code points U+0000..U+0FFF.
+ *
+ * The "supplementary" index tables are always stored.
+ * The index-1 table starts from U+0000, its maximum length is 68=0x44=0x110000>>UCPTRIE_SHIFT_1.
+ *
+ * For both trie types:
+ *
+ * The last index-2 block may be a partial block, storing indexes only for code points
+ * below highStart.
+ *
+ * Lookup for ASCII code point c:
+ *
+ * Linear access from the start of the data array.
+ *
+ * value = data[c];
+ *
+ * Lookup for fast-range code point c:
+ *
+ * Shift the code point right by UCPTRIE_FAST_SHIFT=6 bits,
+ * fetch the index array value at that offset,
+ * add the lower code point bits, index into the data array.
+ *
+ * value = data[index[c>>6] + (c&0x3f)];
+ *
+ * (This works for ASCII as well.)
+ *
+ * Lookup for small-range code point c below highStart:
+ *
+ * Split the code point into four bit fields using several sets of shifts & masks
+ * to read consecutive values from the index-1, index-2, index-3 and data tables.
+ *
+ * If all of the data block offsets in an index-3 block fit within 16 bits (up to 0xffff),
+ * then the data block offsets are stored directly as uint16_t.
+ *
+ * Otherwise (this is very unusual but possible), the index-2 entry for the index-3 block
+ * has bit 15 (0x8000) set, and each set of 8 index-3 entries is preceded by
+ * an additional uint16_t word. Data block offsets are 18 bits wide, with the top 2 bits stored
+ * in the additional word.
+ *
+ * See ucptrie_internalSmallIndex() for details.
+ *
+ * (In a "small" trie, this works for ASCII and below-fast_limit code points as well.)
+ *
+ * Compaction:
+ *
+ * Multiple code point ranges ("blocks") that are aligned on certain boundaries
+ * (determined by the shifting/bit fields of code points) and
+ * map to the same data values normally share a single subsequence of the data array.
+ * Data blocks can also overlap partially.
+ * (Depending on the builder code finding duplicate and overlapping blocks.)
+ *
+ * Iteration over same-value ranges:
+ *
+ * Range iteration (ucptrie_getRange()) walks the structure from a start code point
+ * until some code point is found that maps to a different value;
+ * the end of the returned range is just before that.
+ *
+ * The header.dataNullOffset (split across two header fields, high bits in header.options)
+ * is the offset of a widely shared data block filled with one single value.
+ * It helps quickly skip over large ranges of data with that value.
+ * The builder must ensure that if the start of any data block (fast or small)
+ * matches the dataNullOffset, then the whole block must be filled with the null value.
+ * Special care must be taken if there is no fast null data block
+ * but a small one, which is shorter, and it matches the *start* of some fast data block.
+ *
+ * Similarly, the header.index3NullOffset is the index-array offset of an index-3 block
+ * where all index entries point to the dataNullOffset.
+ * If there is no such data or index-3 block, then these offsets are set to
+ * values that cannot be reached (data offset out of range/reserved index offset),
+ * normally UCPTRIE_NO_DATA_NULL_OFFSET or UCPTRIE_NO_INDEX3_NULL_OFFSET respectively.
+ ','line_number':149,'multiline':True]

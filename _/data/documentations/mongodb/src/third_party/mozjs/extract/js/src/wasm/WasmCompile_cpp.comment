@@ -1,0 +1,117 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ *
+ * Copyright 2015 Mozilla Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ','line_number':1,'multiline':True]['text':' See comments in WasmConstants.h regarding the meaning of the wormhole','line_number':95,'multiline':False]['text':' options.','line_number':96,'multiline':False]['text':' At most one optimizing compiler.','line_number':114,'multiline':False]['text':' Debug information such as source view or debug traps will require','line_number':117,'multiline':False]['text':' additional memory and permanently stay in baseline code, so we try to','line_number':118,'multiline':False]['text':' only enable it when a developer actually cares: when the debugger tab','line_number':119,'multiline':False]['text':' is open.','line_number':120,'multiline':False]['text':' The <Compiler>Available() predicates should ensure no failure here, but','line_number':126,'multiline':False]['text':' when we're fuzzing we allow inconsistent switches and the check may thus','line_number':127,'multiline':False]['text':' fail.  Let it go to a run-time error instead of crashing.','line_number':128,'multiline':False]['text':' This can happen only in testing, and in this case we don't have a','line_number':135,'multiline':False]['text':' proper way to signal the error, so just silently override the default,','line_number':136,'multiline':False]['text':' instead of adding a skip-if directive to every test using debug/gc.','line_number':137,'multiline':False]['text':'
+ * [SMDOC] Tiered wasm compilation.
+ *
+ * "Tiered compilation" refers to the mechanism where we first compile the code
+ * with a fast non-optimizing compiler so that we can start running the code
+ * quickly, while in the background recompiling the code with the slower
+ * optimizing compiler.  Code created by baseline is called "tier-1"; code
+ * created by the optimizing compiler is called "tier-2".  When the tier-2 code
+ * is ready, we "tier up" the code by creating paths from tier-1 code into their
+ * tier-2 counterparts; this patching is performed as the program is running.
+ *
+ * ## Selecting the compilation mode
+ *
+ * When wasm bytecode arrives, we choose the compilation strategy based on
+ * switches and on aspects of the code and the hardware.  If switches allow
+ * tiered compilation to happen (the normal case), the following logic applies.
+ *
+ * If the code is sufficiently large that tiered compilation would be beneficial
+ * but not so large that it might blow our compiled code budget and make
+ * compilation fail, we choose tiered compilation.  Otherwise we go straight to
+ * optimized code.
+ *
+ * The expected benefit of tiering is computed by TieringBeneficial(), below,
+ * based on various estimated parameters of the hardware: ratios of object code
+ * to byte code, speed of the system, number of cores.
+ *
+ * ## Mechanics of tiering up; patching
+ *
+ * Every time control enters a tier-1 function, the function prologue loads its
+ * tiering pointer from the tiering jump table (see JumpTable in WasmCode.h) and
+ * jumps to it.
+ *
+ * Initially, an entry in the tiering table points to the instruction inside the
+ * tier-1 function that follows the jump instruction (hence the jump is an
+ * expensive nop).  When the tier-2 compiler is finished, the table is patched
+ * racily to point into the tier-2 function at the correct prologue location
+ * (see loop near the end of Module::finishTier2()).  As tier-2 compilation is
+ * performed at most once per Module, there is at most one such racy overwrite
+ * per table element during the lifetime of the Module.
+ *
+ * The effect of the patching is to cause the tier-1 function to jump to its
+ * tier-2 counterpart whenever the tier-1 function is called subsequently.  That
+ * is, tier-1 code performs standard frame setup on behalf of whatever code it
+ * jumps to, and the target code (tier-1 or tier-2) allocates its own frame in
+ * whatever way it wants.
+ *
+ * The racy writing means that it is often nondeterministic whether tier-1 or
+ * tier-2 code is reached by any call during the tiering-up process; if F calls
+ * A and B in that order, it may reach tier-2 code for A and tier-1 code for B.
+ * If F is running concurrently on threads T1 and T2, T1 and T2 may see code
+ * from different tiers for either function.
+ *
+ * Note, tiering up also requires upgrading the jit-entry stubs so that they
+ * reference tier-2 code.  The mechanics of this upgrading are described at
+ * WasmInstanceObject::getExportedFunction().
+ *
+ * ## Current limitations of tiering
+ *
+ * Tiering is not always seamless.  Partly, it is possible for a program to get
+ * stuck in tier-1 code.  Partly, a function that has tiered up continues to
+ * force execution to go via tier-1 code to reach tier-2 code, paying for an
+ * additional jump and a slightly less optimized prologue than tier-2 code could
+ * have had on its own.
+ *
+ * Known tiering limitiations:
+ *
+ * - We can tier up only at function boundaries.  If a tier-1 function has a
+ *   long-running loop it will not tier up until it returns to its caller.  If
+ *   this loop never exits (a runloop in a worker, for example) then the
+ *   function will never tier up.
+ *
+ *   To do better, we need OSR.
+ *
+ * - Wasm Table entries are never patched during tier-up.  A Table of funcref
+ *   holds not a JSFunction pointer, but a (code*,Tls*) pair of pointers.  When
+ *   a table.set operation is performed, the JSFunction value is decomposed and
+ *   its code and Tls pointers are stored in the table; subsequently, when a
+ *   table.get operation is performed, the JSFunction value is reconstituted
+ *   from its code pointer using fairly elaborate machinery.  (The mechanics are
+ *   the same also for the reflected JS operations on a WebAssembly.Table.  For
+ *   everything, see WasmTable.{cpp,h}.)  The code pointer in the Table will
+ *   always be the code pointer belonging to the best tier that was active at
+ *   the time when that function was stored in that Table slot; in many cases,
+ *   it will be tier-1 code.  As a consequence, a call through a table will
+ *   first enter tier-1 code and then jump to tier-2 code.
+ *
+ *   To do better, we must update all the tables in the system when an instance
+ *   tiers up.  This is expected to be very hard.
+ *
+ * - Imported Wasm functions are never patched during tier-up.  Imports are held
+ *   in FuncImportTls values in the instance's Tls, and for a wasm callee,
+ *   what's stored is the raw code pointer into the best tier of the callee that
+ *   was active at the time the import was resolved.  That could be baseline
+ *   code, and if it is, the situation is as for Table entries: a call to an
+ *   import will always go via that import's tier-1 code, which will tier up
+ *   with an indirect jump.
+ *
+ *   To do better, we must update all the import tables in the system that
+ *   import functions from instances whose modules have tiered up.  This is
+ *   expected to be hard.
+ ','line_number':165,'multiline':True]['text':' Classify the current system as one of a set of recognizable classes.  This','line_number':267,'multiline':False]['text':' really needs to get our tier-1 systems right.','line_number':268,'multiline':False]['text':'','line_number':269,'multiline':False]['text':' TODO: We don't yet have a good measure of how fast a system is.  We','line_number':270,'multiline':False]['text':' distinguish between mobile and desktop because these are very different kinds','line_number':271,'multiline':False]['text':' of systems, but we could further distinguish between low / medium / high end','line_number':272,'multiline':False]['text':' within those major classes.  If we do so, then constants below would be','line_number':273,'multiline':False]['text':' provided for each (class, architecture, system-tier) combination, not just','line_number':274,'multiline':False]['text':' (class, architecture) as now.','line_number':275,'multiline':False]['text':'','line_number':276,'multiline':False]['text':' CPU clock speed is not by itself a good predictor of system performance, as','line_number':277,'multiline':False]['text':' there are high-performance systems with slow clocks (recent Intel) and','line_number':278,'multiline':False]['text':' low-performance systems with fast clocks (older AMD).  We can also use','line_number':279,'multiline':False]['text':' physical memory, core configuration, OS details, CPU class and family, and','line_number':280,'multiline':False]['text':' CPU manufacturer to disambiguate.','line_number':281,'multiline':False]['text':' Code sizes in machine code bytes per bytecode byte, again empirical except','line_number':329,'multiline':False]['text':' where marked.','line_number':330,'multiline':False]['text':'','line_number':331,'multiline':False]['text':' The Ion estimate for ARM64 is the measured Baseline value scaled by a','line_number':332,'multiline':False]['text':' plausible factor for optimized code.','line_number':333,'multiline':False]['text':' Estimate','line_number':341,'multiline':False]['text':' If parallel Ion compilation is going to take longer than this, we should','line_number':401,'multiline':False]['text':' tier.','line_number':402,'multiline':False]['text':' Compilation rate values are empirical except when noted, the reference','line_number':406,'multiline':False]['text':' systems are:','line_number':407,'multiline':False]['text':'','line_number':408,'multiline':False]['text':' Late-2013 MacBook Pro (2.6GHz 4 x hyperthreaded Haswell, Mac OS X)','line_number':409,'multiline':False]['text':' Late-2015 Nexus 5X (1.4GHz 4 x Cortex-A53 + 1.8GHz 2 x Cortex-A57, Android)','line_number':410,'multiline':False]['text':' Ca-2016 SoftIron Overdrive 1000 (1.7GHz 4 x Cortex-A57, Fedora)','line_number':411,'multiline':False]['text':'','line_number':412,'multiline':False]['text':' The rates are always per core.','line_number':413,'multiline':False]['text':'','line_number':414,'multiline':False]['text':' The estimate for ARM64 is the Baseline compilation rate on the SoftIron','line_number':415,'multiline':False]['text':' (because we have no Ion yet), divided by 5 to estimate Ion compile rate and','line_number':416,'multiline':False]['text':' then divided by 2 to make it more reasonable for consumer ARM64 systems.','line_number':417,'multiline':False]['text':' Estimate','line_number':422,'multiline':False]['text':' Tiering cutoff values: if code section sizes are below these values (when','line_number':424,'multiline':False]['text':' divided by the effective number of cores) we do not tier, because we guess','line_number':425,'multiline':False]['text':' that parallel Ion compilation will be fast enough.','line_number':426,'multiline':False]['text':' Guess','line_number':430,'multiline':False]['text':' As the number of cores grows the effectiveness of each core dwindles (on the','line_number':457,'multiline':False]['text':' systems we care about for SpiderMonkey).','line_number':458,'multiline':False]['text':'','line_number':459,'multiline':False]['text':' The data are empirical, computed from the observed compilation time of the','line_number':460,'multiline':False]['text':' Tanks demo code on a variable number of cores.','line_number':461,'multiline':False]['text':'','line_number':462,'multiline':False]['text':' The heuristic may fail on NUMA systems where the core count is high but the','line_number':463,'multiline':False]['text':' performance increase is nil or negative once the program moves beyond one','line_number':464,'multiline':False]['text':' socket.  However, few browser users have such systems.','line_number':465,'multiline':False]['text':' Don't tier if tiering will fill code memory to more to more than this','line_number':475,'multiline':False]['text':' fraction.','line_number':476,'multiline':False]['text':' Figure out whether we should use tiered compilation or not.','line_number':481,'multiline':False]['text':' It's mostly sensible not to background compile when there's only one','line_number':486,'multiline':False]['text':' hardware thread as we want foreground computation to have access to that.','line_number':487,'multiline':False]['text':' However, if wasm background compilation helper threads can be given lower','line_number':488,'multiline':False]['text':' priority then background compilation on single-core systems still makes','line_number':489,'multiline':False]['text':' some kind of sense.  That said, this is a non-issue: as of September 2017','line_number':490,'multiline':False]['text':' 1-core was down to 3.5% of our population and falling.','line_number':491,'multiline':False]['text':' Compute the max number of threads available to do actual background','line_number':497,'multiline':False]['text':' compilation work.','line_number':498,'multiline':False]['text':' The number of cores we will use is bounded both by the CPU count and the','line_number':502,'multiline':False]['text':' worker count, since the worker count already takes this into account.','line_number':503,'multiline':False]['text':' Ion compilation on available cores must take long enough to be worth the','line_number':509,'multiline':False]['text':' bother.','line_number':510,'multiline':False]['text':' Do not implement a size cutoff for 64-bit systems since the code size','line_number':519,'multiline':False]['text':' budget for 64 bit is so large that it will hardly ever be an issue.','line_number':520,'multiline':False]['text':' (Also the cutoff percentage might be different on 64-bit.)','line_number':521,'multiline':False]['text':' If the amount of executable code for baseline compilation jeopardizes the','line_number':524,'multiline':False]['text':' availability of executable memory for ion code then do not tier, for now.','line_number':525,'multiline':False]['text':'','line_number':526,'multiline':False]['text':' TODO: For now we consider this module in isolation.  We should really','line_number':527,'multiline':False]['text':' worry about what else is going on in this process and might be filling up','line_number':528,'multiline':False]['text':' the code memory.  It's like we need some kind of code memory reservation','line_number':529,'multiline':False]['text':' system or JIT compilation for large modules.','line_number':530,'multiline':False]['text':' If the sum of baseline and ion code makes us exceeds some set percentage','line_number':538,'multiline':False]['text':' of the executable memory then disable tiering.','line_number':539,'multiline':False]['text':' Check that this architecture either:','line_number':567,'multiline':False]['text':' - is cache-coherent, which is the case for most tier-1 architectures we care','line_number':568,'multiline':False]['text':' about.','line_number':569,'multiline':False]['text':' - or has the ability to invalidate the instruction cache of all threads, so','line_number':570,'multiline':False]['text':' background compilation in tiered compilation can be synchronized across all','line_number':571,'multiline':False]['text':' threads.','line_number':572,'multiline':False]['text':' Various constraints in various places should prevent failure here.','line_number':599,'multiline':False]['text':' Skip over the function body; it will be validated by the compilation','line_number':641,'multiline':False]['text':' thread.','line_number':642,'multiline':False]['text':' The caller doesn't care about success or failure; only that compilation','line_number':750,'multiline':False]['text':' is inactive, so there is no success to return here.','line_number':751,'multiline':False]

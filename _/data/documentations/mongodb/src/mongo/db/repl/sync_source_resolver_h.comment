@@ -1,0 +1,81 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * SyncSourceResolverResponse contains the result from running SyncSourceResolver. This result will
+ * indicate one of the following:
+ *          1. A new sync source was selected. isOK() will return true and getSyncSource() will
+ *              return the HostAndPort of the new sync source.
+ *          2. No sync source was selected. isOK() will return true and getSyncSource() will return
+ *              an empty HostAndPort.
+ *          3. All potential sync sources are too fresh. isOK() will return false and
+ *              syncSourceStatus will be ErrorCodes::OplogStartMissing and earliestOpTimeSeen will
+ *              contain a new MinValid boundry. getSyncSource() is not valid to call in this state.
+ ','line_number':62,'multiline':True]['text':' Contains the new syncSource if syncSourceStatus is OK and the HostAndPort is not empty.','line_number':74,'multiline':False]['text':' Contains the new MinValid boundry if syncSourceStatus is ErrorCodes::OplogStartMissing.','line_number':77,'multiline':False]['text':' Rollback ID of the selected sync source.','line_number':80,'multiline':False]['text':' The rbid is fetched before the required optime so callers can be sure that as long as the','line_number':81,'multiline':False]['text':' rbid is the same, the required optime is still present. The rbid will remain set to','line_number':82,'multiline':False]['text':' 'kUninitializedRollbackId' if _requiredOpTime is null.','line_number':83,'multiline':False]['text':'*
+ * Supplies a sync source to Fetcher, Rollback and Reporter.
+ * Obtains sync source candidates to probe from SyncSourceSelector.
+ * Each instance is created as needed whenever a new sync source is required and
+ * is meant to be discarded after the sync source resolution is finished - 'onCompletion'
+ * callback is invoked with the results contained in SyncSourceResolverResponse.
+ ','line_number':96,'multiline':True]['text':'*
+     * Callback function to report final status of resolving sync source.
+     ','line_number':113,'multiline':True]['text':'*
+     * Returns true if we are currently probing sync source candidates.
+     ','line_number':125,'multiline':True]['text':'*
+     * Starts probing sync source candidates returned by the sync source selector.
+     ','line_number':130,'multiline':True]['text':'*
+     * Cancels all remote commands.
+     ','line_number':135,'multiline':True]['text':'*
+     * Block until inactive.
+     ','line_number':140,'multiline':True]['text':'*
+     * Returns new sync source from selector.
+     ','line_number':149,'multiline':True]['text':'*
+     * Creates fetcher to read the first oplog entry on sync source.
+     ','line_number':154,'multiline':True]['text':'*
+     * Creates fetcher to check the remote oplog for '_requiredOpTime'.
+     ','line_number':160,'multiline':True]['text':'*
+     * Schedules fetcher to read oplog on sync source.
+     * Saves fetcher in '_fetcher' on success.
+     ','line_number':167,'multiline':True]['text':'*
+     * Returns optime of first oplog entry from fetcher response.
+     * Returns null optime on error.
+     ','line_number':173,'multiline':True]['text':'*
+     * Callback for fetching first oplog entry on sync source.
+     ','line_number':180,'multiline':True]['text':'*
+     * Schedules a replSetGetRBID command against the candidate to fetch its current rollback id.
+     ','line_number':187,'multiline':True]['text':'*
+     * Checks query response for required optime.
+     ','line_number':195,'multiline':True]['text':'*
+     * Callback for checking if the remote oplog contains '_requiredOpTime'.
+     ','line_number':200,'multiline':True]['text':'*
+     * Obtains new sync source candidate and schedules remote command to fetcher first oplog entry.
+     * May transition state to Complete.
+     * Returns status that could be used as result for startup().
+     ','line_number':208,'multiline':True]['text':'*
+     * Invokes completion callback and transitions state to State::kComplete.
+     * Returns result.getStatus().
+     ','line_number':215,'multiline':True]['text':' Executor used to send remote commands to sync source candidates.','line_number':223,'multiline':False]['text':' Sync source selector used to obtain sync source candidates and for us to denylist non-viable','line_number':226,'multiline':False]['text':' candidates.','line_number':227,'multiline':False]['text':' A viable sync source must contain a starting oplog entry with a timestamp equal or earlier','line_number':230,'multiline':False]['text':' than the timestamp in '_lastOpTimeFetched'.','line_number':231,'multiline':False]['text':' If '_requiredOpTime' is not null, a viable sync source must contain an oplog entry with an','line_number':234,'multiline':False]['text':' optime equal to this value.','line_number':235,'multiline':False]['text':' This is invoked exactly once after startup. The caller gets the results of the sync source','line_number':238,'multiline':False]['text':' resolver via this callback in a SyncSourceResolverResponse struct when the resolver finishes.','line_number':239,'multiline':False]['text':' Protects members of this sync source resolver defined below.','line_number':242,'multiline':False]['text':' State transitions:','line_number':246,'multiline':False]['text':' PreStart --> Running --> ShuttingDown --> Complete','line_number':247,'multiline':False]['text':' It is possible to skip intermediate states. For example,','line_number':248,'multiline':False]['text':' Calling shutdown() when the resolver has not started will transition from PreStart directly','line_number':249,'multiline':False]['text':' to Complete.','line_number':250,'multiline':False]['text':' Fetches first oplog entry on sync source candidate.','line_number':254,'multiline':False]['text':' Holds reference to fetcher in the process of shutting down.','line_number':257,'multiline':False]['text':' namespace repl','line_number':263,'multiline':False]['text':' namespace mongo','line_number':264,'multiline':False]

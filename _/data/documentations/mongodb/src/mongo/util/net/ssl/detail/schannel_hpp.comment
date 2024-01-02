@@ -1,0 +1,153 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':2,'multiline':True]['text':'*
+ * Reusable buffer. Behaves as a sort of producer consumer queue in a sense.
+ *
+ * Data is added to the buffer then removed.
+ *
+ * Typical workflow:
+ * - Write data
+ * - Write more data
+ * - Read some data
+ * - Keeping reading until empty
+ *
+ * Invariants:
+ * - Once reading from a buffer is started, no more writes are permitted until
+ *   consumer has read all the entire buffer.
+ ','line_number':50,'multiline':True]['text':'*
+     * Is buffer empty?
+     ','line_number':72,'multiline':True]['text':'*
+     * Get raw pointer to buffer.
+     ','line_number':79,'multiline':True]['text':'*
+     * Get current number of elements in buffer.
+     ','line_number':86,'multiline':True]['text':'*
+     * Reset to empty state.
+     ','line_number':93,'multiline':True]['text':'*
+     * Add data to empty buffer.
+     ','line_number':101,'multiline':True]['text':'*
+     * Reset current position to specified pointer in buffer.
+     ','line_number':110,'multiline':True]['text':'*
+     * Append data to buffer.
+     ','line_number':119,'multiline':True]['text':'*
+     * Read data from buffer. Can be a partial read.
+     ','line_number':131,'multiline':True]['text':' We have less then ASIO wants, give them everything we have','line_number':136,'multiline':False]['text':' We are empty so reset our state to need encrypted data for the next call','line_number':140,'multiline':False]['text':' ASIO wants less then we have so give them just what they want','line_number':144,'multiline':False]['text':'*
+     * Realloc buffer preserving existing data.
+     ','line_number':152,'multiline':True]['text':'*
+     * Swap current buffer with other buffer.
+     ','line_number':166,'multiline':True]['text':' Buffer of data','line_number':177,'multiline':False]['text':' Current read position in buffer','line_number':180,'multiline':False]['text':' Count of elements in buffer','line_number':183,'multiline':False]['text':' Capacity of buffer for elements, always >= _size','line_number':186,'multiline':False]['text':' Default buffer size. SSL has a max encapsulated packet size of 16 kb.','line_number':190,'multiline':False]['text':' This enum mirrors the engine::want enum. The values must be kept in sync','line_number':193,'multiline':False]['text':' to support a simple conversion from ssl_want to engine::want, see ssl_want_to_engine.','line_number':194,'multiline':False]['text':' Returned by functions to indicate that the engine wants input. The input','line_number':196,'multiline':False]['text':' buffer should be updated to point to the data. The engine then needs to','line_number':197,'multiline':False]['text':' be called again to retry the operation.','line_number':198,'multiline':False]['text':' Returned by functions to indicate that the engine wants to write output.','line_number':201,'multiline':False]['text':' The output buffer points to the data to be written. The engine then','line_number':202,'multiline':False]['text':' needs to be called again to retry the operation.','line_number':203,'multiline':False]['text':' Returned by functions to indicate that the engine doesn't need input or','line_number':206,'multiline':False]['text':' output.','line_number':207,'multiline':False]['text':' Returned by functions to indicate that the engine wants to write output.','line_number':210,'multiline':False]['text':' The output buffer points to the data to be written. After that the','line_number':211,'multiline':False]['text':' operation is complete, and the engine does not need to be called again.','line_number':212,'multiline':False]['text':'*
+ * Manages the SSL handshake and shutdown state machines.
+ *
+ * Handshakes are always the first set of events during SSL connection initiation.
+ * Shutdown can occur anytime after the handshake has succesfully finished
+ * as a result of a read event or explicit shutdown request from the engine.
+ ','line_number':216,'multiline':True]['text':'*
+     * Handshake Mode indicates whether this a for a client or server side.
+     *
+     * Each given connection can only be a client or server, and it cannot change once set.
+     ','line_number':225,'multiline':True]['text':' Initial state, illegal for clients to set','line_number':231,'multiline':False]['text':' Client handshake, connect side','line_number':234,'multiline':False]['text':' Server handshake, accept side','line_number':237,'multiline':False]['text':'*
+     * Handshake state indicates to the caller if nextHandshake needs to be called next.
+     ','line_number':241,'multiline':True]['text':' Caller should continue to call nextHandshake, the handshake is not done.','line_number':245,'multiline':False]['text':' Caller should not continue to call nextHandshake, the handshake is done.','line_number':248,'multiline':False]['text':'*
+     * Set the current handdshake mode as client or server.
+     *
+     * Idempotent if called with same mode otherwise it asserts.
+     ','line_number':270,'multiline':True]['text':'*
+     * Start or continue SSL handshake.
+     *
+     * Must be called until HandshakeState::Done is returned.
+     *
+     * Return status code to indicate whether it needs more data or if data needs to be sent to the
+     * other side.
+     ','line_number':281,'multiline':True]['text':'*
+     * Begin graceful SSL shutdown. Either:
+     * - respond to already received alert signalling connection shutdown on remote side
+     * - start SSL shutdown by signalling remote side
+     ','line_number':291,'multiline':True]['text':'
+     * Ingest data from ASIO that has been received.
+     ','line_number':298,'multiline':True]['text':'*
+     * Returns true if there is data to send over the wire.
+     ','line_number':303,'multiline':True]['text':'*
+     * Returns the SNI captured in doServerHandshake.
+     ','line_number':310,'multiline':True]['text':'*
+     * Get data to sent over the network.
+     ','line_number':321,'multiline':True]['text':'*
+     * RAII class to free a buffer allocated by SSPI.
+     ','line_number':348,'multiline':True]['text':'*
+     * Handshake State machine:
+     *                          +-----------------------------+
+     *                          v                             |
+     * +----------------+     +-----------------------+     +-------------------+     +------+
+     * | HandshakeStart | --> | NeedMoreHandshakeData | --> | HaveEncryptedData | --> | Done |
+     * +----------------+     +-----------------------+     +-------------------+     +------+
+     *                          ^                   |
+     *                          +-------------------+
+     *
+     * echo "[ HandshakeStart ] --> [ NeedMoreHandshakeData ] --> [ NeedMoreHandshakeData ] -->
+     * [HaveEncryptedData] -> [NeedMoreHandshakeData], [Done]" | graph-easy "[ HandshakeStart ] -->
+     * [ NeedMoreHandshakeData ] --> [HaveEncryptedData] -> [
+     ','line_number':372,'multiline':True]['text':' Initial state','line_number':387,'multiline':False]['text':' Handshake needs more data before it decode the next message','line_number':390,'multiline':False]['text':' Handshake just received some data, and can now try to decrypt it','line_number':393,'multiline':False]['text':' Handshake is done','line_number':396,'multiline':False]['text':'*
+     * Transition state machine
+     ','line_number':400,'multiline':True]['text':' State machine','line_number':413,'multiline':False]['text':' Handshake mode - client or server','line_number':416,'multiline':False]['text':' Server name for TLS SNI purposes','line_number':419,'multiline':False]['text':' For reading in the SNI from client hello','line_number':422,'multiline':False]['text':' Checks whether the sni has been set.','line_number':425,'multiline':False]['text':' SChannel function to get the SNI from the client hello','line_number':428,'multiline':False]['text':' Buffer of data received from remote side','line_number':431,'multiline':False]['text':' Scratch buffer to capture extra handshake data','line_number':434,'multiline':False]['text':' Buffer to data to send to remote side','line_number':437,'multiline':False]['text':' Buffer of data received from remote side','line_number':440,'multiline':False]['text':' SChannel Credentials','line_number':443,'multiline':False]['text':' SChannel context','line_number':446,'multiline':False]['text':' Credential handle','line_number':449,'multiline':False]['text':'*
+ * Manages the SSL read state machine.
+ *
+ * Notifies callers of graceful SSL shutdown events.
+ ','line_number':453,'multiline':True]['text':'*
+     * Indicates whether client should continue to decrypt data or it needs to handle other protocol
+     * signals.
+     ','line_number':460,'multiline':True]['text':' SSL connection is proceeding normally','line_number':465,'multiline':False]['text':' Remote side has signaled graceful SSL shutdown','line_number':468,'multiline':False]['text':' Remote side has signaled renegtiation','line_number':471,'multiline':False]['text':'*
+     * Read decrypted data if encrypted data was provided via writeData and succesfully decrypted.
+     ','line_number':485,'multiline':True]['text':'*
+     * Receive more data from ASIO.
+     ','line_number':494,'multiline':True]['text':' We have more data, it may not be enough to decode but we will figure that out later.','line_number':500,'multiline':False]['text':'*
+     * Read State machine:
+     *
+     *  +------------------------------------------------------------+
+     *  |                                                            |
+     *  |                                                            |
+     *  |    +-----------------------------+                         |
+     *  |    v                             |                         |
+     *  |  +-----------------------+     +-------------------+     +-------------------+
+     *  +> | NeedMoreEncryptedData | --> | HaveEncryptedData | --> | HaveDecryptedData |
+     *     +-----------------------+     +-------------------+     +-------------------+
+     *       ^                   |         ^                         |
+     *       +-------------------+         +-------------------------+
+     *
+     * "[ NeedMoreEncryptedData ] --> [ HaveEncryptedData ] --> [HaveDecryptedData] ->
+     * [NeedMoreEncryptedData], [HaveEncryptedData] --> [NeedMoreEncryptedData]  " | graph-easy
+     *
+     ','line_number':510,'multiline':True]['text':' Initial state, Need more data from remote side','line_number':529,'multiline':False]['text':' Have some encrypted data, unknown if it is a complete packet','line_number':532,'multiline':False]['text':' Was able to decrypt a packet, give decrypted data back to client','line_number':535,'multiline':False]['text':'*
+     * Transition state machine
+     ','line_number':539,'multiline':True]['text':' State machine','line_number':555,'multiline':False]['text':' Scratch buffer to capture extra decryption data','line_number':558,'multiline':False]['text':' Buffer of data from the remote side','line_number':561,'multiline':False]['text':' SChannel context handle','line_number':564,'multiline':False]['text':' Credential handle','line_number':567,'multiline':False]['text':'*
+ * Manages the SSL write state machine.
+ ','line_number':571,'multiline':True]['text':'*
+     * Encrypts data to be sent to the remote side.
+     *
+     * If the message is >= max packet side, it will return want_output_and_retry, and expects
+     * callers to continue to call it with the same parameters until want_output is returned.
+     ','line_number':579,'multiline':True]['text':'*
+     * Read encrypted data to be sent to the remote side.
+     ','line_number':590,'multiline':True]['text':' Buffer of data to send to the remote side','line_number':604,'multiline':False]['text':' SChannel context handle','line_number':607,'multiline':False]['text':' Position to start encrypting from for messages needing fragmentation','line_number':610,'multiline':False]['text':' TLS packet header length','line_number':613,'multiline':False]['text':' TLS max packet size - 16kb typically','line_number':616,'multiline':False]['text':' TLS packet trailer length','line_number':619,'multiline':False]['text':' namespace detail','line_number':625,'multiline':False]['text':' namespace ssl','line_number':626,'multiline':False]['text':' namespace asio','line_number':627,'multiline':False]

@@ -1,0 +1,61 @@
+['text':'*
+ *    Copyright (C) 2019-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * Fixture for the task executor cursor tests which offers some convenience methods to help with
+ * scheduling responses. Uses the CRTP pattern so that the tests can be shared between child-classes
+ * that provide their own implementations of the network-mocking needed for the tests.
+ ','line_number':115,'multiline':True]['text':'*
+     * Ensure we work for a single simple batch
+     ','line_number':177,'multiline':True]['text':'*
+     * Ensure the firstBatch can be read correctly when multiple cursors are returned.
+     ','line_number':204,'multiline':True]['text':'*
+     * The operation context under which we send the original cursor-establishing command
+     * can be destructed before getNext is called with new opCtx. Ensure that 'child'
+     * TaskExecutorCursors created from the original TEC's multi-cursor-response can safely
+     * operate if this happens/don't try and use the now-destroyed operation context.
+     * See SERVER-69702 for context
+     ','line_number':239,'multiline':True]['text':' Before calling getNext (and therefore spawning child TECs), destroy the opCtx','line_number':264,'multiline':False]['text':' we used to send the initial query and make a new one.','line_number':265,'multiline':False]['text':' Use the new opCtx to call getNext. The child TECs should not attempt to read from the','line_number':269,'multiline':False]['text':' now dead original opCtx.','line_number':270,'multiline':False]['text':' If we try to getNext() at this point, we are interruptible and can timeout','line_number':312,'multiline':False]['text':' We can pick up after that interruption though','line_number':319,'multiline':False]['text':' Repeat for second cursor.','line_number':324,'multiline':False]['text':' Read second batch, then schedule EOF on both cursors.','line_number':339,'multiline':False]['text':' Then read final document for each.','line_number':340,'multiline':False]['text':' Shouldn't have any more requests, both cursors are closed.','line_number':353,'multiline':False]['text':'*
+     * Ensure we work if find fails (and that we receive the error code it failed with)
+     ','line_number':360,'multiline':True]['text':'*
+     * Ensure multiple batches works correctly
+     ','line_number':381,'multiline':True]['text':' ASSERT(hasReadyRequests());','line_number':405,'multiline':False]['text':' If we try to getNext() at this point, we are interruptible and can timeout','line_number':409,'multiline':False]['text':' We can pick up after that interruption though','line_number':416,'multiline':False]['text':' We don't issue extra getmores after returning a 0 cursor id','line_number':431,'multiline':False]['text':'*
+     * Ensure we allow empty firstBatch.
+     ','line_number':437,'multiline':True]['text':' Schedule a cursor response with an empty "firstBatch". Use end < start so we don't','line_number':460,'multiline':False]['text':' append any doc to "firstBatch".','line_number':461,'multiline':False]['text':' Wait for the getMore run by the getNext() below to be ready, and schedule a','line_number':465,'multiline':False]['text':' cursor response with a non-empty "nextBatch".','line_number':466,'multiline':False]['text':' Verify that the first doc is the doc from the second batch.','line_number':474,'multiline':False]['text':'*
+     * Ensure we allow any empty non-initial batch.
+     ','line_number':480,'multiline':True]['text':' Schedule a cursor response with a non-empty "firstBatch".','line_number':503,'multiline':False]['text':' Schedule two consecutive cursor responses with empty "nextBatch". Use end < start so','line_number':508,'multiline':False]['text':' we don't append any doc to "nextBatch".','line_number':509,'multiline':False]['text':' Wait for the first getMore run by the getNext() below to be ready, and schedule a','line_number':514,'multiline':False]['text':' cursor response with a non-empty "nextBatch".','line_number':515,'multiline':False]['text':' Wait for the second getMore run by the getNext() below to be ready, and schedule a','line_number':523,'multiline':False]['text':' cursor response with a non-empty "nextBatch".','line_number':524,'multiline':False]['text':' Verify that the next doc is the doc from the fourth batch.','line_number':532,'multiline':False]['text':'*
+     * Test that if 'preFetchNextBatch' is false, the TaskExecutorCursor does not request GetMores
+     * until the current batch is exhausted and 'getNext()' is invoked.
+     ','line_number':538,'multiline':True]['text':' The lambda that will be used to augment the getMore request sent below is passed into','line_number':551,'multiline':False]['text':' the TEC constructor.','line_number':552,'multiline':False]['text':' Construction of the TaskExecutorCursor enqueues a request in the','line_number':557,'multiline':False]['text':' NetworkInterfaceMock.','line_number':558,'multiline':False]['text':' Mock the response for the first batch.','line_number':567,'multiline':False]['text':' Exhaust the first batch.','line_number':570,'multiline':False]['text':' Assert that the TaskExecutorCursor has not requested a GetMore. This enforces that','line_number':574,'multiline':False]['text':' 'preFetchNextBatch' works as expected.','line_number':575,'multiline':False]['text':' As soon as 'getNext()' is invoked, the TaskExecutorCursor will try to send a GetMore','line_number':578,'multiline':False]['text':' and that will block this thread in the NetworkInterfaceMock until there is a','line_number':579,'multiline':False]['text':' scheduled response. However, we cannot schedule the cursor response on the main','line_number':580,'multiline':False]['text':' thread before we call 'getNext()' as that will cause the NetworkInterfaceMock to','line_number':581,'multiline':False]['text':' block until there is request enqueued ('getNext()' is the function which will enqueue','line_number':582,'multiline':False]['text':' such as request). To avoid this deadlock, we start a new thread which will schedule a','line_number':583,'multiline':False]['text':' response on the NetworkInterfaceMock.','line_number':584,'multiline':False]['text':' Assert that the command processed for the above response matches with the','line_number':588,'multiline':False]['text':' lambda to augment the getMore command used during construction of the TEC','line_number':589,'multiline':False]['text':' above.','line_number':590,'multiline':False]['text':' Schedules the GetMore request and exhausts the cursor.','line_number':597,'multiline':False]['text':' Joining the thread which schedules the cursor response for the GetMore here forces','line_number':601,'multiline':False]['text':' the destructor of NetworkInterfaceMock::InNetworkGuard to run, which ensures that the','line_number':602,'multiline':False]['text':' 'NetworkInterfaceMock' stops executing as the network thread. This is required before','line_number':603,'multiline':False]['text':' we invoke 'hasReadyRequests()' which enters the network again.','line_number':604,'multiline':False]['text':' Assert no GetMore is requested.','line_number':607,'multiline':False]['text':' Wait until we recieved the command request.','line_number':710,'multiline':False]['text':' Now we expect source message to be called and provide the response','line_number':713,'multiline':False]['text':' Don't assert that the network has requests like we do in other classes. This is to enable','line_number':786,'multiline':False]['text':' the test in 'NoPrefetchGetMore'.','line_number':787,'multiline':False]['text':'*
+ * Ensure early termination of the cursor calls killCursor (if we know about the cursor id)
+ * Only applicable to the unpinned case - if the connection is pinned, and a getMore is
+ * in progress and/or fails, the most we can do is kill the connection. We can't re-use
+ * the connection to send killCursors.
+ ','line_number':890,'multiline':True]['text':' Black hole the pending `getMore` operation scheduled by the `TaskExecutorCursor`.','line_number':914,'multiline':False]['text':'*
+ * Ensure the LSID is passed in all stages of querying. Need to test the
+ * pinning case separately because of difference around killCursor.
+ ','line_number':973,'multiline':True]['text':' lsid in the first batch','line_number':998,'multiline':False]['text':' lsid in the getmore','line_number':1006,'multiline':False]['text':' lsid in the killcursor','line_number':1014,'multiline':False]['text':' namespace','line_number':1031,'multiline':False]['text':' namespace executor','line_number':1032,'multiline':False]['text':' namespace mongo','line_number':1033,'multiline':False]

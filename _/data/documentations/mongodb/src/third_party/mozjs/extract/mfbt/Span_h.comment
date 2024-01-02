@@ -1,0 +1,162 @@
+['text':'/////////////////////////////////////////////////////////////////////////////','line_number':1,'multiline':False]['text':'','line_number':2,'multiline':False]['text':' Copyright (c) 2015 Microsoft Corporation. All rights reserved.','line_number':3,'multiline':False]['text':'','line_number':4,'multiline':False]['text':' This code is licensed under the MIT License (MIT).','line_number':5,'multiline':False]['text':'','line_number':6,'multiline':False]['text':' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR','line_number':7,'multiline':False]['text':' IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,','line_number':8,'multiline':False]['text':' FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE','line_number':9,'multiline':False]['text':' AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER','line_number':10,'multiline':False]['text':' LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,','line_number':11,'multiline':False]['text':' OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN','line_number':12,'multiline':False]['text':' THE SOFTWARE.','line_number':13,'multiline':False]['text':'','line_number':14,'multiline':False]['text':'/////////////////////////////////////////////////////////////////////////////','line_number':15,'multiline':False]['text':' Adapted from','line_number':17,'multiline':False]['text':' https://github.com/Microsoft/GSL/blob/3819df6e378ffccf0e29465afe99c3b324c2aa70/include/gsl/span','line_number':18,'multiline':False]['text':' and','line_number':19,'multiline':False]['text':' https://github.com/Microsoft/GSL/blob/3819df6e378ffccf0e29465afe99c3b324c2aa70/include/gsl/gsl_util','line_number':20,'multiline':False]['text':' Stuff from gsl_util','line_number':44,'multiline':False]['text':' narrow_cast(): a searchable way to do narrowing casts of values','line_number':46,'multiline':False]['text':' end gsl_util','line_number':52,'multiline':False]['text':' [views.constants], constants','line_number':54,'multiline':False]['text':' This was -1 in gsl::span, but using size_t for sizes instead of ptrdiff_t','line_number':55,'multiline':False]['text':' and reserving a magic value that realistically doesn't occur in','line_number':56,'multiline':False]['text':' compile-time-constant Span sizes makes things a lot less messy in terms of','line_number':57,'multiline':False]['text':' comparison between signed and unsigned.','line_number':58,'multiline':False]['text':' implementation details','line_number':64,'multiline':False]['text':' For whatever reason, the compiler doesn't like optimizing away the above','line_number':123,'multiline':False]['text':' MOZ_RELEASE_ASSERT when `span_iterator` is constructed for','line_number':124,'multiline':False]['text':' obviously-correct cases like `span.begin()` or `span.end()`.  We provide','line_number':125,'multiline':False]['text':' this private constructor for such cases.','line_number':126,'multiline':False]['text':' `other` is already correct by construction; we do not need to go through','line_number':132,'multiline':False]['text':' the release assert above.  Put differently, this constructor is effectively','line_number':133,'multiline':False]['text':' a copy constructor and therefore needs no assertions.','line_number':134,'multiline':False]['text':' Iterators from different spans are uncomparable. A diagnostic assertion','line_number':204,'multiline':False]['text':' should be enough to check this, though. To ensure that no iterators from','line_number':205,'multiline':False]['text':' different spans are ever considered equal, still compare them in release','line_number':206,'multiline':False]['text':' builds.','line_number':207,'multiline':False]['text':' namespace span_details','line_number':294,'multiline':False]['text':'*
+ * Span - slices for C++
+ *
+ * Span implements Rust's slice concept for C++. It's called "Span" instead of
+ * "Slice" to follow the naming used in C++ Core Guidelines.
+ *
+ * A Span wraps a pointer and a length that identify a non-owning view to a
+ * contiguous block of memory of objects of the same type. Various types,
+ * including (pre-decay) C arrays, XPCOM strings, nsTArray, mozilla::Array,
+ * mozilla::Range and contiguous standard-library containers, auto-convert
+ * into Spans when attempting to pass them as arguments to methods that take
+ * Spans. (Span itself autoconverts into mozilla::Range.)
+ *
+ * Like Rust's slices, Span provides safety against out-of-bounds access by
+ * performing run-time bound checks. However, unlike Rust's slices, Span
+ * cannot provide safety against use-after-free.
+ *
+ * (Note: Span is like Rust's slice only conceptually. Due to the lack of
+ * ABI guarantees, you should still decompose spans/slices to raw pointer
+ * and length parts when crossing the FFI. The Elements() and data() methods
+ * are guaranteed to return a non-null pointer even for zero-length spans,
+ * so the pointer can be used as a raw part of a Rust slice without further
+ * checks.)
+ *
+ * In addition to having constructors (with the support of deduction guides)
+ * that take various well-known types, a Span for an arbitrary type can be
+ * constructed from a pointer and a length or a pointer and another pointer
+ * pointing just past the last element.
+ *
+ * A Span<const char> or Span<const char16_t> can be obtained for const char*
+ * or const char16_t pointing to a zero-terminated string using the
+ * MakeStringSpan() function (which treats a nullptr argument equivalently
+ * to the empty string). Corresponding implicit constructor does not exist
+ * in order to avoid accidental construction in cases where const char* or
+ * const char16_t* do not point to a zero-terminated string.
+ *
+ * Span has methods that follow the Mozilla naming style and methods that
+ * don't. The methods that follow the Mozilla naming style are meant to be
+ * used directly from Mozilla code. The methods that don't are meant for
+ * integration with C++11 range-based loops and with meta-programming that
+ * expects the same methods that are found on the standard-library
+ * containers. For example, to decompose a Span into its parts in Mozilla
+ * code, use Elements() and Length() (as with nsTArray) instead of data()
+ * and size() (as with std::vector).
+ *
+ * The pointer and length wrapped by a Span cannot be changed after a Span has
+ * been created. When new values are required, simply create a new Span. Span
+ * has a method called Subspan() that works analogously to the Substring()
+ * method of XPCOM strings taking a start index and an optional length. As a
+ * Mozilla extension (relative to Microsoft's gsl::span that mozilla::Span is
+ * based on), Span has methods From(start), To(end) and FromTo(start, end)
+ * that correspond to Rust's &slice[start..], &slice[..end] and
+ * &slice[start..end], respectively. (That is, the end index is the index of
+ * the first element not to be included in the new subspan.)
+ *
+ * When indicating a Span that's only read from, const goes inside the type
+ * parameter. Don't put const in front of Span. That is:
+ * size_t ReadsFromOneSpanAndWritesToAnother(Span<const uint8_t> aReadFrom,
+ *                                           Span<uint8_t> aWrittenTo);
+ *
+ * Any Span<const T> can be viewed as Span<const uint8_t> using the function
+ * AsBytes(). Any Span<T> can be viewed as Span<uint8_t> using the function
+ * AsWritableBytes().
+ *
+ * Note that iterators from different Span instances are uncomparable, even if
+ * they refer to the same memory. This also applies to any spans derived via
+ * Subspan etc.
+ ','line_number':296,'multiline':True]['text':' = dynamic_extent ','line_number':364,'multiline':True]['text':' constants and types','line_number':367,'multiline':False]['text':' [Span.cons], Span constructors, copy, assignment, and destructor','line_number':382,'multiline':False]['text':' "Dependent" is needed to make "std::enable_if_t<(Dependent ||','line_number':383,'multiline':False]['text':'   Extent == 0 || Extent == dynamic_extent)>" SFINAE,','line_number':384,'multiline':False]['text':' since','line_number':385,'multiline':False]['text':' "std::enable_if_t<(Extent == 0 || Extent == dynamic_extent)>" is','line_number':386,'multiline':False]['text':' ill-formed when Extent is neither of the extreme values.','line_number':387,'multiline':False]['text':'*
+   * Constructor with no args.
+   ','line_number':388,'multiline':True]['text':'*
+   * Constructor for nullptr.
+   ','line_number':396,'multiline':True]['text':'*
+   * Constructor for pointer and length.
+   ','line_number':401,'multiline':True]['text':'*
+   * Constructor for start pointer and pointer past end.
+   ','line_number':406,'multiline':True]['text':'*
+   * Constructor for pair of Span iterators.
+   ','line_number':412,'multiline':True]['text':'*
+   * Constructor for C array.
+   ','line_number':423,'multiline':True]['text':' Implicit constructors for char* and char16_t* pointers are deleted in order','line_number':430,'multiline':False]['text':' to avoid accidental construction in cases where a pointer does not point to','line_number':431,'multiline':False]['text':' a zero-terminated string. A Span<const char> or Span<const char16_t> can be','line_number':432,'multiline':False]['text':' obtained for const char* or const char16_t pointing to a zero-terminated','line_number':433,'multiline':False]['text':' string using the MakeStringSpan() function.','line_number':434,'multiline':False]['text':' (This must be a template because otherwise it will prevent the previous','line_number':435,'multiline':False]['text':' array constructor to match because an array decays to a pointer. This only','line_number':436,'multiline':False]['text':' exists to point to the above explanation, since there's no other','line_number':437,'multiline':False]['text':' constructor that would match.)','line_number':438,'multiline':False]['text':'*
+   * Constructor for std::array.
+   ','line_number':447,'multiline':True]['text':'*
+   * Constructor for const std::array.
+   ','line_number':455,'multiline':True]['text':'*
+   * Constructor for mozilla::Array.
+   ','line_number':463,'multiline':True]['text':'*
+   * Constructor for const mozilla::Array.
+   ','line_number':471,'multiline':True]['text':'*
+   * Constructor for mozilla::UniquePtr holding an array and length.
+   ','line_number':479,'multiline':True]['text':' NB: the SFINAE here uses .data() as a incomplete/imperfect proxy for the','line_number':487,'multiline':False]['text':' requirement on Container to be a contiguous sequence container.','line_number':488,'multiline':False]['text':'*
+   * Constructor for standard-library containers.
+   ','line_number':489,'multiline':True]['text':'*
+   * Constructor for standard-library containers (const version).
+   ','line_number':505,'multiline':True]['text':' NB: the SFINAE here uses .Elements() as a incomplete/imperfect proxy for','line_number':519,'multiline':False]['text':' the requirement on Container to be a contiguous sequence container.','line_number':520,'multiline':False]['text':'*
+   * Constructor for contiguous Mozilla containers.
+   ','line_number':521,'multiline':True]['text':'*
+   * Constructor for contiguous Mozilla containers (const version).
+   ','line_number':537,'multiline':True]['text':'*
+   * Constructor from other Span.
+   ','line_number':552,'multiline':True]['text':'*
+   * Constructor from other Span.
+   ','line_number':557,'multiline':True]['text':'*
+   * Constructor from other Span with conversion of element type.
+   ','line_number':562,'multiline':True]['text':'*
+   * Constructor from other Span with conversion of element type.
+   ','line_number':575,'multiline':True]['text':' [Span.sub], Span subviews','line_number':593,'multiline':False]['text':'*
+   * Subspan with first N elements with compile-time N.
+   ','line_number':594,'multiline':True]['text':'*
+   * Subspan with last N elements with compile-time N.
+   ','line_number':603,'multiline':True]['text':'*
+   * Subspan with compile-time start index and length.
+   ','line_number':613,'multiline':True]['text':'*
+   * Subspan with first N elements with run-time N.
+   ','line_number':624,'multiline':True]['text':'*
+   * Subspan with last N elements with run-time N.
+   ','line_number':632,'multiline':True]['text':'*
+   * Subspan with run-time start index and length.
+   ','line_number':641,'multiline':True]['text':'*
+   * Subspan with run-time start index. (Rust's &foo[start..])
+   ','line_number':653,'multiline':True]['text':'*
+   * Subspan with run-time exclusive end index. (Rust's &foo[..end])
+   ','line_number':660,'multiline':True]['text':'*
+   * Subspan with run-time start index and exclusive end index.
+   * (Rust's &foo[start..end])
+   ','line_number':667,'multiline':True]['text':' [Span.obs], Span observers','line_number':677,'multiline':False]['text':'*
+   * Number of elements in the span.
+   ','line_number':678,'multiline':True]['text':'*
+   * Number of elements in the span (standard-libray duck typing version).
+   ','line_number':683,'multiline':True]['text':'*
+   * Size of the span in bytes.
+   ','line_number':688,'multiline':True]['text':'*
+   * Size of the span in bytes (standard-library naming style version).
+   ','line_number':693,'multiline':True]['text':'*
+   * Checks if the the length of the span is zero.
+   ','line_number':700,'multiline':True]['text':'*
+   * Checks if the the length of the span is zero (standard-libray duck
+   * typing version).
+   ','line_number':705,'multiline':True]['text':' [Span.elem], Span element access','line_number':711,'multiline':False]['text':'*
+   * Access element of span by index (standard-library duck typing version).
+   ','line_number':717,'multiline':True]['text':'*
+   * Pointer to the first element of the span. The return value is never
+   * nullptr, not ever for zero-length spans, so it can be passed as-is
+   * to std::slice::from_raw_parts() in Rust.
+   ','line_number':726,'multiline':True]['text':'*
+   * Pointer to the first element of the span (standard-libray duck typing
+   * version). The return value is never nullptr, not ever for zero-length
+   * spans, so it can be passed as-is to std::slice::from_raw_parts() in Rust.
+   ','line_number':733,'multiline':True]['text':' [Span.iter], Span iterator support','line_number':740,'multiline':False]['text':' this implementation detail class lets us take advantage of the','line_number':784,'multiline':False]['text':' empty base class optimization to pay for only storage of a single','line_number':785,'multiline':False]['text':' pointer in the case of fixed-size Spans','line_number':786,'multiline':False]['text':' Replace nullptr with aligned bogus pointer for Rust slice','line_number':793,'multiline':False]['text':' compatibility. See','line_number':794,'multiline':False]['text':' https://doc.rust-lang.org/std/slice/fn.from_raw_parts.html','line_number':795,'multiline':False]['text':' [Span.comparison], Span comparison operators','line_number':833,'multiline':False]['text':' if we only supported compilers with good constexpr support then','line_number':873,'multiline':False]['text':' this pair of classes could collapse down to a constexpr function','line_number':874,'multiline':False]['text':' we should use a narrow_cast<> to go to size_t, but older compilers may not','line_number':876,'multiline':False]['text':' see it as constexpr and so will fail compilation of the template','line_number':877,'multiline':False]['text':' namespace span_details','line_number':888,'multiline':False]['text':' [Span.objectrep], views of object representation','line_number':890,'multiline':False]['text':'*
+ * View span as Span<const uint8_t>.
+ ','line_number':891,'multiline':True]['text':'*
+ * View span as Span<uint8_t>.
+ ','line_number':901,'multiline':True]['text':'*
+ * View a span of uint8_t as a span of char.
+ ','line_number':911,'multiline':True]['text':'*
+ * View a writable span of uint8_t as a span of char.
+ ','line_number':918,'multiline':True]['text':'*
+ * Create span from a zero-terminated C string. nullptr is
+ * treated as the empty string.
+ ','line_number':925,'multiline':True]['text':'*
+ * Create span from a zero-terminated UTF-16 C string. nullptr is
+ * treated as the empty string.
+ ','line_number':937,'multiline':True]['text':' namespace mozilla','line_number':949,'multiline':False]['text':' mozilla_Span_h','line_number':951,'multiline':False]

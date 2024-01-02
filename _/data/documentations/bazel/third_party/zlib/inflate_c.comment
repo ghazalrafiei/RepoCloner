@@ -1,0 +1,225 @@
+['text':' inflate.c -- zlib decompression
+ * Copyright (C) 1995-2022 Mark Adler
+ * For conditions of distribution and use, see copyright notice in zlib.h
+ ','line_number':1,'multiline':True]['text':'
+ * Change history:
+ *
+ * 1.2.beta0    24 Nov 2002
+ * - First version -- complete rewrite of inflate to simplify code, avoid
+ *   creation of window when not needed, minimize use of window when it is
+ *   needed, make inffast.c even faster, implement gzip decoding, and to
+ *   improve code readability and style over the previous zlib inflate code
+ *
+ * 1.2.beta1    25 Nov 2002
+ * - Use pointers for available input and output checking in inffast.c
+ * - Remove input and output counters in inffast.c
+ * - Change inffast.c entry and loop from avail_in >= 7 to >= 6
+ * - Remove unnecessary second byte pull from length extra in inffast.c
+ * - Unroll direct copy to three copies per loop in inffast.c
+ *
+ * 1.2.beta2    4 Dec 2002
+ * - Change external routine names to reduce potential conflicts
+ * - Correct filename to inffixed.h for fixed tables in inflate.c
+ * - Make hbuf[] unsigned char to match parameter type in inflate.c
+ * - Change strm->next_out[-state->offset] to *(strm->next_out - state->offset)
+ *   to avoid negation problem on Alphas (64 bit) in inflate.c
+ *
+ * 1.2.beta3    22 Dec 2002
+ * - Add comments on state->bits assertion in inffast.c
+ * - Add comments on op field in inftrees.h
+ * - Fix bug in reuse of allocated window after inflateReset()
+ * - Remove bit fields--back to byte structure for speed
+ * - Remove distance extra == 0 check in inflate_fast()--only helps for lengths
+ * - Change post-increments to pre-increments in inflate_fast(), PPC biased?
+ * - Add compile time option, POSTINC, to use post-increments instead (Intel?)
+ * - Make MATCH copy in inflate() much faster for when inflate_fast() not used
+ * - Use local copies of stream next and avail values, as well as local bit
+ *   buffer and bit count in inflate()--for speed when inflate_fast() not used
+ *
+ * 1.2.beta4    1 Jan 2003
+ * - Split ptr - 257 statements in inflate_table() to avoid compiler warnings
+ * - Move a comment on output buffer sizes from inffast.c to inflate.c
+ * - Add comments in inffast.c to introduce the inflate_fast() routine
+ * - Rearrange window copies in inflate_fast() for speed and simplification
+ * - Unroll last copy for window match in inflate_fast()
+ * - Use local copies of window variables in inflate_fast() for speed
+ * - Pull out common wnext == 0 case for speed in inflate_fast()
+ * - Make op and len in inflate_fast() unsigned for consistency
+ * - Add FAR to lcode and dcode declarations in inflate_fast()
+ * - Simplified bad distance check in inflate_fast()
+ * - Added inflateBackInit(), inflateBack(), and inflateBackEnd() in new
+ *   source file infback.c to provide a call-back interface to inflate for
+ *   programs like gzip and unzip -- uses window as output buffer to avoid
+ *   window copying
+ *
+ * 1.2.beta5    1 Jan 2003
+ * - Improved inflateBack() interface to allow the caller to provide initial
+ *   input in strm.
+ * - Fixed stored blocks bug in inflateBack()
+ *
+ * 1.2.beta6    4 Jan 2003
+ * - Added comments in inffast.c on effectiveness of POSTINC
+ * - Typecasting all around to reduce compiler warnings
+ * - Changed loops from while (1) or do {} while (1) to for (;;), again to
+ *   make compilers happy
+ * - Changed type of window in inflateBackInit() to unsigned char *
+ *
+ * 1.2.beta7    27 Jan 2003
+ * - Changed many types to unsigned or unsigned short to avoid warnings
+ * - Added inflateCopy() function
+ *
+ * 1.2.0        9 Mar 2003
+ * - Changed inflateBack() interface to provide separate opaque descriptors
+ *   for the in() and out() functions
+ * - Changed inflateBack() argument and in_func typedef to swap the length
+ *   and buffer address return values for the input function
+ * - Check next_in and next_out for Z_NULL on entry to inflate()
+ *
+ * The history for versions after 1.2.0 are in ChangeLog in zlib distribution.
+ ','line_number':6,'multiline':True]['text':' to support ill-conceived Java test suite ','line_number':113,'multiline':True]['text':' get the state ','line_number':145,'multiline':True]['text':' extract wrap request from windowBits parameter ','line_number':149,'multiline':True]['text':' set number of window bits, free window if different ','line_number':164,'multiline':True]['text':' update state and reset the rest of it ','line_number':172,'multiline':True]['text':' in case we return an error ','line_number':187,'multiline':True]['text':' to pass state test in inflateReset2() ','line_number':209,'multiline':True]['text':'
+   Return state with length and distance decoding tables and index sizes set to
+   fixed code decoding.  Normally this returns fixed tables from inffixed.h.
+   If BUILDFIXED is defined, then instead this routine builds the tables the
+   first time it's called, and returns those tables the first time and
+   thereafter.  This reduces the size of the code by about 2K bytes, in
+   exchange for a little execution time.  However, BUILDFIXED should not be
+   used for threaded applications, since the rewriting of the tables and virgin
+   may not be thread-safe.
+ ','line_number':242,'multiline':True]['text':' build fixed huffman tables if first call (may not be thread safe) ','line_number':258,'multiline':True]['text':' literal/length table ','line_number':263,'multiline':True]['text':' distance table ','line_number':274,'multiline':True]['text':' do this just once ','line_number':281,'multiline':True]['text':' !BUILDFIXED ','line_number':284,'multiline':True]['text':' BUILDFIXED ','line_number':286,'multiline':True]['text':'
+   Write out the inffixed.h that is #include'd above.  Defining MAKEFIXED also
+   defines BUILDFIXED, so the tables are built on the fly.  makefixed() writes
+   those tables to stdout, which would be piped to inffixed.h.  A small program
+   can simply call makefixed to do this:
+
+    void makefixed(void);
+
+    int main(void)
+    {
+        makefixed();
+        return 0;
+    }
+
+   Then that can be linked with zlib built with MAKEFIXED defined and run:
+
+    a.out > inffixed.h
+ ','line_number':296,'multiline':True]['text':' MAKEFIXED ','line_number':352,'multiline':True]['text':'
+   Update the window with the last wsize (normally 32K) bytes written before
+   returning.  If window does not exist yet, create it.  This is only called
+   when a window is already in use, or when output has been written during this
+   inflate call, but the end of the deflate stream has not been reached yet.
+   It is also called to create a window for dictionary data when a dictionary
+   is loaded.
+
+   Providing output buffers larger than 32K to inflate() should provide a speed
+   advantage, since only the last 32K of output is copied to the sliding window
+   upon return from inflate(), and since all distances after the first 32K of
+   output will fall in the output data, making match copies simpler and faster.
+   The advantage may be dependent on the size of the processor's data caches.
+ ','line_number':354,'multiline':True]['text':' if it hasn't been done already, allocate space for the window ','line_number':374,'multiline':True]['text':' if window not in use yet, initialize ','line_number':382,'multiline':True]['text':' copy state->wsize or less output bytes into the circular window ','line_number':389,'multiline':True]['text':' Macros for inflate(): ','line_number':414,'multiline':True]['text':' check function to use adler32() for zlib or crc32() for gzip ','line_number':416,'multiline':True]['text':' check macros for header crc ','line_number':424,'multiline':True]['text':' Load registers with state in inflate() for speed ','line_number':443,'multiline':True]['text':' Restore state from registers in inflate() ','line_number':454,'multiline':True]['text':' Clear the input bit accumulator ','line_number':465,'multiline':True]['text':' Get a byte of input into the bit accumulator, or return from inflate()
+   if there is no input available. ','line_number':472,'multiline':True]['text':' Assure that there are at least n bits in the bit accumulator.  If there is
+   not enough available input to do that, then return from inflate(). ','line_number':482,'multiline':True]['text':' Return the low n bits of the bit accumulator (n < 16) ','line_number':490,'multiline':True]['text':' Remove n bits from the bit accumulator ','line_number':494,'multiline':True]['text':' Remove zero to seven bits as needed to go to a byte boundary ','line_number':501,'multiline':True]['text':'
+   inflate() uses a state machine to process as much input data and generate as
+   much output data as possible before returning.  The state machine is
+   structured roughly as follows:
+
+    for (;;) switch (state) {
+    ...
+    case STATEn:
+        if (not enough input data or output space to make progress)
+            return;
+        ... make progress ...
+        state = STATEm;
+        break;
+    ...
+    }
+
+   so when inflate() is called again, the same case is attempted again, and
+   if the appropriate resources are provided, the machine proceeds to the
+   next state.  The NEEDBITS() macro is usually the way the state evaluates
+   whether it can proceed or should return.  NEEDBITS() does the return if
+   the requested bits are not available.  The typical use of the BITS macros
+   is:
+
+        NEEDBITS(n);
+        ... do something with BITS(n) ...
+        DROPBITS(n);
+
+   where NEEDBITS(n) either returns from inflate() if there isn't enough
+   input left to load n bits into the accumulator, or it continues.  BITS(n)
+   gives the low n bits in the accumulator.  When done, DROPBITS(n) drops
+   the low n bits off the accumulator.  INITBITS() clears the accumulator
+   and sets the number of available bits to zero.  BYTEBITS() discards just
+   enough bits to put the accumulator on a byte boundary.  After BYTEBITS()
+   and a NEEDBITS(8), then BITS(8) would return the next byte in the stream.
+
+   NEEDBITS(n) uses PULLBYTE() to get an available byte of input, or to return
+   if there is no input available.  The decoding of variable length codes uses
+   PULLBYTE() directly in order to pull just enough bytes to decode the next
+   code, and no more.
+
+   Some states loop until they get enough input, making sure that enough
+   state information is maintained to continue the loop where it left off
+   if NEEDBITS() returns in the loop.  For example, want, need, and keep
+   would all have to actually be part of the saved state in case NEEDBITS()
+   returns:
+
+    case STATEw:
+        while (want < need) {
+            NEEDBITS(n);
+            keep[want++] = BITS(n);
+            DROPBITS(n);
+        }
+        state = STATEx;
+    case STATEx:
+
+   As shown above, if the next state is also the next case, then the break
+   is omitted.
+
+   A state may also return if there is not enough output space available to
+   complete that state.  Those states are copying stored data, writing a
+   literal byte, and copying a matching string.
+
+   When returning, a "goto inf_leave" is used to update the total counters,
+   update the check value, and determine whether any progress has been made
+   during that inflate() call in order to return the proper return code.
+   Progress is defined as a change in either strm->avail_in or strm->avail_out.
+   When there is a window, goto inf_leave will update the window with the last
+   output written.  If a goto inf_leave occurs in the middle of decompression
+   and there is no window currently, goto inf_leave will create one and copy
+   output to the window for the next call of inflate().
+
+   In this implementation, the flush parameter of inflate() only affects the
+   return code (per zlib.h).  inflate() always writes as much as possible to
+   strm->next_out, given the space available and the provided input--the effect
+   documented in zlib.h of Z_SYNC_FLUSH.  Furthermore, inflate() always defers
+   the allocation of and copying into a sliding window until necessary, which
+   provides the effect documented in zlib.h for Z_FINISH when the entire input
+   stream available.  So the only thing the flush parameter actually does is:
+   when flush is set to Z_FINISH, inflate() cannot return Z_OK.  Instead it
+   will return Z_BUF_ERROR if it has not reached the end of the stream.
+ ','line_number':508,'multiline':True]['text':' next input ','line_number':592,'multiline':True]['text':' next output ','line_number':593,'multiline':True]['text':' available input and output ','line_number':594,'multiline':True]['text':' bit buffer ','line_number':595,'multiline':True]['text':' bits in bit buffer ','line_number':596,'multiline':True]['text':' save starting available input and output ','line_number':597,'multiline':True]['text':' number of stored or match bytes to copy ','line_number':598,'multiline':True]['text':' where to copy match bytes from ','line_number':599,'multiline':True]['text':' current decoding table entry ','line_number':600,'multiline':True]['text':' parent table entry ','line_number':601,'multiline':True]['text':' length to copy for repeats, bits to drop ','line_number':602,'multiline':True]['text':' return code ','line_number':603,'multiline':True]['text':' buffer for gzip header crc calculation ','line_number':605,'multiline':True]['text':' permutation of code lengths ','line_number':607,'multiline':True]['text':' skip check ','line_number':615,'multiline':True]['text':' gzip header ','line_number':629,'multiline':True]['text':' check if zlib header allowed ','line_number':640,'multiline':True]['text':' indicate zlib header ','line_number':664,'multiline':True]['text':' fallthrough ','line_number':690,'multiline':True]['text':' fallthrough ','line_number':699,'multiline':True]['text':' fallthrough ','line_number':710,'multiline':True]['text':' fallthrough ','line_number':724,'multiline':True]['text':' fallthrough ','line_number':748,'multiline':True]['text':' fallthrough ','line_number':770,'multiline':True]['text':' fallthrough ','line_number':791,'multiline':True]['text':' fallthrough ','line_number':815,'multiline':True]['text':' fallthrough ','line_number':823,'multiline':True]['text':' fallthrough ','line_number':826,'multiline':True]['text':' stored block ','line_number':837,'multiline':True]['text':' fixed block ','line_number':842,'multiline':True]['text':' decode codes ','line_number':846,'multiline':True]['text':' dynamic block ','line_number':852,'multiline':True]['text':' go to byte boundary ','line_number':864,'multiline':True]['text':' fallthrough ','line_number':877,'multiline':True]['text':' fallthrough ','line_number':880,'multiline':True]['text':' fallthrough ','line_number':916,'multiline':True]['text':' fallthrough ','line_number':938,'multiline':True]['text':' handle error breaks in while ','line_number':987,'multiline':True]['text':' check for end-of-block code (better have one) ','line_number':990,'multiline':True]['text':' build code tables -- note: do not change the lenbits or distbits
+               values here (9 and 6) without reading the comments in inftrees.h
+               concerning the ENOUGH constants, which depend on those values ','line_number':997,'multiline':True]['text':' fallthrough ','line_number':1022,'multiline':True]['text':' fallthrough ','line_number':1025,'multiline':True]['text':' fallthrough ','line_number':1075,'multiline':True]['text':' fallthrough ','line_number':1086,'multiline':True]['text':' fallthrough ','line_number':1114,'multiline':True]['text':' fallthrough ','line_number':1131,'multiline':True]['text':' copy from window ','line_number':1135,'multiline':True]['text':' copy from output ','line_number':1165,'multiline':True]['text':' fallthrough ','line_number':1207,'multiline':True]['text':' fallthrough ','line_number':1221,'multiline':True]['text':' fallthrough ','line_number':1231,'multiline':True]['text':'
+       Return from inflate(), updating the total counts and the check value.
+       If there was no progress during the inflate() call, return a buffer
+       error.  Call updatewindow() to create and/or update the window state.
+       Note: a memory error from inflate() is non-recoverable.
+     ','line_number':1236,'multiline':True]['text':' check state ','line_number':1282,'multiline':True]['text':' copy dictionary ','line_number':1286,'multiline':True]['text':' check state ','line_number':1304,'multiline':True]['text':' check for correct dictionary identifier ','line_number':1310,'multiline':True]['text':' copy dictionary to window using updatewindow(), which will amend the
+       existing dictionary if appropriate ','line_number':1318,'multiline':True]['text':' check state ','line_number':1333,'multiline':True]['text':' save header structure ','line_number':1338,'multiline':True]['text':'
+   Search buf[0..len-1] for the pattern: 0, 0, 0xff, 0xff.  Return when found
+   or when out of input.  When called, *have is the number of pattern bytes
+   found in order so far, in 0..3.  On return *have is updated to the new
+   state.  If on return *have equals four, then the pattern was found and the
+   return value is how many bytes were read including the last byte of the
+   pattern.  If *have is less than four, then the pattern has not been found
+   yet and the return value is len.  In the latter case, syncsearch() can be
+   called again with more data and the *have state.  *have is initialized to
+   zero for the first call.
+ ','line_number':1344,'multiline':True]['text':' number of bytes to look at or looked at ','line_number':1376,'multiline':True]['text':' temporary to save header status ','line_number':1377,'multiline':True]['text':' temporary to save total_in and total_out ','line_number':1378,'multiline':True]['text':' to restore bit buffer to byte string ','line_number':1379,'multiline':True]['text':' check parameters ','line_number':1382,'multiline':True]['text':' if first time, start search in bit buffer ','line_number':1387,'multiline':True]['text':' search available input ','line_number':1402,'multiline':True]['text':' return no joy or set up to restart inflate() on a new block ','line_number':1408,'multiline':True]['text':' if no header yet, treat as raw ','line_number':1411,'multiline':True]['text':' no point in computing a check value now ','line_number':1413,'multiline':True]['text':'
+   Returns true if inflate is currently at the end of a block generated by
+   Z_SYNC_FLUSH or Z_FULL_FLUSH. This function is used by one PPP
+   implementation to provide an additional safety check. PPP uses
+   Z_SYNC_FLUSH but removes the length bytes of the resulting empty stored
+   block. When decompressing, PPP checks that at the end of input packet,
+   inflate is waiting for these length bytes.
+ ','line_number':1423,'multiline':True]['text':' check input ','line_number':1445,'multiline':True]['text':' allocate space ','line_number':1450,'multiline':True]['text':' copy state ','line_number':1464,'multiline':True]

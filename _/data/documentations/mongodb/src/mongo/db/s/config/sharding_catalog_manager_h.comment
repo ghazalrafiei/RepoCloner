@@ -1,0 +1,359 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+     * Used to indicate to the caller of the removeShard method whether draining of chunks for
+     * a particular shard has started, is ongoing, or has been completed. When removing a catalog
+     * shard, there is a new state when waiting for range deletions of all moved away chunks.
+     * Removing other shards will skip this state.
+     ','line_number':89,'multiline':True]['text':'*
+     * Used to indicate to the caller of the removeShard method the remaining amount of chunks,
+     * jumbo chunks and databases within the shard
+     ','line_number':102,'multiline':True]['text':'*
+ * Implements modifications to the sharding catalog metadata.
+ *
+ * TODO: Currently the code responsible for writing the sharding catalog metadata is split between
+ * this class and ShardingCatalogClient. Eventually all methods that write catalog data should be
+ * moved out of ShardingCatalogClient and into this class.
+ ','line_number':117,'multiline':True]['text':'*
+     * Instantiates an instance of the sharding catalog manager and installs it on the specified
+     * service context. This method is not thread-safe and must be called only once when the service
+     * is starting.
+     ','line_number':140,'multiline':True]['text':'*
+     * Retrieves the per-service instance of the ShardingCatalogManager. This instance is only
+     * available if the node is running as a config server.
+     ','line_number':150,'multiline':True]['text':'*
+     * Safe to call multiple times as long as the calls are externally synchronized to be
+     * non-overlapping.
+     ','line_number':157,'multiline':True]['text':'*
+     * Performs necessary cleanup when shutting down cleanly.
+     ','line_number':163,'multiline':True]['text':'','line_number':168,'multiline':False]['text':' Sharded cluster initialization logic','line_number':169,'multiline':False]['text':'','line_number':170,'multiline':False]['text':'*
+     * Checks if this is the first start of a newly instantiated config server and if so pre-creates
+     * the catalog collections and their indexes. Also generates and persists the cluster's
+     * identity.
+     ','line_number':172,'multiline':True]['text':'*
+     * Invoked on cluster identity metadata rollback after replication step down. Throws out any
+     * cached identity information and causes it to be reloaded/re-created on the next attempt.
+     ','line_number':179,'multiline':True]['text':'','line_number':185,'multiline':False]['text':' Zone Operations','line_number':186,'multiline':False]['text':'','line_number':187,'multiline':False]['text':'*
+     * Adds the given shardName to the zone. Returns ErrorCodes::ShardNotFound if a shard by that
+     * name does not exist.
+     ','line_number':189,'multiline':True]['text':'*
+     * Removes the given shardName from the zone. Returns ErrorCodes::ShardNotFound if a shard by
+     * that name does not exist.
+     ','line_number':197,'multiline':True]['text':'*
+     * Assigns a range of a sharded collection to a particular shard zone. If range is a prefix of
+     * the shard key, the range will be converted into a new range with full shard key filled with
+     * MinKey values.
+     ','line_number':205,'multiline':True]['text':'*
+     * Removes a range from a zone.
+     *
+     * NOTE: unlike assignKeyRangeToZone, the given range will never be converted to include the
+     * full shard key.
+     ','line_number':215,'multiline':True]['text':'','line_number':225,'multiline':False]['text':' General utilities related to the ShardingCatalogManager','line_number':226,'multiline':False]['text':'','line_number':227,'multiline':False]['text':'*
+     * Starts and commits a transaction on the config server, with a no-op find on the specified
+     * namespace in order to internally start the transaction. All writes done inside the
+     * passed-in function must assume that they are run inside a transaction that will be commited
+     * after the function itself has completely finished. Does not support running transaction
+     * operations remotely.
+     ','line_number':233,'multiline':True]['text':'*
+     * Runs the write 'request' on namespace 'nss' in a transaction with 'txnNumber'. Write must be
+     * on a collection in the config database. If expectedNumModified is specified, the number of
+     * documents modified must match expectedNumModified - throws otherwise. Does not support
+     * running transaction operations remotely.
+     ','line_number':248,'multiline':True]['text':'*
+     * Inserts 'docs' to namespace 'nss'. If a txnNumber is passed in, the write will be done in a
+     * transaction with 'txnNumber'. Breaks into multiple batches if 'docs' is larger than the max
+     * batch size. Write must be on a collection in the config database.
+     ','line_number':259,'multiline':True]['text':'*
+     * Find a single document while under a local transaction.
+     ','line_number':269,'multiline':True]['text':'*
+     * Find a single document. Returns an empty BSONObj if no matching document is found.
+     ','line_number':277,'multiline':True]['text':'','line_number':284,'multiline':False]['text':' Chunk Operations','line_number':285,'multiline':False]['text':'','line_number':286,'multiline':False]['text':'*
+     * Bumps the major component of the placement version for each 'shardIds'.
+     ','line_number':288,'multiline':True]['text':'*
+     * Updates metadata in the config.chunks collection to show the given chunk as split into
+     * smaller chunks at the specified split points.
+     *
+     * Returns a ShardAndCollectionPlacementVersions object with the newly produced chunk versions
+     * after the migration:
+     *   - shardPlacementVersion - The new placement version of the source shard
+     *   - collectionPlacementVersion - The new collection placement version after the commit
+     ','line_number':296,'multiline':True]['text':'*
+     * Updates metadata in the config.chunks collection so the chunks within the specified key range
+     * are seen merged into a single larger chunk.
+     *
+     * Returns a ShardAndCollectionPlacementVersions object with the newly produced chunk versions
+     * after the migration:
+     *   - shardPlacementVersion - The new placement version of the source shard
+     *   - collectionPlacementVersion - The new collection placement version after the commit
+     ','line_number':314,'multiline':True]['text':'*
+     * Updates metadata in the config.chunks collection so that all mergeable chunks belonging to
+     * the specified shard for the given collection are merged within one transaction.
+     *
+     * Returns a ShardAndCollectionPlacementVersions object containing the new collection placement
+     * version produced by the merge(s) and the total number of chunks that were merged.
+     ','line_number':332,'multiline':True]['text':'*
+     * Updates metadata in config.chunks collection to show the given chunk in its new shard.
+     *
+     * Returns a ShardAndCollectionPlacementVersions object with the newly produced chunk versions
+     * after the migration:
+     *   - shardPlacementVersion - The new placement version of the source shard
+     *   - collectionPlacementVersion - The new collection placement version after the commit
+     ','line_number':346,'multiline':True]['text':'*
+     * Removes the jumbo flag from the specified chunk.
+     ','line_number':363,'multiline':True]['text':'*
+     * If a chunk matching 'requestedChunk' exists, bumps the chunk's version to one greater than
+     * the current collection placement version.
+     *
+     * 'nss' and 'collUUID' were added to the ConfigsvrEnsureChunkVersionIsGreaterThanCommand
+     * in 5.0. They are optional in 5.0 because the request may come from a previous version (4.4)
+     * that doesn't pass these extra fields.
+     ','line_number':370,'multiline':True]['text':'*
+     * In a single transaction, effectively bumps the placement version for each shard in the
+     * collection to be the current collection placement version's major version + 1 inside an
+     * already-running transaction.
+     ','line_number':384,'multiline':True]['text':'*
+     * Same as bumpCollectionPlacementVersionAndChangeMetadataInTxn, but bumps the placement version
+     * for several collections in a single transaction.
+     ','line_number':399,'multiline':True]['text':'*
+     * Performs a split on the chunk with min value "minKey". If the split fails, it is marked as
+     * jumbo.
+     ','line_number':413,'multiline':True]['text':'*
+     * In a transaction, sets the 'allowMigrations' to the requested state and bumps the collection
+     * version.
+     ','line_number':422,'multiline':True]['text':'*
+     * Bump the minor version of the newest chunk on each shard
+     ','line_number':431,'multiline':True]['text':'
+     * Set the estimated size field for a chunk. Only used for defragmentation operations
+     ','line_number':438,'multiline':True]['text':'
+     * Clear the estimated size for all chunks of a given collection.
+     * Returns true if at least once chunk was modified.
+     ','line_number':446,'multiline':True]['text':'','line_number':452,'multiline':False]['text':' Database Operations','line_number':453,'multiline':False]['text':'','line_number':454,'multiline':False]['text':'*
+     * Checks if a database with the same name, optPrimaryShard and enableSharding state already
+     * exists, and if not, creates a new one that matches these prerequisites. If a database already
+     * exists and matches all the prerequisites returns success, otherwise throws NamespaceNotFound.
+     ','line_number':456,'multiline':True]['text':'*
+     * Updates the metadata in config.databases collection with the new primary shard for the given
+     * database. This also advances the database's lastmod.
+     ','line_number':466,'multiline':True]['text':'','line_number':477,'multiline':False]['text':' Collection Operations','line_number':478,'multiline':False]['text':'','line_number':479,'multiline':False]['text':'*
+     * Refines the shard key of an existing collection with namespace 'nss'. Here, 'shardKey'
+     * denotes the new shard key, which must contain the old shard key as a prefix.
+     *
+     * Throws exception on errors.
+     * TODO SERVER-79064: Remove once 8.0 becomes last LTS
+     ','line_number':481,'multiline':True]['text':'*
+     * Executes the commit of the refine collection shard key of an existing collection with
+     * namespace 'nss' using the new transaction API. Here, 'shardKey' denotes the new shard key,
+     * which must contain the old shard key as a prefix.
+     *
+     * Throws exception on transaction errors.
+     ','line_number':492,'multiline':True]['text':'*
+     * Updates the bucketing parameters of a time-series collection. Also bumps the placement
+     * versions for all shards.
+     ','line_number':512,'multiline':True]['text':'','line_number':520,'multiline':False]['text':' Shard Operations','line_number':521,'multiline':False]['text':'','line_number':522,'multiline':False]['text':'*
+     *
+     * Adds a new shard. It expects a standalone mongod process or replica set to be running on the
+     * provided address.
+     *
+     * 'shardProposedName' is an optional string with the proposed name of the shard. If it is
+     * nullptr, a name will be automatically generated; if not nullptr, it cannot
+     *         contain the empty string.
+     * 'shardConnectionString' is the complete connection string of the shard being added.
+     *
+     * On success returns the name of the newly added shard.
+     ','line_number':524,'multiline':True]['text':'*
+     *
+     * Adds the config server as a shard. Thin wrapper around 'addShard' that retrieves and uses the
+     * config server connection string as the shard connection string.
+     *
+     ','line_number':542,'multiline':True]['text':'*
+     * Inserts the config server shard identity document using a sentinel shard id. Requires the
+     * config server's ShardingState has not already been enabled. Throws on errors.
+     ','line_number':550,'multiline':True]['text':'*
+     * Tries to remove a shard. To completely remove a shard from a sharded cluster,
+     * the data residing in that shard must be moved to the remaining shards in the
+     * cluster by "draining" chunks from that shard.
+     *
+     * Because of the asynchronous nature of the draining mechanism, this method returns
+     * the current draining status. See ShardDrainingStatus enum definition for more details.
+     ','line_number':556,'multiline':True]['text':'*
+     * Returns a scoped lock object, which holds the _kShardMembershipLock in shared mode. While
+     * this lock is held no topology changes can occur.
+     ','line_number':566,'multiline':True]['text':'*
+     * Updates the "hasTwoOrMoreShard" cluster cardinality parameter based on the given number of
+     * shards. Cannot be called while holding the _kShardMembershipLock in exclusive mode since
+     * setting cluster parameters requires taking this lock in shared mode.
+     ','line_number':572,'multiline':True]['text':'','line_number':579,'multiline':False]['text':' Cluster Upgrade Operations','line_number':580,'multiline':False]['text':'','line_number':581,'multiline':False]['text':'*
+     * Runs the setFeatureCompatibilityVersion command on all shards.
+     ','line_number':583,'multiline':True]['text':'','line_number':588,'multiline':False]['text':' For Diagnostics','line_number':589,'multiline':False]['text':'','line_number':590,'multiline':False]['text':'*
+     * Append information about the connection pools owned by the CatalogManager.
+     ','line_number':592,'multiline':True]['text':'*
+     * Appends information on the status of shard draining to the passed in result BSONObjBuilder
+     ','line_number':597,'multiline':True]['text':'*
+     * Only used for unit-tests, clears a previously-created catalog manager from the specified
+     * service context, so that 'create' can be called again.
+     ','line_number':605,'multiline':True]['text':'','line_number':611,'multiline':False]['text':' Upgrade/downgrade','line_number':612,'multiline':False]['text':'','line_number':613,'multiline':False]['text':'*
+     * Upgrade the chunk metadata to include the history field.
+     ','line_number':615,'multiline':True]['text':'*
+     * Returns a catalog client that will always run commands locally. Can only be used on a
+     * config server node.
+     ','line_number':623,'multiline':True]['text':'*
+     * Returns a Shard representing the config server that will always run commands locally. Can
+     * only be used on a config server node.
+     ','line_number':629,'multiline':True]['text':'*
+     * Initializes the config.placementHistory collection:
+        - one entry per collection and its placement information at the current timestamp
+        - one entry per database with the current primary shard at the current timestamp
+     ','line_number':635,'multiline':True]['text':'*
+     * Returns the oldest timestamp that is supported for history preservation.
+     ','line_number':642,'multiline':True]['text':'*
+     * Removes from config.placementHistory any document that is no longer needed to describe
+     * the data distribution of the cluster from earliestClusterTime onwards (and updates the
+     * related initialization metadata).
+     *','line_number':647,'multiline':True]['text':'*
+     * Remove unused `maxSizeMb` field from `config.shards` documents on upgrade to 8.0
+     * returns the number of documents updated
+     * TODO SERVER-80266 delete once 8.0 becomes last lts
+     ','line_number':654,'multiline':True]['text':'*
+     * Updates the config.settings schema for FCV upgrade and downgrade.
+     * TODO (SERVER-83264): Remove once 8.0 becomes last LTS.
+     ','line_number':661,'multiline':True]['text':'*
+     * Performs the necessary checks for version compatibility and creates a new config.version
+     * document if the current cluster config is empty.
+     ','line_number':668,'multiline':True]['text':'*
+     * Builds all the expected indexes on the config server.
+     ','line_number':674,'multiline':True]['text':'*
+     * Creates config.settings (if needed) and adds a schema to the collection.
+     ','line_number':679,'multiline':True]['text':'*
+     * Ensure that config.collections exists upon configsvr startup
+     ','line_number':684,'multiline':True]['text':'*
+     * Used during addShard to determine if there is already an existing shard that matches the
+     * shard that is currently being added.  An OK return with boost::none indicates that there
+     * is no conflicting shard, and we can proceed trying to add the new shard.  An OK return
+     * with a ShardType indicates that there is an existing shard that matches the shard being added
+     * but since the options match, this addShard request can do nothing and return success.  A
+     * non-OK return either indicates a problem reading the existing shards from disk or more likely
+     * indicates that an existing shard conflicts with the shard being added and they have different
+     * options, so the addShard attempt must be aborted.
+     ','line_number':689,'multiline':True]['text':'*
+     * Validates that the specified endpoint can serve as a shard server. In particular, this
+     * this function checks that the shard can be contacted and that it is not already member of
+     * another sharded cluster.
+     *
+     * @param targeter For sending requests to the shard-to-be.
+     * @param shardProposedName Optional proposed name for the shard. Can be omitted in which case
+     *      a unique name for the shard will be generated from the shard's connection string. If it
+     *      is not omitted, the value cannot be the empty string.
+     *
+     * On success returns a partially initialized ShardType object corresponding to the requested
+     * shard. It will have the hostName field set and optionally the name, if the name could be
+     * generated from either the proposed name or the connection string set name. The returned
+     * shard's name should be checked and if empty, one should be generated using some uniform
+     * algorithm.
+     ','line_number':704,'multiline':True]['text':'*
+     * Drops the sessions collection on the specified host.
+     ','line_number':726,'multiline':True]['text':'*
+     * Runs the listDatabases command on the specified host and returns the names of all databases
+     * it returns excluding those named local, config and admin, since they serve administrative
+     * purposes.
+     ','line_number':732,'multiline':True]['text':'*
+     * Runs the listCollections command for every database provided on the specified host and
+     * returns the namespaces of all collections.
+     ','line_number':741,'multiline':True]['text':'*
+     * Runs a command against a "shard" that is not yet in the cluster and thus not present in the
+     * ShardRegistry.
+     ','line_number':750,'multiline':True]['text':'*
+     * Helper method for running a count command against the config server with appropriate error
+     * handling.
+     ','line_number':759,'multiline':True]['text':'*
+     * Appends a read committed read concern to the request object.
+     ','line_number':767,'multiline':True]['text':'*
+     * Retrieve the full chunk description from the config.
+     ','line_number':772,'multiline':True]['text':'*
+     * Broadcasts a remote command to the requested list of recipient that contains the details on a
+     * new set of databases being added to the config catalog.
+     ','line_number':781,'multiline':True]['text':'*
+     * Returns true if the zone with the given name has chunk ranges associated with it and the
+     * shard with the given name is the only shard that it belongs to.
+     ','line_number':789,'multiline':True]['text':'*
+     * Sets the current cluster's user-write blocking state on the shard that is being added.
+     ','line_number':798,'multiline':True]['text':'*
+     * Creates a Fetcher task for fetching documents in the given collection on the given shard.
+     * After the task is scheduled, applies 'processDocsCallback' to each fetched batch and
+     * 'processStatusCallback' to the fetch status.
+     ','line_number':807,'multiline':True]['text':'*
+     * Gets the cluster time keys on the given shard and then saves them locally.
+     ','line_number':819,'multiline':True]['text':'*
+     * Given a vector of cluster parameters in disk format, sets them locally.
+     ','line_number':825,'multiline':True]['text':'*
+     * Gets the cluster parameters set on the shard and then saves them locally.
+     ','line_number':832,'multiline':True]['text':'*
+     * Remove all existing cluster parameters set on the shard.
+     ','line_number':837,'multiline':True]['text':'*
+     * Remove all existing cluster parameters on the new added shard and sets the ones stored on the
+     * config server.
+     ','line_number':842,'multiline':True]['text':'*
+     * Determines whether to absorb the cluster parameters on the newly added shard (if we're
+     * converting from a replica set to a sharded cluster) or set the cluster parameters stored on
+     * the config server in the newly added shard.
+     ','line_number':851,'multiline':True]['text':'*
+     * Execute the migration chunk updates using the internal transaction API.
+     ','line_number':859,'multiline':True]['text':'*
+     * Inserts new entries into the config catalog to describe the shard being added (and the
+     * databases being imported) through the internal transaction API.
+     ','line_number':869,'multiline':True]['text':'*
+     * Use the internal transaction API to remove a shard.
+     ','line_number':877,'multiline':True]['text':'*
+     * Execute the merge chunk updates using the internal transaction API.
+     ','line_number':885,'multiline':True]['text':'*
+     * Execute the split chunk operations using the internal transaction API.
+     ','line_number':906,'multiline':True]['text':'*
+     * Updates the "hasTwoOrMoreShard" cluster cardinality parameter after an add or remove shard
+     * operation if needed. Can only be called after refreshing the shard registry and while holding
+     * _kClusterCardinalityParameterLock lock in exclusive mode to avoid interleaving with other
+     * add/remove shard operation and its set cluster cardinality parameter operation.
+     ','line_number':917,'multiline':True]['text':' The owning service context','line_number':928,'multiline':False]['text':' Executor specifically used for sending commands to servers that are in the process of being','line_number':931,'multiline':False]['text':' added as shards. Does not have any connection hook set on it, thus it can be used to talk to','line_number':932,'multiline':False]['text':' servers that are not yet in the ShardRegistry.','line_number':933,'multiline':False]['text':' A ShardLocal and ShardingCatalogClient with a ShardLocal used for local connections.','line_number':936,'multiline':False]['text':'','line_number':940,'multiline':False]['text':' All member variables are labeled with one of the following codes indicating the','line_number':941,'multiline':False]['text':' synchronization rules for accessing them.','line_number':942,'multiline':False]['text':'','line_number':943,'multiline':False]['text':' (M) Must hold _mutex for access.','line_number':944,'multiline':False]['text':' (R) Read only, can only be written during initialization.','line_number':945,'multiline':False]['text':' (S) Self-synchronizing; access in any way from any context.','line_number':946,'multiline':False]['text':'','line_number':947,'multiline':False]['text':' True if startup() has been called.','line_number':951,'multiline':False]['text':' (M)','line_number':952,'multiline':False]['text':' True if initializeConfigDatabaseIfNeeded() has been called and returned successfully.','line_number':954,'multiline':False]['text':' (M)','line_number':955,'multiline':False]['text':' Resource lock order:','line_number':957,'multiline':False]['text':' _kShardMembershipLock -> _kChunkOpLock','line_number':958,'multiline':False]['text':' _kZoneOpLock','line_number':959,'multiline':False]['text':'*
+     * Lock that guards changes to the set of shards in the cluster (ie addShard and removeShard
+     * requests).
+     ','line_number':961,'multiline':True]['text':'*
+     * Lock that guards changes to the cluster cardinality parameter.
+     ','line_number':967,'multiline':True]['text':'*
+     * Lock for chunk split/merge/move operations. This should be acquired when doing split/merge/
+     * move operations that can affect the config.chunks collection.
+     * No other locks should be held when locking this. If an operation needs to take database
+     * locks (for example to write to a local collection) those locks should be taken after
+     * taking this.
+     ','line_number':972,'multiline':True]['text':'*
+     * Lock for shard zoning operations. This should be acquired when doing any operations that
+     * can affect the config.tags collection or the tags field of the config.shards collection.
+     * No other locks should be held when locking this. If an operation needs to take database
+     * locks (for example to write to a local collection) those locks should be taken after
+     * taking this.
+     ','line_number':981,'multiline':True]['text':'*
+     * Lock for serializing internal/external initialization requests of config.placementHistory.
+     * Regular DDL and chunk operations over the same collection may be run concurrently.
+     ','line_number':990,'multiline':True]['text':' namespace mongo','line_number':997,'multiline':False]

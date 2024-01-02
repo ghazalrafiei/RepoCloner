@@ -1,0 +1,880 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]['text':'
+ * ex_docmd.c: functions for executing an Ex command line.
+ ','line_number':10,'multiline':True]['text':' depth in :if','line_number':26,'multiline':False]['text':'
+ * Declare cmdnames[].
+ ','line_number':374,'multiline':True]['text':' Struct for storing a line inside a while/for loop','line_number':385,'multiline':False]['text':' command line','line_number':388,'multiline':False]['text':' sourcing_lnum of the line','line_number':389,'multiline':False]['text':'
+ * Structure used to store info for line position in a while or for loop.
+ * This is required, because do_one_cmd() may invoke ex_function(), which
+ * reads more lines that may come from the while/for loop.
+ ','line_number':392,'multiline':True]['text':' growarray with line info','line_number':399,'multiline':False]['text':' last read line from growarray','line_number':400,'multiline':False]['text':' TRUE when looping a second time','line_number':401,'multiline':False]['text':' When "repeating" is FALSE use "getline" and "cookie" to get lines','line_number':402,'multiline':False]['text':' Struct to save a few things while debugging.  Used in do_cmdline() only.','line_number':411,'multiline':False]['text':' Necessary for debugging an inactive ":catch", ":finally", ":endtry"','line_number':436,'multiline':False]['text':'
+ * do_exmode(): Repeatedly get commands for the "Ex" mode, until the ":vi"
+ * command is given.
+ ','line_number':463,'multiline':True]['text':' TRUE for "improved Ex" mode','line_number':469,'multiline':False]['text':' When using ":global /pat/ visual" and then "Q" we return to continue','line_number':483,'multiline':False]['text':' the :global command.','line_number':484,'multiline':False]['text':' don't redisplay the window','line_number':489,'multiline':False]['text':' don't wait for return','line_number':490,'multiline':False]['text':' Ignore scrollbar and mouse events in Ex mode','line_number':492,'multiline':False]['text':' Check for a ":normal" command and no more characters left.','line_number':499,'multiline':False]['text':' go up one line, to overwrite the ":<CR>" line, so the','line_number':530,'multiline':False]['text':' output doesn't contain empty lines.','line_number':531,'multiline':False]['text':' must be at EOF','line_number':541,'multiline':False]['text':'
+ * Print the executed command for when 'verbose' is set.
+ * When "lnum" is 0 only print the command.
+ ','line_number':561,'multiline':True]['text':' don't overwrite this','line_number':576,'multiline':False]['text':'
+ * Execute a simple command line.  Used for translated commands like "*".
+ ','line_number':582,'multiline':True]['text':'
+ * Execute the "+cmd" argument of "edit +cmd fname" and the like.
+ * This allows for using a range without ":" in Vim9 script.
+ ','line_number':592,'multiline':True]['text':'
+ * do_cmdline(): execute one Ex command line
+ *
+ * 1. Execute "cmdline" when it is not NULL.
+ *    If "cmdline" is NULL, or more lines are needed, fgetline() is used.
+ * 2. Split up in parts separated with '|'.
+ *
+ * This function can be called recursively!
+ *
+ * flags:
+ * DOCMD_VERBOSE  - The command will be included in the error message.
+ * DOCMD_NOWAIT   - Don't call wait_return() and friends.
+ * DOCMD_REPEAT   - Repeat execution until fgetline() returns NULL.
+ * DOCMD_KEYTYPED - Don't reset KeyTyped.
+ * DOCMD_EXCRESET - Reset the exception environment (used for debugging).
+ * DOCMD_KEEPLINE - Store first typed line (for repeating with ".").
+ *
+ * return FAIL if cmdline could not be executed, OK otherwise
+ ','line_number':603,'multiline':True]['text':' argument for fgetline()','line_number':626,'multiline':False]['text':' next cmd to execute','line_number':629,'multiline':False]['text':' copy of cmd line','line_number':630,'multiline':False]['text':' used "fgetline" to obtain command','line_number':631,'multiline':False]['text':' recursive depth','line_number':632,'multiline':False]['text':' line number count','line_number':634,'multiline':False]['text':' conditional stack','line_number':638,'multiline':False]['text':' keep lines for ":while"/":for"','line_number':639,'multiline':False]['text':' active line in lines_ga','line_number':640,'multiline':False]['text':' function or script name','line_number':642,'multiline':False]['text':' ptr to breakpoint field in cookie','line_number':643,'multiline':False]['text':' ptr to dbg_tick field in cookie','line_number':644,'multiline':False]['text':' saved things for debug mode','line_number':645,'multiline':False]['text':' "fgetline" and "cookie" passed to do_one_cmd()','line_number':650,'multiline':False]['text':' recursiveness','line_number':660,'multiline':False]['text':' For every pair of do_cmdline()/do_one_cmd() calls, use an extra memory','line_number':662,'multiline':False]['text':' location for storing error messages to be converted to an exception.','line_number':663,'multiline':False]['text':' This ensures that the do_errthrow() call in do_one_cmd() does not','line_number':664,'multiline':False]['text':' combine the messages stored by an earlier invocation of do_one_cmd()','line_number':665,'multiline':False]['text':' with the command name of the later one.  This would happen when','line_number':666,'multiline':False]['text':' BufWritePost autocommands are executed after a write error.','line_number':667,'multiline':False]['text':' It's possible to create an endless loop with ":execute", catch that','line_number':672,'multiline':False]['text':' here.  The value of 200 allows nested function calls, ":source", etc.','line_number':673,'multiline':False]['text':' Allow 200 or 'maxfuncdepth', whatever is larger.','line_number':674,'multiline':False]['text':' When converting to an exception, we do not include the command name','line_number':683,'multiline':False]['text':' since this is not an error of the specific command.','line_number':684,'multiline':False]['text':' Inside a function use a higher nesting level.','line_number':699,'multiline':False]['text':' Get the function or script name and the address where the next breakpoint','line_number':704,'multiline':False]['text':' line and the debug tick for a function or script are stored.','line_number':705,'multiline':False]['text':'
+     * Initialize "force_abort"  and "suppress_errthrow" at the top level.
+     ','line_number':719,'multiline':True]['text':'
+     * If requested, store and reset the global values controlling the
+     * exception handling (used when debugging).  Otherwise clear it to avoid
+     * a bogus compiler warning when the optimizer uses inline functions...
+     ','line_number':728,'multiline':True]['text':'
+     * "did_throw" will be set to TRUE when an exception is being thrown.
+     ','line_number':740,'multiline':True]['text':'
+     * "did_emsg" will be set to TRUE when emsg() is used, in which case we
+     * cancel the whole command line, and any if/endif or loop.
+     * If force_abort is set, we cancel everything.
+     ','line_number':745,'multiline':True]['text':'
+     * KeyTyped is only set when calling vgetc().  Reset it here when not
+     * calling vgetc() (sourced command lines).
+     ','line_number':755,'multiline':True]['text':'
+     * Continue executing command lines:
+     * - when inside an ":if", ":while" or ":for"
+     * - for multiple commands on one line, separated with '|'
+     * - when repeating until there are no more lines (for ":source")
+     ','line_number':763,'multiline':True]['text':' stop skipping cmds for an error msg after all endif/while/for','line_number':776,'multiline':False]['text':'
+	 * 1. If repeating a line in a loop, get a line from lines_ga.
+	 * 2. If no line given: Get an allocated line with fgetline().
+	 * 3. If a line is given: Make a copy, so we can mess with it.
+	 ','line_number':791,'multiline':True]['text':' 1. If repeating, get a previous line from lines_ga.','line_number':798,'multiline':False]['text':' Each '|' separated command is stored separately in lines_ga, to','line_number':801,'multiline':False]['text':' be able to jump to it.  Don't use next_cmdline now.','line_number':802,'multiline':False]['text':' Check if a function has returned or, unless it has an unclosed','line_number':805,'multiline':False]['text':' try conditional, aborted.','line_number':806,'multiline':False]['text':' Check if a sourced file hit a ":finish" command.','line_number':825,'multiline':False]['text':' If breakpoints have been added/deleted need to check for it.','line_number':832,'multiline':False]['text':' Did we encounter a breakpoint?','line_number':845,'multiline':False]['text':' Find next breakpoint.','line_number':850,'multiline':False]['text':' 2. If no line given, get an allocated line with fgetline().','line_number':868,'multiline':False]['text':'
+	     * Need to set msg_didout for the first line after an ":if",
+	     * otherwise the ":if" will be overwritten.
+	     ','line_number':871,'multiline':True]['text':' Don't call wait_return() for aborted command line.  The NULL','line_number':886,'multiline':False]['text':' returned for the end of a sourced file or executed function','line_number':887,'multiline':False]['text':' doesn't do this.','line_number':888,'multiline':False]['text':'
+	     * Keep the first typed line.  Clear it when more lines are typed.
+	     ','line_number':896,'multiline':True]['text':' 3. Make a copy of the command so we can mess with it.','line_number':909,'multiline':False]['text':'
+	 * Inside a while/for loop, and when the command looks like a ":while"
+	 * or ":for", the line is stored, because we may need it later when
+	 * looping.
+	 *
+	 * When there is a '|' and another command, it is stored separately,
+	 * because we need to be able to jump back to it from an
+	 * :endwhile/:endfor.
+	 *
+	 * Pass a different "fgetline" function to do_one_cmd() below,
+	 * that it stores lines in or reads them from "lines_ga".  Makes it
+	 * possible to define a function inside a while/for loop and handles
+	 * line continuation.
+	 ','line_number':923,'multiline':True]['text':' Save the current line when encountering it the first time.','line_number':947,'multiline':False]['text':'
+	     * All output from the commands is put below each other, without
+	     * waiting for a return. Don't do this when executing commands
+	     * from a script or when being called recursive (e.g. for ":e
+	     * +command file").
+	     ','line_number':967,'multiline':True]['text':' no output yet','line_number':976,'multiline':False]['text':' put messages below each other','line_number':978,'multiline':False]['text':' don't wait for return until finished','line_number':979,'multiline':False]['text':'
+	 * 2. Execute one '|' separated command.
+	 *    do_one_cmd() will return NULL if there is no trailing '|'.
+	 *    "cmdline_copy" can change, e.g. for '%' and '#' expansion.
+	 ','line_number':988,'multiline':True]['text':' Use "current_line" from "cmd_loop_cookie", it may have been','line_number':1003,'multiline':False]['text':' incremented when defining a function.','line_number':1004,'multiline':False]['text':'
+	     * If the command was typed, remember it for the ':' register.
+	     * Do this AFTER executing the command to make :@: work.
+	     ','line_number':1012,'multiline':True]['text':' need to copy the command after the '|' to cmdline_copy, for the','line_number':1026,'multiline':False]['text':' next do_one_cmd()','line_number':1027,'multiline':False]['text':' reset did_emsg for a function that is not aborted by an error','line_number':1034,'multiline':False]['text':' did_emsg_cumul is not set here','line_number':1039,'multiline':False]['text':'
+	     * An ":endwhile", ":endfor" and ":continue" is handled here.
+	     * If we were executing commands, jump back to the ":while" or
+	     * ":for".
+	     * If we were not executing commands, decrement cs_looplevel.
+	     ','line_number':1047,'multiline':True]['text':' Jump back to the matching ":while" or ":for".  Be careful','line_number':1057,'multiline':False]['text':' not to use a cs_line[] from an entry that isn't a ":while"','line_number':1058,'multiline':False]['text':' or ":for": It would make "current_line" invalid and can','line_number':1059,'multiline':False]['text':' cause a crash.','line_number':1060,'multiline':False]['text':' remember we jumped there','line_number':1069,'multiline':False]['text':' check if CTRL-C typed','line_number':1071,'multiline':False]['text':' Check for the next breakpoint at or after the ":while"','line_number':1073,'multiline':False]['text':' or ":for".','line_number':1074,'multiline':False]['text':' can only get here with ":endwhile" or ":endfor"','line_number':1086,'multiline':False]['text':'
+	     * For a ":while" or ":for" we need to remember the line number.
+	     ','line_number':1093,'multiline':True]['text':' Check for the next breakpoint after a watchexpression','line_number':1103,'multiline':False]['text':'
+	 * When not inside any ":while" loop, clear remembered lines.
+	 ','line_number':1110,'multiline':True]['text':'
+	 * A ":finally" makes did_emsg, got_int, and did_throw pending for
+	 * being restored at the ":endtry".  Reset them here and set the
+	 * ACTIVE and FINALLY flags, so that the finally clause gets executed.
+	 * This includes the case where a missing ":endif", ":endwhile" or
+	 * ":endfor" was detected by the ":finally" itself.
+	 ','line_number':1124,'multiline':True]['text':' Update global "trylevel" for recursive calls to do_cmdline() from','line_number':1141,'multiline':False]['text':' within this loop.','line_number':1142,'multiline':False]['text':'
+	 * If the outermost try conditional (across function calls and sourced
+	 * files) is aborted because of an error, an interrupt, or an uncaught
+	 * exception, cancel everything.  If it is left normally, reset
+	 * force_abort to get the non-EH compatible abortion behavior for
+	 * the rest of the script.
+	 ','line_number':1145,'multiline':True]['text':' Convert an interrupt to an exception if appropriate.','line_number':1155,'multiline':False]['text':' FEAT_EVAL','line_number':1157,'multiline':False]['text':'
+     * Continue executing command lines when:
+     * - no CTRL-C typed, no aborting error, no exception thrown or try
+     *   conditionals need to be checked for executing finally clauses or
+     *   catching an interrupt exception
+     * - didn't get an error message or lines are not typed
+     * - there is a command after '|', inside a :if, :while, :for or :try, or
+     *   looping for ":source" command or function call.
+     ','line_number':1160,'multiline':True]['text':' Keep going when inside try/catch, so that the error can be','line_number':1181,'multiline':False]['text':' deal with, except when it is a syntax error, it may cause','line_number':1182,'multiline':False]['text':' the :endtry to be missed.','line_number':1183,'multiline':False]['text':'
+	 * If a sourced file or executed function ran to its end, report the
+	 * unclosed conditional.
+	 * In Vim9 script do not give a second error, executing aborts after
+	 * the first one.
+	 ','line_number':1203,'multiline':True]['text':'
+	 * Reset "trylevel" in case of a ":finish" or ":return" or a missing
+	 * ":endtry" in a sourced file or executed function.  If the try
+	 * conditional is in its finally clause, ignore anything pending.
+	 * If it is in a catch clause, finish the caught exception.
+	 * Also cleanup any "cs_forinfo" structures.
+	 ','line_number':1226,'multiline':True]['text':' remove try block not in its finally clause','line_number':1238,'multiline':False]['text':' If a missing ":endtry", ":endwhile", ":endfor", or ":endif" or a memory','line_number':1246,'multiline':False]['text':' lack was reported above and the error message is to be converted to an','line_number':1247,'multiline':False]['text':' exception, do this now after rewinding the cstack.','line_number':1248,'multiline':False]['text':' Just in case did_throw got set but current_exception wasn't.','line_number':1254,'multiline':False]['text':'
+	 * When an exception is being thrown out of the outermost try
+	 * conditional, discard the uncaught exception, disable the conversion
+	 * of interrupts or errors to exceptions, and ensure that no more
+	 * commands are executed.
+	 ','line_number':1258,'multiline':True]['text':'
+	 * On an interrupt or an aborting error not converted to an exception,
+	 * disable the conversion of errors to exceptions.  (Interrupts are not
+	 * converted anymore, here.) This enables also the interrupt message
+	 * when force_abort is set and did_emsg unset in case of an interrupt
+	 * from a finally clause after an error.
+	 ','line_number':1267,'multiline':True]['text':'
+     * The current cstack will be freed when do_cmdline() returns.  An uncaught
+     * exception will have to be rethrown in the previous cstack.  If a function
+     * has just returned or a script file was just finished and the previous
+     * cstack belongs to the same function or, respectively, script file, it
+     * will have to be checked for finally clauses to be executed due to the
+     * ":return" or ":finish".  This is done in do_one_cmd().
+     ','line_number':1278,'multiline':True]['text':' When leaving a function, reduce nesting level.','line_number':1298,'multiline':False]['text':'
+	 * Go to debug mode when returning from a function in which we are
+	 * single-stepping.
+	 ','line_number':1301,'multiline':True]['text':'
+     * Restore the exception environment (done after returning from the
+     * debugger).
+     ','line_number':1313,'multiline':True]['text':' Cleanup if "cs_emsg_silent_list" remains.','line_number':1322,'multiline':False]['text':' FEAT_EVAL','line_number':1333,'multiline':False]['text':'
+     * If there was too much output to fit on the command line, ask the user to
+     * hit return before redrawing the screen. With the ":global" command we do
+     * this only once after the command is finished.
+     ','line_number':1335,'multiline':True]['text':'
+	 * When just finished an ":if"-":else" which was typed, no need to
+	 * wait for hit-return.  Also for an error situation.
+	 ','line_number':1347,'multiline':True]['text':' don't wait when restarting edit','line_number':1358,'multiline':False]['text':'
+	     * The msg_start() above clears msg_didout. The wait_return() we do
+	     * here should not overwrite the command that may be shown before
+	     * doing that.
+	     ','line_number':1362,'multiline':True]['text':' in case do_cmdline used recursively','line_number':1373,'multiline':False]['text':'
+     * Reset if_level, in case a sourced script file contains more ":if" than
+     * ":endif" (could be ":if x | foo | endif").
+     ','line_number':1375,'multiline':True]['text':'
+ * Handle when "did_throw" is set after executing commands.
+ ','line_number':1387,'multiline':True]['text':'
+     * If the uncaught exception is a user exception, report it as an
+     * error.  If it is an error exception, display the saved error
+     * message now.  For an interrupt exception, do nothing; the
+     * interrupt message is given elsewhere.
+     ','line_number':1397,'multiline':True]['text':' uses IObuff if 'verbose'','line_number':1424,'multiline':False]['text':'
+ * Obtain a line when inside a ":while" or ":for" loop.
+ ','line_number':1455,'multiline':True]['text':' trying to read past ":endwhile"/":endfor"','line_number':1468,'multiline':False]['text':' First time inside the ":while"/":for": get line normally.','line_number':1470,'multiline':False]['text':'
+ * Store a line in "gap" so that a ":while" loop can execute it again.
+ ','line_number':1488,'multiline':True]['text':'
+ * Free the lines stored for a ":while" or ":for" loop.
+ ','line_number':1502,'multiline':True]['text':'
+ * If "fgetline" is get_loop_line(), return TRUE if the getline it uses equals
+ * "func".  * Otherwise return TRUE when "fgetline" equals "func".
+ ','line_number':1516,'multiline':True]['text':' argument for fgetline()','line_number':1523,'multiline':False]['text':' When "fgetline" is "get_loop_line()" use the "cookie" to find the','line_number':1530,'multiline':False]['text':' function that's originally used to obtain the lines.  This may be','line_number':1531,'multiline':False]['text':' nested several levels.','line_number':1532,'multiline':False]['text':'
+ * If "fgetline" is get_loop_line(), return the cookie used by the original
+ * getline function.  Otherwise return "cookie".
+ ','line_number':1546,'multiline':True]['text':' argument for fgetline()','line_number':1553,'multiline':False]['text':' When "fgetline" is "get_loop_line()" use the "cookie" to find the','line_number':1559,'multiline':False]['text':' cookie that's originally used to obtain the lines.  This may be nested','line_number':1560,'multiline':False]['text':' several levels.','line_number':1561,'multiline':False]['text':'
+ * Get the next line source line without advancing.
+ ','line_number':1576,'multiline':True]['text':' argument for fgetline()','line_number':1582,'multiline':False]['text':' When "fgetline" is "get_loop_line()" use the "cookie" to find the','line_number':1588,'multiline':False]['text':' cookie that's originally used to obtain the lines.  This may be nested','line_number':1589,'multiline':False]['text':' several levels.','line_number':1590,'multiline':False]['text':' executing lines a second time, use the stored copy','line_number':1597,'multiline':False]['text':'
+ * Helper function to apply an offset for buffer commands, i.e. ":bdelete",
+ * ":bwipeout", etc.
+ * Returns the buffer number.
+ ','line_number':1611,'multiline':True]['text':' skip over unloaded buffers','line_number':1634,'multiline':False]['text':' we might have gone too far, last buffer is not loadedd','line_number':1643,'multiline':False]['text':'
+ * Return the window number of "win".
+ * When "win" is NULL return the number of windows.
+ ','line_number':1655,'multiline':True]['text':'
+ * Execute one Ex command.
+ *
+ * If "flags" has DOCMD_VERBOSE, the command will be included in the error
+ * message.
+ *
+ * 1. skip comment lines and leading space
+ * 2. handle command modifiers
+ * 3. find the command
+ * 4. parse range
+ * 5. Parse the command.
+ * 6. parse arguments
+ * 7. switch on command name
+ *
+ * Note: "fgetline" can be NULL.
+ *
+ * This function may be called recursively!
+ ','line_number':1702,'multiline':True]['text':' argument for fgetline()','line_number':1728,'multiline':False]['text':' error message','line_number':1733,'multiline':False]['text':' Ex command arguments','line_number':1735,'multiline':False]['text':' set when Not Implemented','line_number':1739,'multiline':False]['text':' When the last file has not been edited :q has to be typed twice.','line_number':1756,'multiline':False]['text':' avoid that a function call in 'statusline' does this','line_number':1759,'multiline':False]['text':' avoid that an autocommand, e.g. QuitPre, does this','line_number':1762,'multiline':False]['text':'
+     * Reset browse, confirm, etc..  They are restored when returning, for
+     * recursive calls.
+     ','line_number':1766,'multiline':True]['text':' "#!anything" is handled like a comment.','line_number':1772,'multiline':False]['text':'
+ * 1. Skip comment lines and leading white space and colons.
+ * 2. Handle command modifiers.
+ ','line_number':1776,'multiline':True]['text':' The "ea" structure holds the arguments that can be used.','line_number':1780,'multiline':False]['text':'
+ * 3. Skip over the range to find the command.  Let "p" point to after it.
+ *
+ * We need the command to know what kind of range it uses.
+ ','line_number':1801,'multiline':True]['text':' In Vim9 script a colon is required before the range.  This may also be','line_number':1808,'multiline':False]['text':' after command modifiers.','line_number':1809,'multiline':False]['text':' Handle ":export" - it functions almost like a command modifier.','line_number':1828,'multiline':False]['text':' ":export var Name: type"','line_number':1829,'multiline':False]['text':' ":export def Name(..."','line_number':1830,'multiline':False]['text':' etc.','line_number':1831,'multiline':False]['text':' should be "$VAR = val"','line_number':1839,'multiline':False]['text':' If a ':' before the range is missing, give a clearer error','line_number':1850,'multiline':False]['text':' message.','line_number':1851,'multiline':False]['text':' Count this line for profiling if skip is TRUE.','line_number':1864,'multiline':False]['text':' May go to debug mode.  If this happens and the ">quit" debug command is','line_number':1901,'multiline':False]['text':' used, throw an interrupt exception and skip the next command.','line_number':1902,'multiline':False]['text':'
+ * 4. parse a range specifier of the form: addr [,addr] [;addr] ..
+ *
+ * where 'addr' is:
+ *
+ * %	      (entire file)
+ * $  [+-NUM]
+ * 'x [+-NUM] (where x denotes a currently defined mark)
+ * .  [+-NUM]
+ * [+-NUM]..
+ * NUM
+ *
+ * The ea.cmd pointer is updated to point to the first character following the
+ * range spec. If an initial address is found, but no second, the upper bound
+ * is equal to the lower.
+ ','line_number':1911,'multiline':True]['text':' ea.addr_type for user commands is set by find_ucmd','line_number':1928,'multiline':False]['text':' :wincmd range depends on the argument.','line_number':1936,'multiline':False]['text':' :.cc in quickfix window uses line number','line_number':1940,'multiline':False]['text':'
+ * 5. Parse the command.
+ ','line_number':1951,'multiline':True]['text':'
+     * Skip ':' and any white space
+     ','line_number':1955,'multiline':True]['text':'
+     * If we got a line, but no command, then go to the line.
+     * If we find a '|' or '\n' we set ea.nextcmd.
+     ','line_number':1962,'multiline':True]['text':'
+	 * strange vi behaviour:
+	 * ":3"		jumps to line 3
+	 * ":3|..."	prints line 3  (not in Vim9 script)
+	 * ":|"		prints current line  (not in Vim9 script)
+	 ','line_number':1969,'multiline':True]['text':' skip this if inside :if','line_number':1975,'multiline':False]['text':' If this looks like an undefined user command and there are CmdUndefined','line_number':1981,'multiline':False]['text':' autocommands defined, trigger the matching autocommands.','line_number':1982,'multiline':False]['text':' If the autocommands did something and didn't cause an error, try','line_number':1995,'multiline':False]['text':' finding the command again.','line_number':1996,'multiline':False]['text':' Check for wrong commands.','line_number':2010,'multiline':False]['text':' If the modifier was parsed OK the error must be in the','line_number':2025,'multiline':False]['text':' following command','line_number':2026,'multiline':False]['text':'
+     * When the expression evaluation is disabled, recognize the ":if" and
+     * ":endif" commands and ignore everything in between it.
+     ','line_number':2047,'multiline':True]['text':' forced commands','line_number':2062,'multiline':False]['text':'
+ * 6. Parse arguments.  Then check for errors.
+ ','line_number':2072,'multiline':True]['text':' Command not allowed in sandbox.','line_number':2083,'multiline':False]['text':' Command not allowed in non-'modifiable' buffer','line_number':2095,'multiline':False]['text':' Command not allowed in the command line window','line_number':2104,'multiline':False]['text':' Command not allowed when text is locked','line_number':2110,'multiline':False]['text':' Disallow editing another buffer when "curbuf_lock" is set.','line_number':2116,'multiline':False]['text':' Do allow ":checktime" (it is postponed).','line_number':2117,'multiline':False]['text':' Do allow ":edit" (check for an argument later).','line_number':2118,'multiline':False]['text':' Do allow ":file" with no arguments (check for an argument later).','line_number':2119,'multiline':False]['text':'
+     * Don't complain about the range if it is not used
+     * (could happen if line_count is accidentally set to 0).
+     ','line_number':2141,'multiline':True]['text':'
+	 * If the range is backwards, ask for confirmation and, if given, swap
+	 * ea.line1 & ea.line2 so it's forwards again.
+	 * When global command is busy, don't ask, will fail below.
+	 ','line_number':2147,'multiline':True]['text':' default is 1, not cursor','line_number':2174,'multiline':False]['text':' Put the first line at the start of a closed fold, put the last line','line_number':2183,'multiline':False]['text':' at the end of a closed fold.','line_number':2184,'multiline':False]['text':'
+     * For the ":make" and ":grep" commands we insert the 'makeprg'/'grepprg'
+     * option here, so things like % get expanded.
+     ','line_number':2191,'multiline':True]['text':'
+     * Skip to start of argument.
+     * Don't do this for the ":!" command, because ":!! -l" needs the space.
+     ','line_number':2200,'multiline':True]['text':' ":file" cannot be run with an argument when "curbuf_lock" is set','line_number':2209,'multiline':False]['text':'
+     * Check for "++opt=val" argument.
+     * Must be first, allow ":w ++enc=utf8 !cmd"
+     ','line_number':2213,'multiline':True]['text':' append','line_number':2227,'multiline':False]['text':' typed wrong','line_number':2229,'multiline':False]['text':' :w !filter','line_number':2237,'multiline':False]['text':' :r! filter if ea.forceit','line_number':2248,'multiline':False]['text':' :r !filter','line_number':2251,'multiline':False]['text':' count number of '>' or '<'','line_number':2261,'multiline':False]['text':'
+     * Check for "+command" argument, before checking for next command.
+     * Don't do this for ":read !cmd" and ":write !cmd".
+     ','line_number':2269,'multiline':True]['text':'
+     * For commands that do not use '|' inside their argument: Check for '|' to
+     * separate commands and '"' or '#' to start comments.
+     *
+     * Otherwise: Check for <newline> to end a shell command.
+     * Also do this for ":read !cmd", ":write !cmd" and ":global".
+     * Also do this inside a { - } block after :command and :autocmd.
+     * Any others?
+     ','line_number':2276,'multiline':True]['text':' Remove one backslash before a newline, so that it's possible to','line_number':2301,'multiline':False]['text':' pass a newline to the shell and also a newline that is preceded','line_number':2302,'multiline':False]['text':' with a backslash.  This makes it impossible to end a shell','line_number':2303,'multiline':False]['text':' command in a backslash, but that doesn't appear useful.','line_number':2304,'multiline':False]['text':' Halving the number of backslashes is incompatible with previous','line_number':2305,'multiline':False]['text':' versions.','line_number':2306,'multiline':False]['text':' accept numbered register only when no count allowed (:put)','line_number':2321,'multiline':False]['text':' Do not allow register = for user commands','line_number':2324,'multiline':False]['text':' check these explicitly for a more specific error message','line_number':2329,'multiline':False]['text':' for '=' register: accept the rest of the line as an expression','line_number':2341,'multiline':False]['text':'
+     * Check for a count.  When accepting a EX_BUFNAME, don't use "123foo" as a
+     * count, it's a buffer name.
+     ','line_number':2356,'multiline':True]['text':' e.g. :buffer 2, :sleep 3','line_number':2371,'multiline':False]['text':' avoid overflow','line_number':2381,'multiline':False]['text':'
+	     * Be vi compatible: no error message for out of range.
+	     ','line_number':2385,'multiline':True]['text':'
+     * Check for flags: 'l', 'p' and '#'.
+     ','line_number':2393,'multiline':True]['text':' no arguments allowed but there is something','line_number':2401,'multiline':False]['text':'
+     * Skip the command when it's not going to be executed.
+     * The commands like :if, :endif, etc. always need to be executed.
+     * Also make an exception for commands that handle a trailing command
+     * themselves.
+     ','line_number':2413,'multiline':True]['text':' commands that need evaluation','line_number':2423,'multiline':False]['text':' Commands that handle '|' themselves.  Check: A command should','line_number':2440,'multiline':False]['text':' either have the EX_TRLBAR flag, appear in this list or appear in','line_number':2441,'multiline':False]['text':' the list at ":help :bar".','line_number':2442,'multiline':False]['text':'
+     * Accept buffer name.  Cannot be used at the same time with a buffer
+     * number.  Don't do this for a user command.
+     ','line_number':2527,'multiline':True]['text':'
+	 * :bdelete, :bwipeout and :bunload take several arguments, separated
+	 * by spaces: find next space (skipping over escaped characters).
+	 * The others take one argument: ignore trailing spaces.
+	 ','line_number':2534,'multiline':True]['text':' failed','line_number':2550,'multiline':False]['text':' The :try command saves the emsg_silent flag, reset it here when','line_number':2556,'multiline':False]['text':' ":silent! try" was used, it should only apply to :try itself.','line_number':2557,'multiline':False]['text':'
+ * 7. Execute the command.
+ ','line_number':2566,'multiline':True]['text':'
+	 * Execute a user-defined command.
+	 ','line_number':2572,'multiline':True]['text':'
+	 * Call the function to execute the builtin command.
+	 ','line_number':2579,'multiline':True]['text':' A command will reset "is_export" when exporting an item.  If it is still','line_number':2588,'multiline':False]['text':' set something went wrong or the command was never executed.','line_number':2589,'multiline':False]['text':' Set flag that any command was executed, used by ex_vim9script().','line_number':2597,'multiline':False]['text':' Not if this was a command that wasn't executed or :endif.','line_number':2598,'multiline':False]['text':'
+     * If the command just executed called do_cmdline(), any throw or ":return"
+     * or ":finish" encountered there must also check the cstack of the still
+     * active do_cmdline() that called this do_one_cmd().  Rethrow an uncaught
+     * exception, or reanimate a returned function or finished script file and
+     * return or finish it again.
+     ','line_number':2606,'multiline':True]['text':' can happen with zero line number','line_number':2627,'multiline':False]['text':' not really a next command','line_number':2661,'multiline':False]['text':'
+ * Return an error message with argument included.
+ * Uses a static buffer, only the last error will be kept.
+ * "msg" will be translated, caller should use N_().
+ ','line_number':2674,'multiline':True]['text':'
+ * Handle a range without a command.
+ * Returns an error message on failure.
+ ','line_number':2686,'multiline':True]['text':' With '-' in 'cpoptions' a line number past the file is an','line_number':2713,'multiline':False]['text':' error, otherwise put it at the end of the file.','line_number':2714,'multiline':False]['text':'
+ * Check for an Ex command with optional tail.
+ * If there is a match advance "pp" to the argument and return TRUE.
+ * If "noparen" is TRUE do not recognize the command followed by "(" or ".".
+ ','line_number':2735,'multiline':True]['text':' start of command','line_number':2742,'multiline':False]['text':' name of command','line_number':2743,'multiline':False]['text':' required length','line_number':2744,'multiline':False]['text':'
+ * Check for an Ex command with optional tail.
+ * If there is a match advance "pp" to the argument and return TRUE.
+ ','line_number':2761,'multiline':True]['text':' start of command','line_number':2767,'multiline':False]['text':' name of command','line_number':2768,'multiline':False]['text':' required length','line_number':2769,'multiline':False]['text':'
+ * Check for an Ex command with optional tail, not followed by "(" or ".".
+ * If there is a match advance "pp" to the argument and return TRUE.
+ ','line_number':2774,'multiline':True]['text':' start of command','line_number':2780,'multiline':False]['text':' name of command','line_number':2781,'multiline':False]['text':' required length','line_number':2782,'multiline':False]['text':'
+ * Parse and skip over command modifiers:
+ * - update eap->cmd
+ * - store flags in "cmod".
+ * - Set ex_pressedreturn for an empty command line.
+ * When "skip_only" is TRUE the global variables are not changed, except for
+ * "cmdmod".
+ * When "skip_only" is FALSE then undo_cmdmod() must be called later to free
+ * any cmod_filter_regmatch.regprog.
+ * Call apply_cmdmod() to get the side effects of the modifiers:
+ * - Increment "sandbox" for ":sandbox"
+ * - set p_verbose for ":verbose"
+ * - set msg_silent for ":silent"
+ * - set 'eventignore' to "all" for ":noautocmd"
+ * Return FAIL when the command is not to be executed.
+ * May set "errormsg" to an error message.
+ ','line_number':2787,'multiline':True]['text':' The automatically inserted Visual area range is skipped, so that','line_number':2823,'multiline':False]['text':' typing ":cmdmod cmd" in Visual mode works without having to move the','line_number':2824,'multiline':False]['text':' range to after the modififiers. The command will be','line_number':2825,'multiline':False]['text':' "'<,'>cmdmod cmd", parse "cmdmod cmd" and then put back "'<,'>"','line_number':2826,'multiline':False]['text':' before "cmd" below.','line_number':2827,'multiline':False]['text':' Repeat until no more command modifiers are found.','line_number':2833,'multiline':False]['text':' in ex mode, an empty command (after modifiers) works like :+','line_number':2845,'multiline':False]['text':' no modifiers following','line_number':2854,'multiline':False]['text':' ignore comment and empty lines','line_number':2857,'multiline':False]['text':' a comment ends at a NL','line_number':2860,'multiline':False]['text':' In Vim9 script a variable can shadow a command modifier:','line_number':2892,'multiline':False]['text':'   verbose = 123','line_number':2893,'multiline':False]['text':'   verbose += 123','line_number':2894,'multiline':False]['text':'   silent! verbose = func()','line_number':2895,'multiline':False]['text':'   verbose.member = 2','line_number':2896,'multiline':False]['text':'   verbose[expr] = 2','line_number':2897,'multiline':False]['text':' But not:','line_number':2898,'multiline':False]['text':'   verbose [a, b] = list','line_number':2899,'multiline':False]['text':' When adding an entry, also modify cmdmods[].','line_number':2914,'multiline':False]['text':' only accept ":filter {pat} cmd"','line_number':2964,'multiline':False]['text':' in ":filter #pat# cmd" # does not','line_number':2974,'multiline':False]['text':' start a comment','line_number':2975,'multiline':False]['text':' Avoid that "filter(arg)" is recognized.','line_number':2988,'multiline':False]['text':' NOTE: This puts a NUL after the pattern.','line_number':2995,'multiline':False]['text':' restore the character overwritten by NUL','line_number':3006,'multiline':False]['text':' ":hide" and ":hide | cmd" are not modifiers','line_number':3019,'multiline':False]['text':' ":silent!", but not "silent !cmd"','line_number':3074,'multiline':False]['text':' zero means not set, one is verbose == 0, etc.','line_number':3132,'multiline':False]['text':' default: verbose == 1','line_number':3136,'multiline':False]['text':' Move the '<,'> range to after the modifiers and insert a colon.','line_number':3147,'multiline':False]['text':' Since the modifiers have been parsed put the colon on top of the','line_number':3148,'multiline':False]['text':' space: "'<,'>mod cmd" -> "mod:'<,'>cmd','line_number':3149,'multiline':False]['text':' Put eap->cmd after the colon.','line_number':3150,'multiline':False]['text':' Special case: empty command uses "+":','line_number':3155,'multiline':False]['text':'  "'<,'>mods" -> "mods *+','line_number':3156,'multiline':False]['text':'  Use "*" instead of "'<,'>" to avoid the command getting','line_number':3157,'multiline':False]['text':'  longer, in case it was allocated.','line_number':3158,'multiline':False]['text':' No modifiers, move the pointer back.','line_number':3170,'multiline':False]['text':' Special case: change empty command to "+".','line_number':3171,'multiline':False]['text':'
+ * Return TRUE if "cmod" has anything set.
+ ','line_number':3183,'multiline':True]['text':'
+ * If Vim9 script and "cmdmod" has anything set give an error and return TRUE.
+ ','line_number':3199,'multiline':True]['text':'
+ * Apply the command modifiers.  Saves current state in "cmdmod", call
+ * undo_cmdmod() later.
+ ','line_number':3214,'multiline':True]['text':' Set 'eventignore' to "all".','line_number':3254,'multiline':False]['text':' First save the existing option value for restoring it later.','line_number':3255,'multiline':False]['text':'
+ * Undo and free contents of "cmod".
+ ','line_number':3262,'multiline':True]['text':' Restore 'eventignore' to the value before ":noautocmd".','line_number':3284,'multiline':False]['text':' messages could be enabled for a serious error, need to check if the','line_number':3295,'multiline':False]['text':' counters don't become negative','line_number':3296,'multiline':False]['text':' Restore msg_scroll, it's set by file I/O commands, even when no','line_number':3302,'multiline':False]['text':' message is actually displayed.','line_number':3303,'multiline':False]['text':' "silent reg" or "silent echo x" inside "redir" leaves msg_col','line_number':3306,'multiline':False]['text':' somewhere in the line.  Put it back in the first column.','line_number':3307,'multiline':False]['text':'
+ * Parse the address range, if any, in "eap".
+ * May set the last search pattern, unless "silent" is TRUE.
+ * Return FAIL and set "errormsg" or return OK.
+ ','line_number':3316,'multiline':True]['text':' Repeat for all ',' or ';' separated addresses.','line_number':3329,'multiline':False]['text':' error detected','line_number':3337,'multiline':False]['text':' '%' - all lines','line_number':3341,'multiline':False]['text':' there is no Vim command which uses '%' and','line_number':3380,'multiline':False]['text':' ADDR_WINDOWS or ADDR_TABS','line_number':3381,'multiline':False]['text':' Will give an error later if a range is found.','line_number':3409,'multiline':False]['text':' '*' - visual area','line_number':3418,'multiline':False]['text':' Don't leave the cursor on an illegal line or column, but do','line_number':3450,'multiline':False]['text':' accept zero as address, so 0;/PATTERN/ works correctly','line_number':3451,'multiline':False]['text':' (where zero usually means to use the first line).','line_number':3452,'multiline':False]['text':' Check the cursor position before returning.','line_number':3453,'multiline':False]['text':' One address given: set start and end lines.','line_number':3466,'multiline':False]['text':' ... but only implicit: really no address given','line_number':3470,'multiline':False]['text':'
+ * Append "cmd" to the error message in IObuff.
+ * Takes care of limiting the length and handling 0xa0, which would be
+ * invisible otherwise.
+ ','line_number':3482,'multiline':True]['text':' Not enough space, truncate and put in "...".','line_number':3496,'multiline':False]['text':'
+ * If "start" points "&opt", "&l:opt", "&g:opt" or "$ENV" return a pointer to
+ * the name.  Otherwise just return "start".
+ ','line_number':3520,'multiline':True]['text':'
+ * Return TRUE and set "*idx" if "p" points to a one letter command.
+ * If not in Vim9 script:
+ * - The 'k' command can directly be followed by any character.
+ * - The 's' command can be followed directly by 'c', 'g', 'i', 'I' or 'r'
+ *	    but :sre[wind] is another command, as are :scr[iptnames],
+ *	    :scs[cope], :sim[alt], :sig[ns] and :sil[ent].
+ ','line_number':3542,'multiline':True]['text':'
+ * Return TRUE if "cmd" starts with "123->", a number followed by a method
+ * call.
+ ','line_number':3575,'multiline':True]['text':'
+ * Find an Ex command by its name, either built-in or user.
+ * Start of the name can be found at eap->cmd.
+ * Sets eap->cmdidx and returns a pointer to char after the command name.
+ * "full" is set to TRUE if the whole command name matched.
+ *
+ * If "lookup" is not NULL recognize expression without "eval" or "call" and
+ * assignment without "let".  Sets eap->cmdidx to the command while returning
+ * "eap->cmd".
+ *
+ * Returns NULL for an ambiguous user command.
+ ','line_number':3588,'multiline':True]['text':'
+     * Recognize a Vim9 script function/method call and assignment:
+     * "lvar = value", "lvar(arg)", "[1, 2 3]->Func()"
+     ','line_number':3615,'multiline':True]['text':' "&option <NL>", "$ENV <NL>" and "@r <NL>" are the start','line_number':3652,'multiline':False]['text':' of an expression.','line_number':3653,'multiline':False]['text':' "&option" can be followed by "->" or "=", check below','line_number':3657,'multiline':False]['text':' "(..." is an expression.','line_number':3663,'multiline':False]['text':' "funcname(" is always a function call.','line_number':3664,'multiline':False]['text':' "{..." is a dict expression or block start.','line_number':3668,'multiline':False]['text':' "'string'->func()" is an expression.','line_number':3670,'multiline':False]['text':' '"string"->func()' is an expression.','line_number':3672,'multiline':False]['text':' '$"string"->func()' is an expression.','line_number':3674,'multiline':False]['text':' "$'string'->func()" is an expression.','line_number':3675,'multiline':False]['text':' '0z1234->func()' is an expression.','line_number':3678,'multiline':False]['text':' "g:varname" is an expression.','line_number':3680,'multiline':False]['text':' "varname->func()" is an expression.','line_number':3683,'multiline':False]['text':' "{" by itself is the start of a block.','line_number':3688,'multiline':False]['text':' "varname[]" is an expression.','line_number':3697,'multiline':False]['text':' "varname.key" is an expression.','line_number':3699,'multiline':False]['text':' g:[key] is an expression','line_number':3702,'multiline':False]['text':' When followed by "=" or "+=" then it is an assignment.','line_number':3707,'multiline':False]['text':' Skip over the whole thing, it can be:','line_number':3708,'multiline':False]['text':'	name.member = val','line_number':3709,'multiline':False]['text':'	name[a : b] = val','line_number':3710,'multiline':False]['text':'	name[idx] = val','line_number':3711,'multiline':False]['text':'	name[idx].member = val','line_number':3712,'multiline':False]['text':'	etc.','line_number':3713,'multiline':False]['text':' "[...]->Method()" is a list expression, but "[a, b] = Func()" is','line_number':3728,'multiline':False]['text':' an assignment.','line_number':3729,'multiline':False]['text':' If there is no line break inside the "[...]" then "p" is','line_number':3730,'multiline':False]['text':' advanced to after the "]" by to_name_const_end(): check if a "="','line_number':3731,'multiline':False]['text':' follows.','line_number':3732,'multiline':False]['text':' If "[...]" has a line break "p" still points at the "[" and it','line_number':3733,'multiline':False]['text':' can't be an assignment.','line_number':3734,'multiline':False]['text':' Recognize an assignment if we recognize the variable name:','line_number':3766,'multiline':False]['text':' "g:var = expr"','line_number':3767,'multiline':False]['text':' "@r = expr"','line_number':3768,'multiline':False]['text':' "&opt = expr"','line_number':3769,'multiline':False]['text':' "var = expr"  where "var" is a variable name or we are skipping','line_number':3770,'multiline':False]['text':' (variable declaration might have been skipped).','line_number':3771,'multiline':False]['text':' Not "redir => var" (when skipping).','line_number':3772,'multiline':False]['text':' Recognize trying to use a type for a w:, b:, t: or g: variable:','line_number':3789,'multiline':False]['text':' "w:varname: number = 123".','line_number':3790,'multiline':False]['text':' 1234->func() is a method call','line_number':3798,'multiline':False]['text':' "g:", "s:" and "l:" are always assumed to be a variable, thus start','line_number':3805,'multiline':False]['text':' an expression.  A global/substitute/list command needs to use a','line_number':3806,'multiline':False]['text':' longer name.','line_number':3807,'multiline':False]['text':' If it is an ID it might be a variable with an operator on the next','line_number':3814,'multiline':False]['text':' line, if the variable exists it can't be an Ex command.','line_number':3815,'multiline':False]['text':' Check for "++nr" and "--nr".','line_number':3824,'multiline':False]['text':'
+     * Isolate the command and search for it in the command table.
+     ','line_number':3834,'multiline':True]['text':' for python 3.x support ":py3", ":python3", ":py3file", etc.','line_number':3846,'multiline':False]['text':' include "9" for "vim9*" commands; "vim9cmd" and "vim9script".','line_number':3854,'multiline':False]['text':' check for non-alpha command','line_number':3860,'multiline':False]['text':' The "d" command can directly be followed by 'l' or 'p' flag, when','line_number':3864,'multiline':False]['text':' not in Vim9 script.','line_number':3865,'multiline':False]['text':' Check for ":dl", ":dell", etc. to ":deletel": that's','line_number':3868,'multiline':False]['text':' :delete with the 'l' flag.  Same for 'p'.','line_number':3869,'multiline':False]['text':' Use a precomputed index for fast look-up in cmdnames[]','line_number':3894,'multiline':False]['text':' taking into account the first 2 letters of eap->cmd.','line_number':3895,'multiline':False]['text':' :Print and :mode are not supported in Vim9 script.','line_number':3917,'multiline':False]['text':' Some commands cannot be shortened in Vim9 script.','line_number':3918,'multiline':False]['text':' Do not recognize ":*" as the star command unless '*' is in','line_number':3931,'multiline':False]['text':' 'cpoptions'.','line_number':3932,'multiline':False]['text':' Look for a user defined command as a last resort.  Let ":Print" be','line_number':3936,'multiline':False]['text':' overruled by a user defined command.','line_number':3937,'multiline':False]['text':' User defined commands may contain digits.','line_number':3941,'multiline':False]['text':' ":fina" means ":finally" in legacy script, for backwards compatibility.','line_number':3950,'multiline':False]['text':' :123verbose  :3tab','line_number':3977,'multiline':False]['text':'
+ * Return length of a command modifier (including optional count).
+ * Return zero when it's not a modifier.
+ ','line_number':4007,'multiline':True]['text':'
+ * Return > 0 if an Ex command "name" exists.
+ * Return 2 if there is an exact match.
+ * Return 3 if there is an ambiguous match.
+ ','line_number':4031,'multiline':True]['text':' Check command modifiers.','line_number':4045,'multiline':False]['text':' Check built-in commands and user defined commands.','line_number':4055,'multiline':False]['text':' For ":2match" and ":3match" we need to skip the number.','line_number':4056,'multiline':False]['text':' trailing garbage','line_number':4066,'multiline':False]['text':'
+ * "fullcommand" function
+ ','line_number':4070,'multiline':True]['text':' don't complain about using "en" in Vim9 script','line_number':4108,'multiline':False]['text':'
+ * Skip a range specifier of the form: addr [,addr] [;addr] ..
+ *
+ * Backslashed delimiters after / or ? will be skipped, and commands will
+ * not be expanded between /'s and ?'s or after "'".
+ *
+ * Also skip white space and ":" characters after the range.
+ * Returns the "cmd" pointer advanced to beyond the range.
+ ','line_number':4154,'multiline':True]['text':' skip "*" used for Visual range','line_number':4166,'multiline':False]['text':' pointer to xp_context or NULL','line_number':4167,'multiline':False]['text':' a quote is only valid at the start or after a separator','line_number':4185,'multiline':False]['text':' Skip ":" and white space.','line_number':4210,'multiline':False]['text':' Skip "*" used for Visual range.','line_number':4214,'multiline':False]['text':'
+ * Return the default address for an address type.
+ ','line_number':4230,'multiline':True]['text':' Default is the cursor line number.  Avoid using an invalid','line_number':4242,'multiline':False]['text':' line number though.','line_number':4243,'multiline':False]['text':' Will give an error later if a range is found.','line_number':4279,'multiline':False]['text':'
+ * Get a single EX address.
+ *
+ * Set ptr to the next character after the part that was interpreted.
+ * Set ptr to NULL when an error is encountered.
+ * This may set the last used search pattern.
+ *
+ * Return MAXLNUM when no Ex address was found.
+ ','line_number':4285,'multiline':True]['text':' only skip the address, don't use it','line_number':4299,'multiline':False]['text':' no errors or side effects','line_number':4300,'multiline':False]['text':' flag: may jump to other file','line_number':4301,'multiline':False]['text':' 1 for first address, >1 after comma','line_number':4302,'multiline':False]['text':' '.' - Cursor position','line_number':4319,'multiline':False]['text':' '$' - last line','line_number':4360,'multiline':False]['text':' ''' - mark','line_number':4414,'multiline':False]['text':' Only accept a mark in another file when it is','line_number':4430,'multiline':False]['text':' used by itself: ":'M".','line_number':4431,'multiline':False]['text':' Jumped to another file.','line_number':4435,'multiline':False]['text':' '/' or '?' - search','line_number':4450,'multiline':False]['text':' skip "/pat/"','line_number':4458,'multiline':False]['text':' save curwin->w_cursor','line_number':4468,'multiline':False]['text':' When '/' or '?' follows another address, start from','line_number':4470,'multiline':False]['text':' there.','line_number':4471,'multiline':False]['text':' Start a forward search at the end of the line (unless','line_number':4477,'multiline':False]['text':' before the first line).','line_number':4478,'multiline':False]['text':' Start a backward search at the start of the line.','line_number':4479,'multiline':False]['text':' This makes sure we never match in the current','line_number':4480,'multiline':False]['text':' line, and can match anywhere in the','line_number':4481,'multiline':False]['text':' next/previous line.','line_number':4482,'multiline':False]['text':' adjust command string pointer','line_number':4497,'multiline':False]['text':' "\?", "\/" or "\&", repeat search','line_number':4502,'multiline':False]['text':'
+		     * When search follows another address, start from
+		     * there.
+		     ','line_number':4523,'multiline':True]['text':'
+		     * Start the search just like for the above
+		     * do_search().
+		     ','line_number':4532,'multiline':True]['text':' absolute line number','line_number':4555,'multiline':False]['text':' "+1" is same as ".+1"','line_number':4571,'multiline':False]['text':' "number" is same as "+number"','line_number':4608,'multiline':False]['text':' '+' is '+1'','line_number':4611,'multiline':False]['text':' "number", "+number" or "-number"','line_number':4615,'multiline':False]['text':' Relative line addressing: need to adjust for lines in a','line_number':4637,'multiline':False]['text':' closed fold after the first address.','line_number':4638,'multiline':False]['text':'
+ * Set eap->line1 and eap->line2 to the whole range.
+ * Used for commands with the EX_DFLALL flag and no range given.
+ ','line_number':4663,'multiline':True]['text':'
+ * Get flags from an Ex command argument.
+ ','line_number':4725,'multiline':True]['text':'
+ * Function called for command which is Not Implemented.  NI!
+ ','line_number':4743,'multiline':True]['text':'
+ * Function called for script command which is Not Implemented.  NI!
+ * Skips over ":perl <<EOF" constructs.
+ ','line_number':4755,'multiline':True]['text':'
+ * Check range in Ex command for validity.
+ * Return NULL when valid, error message when invalid.
+ ','line_number':4769,'multiline':True]['text':' add 1 if ARGCOUNT is 0','line_number':4796,'multiline':False]['text':' Only a boundary check, not whether the buffers actually','line_number':4801,'multiline':False]['text':' exist.','line_number':4802,'multiline':False]['text':' Any range is OK.','line_number':4836,'multiline':False]['text':' No error for value that is too big, will use the last entry.','line_number':4840,'multiline':False]['text':' Will give an error elsewhere.','line_number':4858,'multiline':False]['text':'
+ * Correct the range for zero line number, if required.
+ ','line_number':4865,'multiline':True]['text':' zero in range not allowed','line_number':4871,'multiline':False]['text':'
+ * For a ":vimgrep" or ":vimgrepadd" command return a pointer past the
+ * pattern.  Otherwise return eap->arg.
+ ','line_number':4881,'multiline':True]['text':'
+ * For the ":make" and ":grep" commands insert the 'makeprg'/'grepprg' option
+ * in the command line, so that things like % get expanded.
+ ','line_number':4902,'multiline':True]['text':'
+     * Don't do it when ":vimgrep" is used for ":grep".
+     ','line_number':4916,'multiline':True]['text':' replace $* by given arguments','line_number':4945,'multiline':False]['text':' out of memory','line_number':4952,'multiline':False]['text':' out of memory','line_number':4968,'multiline':False]['text':' 'eap->cmd' is not set here, because it is not used at CMD_make','line_number':4975,'multiline':False]['text':'
+ * Expand file name in Ex command argument.
+ * When an error is detected, "errormsgp" is set to a non-NULL pointer.
+ * Return FAIL for failure, OK otherwise.
+ ','line_number':4984,'multiline':True]['text':' need to expand wildcards','line_number':4995,'multiline':False]['text':' Skip a regexp pattern for ":vimgrep[add] pat file..."','line_number':5003,'multiline':False]['text':'
+     * Decide to expand wildcards *before* replacing '%', '#', etc.  If
+     * the file name contains a wildcard it should not cause expanding.
+     * (it will be expanded anyway if there is a wildcard before replacing).
+     ','line_number':5009,'multiline':True]['text':' Skip over `=expr`, wildcards in it are not expanded.','line_number':5018,'multiline':False]['text':'
+	 * Quick check if this cannot be the start of a special string.
+	 * Also removes backslash before '%', '#' and '<'.
+	 ','line_number':5028,'multiline':True]['text':'
+	 * Try to find a match at this position.
+	 ','line_number':5038,'multiline':True]['text':' error detected','line_number':5043,'multiline':False]['text':' no match found','line_number':5045,'multiline':False]['text':' Wildcards won't be expanded below, the replacement is taken','line_number':5051,'multiline':False]['text':' literally.  But do expand "~/file", "~user/file" and "$HOME/file".','line_number':5052,'multiline':False]['text':' Need to escape white space et al. with a backslash.','line_number':5061,'multiline':False]['text':' Don't do this for:','line_number':5062,'multiline':False]['text':' - replacement that already has been escaped: "##"','line_number':5063,'multiline':False]['text':' - shell commands (may have to use quotes instead).','line_number':5064,'multiline':False]['text':' - non-unix systems when there is a single argument (spaces don't','line_number':5065,'multiline':False]['text':'   separate arguments then).','line_number':5066,'multiline':False]['text':' Don't escape a backslash here, because rem_backslash() doesn't','line_number':5085,'multiline':False]['text':' remove it later.','line_number':5086,'multiline':False]['text':' For a shell command a '!' must be escaped.','line_number':5106,'multiline':False]['text':'
+     * One file argument: Expand wildcards.
+     * Don't do this with ":r !command" or ":w !command".
+     ','line_number':5127,'multiline':True]['text':'
+	 * May do this twice:
+	 * 1. Replace environment variables.
+	 * 2. Replace any other wildcards, remove backslashes.
+	 ','line_number':5133,'multiline':True]['text':'
+		 * Halve the number of backslashes (this is Vi compatible).
+		 * For Unix and OS/2, when wildcards are expanded, this is
+		 * done by ExpandOne() below.
+		 ','line_number':5142,'multiline':True]['text':'
+		     * First loop: May expand environment variables.  This
+		     * can be done much faster with expand_env() than with
+		     * something else (e.g., calling a shell).
+		     * After expanding environment variables, check again
+		     * if there are still wildcards present.
+		     ','line_number':5157,'multiline':True]['text':' n == 2','line_number':5175,'multiline':False]['text':' p came from ExpandOne()','line_number':5194,'multiline':False]['text':'
+ * Replace part of the command line, keeping eap->cmd, eap->arg and
+ * eap->nextcmd correct.
+ * "src" points to the part that is to be replaced, of length "srclen".
+ * "repl" is the replacement string.
+ * Returns a pointer to the character after the replaced string.
+ * Returns NULL for failure.
+ ','line_number':5203,'multiline':True]['text':'
+     * The new command line is build in new_cmdline[].
+     * First allocate it.
+     * Careful: a "+cmd" argument may have been NUL terminated.
+     ','line_number':5223,'multiline':True]['text':' add space for next command','line_number':5231,'multiline':False]['text':' out of memory!','line_number':5233,'multiline':False]['text':'
+     * Copy the stuff before the expanded part.
+     * Copy the expanded stuff.
+     * Copy what came after the expanded part.
+     * Copy the next commands, if there are any.
+     ','line_number':5235,'multiline':True]['text':' length of part before match','line_number':5241,'multiline':False]['text':' remember the end of the string','line_number':5245,'multiline':False]['text':' remember where to continue','line_number':5247,'multiline':False]['text':' append next command','line_number':5249,'multiline':False]['text':'
+ * Check for '|' to separate commands and '"' to start comments.
+ * If "keep_backslash" is TRUE do not remove any backslash.
+ ','line_number':5265,'multiline':True]['text':' skip CTRL-V and next char','line_number':5285,'multiline':False]['text':' remove CTRL-V and skip next char','line_number':5287,'multiline':False]['text':' stop at NUL after CTRL-V','line_number':5289,'multiline':False]['text':' Skip over `=expr` when wildcards are expanded.','line_number':5294,'multiline':False]['text':' stop at NUL after CTRL-V','line_number':5299,'multiline':False]['text':' Check for '"'/'#': start of comment or '|': next command','line_number':5304,'multiline':False]['text':' :@" and :*" do not start a comment!','line_number':5305,'multiline':False]['text':' :redir @" doesn't either.','line_number':5306,'multiline':False]['text':'
+	     * We remove the '\' before the '|', unless EX_CTRLV is used
+	     * AND 'b' is present in 'cpoptions'.
+	     ','line_number':5320,'multiline':True]['text':' remove the '\'','line_number':5329,'multiline':False]['text':' remove trailing spaces','line_number':5342,'multiline':False]['text':'
+ * get + command from ex argument
+ ','line_number':5346,'multiline':True]['text':' +[command]','line_number':5355,'multiline':False]['text':' terminate command with NUL','line_number':5365,'multiline':False]['text':' skip over spaces','line_number':5368,'multiline':False]['text':'
+ * Find end of "+command" argument.  Skip over "\ " and "\\".
+ ','line_number':5374,'multiline':True]['text':' TRUE to halve the number of backslashes','line_number':5380,'multiline':False]['text':'
+ * Function given to ExpandGeneric() to obtain the list of bad= names.
+ ','line_number':5410,'multiline':True]['text':' Note: Keep this in sync with getargopt.','line_number':5416,'multiline':False]['text':'
+ * Get "++opt=arg" argument.
+ * Return FAIL or OK.
+ ','line_number':5429,'multiline':True]['text':' Note: Keep this in sync with get_argopt_name.','line_number':5441,'multiline':False]['text':' ":edit ++[no]bin[ary] file"','line_number':5443,'multiline':False]['text':' ":read ++edit file"','line_number':5459,'multiline':False]['text':' Make 'fileencoding' lower case.','line_number':5508,'multiline':False]['text':' Check ++bad= argument.  Must be a single-byte character, "keep" or','line_number':5514,'multiline':False]['text':' "drop".','line_number':5515,'multiline':False]['text':'
+ * Function given to ExpandGeneric() to obtain the list of ++opt names.
+ ','line_number':5523,'multiline':True]['text':' Note: Keep this in sync with getargopt.','line_number':5529,'multiline':False]['text':'
+ * Command-line expansion for ++opt=name.
+ ','line_number':5545,'multiline':True]['text':' Special handling of "ff" which acts as a short form of','line_number':5591,'multiline':False]['text':' "fileformat", as "ff" is not a substring of it.','line_number':5592,'multiline':False]['text':'
+     * Disallow autocommands from .exrc and .vimrc in current
+     * directory for security reasons.
+     ','line_number':5617,'multiline':True]['text':'
+ * ":doautocmd": Apply the automatic commands to the current buffer.
+ ','line_number':5633,'multiline':True]['text':' Only when there is no <nomodeline>.','line_number':5644,'multiline':False]['text':'
+ * :[N]bunload[!] [N] [bufname] unload buffer
+ * :[N]bdelete[!] [N] [bufname] delete buffer from buffer list
+ * :[N]bwipeout[!] [N] [bufname] delete buffer really
+ ','line_number':5649,'multiline':True]['text':'
+ * :[N]buffer [N]	to buffer N
+ * :[N]sbuffer [N]	to buffer N
+ ','line_number':5666,'multiline':True]['text':' default is current buffer','line_number':5679,'multiline':False]['text':'
+ * :[N]bmodified [N]	to next mod. buffer
+ * :[N]sbmodified [N]	to next mod. buffer
+ ','line_number':5688,'multiline':True]['text':'
+ * :[N]bnext [N]	to next buffer
+ * :[N]sbnext [N]	split and to next buffer
+ ','line_number':5700,'multiline':True]['text':'
+ * :[N]bNext [N]	to previous buffer
+ * :[N]bprevious [N]	to previous buffer
+ * :[N]sbNext [N]	split and to previous buffer
+ * :[N]sbprevious [N]	split and to previous buffer
+ ','line_number':5715,'multiline':True]['text':'
+ * :brewind		to first buffer
+ * :bfirst		to first buffer
+ * :sbrewind		split and to first buffer
+ * :sbfirst		split and to first buffer
+ ','line_number':5732,'multiline':True]['text':'
+ * :blast		to last buffer
+ * :sblast		split and to last buffer
+ ','line_number':5749,'multiline':True]['text':'
+ * Check if "c" ends an Ex command.
+ * In Vim9 script does not check for white space before #.
+ ','line_number':5764,'multiline':True]['text':'
+ * Like ends_excmd() but checks that a # in Vim9 script either has "cmd" equal
+ * to "cmd_start" or has a white space character before it.
+ ','line_number':5778,'multiline':True]['text':'  # starts a comment, #{ might be a mistake, #{{ can start a fold','line_number':5790,'multiline':False]['text':'
+ * Return the next command, after the first '|' or '\n'.
+ * Return NULL if not found.
+ ','line_number':5798,'multiline':True]['text':'
+ * Check if *p is a separator between Ex commands, skipping over white space.
+ * Return NULL if it isn't, the following character if it is.
+ ','line_number':5815,'multiline':True]['text':'
+ * If "eap->nextcmd" is not set, check for a next command at "p".
+ ','line_number':5830,'multiline':True]['text':' cannot use "| command" inside a  {} block','line_number':5841,'multiline':False]['text':'
+ * - if there are more files to edit
+ * - and this is the last window
+ * - and forceit not used
+ * - and not repeated twice on a row
+ *    return FAIL and give error message if 'message' TRUE
+ * return OK otherwise
+ ','line_number':5845,'multiline':True]['text':' when FALSE check only, no messages','line_number':5855,'multiline':False]['text':' next try to quit is allowed','line_number':5881,'multiline':False]['text':'
+ * Function given to ExpandGeneric() to obtain the list of command names.
+ ','line_number':5888,'multiline':True]['text':' background color change requires clear + redraw','line_number':5932,'multiline':False]['text':'
+ * Call this function if we thought we were going to exit, but we won't
+ * (because of an error).  May need to restore the terminal mode.
+ ','line_number':5948,'multiline':True]['text':' Bail out when autocommands closed the window.','line_number':5964,'multiline':False]['text':' Refuse to quit when the buffer in the last window is being closed (can','line_number':5965,'multiline':False]['text':' only happen in autocommands).','line_number':5966,'multiline':False]['text':' Refuse to quit when locked or when the window was closed or the','line_number':5975,'multiline':False]['text':' buffer in the last window is being closed (can only happen in','line_number':5976,'multiline':False]['text':' autocommands).','line_number':5977,'multiline':False]['text':'
+ * ":quit": quit current window, quit Vim if the last window is closed.
+ * ":{nr}quit": quit window {nr}
+ * Also used when closing a terminal window that's the last one.
+ ','line_number':5986,'multiline':True]['text':' Don't quit while editing the command line.','line_number':6001,'multiline':False]['text':' Refuse to quit when locked.','line_number':6018,'multiline':False]['text':' Trigger QuitPre and maybe ExitPre','line_number':6022,'multiline':False]['text':'
+     * If there is only one relevant window we will exit.
+     ','line_number':6030,'multiline':True]['text':' quit last window','line_number':6046,'multiline':False]['text':' Note: only_one_window() returns true, even so a help window is','line_number':6047,'multiline':False]['text':' still open. In that case only quit, if no address has been','line_number':6048,'multiline':False]['text':' specified. Example:','line_number':6049,'multiline':False]['text':' :h|wincmd w|1q     - don't quit','line_number':6050,'multiline':False]['text':' :h|wincmd w|q      - quit','line_number':6051,'multiline':False]['text':' close window; may free buffer','line_number':6058,'multiline':False]['text':'
+ * ":cquit".
+ ','line_number':6063,'multiline':True]['text':' this does not always pass on the exit code to the Manx compiler. why?','line_number':6069,'multiline':False]['text':'
+ * Do preparations for "qall" and "wqall".
+ * Returns FAIL when quitting should be aborted.
+ ','line_number':6073,'multiline':True]['text':' ex_window() takes care of this','line_number':6083,'multiline':False]['text':' Don't quit while editing the command line.','line_number':6089,'multiline':False]['text':'
+ * ":qall": try to quit all windows
+ ','line_number':6102,'multiline':True]['text':'
+ * ":close": close current window, unless it is the last one
+ ','line_number':6116,'multiline':True]['text':'
+ * ":pclose": Close any preview window.
+ ','line_number':6147,'multiline':True]['text':' First close any normal window.','line_number':6155,'multiline':False]['text':' Also when 'previewpopup' is empty, it might have been cleared.','line_number':6163,'multiline':False]['text':'
+ * Close window "win" and take care of handling closing the last window for a
+ * modified buffer.
+ ','line_number':6169,'multiline':True]['text':' NULL or the tab page "win" is in','line_number':6177,'multiline':False]['text':' Never close the autocommand window.','line_number':6182,'multiline':False]['text':' Manually kill the terminal here because this command will','line_number':6202,'multiline':False]['text':' hide it otherwise.','line_number':6203,'multiline':False]['text':' free buffer when not hiding it or when it's a scratch buffer','line_number':6231,'multiline':False]['text':'
+ * Handle the argument for a tabpage related ex command.
+ * Returns a tabpage number.
+ * When an error is encountered then eap->errmsg is set.
+ ','line_number':6238,'multiline':True]['text':' argument +N/-N means: go to N places to the','line_number':6253,'multiline':False]['text':' right/left relative to the current position.','line_number':6254,'multiline':False]['text':' No numbers as argument.','line_number':6287,'multiline':False]['text':' No numbers as argument.','line_number':6299,'multiline':False]['text':'
+ * ":tabclose": close current tab page, unless it is the last one.
+ * ":tabclose N": close tab page N.
+ ','line_number':6349,'multiline':True]['text':'
+ * ":tabonly": close all tab pages except the current one
+ ','line_number':6393,'multiline':True]['text':' Repeat this up to a 1000 times, because autocommands may','line_number':6423,'multiline':False]['text':' mess up the lists.','line_number':6424,'multiline':False]['text':' if we failed to close it quit','line_number':6431,'multiline':False]['text':' start over, "tp" is now invalid','line_number':6434,'multiline':False]['text':'
+ * Close the current tab page.
+ ','line_number':6442,'multiline':True]['text':' First close all the windows but the current one.  If that worked then','line_number':6451,'multiline':False]['text':' close the last window in this tab, that will close it.','line_number':6452,'multiline':False]['text':'
+ * Close tab page "tp", which is not the current tab page.
+ * Note that autocommands may make "tp" invalid.
+ * Also takes care of the tab pages line disappearing when closing the
+ * last-but-one tab page.
+ ','line_number':6462,'multiline':True]['text':' Limit to 1000 windows, autocommands may add a window while we close','line_number':6474,'multiline':False]['text':' one.  OK, so I'm paranoid...','line_number':6475,'multiline':False]['text':' Autocommands may delete the tab page under our fingers and we may','line_number':6481,'multiline':False]['text':' fail to close a window with a modified buffer.','line_number':6482,'multiline':False]['text':'
+ * ":only".
+ ','line_number':6490,'multiline':True]['text':' ":hide" or ":hide | cmd": hide current window','line_number':6520,'multiline':False]['text':' don't free buffer','line_number':6530,'multiline':False]['text':'
+ * ":stop" and ":suspend": Suspend Vim.
+ ','line_number':6548,'multiline':True]['text':'
+     * Disallow suspending for "rvim".
+     ','line_number':6554,'multiline':True]['text':' needed for SUN to restore xterm buffer','line_number':6567,'multiline':False]['text':' restore window titles','line_number':6568,'multiline':False]['text':' call machine specific function','line_number':6569,'multiline':False]['text':' force updating the title','line_number':6571,'multiline':False]['text':' scroll screen before redrawing','line_number':6573,'multiline':False]['text':' may have resized window','line_number':6575,'multiline':False]['text':'
+ * ":exit", ":xit" and ":wq": Write file and quit the current window.
+ ','line_number':6579,'multiline':True]['text':' Don't quit while editing the command line.','line_number':6594,'multiline':False]['text':'
+     * we plan to exit if there is only one relevant window
+     ','line_number':6601,'multiline':True]['text':' Write the buffer for ":wq" or when it was changed.','line_number':6607,'multiline':False]['text':' Trigger QuitPre and ExitPre.','line_number':6608,'multiline':False]['text':' Check if we can exit now, after autocommands have changed things.','line_number':6609,'multiline':False]['text':' quit last window, exit Vim','line_number':6619,'multiline':False]['text':' Quit current window, may free the buffer.','line_number':6625,'multiline':False]['text':'
+ * ":print", ":list", ":number".
+ ','line_number':6630,'multiline':True]['text':' show one line at a time','line_number':6648,'multiline':False]['text':' put cursor at last line','line_number':6651,'multiline':False]['text':'
+ * ":shell".
+ ','line_number':6667,'multiline':True]['text':' Setting the argument list may cause screen updates and being called','line_number':6691,'multiline':False]['text':' recursively.  Avoid that by setting drop_busy.','line_number':6692,'multiline':False]['text':' Check whether the current buffer is changed. If so, we will need','line_number':6695,'multiline':False]['text':' to split the current window or data could be lost.','line_number':6696,'multiline':False]['text':' We don't need to check if the 'hidden' option is set, as in this','line_number':6697,'multiline':False]['text':' case the buffer won't be lost.','line_number':6698,'multiline':False]['text':' When splitting the window, create a new alist.  Otherwise the','line_number':6711,'multiline':False]['text':' existing one is overwritten.','line_number':6712,'multiline':False]['text':'
+     * Set up the new argument list.
+     ','line_number':6717,'multiline':True]['text':'
+     * Move to the first file.
+     ','line_number':6722,'multiline':True]['text':' Fake up a minimal "next" command for do_argfile()','line_number':6725,'multiline':False]['text':' do_ecmd() may set need_start_insertmode, but since we never left Insert','line_number':6730,'multiline':False]['text':' mode that is not needed here.','line_number':6731,'multiline':False]['text':' Restore msg_scroll, otherwise a following command may cause scrolling','line_number':6734,'multiline':False]['text':' unexpectedly.  The screen will be redrawn by the caller, thus','line_number':6735,'multiline':False]['text':' msg_scroll being set by displaying a message is irrelevant.','line_number':6736,'multiline':False]['text':'
+ * Handle a file drop. The code is here because a drop is *nearly* like an
+ * :args command, but not quite (we have a list of exact filenames, so we
+ * don't want to (a) parse a command line, or (b) expand wildcards). So the
+ * code is very similar to :args and hence needs access to a lot of the static
+ * functions in this file.
+ *
+ * The "filev" list must have been allocated using alloc(), as should each item
+ * in the list. This function takes over responsibility for freeing the "filev"
+ * list.
+ ','line_number':6746,'multiline':True]['text':' the number of files dropped','line_number':6759,'multiline':False]['text':' the list of files dropped','line_number':6760,'multiline':False]['text':' force splitting the window','line_number':6761,'multiline':False]['text':' to be called after setting the argument','line_number':6762,'multiline':False]['text':' list','line_number':6763,'multiline':False]['text':' argument for "callback" (allocated)','line_number':6764,'multiline':False]['text':' Cannot handle recursive drops, finish the pending one.','line_number':6766,'multiline':False]['text':' When calling handle_drop() more than once in a row we only use the last','line_number':6774,'multiline':False]['text':' one.','line_number':6775,'multiline':False]['text':' Postpone this when:','line_number':6788,'multiline':False]['text':' - editing the command line','line_number':6789,'multiline':False]['text':' - not possible to change the current buffer','line_number':6790,'multiline':False]['text':' - updating the screen','line_number':6791,'multiline':False]['text':' As it may change buffers and window structures that are in use and cause','line_number':6792,'multiline':False]['text':' freed memory to be used.','line_number':6793,'multiline':False]['text':'
+ * To be called when text is unlocked, curbuf is unlocked or updating_screen is
+ * reset: Handle a postponed drop.
+ ','line_number':6800,'multiline':True]['text':'
+ * ":preserve".
+ ','line_number':6813,'multiline':True]['text':'
+ * ":recover".
+ ','line_number':6823,'multiline':True]['text':' Set recoverymode right away to avoid the ATTENTION prompt.','line_number':6829,'multiline':False]['text':'
+ * Command modifier used in a wrong way.  Also for other commands that can't
+ * appear at the toplevel.
+ ','line_number':6842,'multiline':True]['text':'
+ * :sview [+command] file	split window with new file, read-only
+ * :split [[+command] file]	split window with current or new file
+ * :vsplit [[+command] file]	split window vertically with current or new file
+ * :new [[+command] file]	split window with no or new file
+ * :vnew [[+command] file]	split vertically window with no or new file
+ * :sfind [+command] file	split window with file in 'path'
+ *
+ * :tabedit			open new Tab page with empty window
+ * :tabedit [+command] file	open new Tab page and edit "file"
+ * :tabnew [[+command] file]	just like :tabedit
+ * :tabfind [+command] file	open new Tab page and find "file"
+ ','line_number':6852,'multiline':True]['text':' A ":split" in the quickfix window works like ":new".  Don't want two','line_number':6886,'multiline':False]['text':' quickfix windows.  But it's OK when doing ":tab split".','line_number':6887,'multiline':False]['text':' No browsing supported but we do have the file explorer:','line_number':6921,'multiline':False]['text':' Edit the directory.','line_number':6922,'multiline':False]['text':' Don't browse again in do_ecmd().','line_number':6937,'multiline':False]['text':'
+     * Either open new tab page or split the window.
+     ','line_number':6940,'multiline':True]['text':' set the alternate buffer for the window we came from','line_number':6951,'multiline':False]['text':' Reset 'scrollbind' when editing another file, but keep it when','line_number':6962,'multiline':False]['text':' doing ":split" without arguments.','line_number':6963,'multiline':False]['text':'
+ * Open a new tab page.
+ ','line_number':6979,'multiline':True]['text':'
+ * :tabnext command
+ ','line_number':6994,'multiline':True]['text':' No numbers as argument.','line_number':7024,'multiline':False]['text':' CMD_tabnext','line_number':7045,'multiline':False]['text':'
+ * :tabmove command
+ ','line_number':7053,'multiline':True]['text':'
+ * :tabs command: List tabs and their contents.
+ ','line_number':7066,'multiline':True]['text':' output one line at a time','line_number':7083,'multiline':False]['text':' output one line at a time','line_number':7103,'multiline':False]['text':'
+ * ":mode": Set screen mode.
+ * If no argument given, just get the screen size and redraw.
+ ','line_number':7109,'multiline':True]['text':'
+ * ":resize".
+ * set, increment or decrement current window height
+ ','line_number':7122,'multiline':True]['text':' default is very wide','line_number':7147,'multiline':False]['text':' default is very high','line_number':7155,'multiline':False]['text':'
+ * ":find [+command] <file>" command.
+ ','line_number':7161,'multiline':True]['text':' Repeat finding the file "count" times.  This matters when it appears','line_number':7176,'multiline':False]['text':' several times in the path.','line_number':7177,'multiline':False]['text':'
+ * ":open" simulation: for now works just like ":visual".
+ ','line_number':7197,'multiline':True]['text':' ":open /pattern/": put cursor in column found with pattern','line_number':7214,'multiline':False]['text':' make a copy of the line, when searching for a mark it might be','line_number':7221,'multiline':False]['text':' flushed','line_number':7222,'multiline':False]['text':' Move to the NUL, ignore any other arguments.','line_number':7233,'multiline':False]['text':'
+ * ":edit", ":badd", ":balt", ":visual".
+ ','line_number':7242,'multiline':True]['text':'
+ * ":edit <file>" command and alike.
+ ','line_number':7251,'multiline':True]['text':' curwin before doing a split or NULL','line_number':7257,'multiline':False]['text':'
+     * ":vi" command ends Ex mode.
+     ','line_number':7266,'multiline':True]['text':' Special case:  ":global/pat/visual\NLvi-commands"','line_number':7276,'multiline':False]['text':' ":new" or ":tabnew" without argument: edit a new empty buffer','line_number':7320,'multiline':False]['text':' Can't edit another file when "textlock" or "curbuf_lock" is set.','line_number':7333,'multiline':False]['text':' Only ":edit" or ":script" can bring us here, others are stopped','line_number':7334,'multiline':False]['text':' earlier.','line_number':7335,'multiline':False]['text':' 'readonly' doesn't make sense in an','line_number':7343,'multiline':False]['text':' empty buffer','line_number':7344,'multiline':False]['text':' ":edit" goes to first line if Vi compatible','line_number':7349,'multiline':False]['text':' after a split we can use an existing buffer','line_number':7355,'multiline':False]['text':' Editing the file failed.  If the window was split, close it.','line_number':7361,'multiline':False]['text':' Reset the error/interrupt/exception state here so that','line_number':7370,'multiline':False]['text':' aborting() returns FALSE when closing a window.','line_number':7371,'multiline':False]['text':' Restore the error/interrupt/exception state if not','line_number':7380,'multiline':False]['text':' discarded by a new aborting error, interrupt, or','line_number':7381,'multiline':False]['text':' uncaught exception.','line_number':7382,'multiline':False]['text':' When editing an already visited buffer, 'readonly' won't be set','line_number':7390,'multiline':False]['text':' but the previous value is kept.  With ":view" and ":sview" we','line_number':7391,'multiline':False]['text':' want the  file to be readonly, except when another window is','line_number':7392,'multiline':False]['text':' editing the same buffer.','line_number':7393,'multiline':False]['text':'
+     * if ":split file" worked, set alternate file name in old window to new
+     * file
+     ','line_number':7408,'multiline':True]['text':'
+ * ":gui" and ":gvim" when there is no GUI.
+ ','line_number':7424,'multiline':True]['text':'
+ * ":syncbind" forces all 'scrollbind' windows to have the same relative
+ * offset.
+ * (1998-11-02 16:21:01  R. Edward Ralston <eralston@computer.org>)
+ ','line_number':7469,'multiline':True]['text':'
+     * determine max topline
+     ','line_number':7486,'multiline':True]['text':'
+     * Set all scrollbind windows to the same topline.
+     ','line_number':7510,'multiline':True]['text':' :r!cmd','line_number':7554,'multiline':False]['text':' check for no file name','line_number':7583,'multiline':False]['text':' Delete the empty line that remains.  Historically ex does','line_number':7607,'multiline':False]['text':' this but vi doesn't.','line_number':7608,'multiline':False]['text':'
+ * Get the previous directory for the given chdir scope.
+ ','line_number':7637,'multiline':True]['text':'
+ * Deal with the side effects of changing the current directory.
+ * When 'scope' is CDSCOPE_TABPAGE then this was after an ":tcd" command.
+ * When 'scope' is CDSCOPE_WINDOW then this was after an ":lcd" command.
+ ','line_number':7650,'multiline':True]['text':' Clear tab local directory for both :cd and :tcd','line_number':7659,'multiline':False]['text':' If still in the global directory, need to remember current','line_number':7666,'multiline':False]['text':' directory as the global directory.','line_number':7667,'multiline':False]['text':' Remember this local directory for the window.','line_number':7671,'multiline':False]['text':' We are now in the global directory, no need to remember its name.','line_number':7682,'multiline':False]['text':'
+ * Trigger DirChangedPre for "acmd_fname" with directory "new_dir".
+ ','line_number':7690,'multiline':True]['text':'
+ * Change directory function used by :cd/:tcd/:lcd Ex commands and the
+ * chdir() function.
+ * scope == CDSCOPE_WINDOW: changes the window-local directory
+ * scope == CDSCOPE_TABPAGE: changes the tab-local directory
+ * Otherwise: changes the global directory
+ * Returns TRUE if the directory is successfully changed.
+ ','line_number':7710,'multiline':True]['text':' ":cd -": Change to previous directory','line_number':7739,'multiline':False]['text':' Save current directory for next ":cd -"','line_number':7751,'multiline':False]['text':' For UNIX ":cd" means: go to home directory.','line_number':7757,'multiline':False]['text':' On other systems too if 'cdhome' is set.','line_number':7758,'multiline':False]['text':' use NameBuff for home directory name','line_number':7765,'multiline':False]['text':' empty is the same as not set','line_number':7770,'multiline':False]['text':' new_dir may use this','line_number':7805,'multiline':False]['text':'
+ * ":cd", ":tcd", ":lcd", ":chdir" ":tchdir" and ":lchdir".
+ ','line_number':7816,'multiline':True]['text':' for non-UNIX ":cd" means: print current directory unless 'cdhome' is set','line_number':7826,'multiline':False]['text':' Echo the new current directory if the command was typed.','line_number':7843,'multiline':False]['text':'
+ * ":pwd".
+ ','line_number':7849,'multiline':True]['text':'
+ * ":=".
+ ','line_number':7879,'multiline':True]['text':' Hide the cursor if invoked with !','line_number':7910,'multiline':False]['text':'
+ * Sleep for "msec" milliseconds, but keep checking for a CTRL-C every second.
+ * Hide the cursor if "hide_cursor" is TRUE.
+ ','line_number':7914,'multiline':True]['text':' Remember at what time we started, so that we know how much longer we','line_number':7926,'multiline':False]['text':' should wait after waiting for a bit.','line_number':7927,'multiline':False]['text':' Process the netbeans and clientserver messages that may have been','line_number':7965,'multiline':False]['text':' received in the call to ui_breakcheck() when the GUI is in use. This','line_number':7966,'multiline':False]['text':' may occur when running a test case.','line_number':7967,'multiline':False]['text':' actual time passed','line_number':7972,'multiline':False]['text':' guestimate time passed (will actually be more)','line_number':7975,'multiline':False]['text':' If CTRL-C was typed to interrupt the sleep, drop the CTRL-C from the','line_number':7980,'multiline':False]['text':' input buffer, otherwise a following call to input() fails.','line_number':7981,'multiline':False]['text':'
+ * ":winsize" command (obsolete).
+ ','line_number':7989,'multiline':True]['text':' CTRL-W g and CTRL-W CTRL-G  have an extra command character','line_number':8022,'multiline':False]['text':' Pass flags on for ":vertical wincmd ]".','line_number':8045,'multiline':False]['text':'
+ * ":winpos".
+ ','line_number':8055,'multiline':True]['text':' Remember the coordinates for when the window is opened.','line_number':8100,'multiline':False]['text':'
+ * Handle command that work like operators: ":delete", ":yank", ":>" and ":<".
+ ','line_number':8119,'multiline':True]['text':' position cursor for undo','line_number':8134,'multiline':False]['text':' CMD_rshift or CMD_lshift','line_number':8156,'multiline':False]['text':'
+ * ":put".
+ ','line_number':8174,'multiline':True]['text':' ":0put" works like ":1put!".','line_number':8180,'multiline':False]['text':'
+ * Handle ":copy" and ":move".
+ ','line_number':8192,'multiline':True]['text':' error detected','line_number':8205,'multiline':False]['text':'
+     * move or copy lines from 'eap->line1'-'eap->line2' to below line 'n'
+     ','line_number':8212,'multiline':True]['text':'
+ * Print the current line if flags were given to the Ex command.
+ ','line_number':8233,'multiline':True]['text':'
+ * ":smagic" and ":snomagic".
+ ','line_number':8247,'multiline':True]['text':'
+ * ":join".
+ ','line_number':8261,'multiline':True]['text':' :2,2join does nothing','line_number':8270,'multiline':False]['text':'
+ * ":[addr]@r" or ":[addr]*r": execute register
+ ','line_number':8284,'multiline':True]['text':' disallow scrolling here','line_number':8297,'multiline':False]['text':' get the register name.  No name means to use the previous one','line_number':8300,'multiline':False]['text':' Put the register in the typeahead buffer with the "silent" flag.','line_number':8304,'multiline':False]['text':'
+     * Execute from the typeahead buffer.
+     * Continue until the stuff buffer is empty and all added characters
+     * have been consumed.
+     ','line_number':8316,'multiline':True]['text':'
+ * ":!".
+ ','line_number':8327,'multiline':True]['text':'
+ * ":undo".
+ ','line_number':8336,'multiline':True]['text':' :undo 123','line_number':8342,'multiline':False]['text':'
+ * ":redo".
+ ','line_number':8368,'multiline':True]['text':'
+ * ":earlier" and ":later".
+ ','line_number':8377,'multiline':True]['text':'
+ * ":redir": start/stop redirection.
+ ','line_number':8410,'multiline':True]['text':' Expand environment variables and "~/".','line_number':8446,'multiline':False]['text':' operation cancelled','line_number':8460,'multiline':False]['text':' since dialog already asked','line_number':8463,'multiline':False]['text':' redirect to a register a-z (resp. A-Z for appending)','line_number':8473,'multiline':False]['text':' append','line_number':8484,'multiline':False]['text':' Can use both "@a" and "@a>".','line_number':8488,'multiline':False]['text':' Make register empty when not using @A-@Z and the','line_number':8491,'multiline':False]['text':' command is valid.','line_number':8492,'multiline':False]['text':' redirect to a variable','line_number':8507,'multiline':False]['text':' TODO: redirect to a buffer','line_number':8524,'multiline':False]['text':' Make sure redirection is not off.  Can happen for cmdline completion','line_number':8530,'multiline':False]['text':' that indirectly invokes a command to catch its output.','line_number':8531,'multiline':False]['text':'
+ * ":redraw": force redraw, with clear for ":redraw!".
+ ','line_number':8540,'multiline':True]['text':'
+ * ":redraw": force redraw, with clear if "clear" is TRUE.
+ ','line_number':8549,'multiline':True]['text':' After drawing the statusline screen_attr may still be set.','line_number':8575,'multiline':False]['text':' Reset msg_didout, so that a message that's there is overwritten.','line_number':8578,'multiline':False]['text':' No need to wait after an intentional redraw.','line_number':8582,'multiline':False]['text':' When invoked from a callback or autocmd the command line may be active.','line_number':8585,'multiline':False]['text':'
+ * ":redrawstatus": force redraw of status line(s)
+ ','line_number':8592,'multiline':True]['text':' redraw later','line_number':8603,'multiline':False]['text':'
+ * ":redrawtabline": force redraw of the tabline
+ ','line_number':8620,'multiline':True]['text':'
+ * Open a file for writing for an Ex command, with some checks.
+ * Return file descriptor, or NULL on failure.
+ ','line_number':8670,'multiline':True]['text':' "w" for create new file or "a" for append','line_number':8678,'multiline':False]['text':' with Unix it is possible to open a directory','line_number':8683,'multiline':False]['text':'
+ * ":mark" and ":k".
+ ','line_number':8702,'multiline':True]['text':' No argument?','line_number':8714,'multiline':False]['text':' more than one character?','line_number':8720,'multiline':False]['text':' save curwin->w_cursor','line_number':8726,'multiline':False]['text':' set mark','line_number':8729,'multiline':False]['text':' restore curwin->w_cursor','line_number':8731,'multiline':False]['text':'
+ * Update w_topline, w_leftcol and the cursor position.
+ ','line_number':8734,'multiline':True]['text':' put cursor on valid line','line_number':8740,'multiline':False]['text':'
+ * Save the current State and go to Normal mode.
+ * Return TRUE if the typeahead could be saved.
+ ','line_number':8747,'multiline':True]['text':' no msg scrolling in Normal mode','line_number':8764,'multiline':False]['text':' don't go to Insert mode','line_number':8765,'multiline':False]['text':' don't use 'insertmode'','line_number':8766,'multiline':False]['text':' not in Vim9 script','line_number':8769,'multiline':False]['text':'
+     * Save the current typeahead.  This is required to allow using ":normal"
+     * from an event handler and makes sure we don't hang when the argument
+     * ends with half a command.
+     ','line_number':8771,'multiline':True]['text':' Restore the previous typeahead.','line_number':8783,'multiline':False]['text':' don't reset msg_didout now','line_number':8793,'multiline':False]['text':' Restore the state (needed when called from a function executed for','line_number':8796,'multiline':False]['text':' 'indentexpr'). Update the mouse and cursor, they may have changed.','line_number':8797,'multiline':False]['text':' may show different cursor shape','line_number':8800,'multiline':False]['text':'
+ * ":normal[!] {commands}": Execute normal mode commands.
+ ','line_number':8804,'multiline':True]['text':'
+     * vgetc() expects a CSI and K_SPECIAL to have been escaped.  Don't do
+     * this for the K_SPECIAL leading byte, otherwise special keys will not
+     * work.
+     ','line_number':8826,'multiline':True]['text':' Count the number of characters to be escaped.','line_number':8835,'multiline':False]['text':' leadbyte CSI','line_number':8839,'multiline':False]['text':' trailbyte K_SPECIAL or CSI','line_number':8843,'multiline':False]['text':'
+	 * Repeat the :normal command for each line in the range.  When no
+	 * range given, execute it just once, without positioning the cursor
+	 * first.
+	 ','line_number':8891,'multiline':True]['text':' Might not return to the main loop when in an event handler.','line_number':8912,'multiline':False]['text':' may show different cursor shape','line_number':8919,'multiline':False]['text':'
+ * ":startinsert", ":startreplace" and ":startgreplace"
+ ','line_number':8925,'multiline':True]['text':' cursor line can be zero on startup','line_number':8933,'multiline':False]['text':' Ignore this when running in an active terminal.','line_number':8939,'multiline':False]['text':' Ignore the command when already in Insert mode.  Inserting an','line_number':8944,'multiline':False]['text':' expression register that invokes a function can do this.','line_number':8945,'multiline':False]['text':' avoid MAXCOL','line_number':8960,'multiline':False]['text':'
+ * ":stopinsert"
+ ','line_number':8967,'multiline':True]['text':'
+ * Execute normal mode command "cmd".
+ * "remap" can be REMAP_NONE or REMAP_YES.
+ ','line_number':8978,'multiline':True]['text':' Stuff the argument into the typeahead buffer.','line_number':8985,'multiline':False]['text':'
+ * Execute normal_cmd() until there is no typeahead left.
+ * When "use_vpeekc" is TRUE use vpeekc() to check for available chars.
+ ','line_number':8990,'multiline':True]['text':' When calling vpeekc() from feedkeys() it will return Ctrl_C when there','line_number':9000,'multiline':False]['text':' is nothing to get, so also check for Ctrl_C.','line_number':9001,'multiline':False]['text':' If terminal_loop() returns OK we got a key that is handled','line_number':9015,'multiline':False]['text':' in Normal model.  With FAIL we first need to position the','line_number':9016,'multiline':False]['text':' cursor and the screen needs to be redrawn.','line_number':9017,'multiline':False]['text':' execute a Normal mode cmd','line_number':9023,'multiline':False]['text':'
+ * ":psearch"
+ ','line_number':9038,'multiline':True]['text':' ":psearch", ":isearch" and ":dsearch"','line_number':9060,'multiline':False]['text':' ":ilist" and ":dlist"','line_number':9066,'multiline':False]['text':' ":ijump" and ":djump"','line_number':9069,'multiline':False]['text':' ":isplit" and ":dsplit"','line_number':9072,'multiline':False]['text':' get count','line_number':9078,'multiline':False]['text':' Match regexp, not just whole words','line_number':9083,'multiline':False]['text':' Check for trailing illegal characters','line_number':9093,'multiline':False]['text':'
+ * ":ptag", ":ptselect", ":ptjump", ":ptnext", etc.
+ ','line_number':9110,'multiline':True]['text':' will be reset to 0 in ex_tag_cmd()','line_number':9116,'multiline':False]['text':'
+ * ":pedit"
+ ','line_number':9120,'multiline':True]['text':' Open the preview window or popup and make it the current window.','line_number':9131,'multiline':False]['text':' Edit the file.','line_number':9135,'multiline':False]['text':' Return cursor to where we were','line_number':9140,'multiline':False]['text':' can't keep focus in popup window','line_number':9148,'multiline':False]['text':'
+ * ":stag", ":stselect" and ":stjump".
+ ','line_number':9156,'multiline':True]['text':'
+ * ":tag", ":tselect", ":tjump", ":tnext", etc.
+ ','line_number':9170,'multiline':True]['text':' ":tjump"','line_number':9186,'multiline':False]['text':' ":tselect"','line_number':9188,'multiline':False]['text':' ":tprevious"','line_number':9190,'multiline':False]['text':' ":tNext"','line_number':9192,'multiline':False]['text':' ":tnext"','line_number':9194,'multiline':False]['text':' ":pop"','line_number':9196,'multiline':False]['text':' ":tfirst"','line_number':9198,'multiline':False]['text':' ":trewind"','line_number':9199,'multiline':False]['text':' ":tlast"','line_number':9201,'multiline':False]['text':' ":tag"','line_number':9203,'multiline':False]['text':'
+ * Check "str" for starting with a special cmdline variable.
+ * If found return one of the SPEC_ values and set "*usedlen" to the length of
+ * the variable.  Otherwise return -1 and "*usedlen" is unchanged.
+ ','line_number':9229,'multiline':True]['text':' cursor word','line_number':9244,'multiline':False]['text':' cursor WORD','line_number':9246,'multiline':False]['text':' expr under cursor','line_number':9248,'multiline':False]['text':' cursor path name','line_number':9250,'multiline':False]['text':' ":so" file name','line_number':9252,'multiline':False]['text':' ":so" file line number','line_number':9254,'multiline':False]['text':' call stack','line_number':9256,'multiline':False]['text':' script file name','line_number':9258,'multiline':False]['text':' autocommand file name','line_number':9260,'multiline':False]['text':' autocommand buffer number','line_number':9262,'multiline':False]['text':' autocommand match name','line_number':9264,'multiline':False]['text':' script file line number','line_number':9266,'multiline':False]['text':' script ID: <SNR>123_','line_number':9268,'multiline':False]['text':'
+ * Evaluate cmdline variables.
+ *
+ * change "%"	    to curbuf->b_ffname
+ *	  "#"	    to curwin->w_alt_fnum
+ *	  "%%"	    to curwin->w_alt_fnum in Vim9 script
+ *	  "<cword>" to word under the cursor
+ *	  "<cWORD>" to WORD under the cursor
+ *	  "<cexpr>" to C-expression under the cursor
+ *	  "<cfile>" to path name under the cursor
+ *	  "<sfile>" to sourced file name
+ *	  "<stack>" to call stack
+ *	  "<script>" to current script name
+ *	  "<slnum>" to sourced file line number
+ *	  "<afile>" to file name for autocommand
+ *	  "<abuf>"  to buffer number for autocommand
+ *	  "<amatch>" to matching name for autocommand
+ *
+ * When an error is detected, "errormsg" is set to a non-NULL pointer (may be
+ * "" for error without a message) and NULL is returned.
+ * Returns an allocated string if a valid match was found.
+ * Returns NULL if no match was found.	"usedlen" then still contains the
+ * number of characters to skip.
+ ','line_number':9288,'multiline':True]['text':' pointer into commandline','line_number':9314,'multiline':False]['text':' beginning of valid memory for src','line_number':9315,'multiline':False]['text':' characters after src that are used','line_number':9316,'multiline':False]['text':' line number for :e command, or NULL','line_number':9317,'multiline':False]['text':' pointer to error message','line_number':9318,'multiline':False]['text':' return value has escaped white space (can','line_number':9319,'multiline':False]['text':' be NULL)','line_number':9320,'multiline':False]['text':' empty result is considered an error','line_number':9321,'multiline':False]['text':' assume valid result','line_number':9329,'multiline':False]['text':'
+     * Check if there is something to do.
+     ','line_number':9339,'multiline':True]['text':' no match','line_number':9343,'multiline':False]['text':'
+     * Skip when preceded with a backslash "\%" and "\#".
+     * Note: In "\\%" the % is also not recognized!
+     ','line_number':9349,'multiline':True]['text':' remove backslash','line_number':9356,'multiline':False]['text':'
+     * word or WORD under cursor
+     ','line_number':9360,'multiline':True]['text':'
+     * '#': Alternate file name
+     * '%': Current file name
+     *	    File name under the cursor
+     *	    File name for autocommand
+     *	and following modifiers
+     ','line_number':9377,'multiline':True]['text':' '%': current file','line_number':9395,'multiline':False]['text':' Must have ":p:h" to be valid','line_number':9399,'multiline':False]['text':' "%%" alternate file','line_number':9409,'multiline':False]['text':' FALLTHROUGH','line_number':9412,'multiline':False]['text':' '#' or "#99": alternate file','line_number':9413,'multiline':False]['text':' "##" or "%%%": the argument list','line_number':9416,'multiline':False]['text':' "#<99" uses v:oldfiles','line_number':9426,'multiline':False]['text':' just a minus sign, don't skip over it','line_number':9430,'multiline':False]['text':' length of what we expand','line_number':9432,'multiline':False]['text':' Should we give an error message for #<text?','line_number':9438,'multiline':False]['text':' Must have ":p:h" to be valid','line_number':9470,'multiline':False]['text':' file name under cursor','line_number':9480,'multiline':False]['text':' remember allocated string','line_number':9487,'multiline':False]['text':' file name for autocommand','line_number':9490,'multiline':False]['text':' Still need to turn the fname into a full path.  It is','line_number':9494,'multiline':False]['text':' postponed to avoid a delay when <afile> is not used.','line_number':9495,'multiline':False]['text':' buffer number for autocommand','line_number':9509,'multiline':False]['text':' match name for autocommand','line_number':9519,'multiline':False]['text':' file name for ":so" command','line_number':9528,'multiline':False]['text':' remember allocated string','line_number':9535,'multiline':False]['text':' call stack','line_number':9537,'multiline':False]['text':' remember allocated string','line_number':9544,'multiline':False]['text':' script file name','line_number':9546,'multiline':False]['text':' remember allocated string','line_number':9553,'multiline':False]['text':' line in file for ":so" command','line_number':9556,'multiline':False]['text':' line in script file','line_number':9567,'multiline':False]['text':' Source of last submitted input','line_number':9590,'multiline':False]['text':' avoid gcc warning','line_number':9598,'multiline':False]['text':' length of new string','line_number':9602,'multiline':False]['text':' remove the file name extension','line_number':9603,'multiline':False]['text':'
+ * Expand the <sfile> string in "arg".
+ *
+ * Returns an allocated string, or NULL for any error.
+ ','line_number':9638,'multiline':True]['text':' replace "<sfile>" with the sourced file name, and do ":" stuff','line_number':9664,'multiline':False]['text':' no match (cannot happen)','line_number':9673,'multiline':False]['text':' continue after the match','line_number':9693,'multiline':False]['text':'
+ * Make a dialog message in "buff[DIALOG_MSG_SIZE]".
+ * "format" must contain "%s".
+ ','line_number':9701,'multiline':True]['text':'
+ * ":behave {mswin,xterm}"
+ ','line_number':9714,'multiline':True]['text':'
+ * ":filetype [plugin] [indent] {on,off,detect}"
+ * on: Load the filetype.vim file to install autocommands for file types.
+ * off: Load the ftoff.vim file to remove all autocommands for file types.
+ * plugin on: load filetype.vim and ftplugin.vim
+ * plugin off: load ftplugof.vim
+ * indent on: load filetype.vim and indent.vim
+ * indent off: load indoff.vim
+ ','line_number':9748,'multiline':True]['text':' Print current status.','line_number':9766,'multiline':False]['text':' Accept "plugin" and "indent" in any order.','line_number':9774,'multiline':False]['text':'
+ * ":setfiletype [FALLBACK] {name}"
+ ','line_number':9839,'multiline':True]['text':'
+ * ":nohlsearch"
+ ','line_number':9880,'multiline':True]['text':'
+ * ":X": Get crypt key
+ ','line_number':9892,'multiline':True]['text':' First set the marks for all lines closed/open.','line_number':9927,'multiline':False]['text':' Execute the command on the marked lines.','line_number':9932,'multiline':False]['text':' clear rest of the marks','line_number':9934,'multiline':False]['text':'
+ * Returns TRUE if the supplied Ex cmdidx is for a location list command
+ * instead of a quickfix command.
+ ','line_number':9942,'multiline':True]

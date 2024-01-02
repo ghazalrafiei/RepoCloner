@@ -1,0 +1,914 @@
+['text':'////////////////////////////////////////////////////////////////////////////','line_number':1,'multiline':False]['text':'','line_number':2,'multiline':False]['text':' (C) Copyright Benedek Thaler 2015-2016','line_number':3,'multiline':False]['text':' (C) Copyright Ion Gaztanaga 2019-2020. Distributed under the Boost','line_number':4,'multiline':False]['text':' Software License, Version 1.0. (See accompanying file','line_number':5,'multiline':False]['text':' LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)','line_number':6,'multiline':False]['text':'','line_number':7,'multiline':False]['text':' See http://www.boost.org/libs/container for documentation.','line_number':8,'multiline':False]['text':'','line_number':9,'multiline':False]['text':'////////////////////////////////////////////////////////////////////////////','line_number':10,'multiline':False]['text':'#include <algorithm>','line_number':18,'multiline':False]['text':' memcpy','line_number':19,'multiline':False]['text':'new_allocator','line_number':25,'multiline':False]['text':'allocator_traits','line_number':26,'multiline':False]['text':'equal()','line_number':27,'multiline':False]['text':' move','line_number':39,'multiline':False]['text':'std','line_number':54,'multiline':False]['text':'for std::initializer_list','line_number':56,'multiline':False]['text':'#if defined(BOOST_CONTAINER_DOXYGEN_INVOKED)','line_number':80,'multiline':False]['text':'struct unsafe_uninitialized_tag_t {};','line_number':83,'multiline':False]['text':'*
+ * A vector-like sequence container providing front and back operations
+ * (e.g: `push_front`/`pop_front`/`push_back`/`pop_back`) with amortized constant complexity
+ * and unsafe methods geared towards additional performance.
+ *
+ * Models the [SequenceContainer], [ReversibleContainer], and [AllocatorAwareContainer] concepts.
+ *
+ * **Requires**:
+ *  - `T` shall be [MoveInsertable] into the devector.
+ *  - `T` shall be [Erasable] from any `devector<T, allocator_type, GP>`.
+ *  - `GrowthFactor`, and `Allocator` must model the concepts with the same names or be void.
+ *
+ * **Definition**: `T` is `NothrowConstructible` if it's either nothrow move constructible or
+ * nothrow copy constructible.
+ *
+ * **Definition**: `T` is `NothrowAssignable` if it's either nothrow move assignable or
+ * nothrow copy assignable.
+ *
+ * **Exceptions**: The exception specifications assume `T` is nothrow [Destructible].
+ *
+ * Most methods providing the strong exception guarantee assume `T` either has a move
+ * constructor marked noexcept or is [CopyInsertable] into the devector. If it isn't true,
+ * and the move constructor throws, the guarantee is waived and the effects are unspecified.
+ *
+ * In addition to the exceptions specified in the **Throws** clause, the following operations
+ * of `T` can throw when any of the specified concept is required:
+ *  - [DefaultInsertable][]: Default constructor
+ *  - [MoveInsertable][]: Move constructor
+ *  - [CopyInsertable][]: Copy constructor
+ *  - [DefaultConstructible][]: Default constructor
+ *  - [EmplaceConstructible][]: Constructor selected by the given arguments
+ *  - [MoveAssignable][]: Move assignment operator
+ *  - [CopyAssignable][]: Copy assignment operator
+ *
+ * Furthermore, not `noexcept` methods throws whatever the allocator throws
+ * if memory allocation fails. Such methods also throw `length_error` if the capacity
+ * exceeds `max_size()`.
+ *
+ * **Remark**: If a method invalidates some iterators, it also invalidates references
+ * and pointers to the elements pointed by the invalidated iterators.
+ *
+ * **Policies**:
+ *
+ * @ref devector_growth_policy models the `GrowthFactor` concept.
+ *
+ * [SequenceContainer]: http://en.cppreference.com/w/cpp/concept/SequenceContainer
+ * [ReversibleContainer]: http://en.cppreference.com/w/cpp/concept/ReversibleContainer
+ * [AllocatorAwareContainer]: http://en.cppreference.com/w/cpp/concept/AllocatorAwareContainer
+ * [DefaultInsertable]: http://en.cppreference.com/w/cpp/concept/DefaultInsertable
+ * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+ * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+ * [Erasable]: http://en.cppreference.com/w/cpp/concept/Erasable
+ * [DefaultConstructible]: http://en.cppreference.com/w/cpp/concept/DefaultConstructible
+ * [Destructible]: http://en.cppreference.com/w/cpp/concept/Destructible
+ * [EmplaceConstructible]: http://en.cppreference.com/w/cpp/concept/EmplaceConstructible
+ * [MoveAssignable]: http://en.cppreference.com/w/cpp/concept/MoveAssignable
+ * [CopyAssignable]: http://en.cppreference.com/w/cpp/concept/CopyAssignable
+ ','line_number':85,'multiline':True]['text':' ifndef BOOST_CONTAINER_DOXYGEN_INVOKED','line_number':154,'multiline':False]['text':' Standard Interface Types:','line_number':157,'multiline':False]['text':' Guard to deallocate buffer on exception','line_number':179,'multiline':False]['text':' Random access pseudo iterator always yielding to the same result','line_number':182,'multiline':False]['text':' ifndef BOOST_CONTAINER_DOXYGEN_INVOKED','line_number':185,'multiline':False]['text':' Standard Interface','line_number':187,'multiline':False]['text':' construct/copy/destroy','line_number':189,'multiline':False]['text':'*
+   * **Effects**: Constructs an empty devector.
+   *
+   * **Postcondition**: `empty() && front_free_capacity() == 0
+   * && back_free_capacity() == 0`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':191,'multiline':True]['text':'*
+   * **Effects**: Constructs an empty devector, using the specified allocator.
+   *
+   * **Postcondition**: `empty() && front_free_capacity() == 0
+   * && back_free_capacity() == 0`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':203,'multiline':True]['text':'*
+   * **Effects**: Constructs an empty devector, using the specified allocator
+   * and reserves `n` slots as if `reserve(n)` was called.
+   *
+   * **Postcondition**: `empty() && front_free_capacity() == 0
+   * && back_free_capacity() >= n`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Constant.
+   ','line_number':215,'multiline':True]['text':'*
+   * **Effects**: Constructs an empty devector, using the specified allocator
+   * and reserves `front_cap + back_cap` slots as if `reserve_front(front_cap)` and
+   * `reserve_back(back_cap)` was called.
+   *
+   * **Postcondition**: `empty() && front_free_capacity() == front_cap
+   * && back_free_capacity() >= back_cap`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Constant.
+   ','line_number':230,'multiline':True]['text':'*
+   * [DefaultInsertable]: http://en.cppreference.com/w/cpp/concept/DefaultInsertable
+   *
+   * **Effects**: Constructs a devector with `n` default-inserted elements using the specified allocator.
+   *
+   * **Requires**: `T` shall be [DefaultInsertable] into `*this`.
+   *
+   * **Postcondition**: `size() == n && front_free_capacity() == 0`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in `n`.
+   ','line_number':246,'multiline':True]['text':' Cannot use construct_from_range/constant_iterator and copy_range,','line_number':262,'multiline':False]['text':' because we are not allowed to default construct T','line_number':263,'multiline':False]['text':'*
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   *
+   * **Effects**: Constructs a devector with `n` copies of `value`, using the specified allocator.
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this`.
+   *
+   * **Postcondition**: `size() == n && front_free_capacity() == 0`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in `n`.
+   ','line_number':279,'multiline':True]['text':'*
+   * **Effects**: Constructs a devector equal to the range `[first,last)`, using the specified allocator.
+   *
+   * **Requires**: `T` shall be [EmplaceConstructible] into `*this` from `*first`. If the specified
+   * iterator does not meet the forward iterator requirements, `T` shall also be [MoveInsertable]
+   * into `*this`.
+   *
+   * **Postcondition**: `size() == boost::container::iterator_distance(first, last)
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Makes only `N` calls to the copy constructor of `T` (where `N` is the distance between `first`
+   * and `last`), at most one allocation and no reallocations if iterators first and last are of forward,
+   * bidirectional, or random access categories. It makes `O(N)` calls to the copy constructor of `T`
+   * and `O(log(N)) reallocations if they are just input iterators.
+   *
+   * **Remarks**: Each iterator in the range `[first,last)` shall be dereferenced exactly once,
+   * unless an exception is thrown.
+   *
+   * [EmplaceConstructible]: http://en.cppreference.com/w/cpp/concept/EmplaceConstructible
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   ','line_number':299,'multiline':True]['text':'Input iterators','line_number':323,'multiline':False]['text':'Other iterators','line_number':343,'multiline':False]['text':'this->allocate(n) will take care of overflows','line_number':355,'multiline':False]['text':'construct_from_range releases memory on failure','line_number':358,'multiline':False]['text':' ifndef BOOST_CONTAINER_DOXYGEN_INVOKED','line_number':363,'multiline':False]['text':'*
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   *
+   * **Effects**: Copy constructs a devector.
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this`.
+   *
+   * **Postcondition**: `this->size() == x.size() && front_free_capacity() == 0`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in the size of `x`.
+   ','line_number':365,'multiline':True]['text':'this->allocate(n) will take care of overflows','line_number':384,'multiline':False]['text':'*
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   *
+   * **Effects**: Copy constructs a devector, using the specified allocator.
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this`.
+   *
+   * **Postcondition**: `this->size() == x.size() && front_free_capacity() == 0`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in the size of `x`.
+   ','line_number':391,'multiline':True]['text':'this->allocate(n) will take care of overflows','line_number':410,'multiline':False]['text':'*
+   * **Effects**: Moves `rhs`'s resources to `*this`.
+   *
+   * **Throws**: Nothing.
+   *
+   * **Postcondition**: `rhs` is left in an unspecified but valid state.
+   *
+   * **Exceptions**: Strong exception guarantee if not `noexcept`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':417,'multiline':True]['text':' buffer is already acquired, reset rhs','line_number':431,'multiline':False]['text':'*
+   * **Effects**: Moves `rhs`'s resources to `*this`, using the specified allocator.
+   *
+   * **Throws**: If allocation or T's move constructor throws.
+   *
+   * **Postcondition**: `rhs` is left in an unspecified but valid state.
+   *
+   * **Exceptions**: Strong exception guarantee if not `noexcept`.
+   *
+   * **Complexity**: Linear if allocator != rhs.get_allocator(), otherwise constant.
+   ','line_number':440,'multiline':True]['text':' TODO should move elems-by-elems if the two allocators differ','line_number':454,'multiline':False]['text':' buffer is already acquired, reset rhs','line_number':455,'multiline':False]['text':'*
+   * **Equivalent to**: `devector(il.begin(), il.end())` or `devector(il.begin(), il.end(), allocator)`.
+   ','line_number':465,'multiline':True]['text':'this->allocate(n) will take care of overflows','line_number':474,'multiline':False]['text':'construct_from_range releases memory on failure','line_number':477,'multiline':False]['text':'*
+   * **Effects**: Destroys the devector. All stored values are destroyed and
+   * used memory, if any, deallocated.
+   *
+   * **Complexity**: Linear in the size of `*this`.
+   ','line_number':483,'multiline':True]['text':'*
+   * **Effects**: Copies elements of `x` to `*this`. Previously
+   * held elements get copy assigned to or destroyed.
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this`.
+   *
+   * **Postcondition**: `this->size() == x.size()`, the elements of
+   * `*this` are copies of elements in `x` in the same order.
+   *
+   * **Returns**: `*this`.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is `NothrowConstructible`
+   * and the allocator is allowed to be propagated
+   * ([propagate_on_container_copy_assignment] is true),
+   * Basic exception guarantee otherwise.
+   *
+   * **Complexity**: Linear in the size of `x` and `*this`.
+   *
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   * [propagate_on_container_copy_assignment]: http://en.cppreference.com/w/cpp/memory/allocator_traits
+   ','line_number':495,'multiline':True]['text':' skip self','line_number':520,'multiline':False]['text':' new allocator cannot free existing storage','line_number':528,'multiline':False]['text':'*
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   *
+   * **Effects**: Moves elements of `x` to `*this`. Previously
+   * held elements get move/copy assigned to or destroyed.
+   *
+   * **Requires**: `T` shall be [MoveInsertable] into `*this`.
+   *
+   * **Postcondition**: `x` is left in an unspecified but valid state.
+   *
+   * **Returns**: `*this`.
+   *
+   * **Exceptions**: Basic exception guarantee if not `noexcept`.
+   *
+   * **Complexity**: Constant if allocator_traits_type::
+   *  propagate_on_container_move_assignment is true or
+   *  this->get>allocator() == x.get_allocator(). Linear otherwise.
+   ','line_number':553,'multiline':True]['text':' leave x in valid state','line_number':592,'multiline':False]['text':' if the allocator shouldn't be copied and they do not compare equal','line_number':599,'multiline':False]['text':' we can't steal memory.','line_number':600,'multiline':False]['text':'*
+   * **Effects**: Copies elements of `il` to `*this`. Previously
+   * held elements get copy assigned to or destroyed.
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this` and [CopyAssignable].
+   *
+   * **Postcondition**: `this->size() == il.size()`, the elements of
+   * `*this` are copies of elements in `il` in the same order.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is nothrow copy assignable
+   * from `T` and `NothrowConstructible`, Basic exception guarantee otherwise.
+   *
+   * **Returns**: `*this`.
+   *
+   * **Complexity**: Linear in the size of `il` and `*this`.
+   *
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   * [CopyAssignable]: http://en.cppreference.com/w/cpp/concept/CopyAssignable
+   ','line_number':626,'multiline':True]['text':'*
+   * **Effects**: Replaces elements of `*this` with a copy of `[first,last)`.
+   * Previously held elements get copy assigned to or destroyed.
+   *
+   * **Requires**: `T` shall be [EmplaceConstructible] from `*first`. If the specified iterator
+   * does not meet the forward iterator requirements, `T` shall be also [MoveInsertable] into `*this`.
+   *
+   * **Precondition**: `first` and `last` are not iterators into `*this`.
+   *
+   * **Postcondition**: `size() == N`, where `N` is the distance between `first` and `last`.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is nothrow copy assignable
+   * from `*first` and `NothrowConstructible`, Basic exception guarantee otherwise.
+   *
+   * **Complexity**: Linear in the distance between `first` and `last`.
+   * Makes a single reallocation at most if the iterators `first` and `last`
+   * are of forward, bidirectional, or random access categories. It makes
+   * `O(log(N))` reallocations if they are just input iterators.
+   *
+   * **Remarks**: Each iterator in the range `[first,last)` shall be dereferenced exactly once,
+   * unless an exception is thrown.
+   *
+   * [EmplaceConstructible]: http://en.cppreference.com/w/cpp/concept/EmplaceConstructible
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   ','line_number':652,'multiline':True]['text':'Input iterators','line_number':679,'multiline':False]['text':'Other iterators','line_number':698,'multiline':False]['text':' ifndef BOOST_CONTAINER_DOXYGEN_INVOKED','line_number':720,'multiline':False]['text':'*
+   * **Effects**: Replaces elements of `*this` with `n` copies of `u`.
+   * Previously held elements get copy assigned to or destroyed.
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this` and
+   * [CopyAssignable].
+   *
+   * **Precondition**: `u` is not a reference into `*this`.
+   *
+   * **Postcondition**: `size() == n` and the elements of
+   * `*this` are copies of `u`.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is nothrow copy assignable
+   * from `u` and `NothrowConstructible`, Basic exception guarantee otherwise.
+   *
+   * **Complexity**: Linear in `n` and the size of `*this`.
+   *
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   * [CopyAssignable]: http://en.cppreference.com/w/cpp/concept/CopyAssignable
+   ','line_number':722,'multiline':True]['text':'* **Equivalent to**: `assign(il.begin(), il.end())`. ','line_number':751,'multiline':True]['text':'*
+   * **Returns**: A copy of the allocator associated with the container.
+   *
+   * **Complexity**: Constant.
+   ','line_number':758,'multiline':True]['text':' iterators','line_number':781,'multiline':False]['text':'*
+   * **Returns**: A iterator pointing to the first element in the devector,
+   * or the past the end iterator if the devector is empty.
+   *
+   * **Complexity**: Constant.
+   ','line_number':783,'multiline':True]['text':'*
+   * **Returns**: A constant iterator pointing to the first element in the devector,
+   * or the past the end iterator if the devector is empty.
+   *
+   * **Complexity**: Constant.
+   ','line_number':795,'multiline':True]['text':'*
+   * **Returns**: An iterator pointing past the last element of the container.
+   *
+   * **Complexity**: Constant.
+   ','line_number':807,'multiline':True]['text':'*
+   * **Returns**: A constant iterator pointing past the last element of the container.
+   *
+   * **Complexity**: Constant.
+   ','line_number':818,'multiline':True]['text':'*
+   * **Returns**: A reverse iterator pointing to the first element in the reversed devector,
+   * or the reverse past the end iterator if the devector is empty.
+   *
+   * **Complexity**: Constant.
+   ','line_number':829,'multiline':True]['text':'*
+   * **Returns**: A constant reverse iterator
+   * pointing to the first element in the reversed devector,
+   * or the reverse past the end iterator if the devector is empty.
+   *
+   * **Complexity**: Constant.
+   ','line_number':841,'multiline':True]['text':'*
+   * **Returns**: A reverse iterator pointing past the last element in the
+   * reversed container, or to the beginning of the reversed container if it's empty.
+   *
+   * **Complexity**: Constant.
+   ','line_number':854,'multiline':True]['text':'*
+   * **Returns**: A constant reverse iterator pointing past the last element in the
+   * reversed container, or to the beginning of the reversed container if it's empty.
+   *
+   * **Complexity**: Constant.
+   ','line_number':866,'multiline':True]['text':'*
+   * **Returns**: A constant iterator pointing to the first element in the devector,
+   * or the past the end iterator if the devector is empty.
+   *
+   * **Complexity**: Constant.
+   ','line_number':878,'multiline':True]['text':'*
+   * **Returns**: A constant iterator pointing past the last element of the container.
+   *
+   * **Complexity**: Constant.
+   ','line_number':890,'multiline':True]['text':'*
+   * **Returns**: A constant reverse iterator
+   * pointing to the first element in the reversed devector,
+   * or the reverse past the end iterator if the devector is empty.
+   *
+   * **Complexity**: Constant.
+   ','line_number':900,'multiline':True]['text':'*
+   * **Returns**: A constant reverse iterator pointing past the last element in the
+   * reversed container, or to the beginning of the reversed container if it's empty.
+   *
+   * **Complexity**: Constant.
+   ','line_number':913,'multiline':True]['text':' capacity','line_number':925,'multiline':False]['text':'*
+   * **Returns**: True, if `size() == 0`, false otherwise.
+   *
+   * **Complexity**: Constant.
+   ','line_number':927,'multiline':True]['text':'*
+   * **Returns**: The number of elements the devector contains.
+   *
+   * **Complexity**: Constant.
+   ','line_number':938,'multiline':True]['text':'*
+   * **Returns**: The maximum number of elements the devector could possibly hold.
+   *
+   * **Complexity**: Constant.
+   ','line_number':949,'multiline':True]['text':'*
+   * **Returns**: The total number of elements that the devector can hold without requiring reallocation.
+   *
+   * **Complexity**: Constant.
+   ','line_number':962,'multiline':True]['text':'*
+   * **Returns**: The total number of elements that can be pushed to the front of the
+   * devector without requiring reallocation.
+   *
+   * **Complexity**: Constant.
+   ','line_number':973,'multiline':True]['text':'*
+   * **Returns**: The total number of elements that can be pushed to the back of the
+   * devector without requiring reallocation.
+   *
+   * **Complexity**: Constant.
+   ','line_number':985,'multiline':True]['text':'* **Equivalent to**: `resize_back(sz)` ','line_number':997,'multiline':True]['text':'* **Equivalent to**: `resize_back(sz, c)` ','line_number':1000,'multiline':True]['text':'*
+   * **Effects**: If `sz` is greater than the size of `*this`,
+   * additional value-initialized elements are inserted
+   * to the front. Invalidates iterators if reallocation is needed.
+   * If `sz` is smaller than than the size of `*this`,
+   * elements are popped from the front.
+   *
+   * **Requires**: T shall be [MoveInsertable] into *this and [DefaultConstructible].
+   *
+   * **Postcondition**: `sz == size()`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in the size of `*this` and `sz`.
+   *
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   * [DefaultConstructible]: http://en.cppreference.com/w/cpp/concept/DefaultConstructible
+   ','line_number':1003,'multiline':True]['text':'*
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   *
+   * **Effects**: If `sz` is greater than the size of `*this`,
+   * copies of `c` are inserted to the front.
+   * Invalidates iterators if reallocation is needed.
+   * If `sz` is smaller than than the size of `*this`,
+   * elements are popped from the front.
+   *
+   * **Postcondition**: `sz == size()`.
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in the size of `*this` and `sz`.
+   ','line_number':1027,'multiline':True]['text':'*
+   * **Effects**: If `sz` is greater than the size of `*this`,
+   * additional value-initialized elements are inserted
+   * to the back. Invalidates iterators if reallocation is needed.
+   * If `sz` is smaller than than the size of `*this`,
+   * elements are popped from the back.
+   *
+   * **Requires**: T shall be [MoveInsertable] into *this and [DefaultConstructible].
+   *
+   * **Postcondition**: `sz == size()`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in the size of `*this` and `sz`.
+   *
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   * [DefaultConstructible]: http://en.cppreference.com/w/cpp/concept/DefaultConstructible
+   ','line_number':1050,'multiline':True]['text':'*
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   *
+   * **Effects**: If `sz` is greater than the size of `*this`,
+   * copies of `c` are inserted to the back.
+   * If `sz` is smaller than than the size of `*this`,
+   * elements are popped from the back.
+   *
+   * **Postcondition**: `sz == size()`.
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in the size of `*this` and `sz`.
+   ','line_number':1074,'multiline':True]['text':' unsafe uninitialized resize methods','line_number':1096,'multiline':False]['text':'*
+   * **Unsafe method**, use with care.
+   *
+   * **Effects**: Changes the size of the devector without properly
+   * initializing the extra or destroying the superfluous elements.
+   * If `n < size()`, elements are removed from the front without
+   * getting destroyed; if `n > size()`, uninitialized elements are added
+   * before the first element at the front.
+   * Invalidates iterators if reallocation is needed.
+   *
+   * **Postcondition**: `size() == n`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in `size()` if `capacity() < n`, constant otherwise.
+   *
+   * **Remarks**: The devector does not keep track of initialization of the elements:
+   * Elements without a trivial destructor must be manually destroyed before shrinking,
+   * elements without a trivial constructor must be initialized after growing.
+   ','line_number':1098,'multiline':True]['text':'
+  void unsafe_uninitialized_resize_front(size_type n)
+  {
+    if (n > size())
+    {
+      unsafe_uninitialized_grow_front(n);
+    }
+    else
+    {
+      unsafe_uninitialized_shrink_front(n);
+    }
+  }
+','line_number':1118,'multiline':True]['text':'*
+   * **Unsafe method**, use with care.
+   *
+   * **Effects**: Changes the size of the devector without properly
+   * initializing the extra or destroying the superfluous elements.
+   * If `n < size()`, elements are removed from the back without
+   * getting destroyed; if `n > size()`, uninitialized elements are added
+   * after the last element at the back.
+   * Invalidates iterators if reallocation is needed.
+   *
+   * **Postcondition**: `size() == n`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in `size()` if `capacity() < n`, constant otherwise.
+   *
+   * **Remarks**: The devector does not keep track of initialization of the elements:
+   * Elements without a trivial destructor must be manually destroyed before shrinking,
+   * elements without a trivial constructor must be initialized after growing.
+   ','line_number':1131,'multiline':True]['text':'
+  void unsafe_uninitialized_resize_back(size_type n)
+  {
+    if (n > size())
+    {
+      unsafe_uninitialized_grow_back(n);
+    }
+    else
+    {
+      unsafe_uninitialized_shrink_back(n);
+    }
+  }
+','line_number':1151,'multiline':True]['text':' reserve promise:','line_number':1164,'multiline':False]['text':' after reserve_[front,back](n), n - size() push_[front,back] will not allocate','line_number':1165,'multiline':False]['text':'* **Equivalent to**: `reserve_back(new_capacity)` ','line_number':1167,'multiline':True]['text':'*
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   *
+   * **Effects**: Ensures that `n` elements can be pushed to the front
+   * without requiring reallocation, where `n` is `new_capacity - size()`,
+   * if `n` is positive. Otherwise, there are no effects.
+   * Invalidates iterators if reallocation is needed.
+   *
+   * **Requires**: `T` shall be [MoveInsertable] into `*this`.
+   *
+   * **Complexity**: Linear in the size of *this.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Throws**: `length_error` if `new_capacity > max_size()`.
+   ','line_number':1170,'multiline':True]['text':'*
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   *
+   * **Effects**: Ensures that `n` elements can be pushed to the back
+   * without requiring reallocation, where `n` is `new_capacity - size()`,
+   * if `n` is positive. Otherwise, there are no effects.
+   * Invalidates iterators if reallocation is needed.
+   *
+   * **Requires**: `T` shall be [MoveInsertable] into `*this`.
+   *
+   * **Complexity**: Linear in the size of *this.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Throws**: length_error if `new_capacity > max_size()`.
+   ','line_number':1195,'multiline':True]['text':'*
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   *
+   * **Effects**: Reduces `capacity()` to `size()`. Invalidates iterators.
+   *
+   * **Requires**: `T` shall be [MoveInsertable] into `*this`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Linear in the size of *this.
+   ','line_number':1221,'multiline':True]['text':' element access:','line_number':1238,'multiline':False]['text':'*
+   * **Returns**: A reference to the `n`th element in the devector.
+   *
+   * **Precondition**: `n < size()`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1240,'multiline':True]['text':'*
+   * **Returns**: A constant reference to the `n`th element in the devector.
+   *
+   * **Precondition**: `n < size()`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1254,'multiline':True]['text':'*
+   * **Returns**: A reference to the `n`th element in the devector.
+   *
+   * **Throws**: `out_of_range`, if `n >= size()`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1269,'multiline':True]['text':'*
+   * **Returns**: A constant reference to the `n`th element in the devector.
+   *
+   * **Throws**: `out_of_range`, if `n >= size()`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1284,'multiline':True]['text':'*
+   * **Returns**: A reference to the first element in the devector.
+   *
+   * **Precondition**: `!empty()`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1299,'multiline':True]['text':'*
+   * **Returns**: A constant reference to the first element in the devector.
+   *
+   * **Precondition**: `!empty()`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1314,'multiline':True]['text':'*
+   * **Returns**: A reference to the last element in the devector.
+   *
+   * **Precondition**: `!empty()`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1329,'multiline':True]['text':'*
+   * **Returns**: A constant reference to the last element in the devector.
+   *
+   * **Precondition**: `!empty()`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1344,'multiline':True]['text':'*
+   * **Returns**: A pointer to the underlying array serving as element storage.
+   * The range `[data(); data() + size())` is always valid. For a non-empty devector,
+   * `data() == &front()`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1359,'multiline':True]['text':'*
+   * **Returns**: A constant pointer to the underlying array serving as element storage.
+   * The range `[data(); data() + size())` is always valid. For a non-empty devector,
+   * `data() == &front()`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1372,'multiline':True]['text':' modifiers:','line_number':1385,'multiline':False]['text':'*
+   * **Effects**: Pushes a new element to the front of the devector.
+   * The element is constructed in-place, using the perfect forwarded `args`
+   * as constructor arguments. Invalidates iterators if reallocation is needed.
+   * (`front_free_capacity() == 0`)
+   *
+   * **Requires**: `T` shall be [EmplaceConstructible] from `args` and [MoveInsertable] into `*this`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Amortized constant in the size of `*this`.
+   * (Constant, if `front_free_capacity() > 0`)
+   *
+   * [EmplaceConstructible]: http://en.cppreference.com/w/cpp/concept/EmplaceConstructible
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   ','line_number':1387,'multiline':True]['text':' fast path','line_number':1407,'multiline':False]['text':'!defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED)','line_number':1420,'multiline':False]['text':'','line_number':1438,'multiline':False]['text':'*
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   *
+   * **Effects**: Pushes the copy of `x` to the front of the devector.
+   * Invalidates iterators if reallocation is needed.
+   * (`front_free_capacity() == 0`)
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Amortized constant in the size of `*this`.
+   * (Constant, if `front_free_capacity() > 0`)
+   ','line_number':1445,'multiline':True]['text':'*
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   *
+   * **Effects**: Move constructs a new element at the front of the devector using `x`.
+   * Invalidates iterators if reallocation is needed.
+   * (`front_free_capacity() == 0`)
+   *
+   * **Requires**: `T` shall be [MoveInsertable] into `*this`.
+   *
+   * **Exceptions**: Strong exception guarantee, not regarding the state of `x`.
+   *
+   * **Complexity**: Amortized constant in the size of `*this`.
+   * (Constant, if `front_free_capacity() > 0`)
+   ','line_number':1461,'multiline':True]['text':'*
+   * **Effects**: Removes the first element of `*this`.
+   *
+   * **Precondition**: `!empty()`.
+   *
+   * **Postcondition**: `front_free_capacity()` is incremented by 1.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1481,'multiline':True]['text':'*
+   * **Effects**: Pushes a new element to the back of the devector.
+   * The element is constructed in-place, using the perfect forwarded `args`
+   * as constructor arguments. Invalidates iterators if reallocation is needed.
+   * (`back_free_capacity() == 0`)
+   *
+   * **Requires**: `T` shall be [EmplaceConstructible] from `args` and [MoveInsertable] into `*this`,
+   * and [MoveAssignable].
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Amortized constant in the size of `*this`.
+   * (Constant, if `back_free_capacity() > 0`)
+   *
+   * [EmplaceConstructible]: http://en.cppreference.com/w/cpp/concept/EmplaceConstructible
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   * [MoveAssignable]: http://en.cppreference.com/w/cpp/concept/MoveAssignable
+   ','line_number':1498,'multiline':True]['text':'!defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED)','line_number':1530,'multiline':False]['text':'','line_number':1545,'multiline':False]['text':'!defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED)','line_number':1549,'multiline':False]['text':'*
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   *
+   * **Effects**: Pushes the copy of `x` to the back of the devector.
+   * Invalidates iterators if reallocation is needed.
+   * (`back_free_capacity() == 0`)
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this`.
+   *
+   * **Exceptions**: Strong exception guarantee.
+   *
+   * **Complexity**: Amortized constant in the size of `*this`.
+   * (Constant, if `back_free_capacity() > 0`)
+   ','line_number':1553,'multiline':True]['text':'*
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   *
+   * **Effects**: Move constructs a new element at the back of the devector using `x`.
+   * Invalidates iterators if reallocation is needed.
+   * (`back_free_capacity() == 0`)
+   *
+   * **Requires**: `T` shall be [MoveInsertable] into `*this`.
+   *
+   * **Exceptions**: Strong exception guarantee, not regarding the state of `x`.
+   *
+   * **Complexity**: Amortized constant in the size of `*this`.
+   * (Constant, if `back_free_capacity() > 0`)
+   ','line_number':1569,'multiline':True]['text':'*
+   * **Effects**: Removes the last element of `*this`.
+   *
+   * **Precondition**: `!empty()`.
+   *
+   * **Postcondition**: `back_free_capacity()` is incremented by 1.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1589,'multiline':True]['text':'*
+   * **Effects**: Constructs a new element before the element pointed by `position`.
+   * The element is constructed in-place, using the perfect forwarded `args`
+   * as constructor arguments. Invalidates iterators if reallocation is needed.
+   *
+   * **Requires**: `T` shall be [EmplaceConstructible], and [MoveInsertable] into `*this`,
+   * and [MoveAssignable].
+   *
+   * **Returns**: Iterator pointing to the newly constructed element.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is `NothrowConstructible`
+   * and `NothrowAssignable`, Basic exception guarantee otherwise.
+   *
+   * **Complexity**: Linear in the size of `*this`.
+   *
+   * [EmplaceConstructible]: http://en.cppreference.com/w/cpp/concept/EmplaceConstructible
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   * [MoveAssignable]: http://en.cppreference.com/w/cpp/concept/MoveAssignable
+   ','line_number':1606,'multiline':True]['text':' fast path','line_number':1632,'multiline':False]['text':' secondary fast path','line_number':1638,'multiline':False]['text':'!defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED)','line_number':1651,'multiline':False]['text':'','line_number':1675,'multiline':False]['text':'!defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED)','line_number':1679,'multiline':False]['text':'*
+   * **Effects**: Copy constructs a new element before the element pointed by `position`,
+   * using `x` as constructor argument. Invalidates iterators if reallocation is needed.
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this` and and [CopyAssignable].
+   *
+   * **Returns**: Iterator pointing to the newly constructed element.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is `NothrowConstructible`
+   * and `NothrowAssignable`, Basic exception guarantee otherwise.
+   *
+   * **Complexity**: Linear in the size of `*this`.
+   *
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   * [CopyAssignable]: http://en.cppreference.com/w/cpp/concept/CopyAssignable
+   ','line_number':1683,'multiline':True]['text':'*
+   * **Effects**: Move constructs a new element before the element pointed by `position`,
+   * using `x` as constructor argument. Invalidates iterators if reallocation is needed.
+   *
+   * **Requires**: `T` shall be [MoveInsertable] into `*this` and and [CopyAssignable].
+   *
+   * **Returns**: Iterator pointing to the newly constructed element.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is `NothrowConstructible`
+   * and `NothrowAssignable` (not regarding the state of `x`),
+   * Basic exception guarantee otherwise.
+   *
+   * **Complexity**: Linear in the size of `*this`.
+   *
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   * [CopyAssignable]: http://en.cppreference.com/w/cpp/concept/CopyAssignable
+   ','line_number':1701,'multiline':True]['text':'*
+   * **Effects**: Copy constructs `n` elements before the element pointed by `position`,
+   * using `x` as constructor argument. Invalidates iterators if reallocation is needed.
+   *
+   * **Requires**: `T` shall be [CopyInsertable] into `*this` and and [CopyAssignable].
+   *
+   * **Returns**: Iterator pointing to the first inserted element, or `position`, if `n` is zero.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is `NothrowConstructible`
+   * and `NothrowAssignable`, Basic exception guarantee otherwise.
+   *
+   * **Complexity**: Linear in the size of `*this` and `n`.
+   *
+   * [CopyInsertable]: http://en.cppreference.com/w/cpp/concept/CopyInsertable
+   * [CopyAssignable]: http://en.cppreference.com/w/cpp/concept/CopyAssignable
+   ','line_number':1723,'multiline':True]['text':'*
+   * **Effects**: Copy constructs elements before the element pointed by position
+   * using each element in the rage pointed by `first` and `last` as constructor arguments.
+   * Invalidates iterators if reallocation is needed.
+   *
+   * **Requires**: `T` shall be [EmplaceConstructible] into `*this` from `*first`. If the specified iterator
+   * does not meet the forward iterator requirements, `T` shall also be [MoveInsertable] into `*this`
+   * and [MoveAssignable].
+   *
+   * **Precondition**: `first` and `last` are not iterators into `*this`.
+   *
+   * **Returns**: Iterator pointing to the first inserted element, or `position`, if `first == last`.
+   *
+   * **Complexity**: Linear in the size of `*this` and `N` (where `N` is the distance between `first` and `last`).
+   * Makes only `N` calls to the constructor of `T` and no reallocations if iterators `first` and `last`
+   * are of forward, bidirectional, or random access categories. It makes 2N calls to the copy constructor of `T`
+   * and allocates memory twice at most if they are just input iterators.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is `NothrowConstructible`
+   * and `NothrowAssignable`, Basic exception guarantee otherwise.
+   *
+   * **Remarks**: Each iterator in the range `[first,last)` shall be dereferenced exactly once,
+   * unless an exception is thrown.
+   *
+   * [EmplaceConstructible]: http://en.cppreference.com/w/cpp/concept/EmplaceConstructible
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   * [MoveAssignable]: http://en.cppreference.com/w/cpp/concept/MoveAssignable
+   ','line_number':1746,'multiline':True]['text':'Input iterators','line_number':1776,'multiline':False]['text':'Other iterators','line_number':1813,'multiline':False]['text':' ifndef BOOST_CONTAINER_DOXYGEN_INVOKED','line_number':1824,'multiline':False]['text':'* **Equivalent to**: `insert(position, il.begin(), il.end())` ','line_number':1827,'multiline':True]['text':'*
+   * [MoveAssignable]: http://en.cppreference.com/w/cpp/concept/MoveAssignable
+   *
+   * **Effects**: Destroys the element pointed by `position` and removes it from the devector.
+   * Invalidates iterators.
+   *
+   * **Requires**: `T` shall be [MoveAssignable].
+   *
+   * **Precondition**: `position` must be in the range of `[begin(), end())`.
+   *
+   * **Returns**: Iterator pointing to the element immediately following the erased element
+   * prior to its erasure. If no such element exists, `end()` is returned.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is `NothrowAssignable`,
+   * Basic exception guarantee otherwise.
+   *
+   * **Complexity**: Linear in half the size of `*this`.
+   ','line_number':1834,'multiline':True]['text':'*
+   * [MoveAssignable]: http://en.cppreference.com/w/cpp/concept/MoveAssignable
+   *
+   * **Effects**: Destroys the range `[first,last)` and removes it from the devector.
+   * Invalidates iterators.
+   *
+   * **Requires**: `T` shall be [MoveAssignable].
+   *
+   * **Precondition**: `[first,last)` must be in the range of `[begin(), end())`.
+   *
+   * **Returns**: Iterator pointing to the element pointed to by `last` prior to any elements
+   * being erased. If no such element exists, `end()` is returned.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is `NothrowAssignable`,
+   * Basic exception guarantee otherwise.
+   *
+   * **Complexity**: Linear in half the size of `*this`
+   * plus the distance between `first` and `last`.
+   ','line_number':1857,'multiline':True]['text':'*
+   * [MoveAssignable]: http://en.cppreference.com/w/cpp/concept/MoveAssignable
+   *
+   * **Effects**: Destroys the range `[first,last)` and removes it from the devector.
+   * Invalidates iterators.
+   *
+   * **Requires**: `T` shall be [MoveAssignable].
+   *
+   * **Precondition**: `[first,last)` must be in the range of `[begin(), end())`.
+   *
+   * **Returns**: Iterator pointing to the element pointed to by `last` prior to any elements
+   * being erased. If no such element exists, `end()` is returned.
+   *
+   * **Exceptions**: Strong exception guarantee if `T` is `NothrowAssignable`,
+   * Basic exception guarantee otherwise.
+   *
+   * **Complexity**: Linear in half the size of `*this`.
+   ','line_number':1883,'multiline':True]['text':' move n to the right','line_number':1909,'multiline':False]['text':'n is always less than max stored_size_type','line_number':1916,'multiline':False]['text':' move n to the left','line_number':1923,'multiline':False]['text':'n is always less than max stored_size_type','line_number':1930,'multiline':False]['text':'*
+   * [MoveInsertable]: http://en.cppreference.com/w/cpp/concept/MoveInsertable
+   *
+   * **Effects**: exchanges the contents of `*this` and `b`.
+   *
+   * **Requires**: instances of `T` must be swappable by unqualified call of `swap`
+   * and `T` must be [MoveInsertable] into `*this`.
+   *
+   * **Precondition**: The allocators should allow propagation or should compare equal.
+   *
+   * **Exceptions**: Basic exceptions guarantee if not `noexcept`.
+   *
+   * **Complexity**: Constant.
+   ','line_number':1938,'multiline':True]['text':' else it's undefined behavior','line_number':1957,'multiline':False]['text':' swap indices','line_number':1961,'multiline':False]['text':'And now swap the allocator','line_number':1965,'multiline':False]['text':'*
+   * **Effects**: Destroys all elements in the devector.
+   * Invalidates all references, pointers and iterators to the
+   * elements of the devector.
+   *
+   * **Postcondition**: `empty() && front_free_capacity() == 0
+   * && back_free_capacity() == old capacity`.
+   *
+   * **Complexity**: Linear in the size of `*this`.
+   *
+   * **Remarks**: Does not free memory.
+   ','line_number':1972,'multiline':True]['text':' allocator_type wrappers','line_number':2047,'multiline':False]['text':' BOOST_CONTAINER_DEVECTOR_ALLOC_STATS','line_number':2064,'multiline':False]['text':'!defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED)','line_number':2112,'multiline':False]['text':'','line_number':2138,'multiline':False]['text':'!defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED)','line_number':2142,'multiline':False]['text':' if trivial copy and default allocator, memcpy','line_number':2201,'multiline':False]['text':' if trivial copy and default allocator, memcpy','line_number':2235,'multiline':False]['text':' prefer moving front to access memory forward if there are less elems to move','line_number':2342,'multiline':False]['text':' move things closer to the front a bit','line_number':2349,'multiline':False]['text':' avoid invalidating any reference in args later','line_number':2351,'multiline':False]['text':' construct at front - 1 from front (no guard)','line_number':2354,'multiline':False]['text':' move front half left','line_number':2357,'multiline':False]['text':' move assign new elem before pos','line_number':2361,'multiline':False]['text':' move things closer to the end a bit','line_number':2370,'multiline':False]['text':' avoid invalidating any reference in args later','line_number':2372,'multiline':False]['text':' construct at back + 1 from back (no guard)','line_number':2375,'multiline':False]['text':' move back half right','line_number':2378,'multiline':False]['text':' move assign new elem to pos','line_number':2382,'multiline':False]['text':' reallocate','line_number':2396,'multiline':False]['text':' guard allocation','line_number':2400,'multiline':False]['text':' construct new element (and guard it)','line_number':2411,'multiline':False]['text':' move front-pos (possibly guarded)','line_number':2417,'multiline':False]['text':' move pos+1-end (possibly guarded)','line_number':2421,'multiline':False]['text':' cleanup','line_number':2424,'multiline':False]['text':' release alloc and other guards','line_number':2428,'multiline':False]['text':' rebind members','line_number':2433,'multiline':False]['text':'!defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED)','line_number':2442,'multiline':False]['text':'','line_number':2607,'multiline':False]['text':'!defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_CONTAINER_DOXYGEN_INVOKED)','line_number':2611,'multiline':False]['text':'
+   void unsafe_uninitialized_grow_front(size_type n)
+   {
+      BOOST_ASSERT(n >= size());
+
+      size_type need = n - size();
+
+      if (need > front_free_capacity())
+      {
+         reallocate_at(n + back_free_capacity(), need);
+      }
+
+      m_.set_front_idx(m_.front_idx - need);
+   }
+
+   void unsafe_uninitialized_shrink_front(size_type n)
+   {
+      BOOST_ASSERT(n <= size());
+
+      size_type doesnt_need = size() - n;
+      m_.set_front_idx(m_.front_idx + doesnt_need);
+   }
+
+   void unsafe_uninitialized_grow_back(size_type n)
+   {
+      BOOST_ASSERT(n >= size());
+
+      size_type need = n - size();
+
+      if (need > back_free_capacity())
+      {
+         reallocate_at(n + front_free_capacity(), front_free_capacity());
+      }
+
+      m_.set_back_idx(m_.back_idx + need);
+   }
+
+   void unsafe_uninitialized_shrink_back(size_type n)
+   {
+      BOOST_ASSERT(n <= size());
+
+      size_type doesnt_need = size() - n;
+      m_.set_back_idx(m_.back_idx - doesnt_need);
+   }
+','line_number':2612,'multiline':True]['text':'Safe cast, allocate() will handle stored_size_type overflow','line_number':2668,'multiline':False]['text':' fast path','line_number':2681,'multiline':False]['text':' secondary fast path','line_number':2687,'multiline':False]['text':' if we move enough, it can be done without reallocation','line_number':2704,'multiline':False]['text':' reallocate','line_number':2772,'multiline':False]['text':' guard allocation','line_number':2776,'multiline':False]['text':' construct new element (and guard it)','line_number':2787,'multiline':False]['text':' move front-pos (possibly guarded)','line_number':2796,'multiline':False]['text':' move pos+1-end (possibly guarded)','line_number':2800,'multiline':False]['text':' cleanup','line_number':2803,'multiline':False]['text':' release alloc and other guards','line_number':2807,'multiline':False]['text':' rebind members','line_number':2812,'multiline':False]['text':'First detect overflow on smaller stored_size_types','line_number':2930,'multiline':False]['text':'static cast sizes, as the allocation function will take care of overflows','line_number':2957,'multiline':False]['text':'static cast sizes, as the allocation function will take care of overflows','line_number':2968,'multiline':False]['text':'static cast sizes, as the allocation function will take care of overflows','line_number':2979,'multiline':False]['text':' ifdef BOOST_CONTAINER_DEVECTOR_ALLOC_STATS','line_number':3019,'multiline':False]['text':' ifndef BOOST_CONTAINER_DOXYGEN_INVOKED','line_number':3021,'multiline':False]['text':' namespace boost::container','line_number':3024,'multiline':False]['text':' BOOST_CONTAINER_DEVECTOR_HPP','line_number':3028,'multiline':False]

@@ -1,0 +1,537 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':'
+ * High-level interface to the JS garbage collector.
+ ','line_number':7,'multiline':True]['text':' namespace gc','line_number':27,'multiline':False]['text':' namespace gcstats','line_number':30,'multiline':False]['text':' namespace js','line_number':31,'multiline':False]['text':' Options used when starting a GC.','line_number':35,'multiline':False]['text':' Normal GC invocation.','line_number':37,'multiline':False]['text':'','line_number':38,'multiline':False]['text':' Some objects that are unreachable from the program may still be alive after','line_number':39,'multiline':False]['text':' collection because of internal references','line_number':40,'multiline':False]['text':' Try to release as much memory as possible by clearing internal caches,','line_number':43,'multiline':False]['text':' aggressively discarding JIT code and decommitting unused chunks. This','line_number':44,'multiline':False]['text':' ensures all unreferenced objects are removed from the system.','line_number':45,'multiline':False]['text':'','line_number':46,'multiline':False]['text':' Finally, compact the GC heap.','line_number':47,'multiline':False]['text':' namespace JS','line_number':51,'multiline':False]['text':'*
+   * Maximum nominal heap before last ditch GC.
+   *
+   * Soft limit on the number of bytes we are allowed to allocate in the GC
+   * heap. Attempts to allocate gcthings over this limit will return null and
+   * subsequently invoke the standard OOM machinery, independent of available
+   * physical memory.
+   *
+   * Pref: javascript.options.mem.max
+   * Default: 0xffffffff
+   ','line_number':54,'multiline':True]['text':'*
+   * Maximum size of the generational GC nurseries.
+   *
+   * This will be rounded to the nearest gc::ChunkSize.
+   *
+   * Pref: javascript.options.mem.nursery.max_kb
+   * Default: JS::DefaultNurseryMaxBytes
+   ','line_number':67,'multiline':True]['text':'* Amount of bytes allocated by the GC. ','line_number':77,'multiline':True]['text':'* Number of times GC has been invoked. Includes both major and minor GC. ','line_number':80,'multiline':True]['text':'*
+   * Whether incremental GC is enabled. If not, GC will always run to
+   * completion.
+   *
+   * prefs: javascript.options.mem.gc_incremental.
+   * Default: false
+   ','line_number':83,'multiline':True]['text':'*
+   * Whether per-zone GC is enabled. If not, all zones are collected every time.
+   *
+   * prefs: javascript.options.mem.gc_per_zone
+   * Default: false
+   ','line_number':92,'multiline':True]['text':'* Number of cached empty GC chunks. ','line_number':100,'multiline':True]['text':'* Total number of allocated GC chunks. ','line_number':103,'multiline':True]['text':'*
+   * Max milliseconds to spend in an incremental GC slice.
+   *
+   * A value of zero means there is no maximum.
+   *
+   * Pref: javascript.options.mem.gc_incremental_slice_ms
+   * Default: DefaultTimeBudgetMS.
+   ','line_number':106,'multiline':True]['text':'*
+   * Maximum size the GC mark stack can grow to.
+   *
+   * Pref: none
+   * Default: MarkStack::DefaultCapacity
+   ','line_number':116,'multiline':True]['text':'*
+   * The "do we collect?" decision depends on various parameters and can be
+   * summarised as:
+   *
+   *   ZoneSize > Max(ThresholdBase, LastSize) * GrowthFactor * ThresholdFactor
+   *
+   * Where
+   *   ZoneSize: Current size of this zone.
+   *   LastSize: Heap size immediately after the most recent collection.
+   *   ThresholdBase: The JSGC_ALLOCATION_THRESHOLD parameter
+   *   GrowthFactor: A number above 1, calculated based on some of the
+   *                 following parameters.
+   *                 See computeZoneHeapGrowthFactorForHeapSize() in GC.cpp
+   *   ThresholdFactor: 1.0 to trigger an incremental collections or between
+   *                    JSGC_SMALL_HEAP_INCREMENTAL_LIMIT and
+   *                    JSGC_LARGE_HEAP_INCREMENTAL_LIMIT to trigger a
+   *                    non-incremental collection.
+   *
+   * The RHS of the equation above is calculated and sets
+   * zone->gcHeapThreshold.bytes(). When gcHeapSize.bytes() exeeds
+   * gcHeapThreshold.bytes() for a zone, the zone may be scheduled for a GC.
+   ','line_number':124,'multiline':True]['text':'*
+   * GCs less than this far apart in milliseconds will be considered
+   * 'high-frequency GCs'.
+   *
+   * Pref: javascript.options.mem.gc_high_frequency_time_limit_ms
+   * Default: HighFrequencyThreshold
+   ','line_number':147,'multiline':True]['text':'*
+   * Upper limit for classifying a heap as small (MB).
+   *
+   * Dynamic heap growth thresholds are based on whether the heap is small,
+   * medium or large. Heaps smaller than this size are classified as small;
+   * larger heaps are classified as medium or large.
+   *
+   * Pref: javascript.options.mem.gc_small_heap_size_max_mb
+   * Default: SmallHeapSizeMaxBytes
+   ','line_number':156,'multiline':True]['text':'*
+   * Lower limit for classifying a heap as large (MB).
+   *
+   * Dynamic heap growth thresholds are based on whether the heap is small,
+   * medium or large. Heaps larger than this size are classified as large;
+   * smaller heaps are classified as small or medium.
+   *
+   * Pref: javascript.options.mem.gc_large_heap_size_min_mb
+   * Default: LargeHeapSizeMinBytes
+   ','line_number':168,'multiline':True]['text':'*
+   * Heap growth factor for small heaps in the high-frequency GC state.
+   *
+   * Pref: javascript.options.mem.gc_high_frequency_small_heap_growth
+   * Default: HighFrequencySmallHeapGrowth
+   ','line_number':180,'multiline':True]['text':'*
+   * Heap growth factor for large heaps in the high-frequency GC state.
+   *
+   * Pref: javascript.options.mem.gc_high_frequency_large_heap_growth
+   * Default: HighFrequencyLargeHeapGrowth
+   ','line_number':188,'multiline':True]['text':'*
+   * Heap growth factor for low frequency GCs.
+   *
+   * This factor is applied regardless of the size of the heap when not in the
+   * high-frequency GC state.
+   *
+   * Pref: javascript.options.mem.gc_low_frequency_heap_growth
+   * Default: LowFrequencyHeapGrowth
+   ','line_number':196,'multiline':True]['text':'*
+   * Lower limit for collecting a zone.
+   *
+   * Zones smaller than this size will not normally be collected.
+   *
+   * Pref: javascript.options.mem.gc_allocation_threshold_mb
+   * Default GCZoneAllocThresholdBase
+   ','line_number':207,'multiline':True]['text':'*
+   * We try to keep at least this many unused chunks in the free chunk pool at
+   * all times, even after a shrinking GC.
+   *
+   * Pref: javascript.options.mem.gc_min_empty_chunk_count
+   * Default: MinEmptyChunkCount
+   ','line_number':217,'multiline':True]['text':'*
+   * We never keep more than this many unused chunks in the free chunk
+   * pool.
+   *
+   * Pref: javascript.options.mem.gc_min_empty_chunk_count
+   * Default: MinEmptyChunkCount
+   ','line_number':226,'multiline':True]['text':'*
+   * Whether compacting GC is enabled.
+   *
+   * Pref: javascript.options.mem.gc_compacting
+   * Default: CompactingEnabled
+   ','line_number':235,'multiline':True]['text':'*
+   * Limit of how far over the incremental trigger threshold we allow the heap
+   * to grow before finishing a collection non-incrementally, for small heaps.
+   *
+   * We trigger an incremental GC when a trigger threshold is reached but the
+   * collection may not be fast enough to keep up with the mutator. At some
+   * point we finish the collection non-incrementally.
+   *
+   * Default: SmallHeapIncrementalLimit
+   * Pref: javascript.options.mem.gc_small_heap_incremental_limit
+   ','line_number':243,'multiline':True]['text':'*
+   * Limit of how far over the incremental trigger threshold we allow the heap
+   * to grow before finishing a collection non-incrementally, for large heaps.
+   *
+   * Default: LargeHeapIncrementalLimit
+   * Pref: javascript.options.mem.gc_large_heap_incremental_limit
+   ','line_number':256,'multiline':True]['text':'*
+   * Attempt to run a minor GC in the idle time if the free space falls
+   * below this number of bytes.
+   *
+   * Default: NurseryChunkUsableSize / 4
+   * Pref: None
+   ','line_number':265,'multiline':True]['text':'*
+   * If this percentage of the nursery is tenured and the nursery is at least
+   * 4MB, then proceed to examine which groups we should pretenure.
+   *
+   * Default: PretenureThreshold
+   * Pref: None
+   ','line_number':274,'multiline':True]['text':'*
+   * If the above condition is met, then any object group that tenures more than
+   * this number of objects will be pretenured (if it can be).
+   *
+   * Default: PretenureGroupThreshold
+   * Pref: None
+   ','line_number':283,'multiline':True]['text':'*
+   * Attempt to run a minor GC in the idle time if the free space falls
+   * below this percentage (from 0 to 99).
+   *
+   * Default: 25
+   * Pref: None
+   ','line_number':292,'multiline':True]['text':'*
+   * Minimum size of the generational GC nurseries.
+   *
+   * This value will be rounded to the nearest Nursery::SubChunkStep if below
+   * gc::ChunkSize, otherwise it'll be rounded to the nearest gc::ChunkSize.
+   *
+   * Default: Nursery::SubChunkLimit
+   * Pref: javascript.options.mem.nursery.min_kb
+   ','line_number':301,'multiline':True]['text':'*
+   * The minimum time to allow between triggering last ditch GCs in seconds.
+   *
+   * Default: 60 seconds
+   * Pref: None
+   ','line_number':312,'multiline':True]['text':'*
+   * The delay (in heapsize kilobytes) between slices of an incremental GC.
+   *
+   * Default: ZoneAllocDelayBytes
+   ','line_number':320,'multiline':True]['text':'
+   * The current size of the nursery.
+   *
+   * This parameter is read-only.
+   ','line_number':327,'multiline':True]['text':'*
+   * Retained size base value for calculating malloc heap threshold.
+   *
+   * Default: MallocThresholdBase
+   ','line_number':334,'multiline':True]['text':'*
+   * Growth factor for calculating malloc heap threshold.
+   *
+   * Default: MallocGrowthFactor
+   ','line_number':341,'multiline':True]['text':'*
+   * Whether incremental weakmap marking is enabled.
+   *
+   * Pref: javascript.options.mem.incremental_weakmap
+   * Default: IncrementalWeakMarkEnabled
+   ','line_number':348,'multiline':True]['text':'*
+   * The chunk size in bytes for this system.
+   *
+   * This parameter is read-only.
+   ','line_number':356,'multiline':True]['text':'*
+   * The number of background threads to use for parallel GC work for each CPU
+   * core, expressed as an integer percentage.
+   *
+   * Pref: javascript.options.mem.gc_helper_thread_ratio
+   ','line_number':363,'multiline':True]['text':'*
+   * The maximum number of background threads to use for parallel GC work.
+   *
+   * Pref: javascript.options.mem.gc_max_helper_threads
+   ','line_number':371,'multiline':True]['text':'*
+   * The number of background threads to use for parallel GC work.
+   *
+   * This parameter is read-only and is set based on the
+   * JSGC_HELPER_THREAD_RATIO and JSGC_MAX_HELPER_THREADS parameters.
+   ','line_number':378,'multiline':True]['text':'*
+   * If the percentage of the tenured strings exceeds this threshold, string
+   * will be allocated in tenured heap instead. (Default is allocated in
+   * nursery.)
+   ','line_number':386,'multiline':True]['text':'*
+   * If the finalization rate of the tenured strings exceeds this threshold,
+   * string will be allocated in nursery.
+   ','line_number':393,'multiline':True]['text':'*
+   * A number that is incremented on every major GC slice.
+   ','line_number':399,'multiline':True]['text':'*
+   * A number that is incremented on every minor GC.
+   ','line_number':404,'multiline':True]['text':'*
+   * JS::RunIdleTimeGCTask will collect the nursery if it hasn't been collected
+   * in this many milliseconds.
+   *
+   * Default: 5000
+   * Pref: None
+   ','line_number':409,'multiline':True]['text':'*
+   * The system page size in KB.
+   *
+   * This parameter is read-only.
+   ','line_number':418,'multiline':True]['text':'
+ * Generic trace operation that calls JS::TraceEdge on each traceable thing's
+ * location reachable from data.
+ ','line_number':426,'multiline':True]['text':'*
+   * Called when preparing to sweep a group of zones, before anything has been
+   * swept.  The collector will not yield to the mutator before calling the
+   * callback with JSFINALIZE_GROUP_START status.
+   ','line_number':437,'multiline':True]['text':'*
+   * Called after preparing to sweep a group of zones. Weak references to
+   * unmarked things have been removed at this point, but no GC things have
+   * been swept. The collector may yield to the mutator after this point.
+   ','line_number':444,'multiline':True]['text':'*
+   * Called after sweeping a group of zones. All dead GC things have been
+   * swept at this point.
+   ','line_number':451,'multiline':True]['text':'*
+   * Called at the end of collection when everything has been swept.
+   ','line_number':457,'multiline':True]['text':'
+ * This is called to tell the embedding that a FinalizationRegistry object has
+ * cleanup work, and that the engine should be called back at an appropriate
+ * later time to perform this cleanup, by calling the function |doCleanup|.
+ *
+ * This callback must not do anything that could cause GC.
+ ','line_number':472,'multiline':True]['text':'*
+ * Each external string has a pointer to JSExternalStringCallbacks. Embedders
+ * can use this to implement custom finalization or memory reporting behavior.
+ ','line_number':482,'multiline':True]['text':'*
+   * Finalizes external strings created by JS_NewExternalString. The finalizer
+   * can be called off the main thread.
+   ','line_number':487,'multiline':True]['text':'*
+   * Callback used by memory reporting to ask the embedder how much memory an
+   * external string is keeping alive.  The embedder is expected to return a
+   * value that corresponds to the size of the allocation that will be released
+   * by the finalizer callback above.
+   *
+   * Implementations of this callback MUST NOT do anything that can cause GC.
+   ','line_number':493,'multiline':True]['text':' Reasons internal to the JS engine. ','line_number':508,'multiline':True]['text':'                                                                   \
+   * Reasons from Firefox.                                             \
+   *                                                                   \
+   * The JS engine attaches special meanings to some of these reasons. \
+   ','line_number':543,'multiline':True]['text':' Reasons reserved for embeddings. ','line_number':572,'multiline':True]['text':'
+   * For telemetry, we want to keep a fixed max bucket size over time so we
+   * don't have to switch histograms. 100 is conservative; but the cost of extra
+   * buckets seems to be low while the cost of switching histograms is high.
+   ','line_number':593,'multiline':True]['text':'*
+ * Get a statically allocated C string explaining the given GC reason.
+ ','line_number':601,'multiline':True]['text':'*
+ * Return true if the GC reason is internal to the JS engine.
+ ','line_number':606,'multiline':True]['text':'
+ * Zone GC:
+ *
+ * SpiderMonkey's GC is capable of performing a collection on an arbitrary
+ * subset of the zones in the system. This allows an embedding to minimize
+ * collection time by only collecting zones that have run code recently,
+ * ignoring the parts of the heap that are unlikely to have changed.
+ *
+ * When triggering a GC using one of the functions below, it is first necessary
+ * to select the zones to be collected. To do this, you can call
+ * PrepareZoneForGC on each zone, or you can call PrepareForFullGC to select
+ * all zones. Failing to select any zone is an error.
+ ','line_number':611,'multiline':True]['text':'*
+ * Schedule the given zone to be collected as part of the next GC.
+ ','line_number':625,'multiline':True]['text':'*
+ * Schedule all zones to be collected in the next GC.
+ ','line_number':630,'multiline':True]['text':'*
+ * When performing an incremental GC, the zones that were selected for the
+ * previous incremental slice must be selected in subsequent slices as well.
+ * This function selects those slices automatically.
+ ','line_number':635,'multiline':True]['text':'*
+ * Returns true if any zone in the system has been scheduled for GC with one of
+ * the functions above or by the JS engine.
+ ','line_number':642,'multiline':True]['text':'*
+ * Undoes the effect of the Prepare methods above. The given zone will not be
+ * collected in the next GC.
+ ','line_number':648,'multiline':True]['text':'
+ * Non-Incremental GC:
+ *
+ * The following functions perform a non-incremental GC.
+ ','line_number':654,'multiline':True]['text':'*
+ * Performs a non-incremental collection of all selected zones.
+ ','line_number':660,'multiline':True]['text':'
+ * Incremental GC:
+ *
+ * Incremental GC divides the full mark-and-sweep collection into multiple
+ * slices, allowing client JavaScript code to run between each slice. This
+ * allows interactive apps to avoid long collection pauses. Incremental GC does
+ * not make collection take less time, it merely spreads that time out so that
+ * the pauses are less noticable.
+ *
+ * For a collection to be carried out incrementally the following conditions
+ * must be met:
+ *  - The collection must be run by calling JS::IncrementalGC() rather than
+ *    JS_GC().
+ *  - The GC parameter JSGC_INCREMENTAL_GC_ENABLED must be true.
+ *
+ * Note: Even if incremental GC is enabled and working correctly,
+ *       non-incremental collections can still happen when low on memory.
+ ','line_number':666,'multiline':True]['text':'*
+ * Begin an incremental collection and perform one slice worth of work. When
+ * this function returns, the collection may not be complete.
+ * IncrementalGCSlice() must be called repeatedly until
+ * !IsIncrementalGCInProgress(cx).
+ *
+ * Note: SpiderMonkey's GC is not realtime. Slices in practice may be longer or
+ *       shorter than the requested interval.
+ ','line_number':685,'multiline':True]['text':'*
+ * Perform a slice of an ongoing incremental collection. When this function
+ * returns, the collection may not be complete. It must be called repeatedly
+ * until !IsIncrementalGCInProgress(cx).
+ *
+ * Note: SpiderMonkey's GC is not realtime. Slices in practice may be longer or
+ *       shorter than the requested interval.
+ ','line_number':699,'multiline':True]['text':'*
+ * Return whether an incremental GC has work to do on the foreground thread and
+ * would make progress if a slice was run now. If this returns false then the GC
+ * is waiting for background threads to finish their work and a slice started
+ * now would return immediately.
+ ','line_number':710,'multiline':True]['text':'*
+ * If IsIncrementalGCInProgress(cx), this call finishes the ongoing collection
+ * by performing an arbitrarily long slice. If !IsIncrementalGCInProgress(cx),
+ * this is equivalent to NonIncrementalGC. When this function returns,
+ * IsIncrementalGCInProgress(cx) will always be false.
+ ','line_number':718,'multiline':True]['text':'*
+ * If IsIncrementalGCInProgress(cx), this call aborts the ongoing collection and
+ * performs whatever work needs to be done to return the collector to its idle
+ * state. This may take an arbitrarily long time. When this function returns,
+ * IsIncrementalGCInProgress(cx) will always be false.
+ ','line_number':726,'multiline':True]['text':' The `JS::dbg::GarbageCollectionEvent` class is essentially a view of the','line_number':736,'multiline':False]['text':' `js::gcstats::Statistics` data without the uber implementation-specific bits.','line_number':737,'multiline':False]['text':' It should generally be palatable for web developers.','line_number':738,'multiline':False]['text':' The major GC number of the GC cycle this data pertains to.','line_number':740,'multiline':False]['text':' Reference to a non-owned, statically allocated C string. This is a very','line_number':743,'multiline':False]['text':' short reason explaining why a GC was triggered.','line_number':744,'multiline':False]['text':' Reference to a nullable, non-owned, statically allocated C string. If the','line_number':747,'multiline':False]['text':' collection was forced to be non-incremental, this is a short reason of','line_number':748,'multiline':False]['text':' why the GC could not perform an incremental collection.','line_number':749,'multiline':False]['text':' Represents a single slice of a possibly multi-slice incremental garbage','line_number':752,'multiline':False]['text':' collection.','line_number':753,'multiline':False]['text':' The set of garbage collection slices that made up this GC cycle.','line_number':759,'multiline':False]['text':' namespace dbg','line_number':781,'multiline':False]['text':'
+   * During GC, the GC is bracketed by GC_CYCLE_BEGIN/END callbacks. Each
+   * slice between those (whether an incremental or the sole non-incremental
+   * slice) is bracketed by GC_SLICE_BEGIN/GC_SLICE_END.
+   ','line_number':784,'multiline':True]['text':'*
+ * The GC slice callback is called at the beginning and end of each slice. This
+ * callback may be used for GC notifications as well as to perform additional
+ * marking.
+ ','line_number':828,'multiline':True]['text':'*
+ * Describes the progress of an observed nursery collection.
+ ','line_number':836,'multiline':True]['text':'*
+   * The nursery collection is starting.
+   ','line_number':840,'multiline':True]['text':'*
+   * The nursery collection is ending.
+   ','line_number':844,'multiline':True]['text':'*
+ * A nursery collection callback receives the progress of the nursery collection
+ * and the reason for the collection.
+ ','line_number':850,'multiline':True]['text':'*
+ * Set the nursery collection callback for the given runtime. When set, it will
+ * be called at the start and end of every nursery collection.
+ ','line_number':858,'multiline':True]['text':'*
+ * The purge gray callback is called after any COMPARTMENT_REVIVED GC in which
+ * the majority of compartments have been marked gray.
+ ','line_number':867,'multiline':True]['text':'*
+ * Incremental GC defaults to enabled, but may be disabled for testing or in
+ * embeddings that have not yet implemented barriers on their native classes.
+ * There is not currently a way to re-enable incremental GC once it has been
+ * disabled on the runtime.
+ ','line_number':874,'multiline':True]['text':'*
+ * Returns true if incremental GC is enabled. Simply having incremental GC
+ * enabled is not sufficient to ensure incremental collections are happening.
+ * See the comment "Incremental GC" above for reasons why incremental GC may be
+ * suppressed. Inspection of the "nonincremental reason" field of the
+ * GCDescription returned by GCSliceCallback may help narrow down the cause if
+ * collections are not happening incrementally when expected.
+ ','line_number':882,'multiline':True]['text':'*
+ * Returns true while an incremental GC is ongoing, both when actively
+ * collecting and between slices.
+ ','line_number':892,'multiline':True]['text':'*
+ * Returns true while an incremental GC is ongoing, both when actively
+ * collecting and between slices.
+ ','line_number':898,'multiline':True]['text':'*
+ * Returns true if the most recent GC ran incrementally.
+ ','line_number':904,'multiline':True]['text':'
+ * Generational GC:
+ *
+ * Note: Generational GC is not yet enabled by default. The following class
+ *       is non-functional unless SpiderMonkey was configured with
+ *       --enable-gcgenerational.
+ ','line_number':909,'multiline':True]['text':'* Ensure that generational GC is disabled within some scope. ','line_number':917,'multiline':True]['text':'*
+ * Returns true if generational allocation and collection is currently enabled
+ * on the given runtime.
+ ','line_number':926,'multiline':True]['text':'*
+ * Enable or disable support for pretenuring allocations based on their
+ * allocation site.
+ ','line_number':932,'multiline':True]['text':'*
+ * Pass a subclass of this "abstract" class to callees to require that they
+ * never GC. Subclasses can use assertions or the hazard analysis to ensure no
+ * GC happens.
+ ','line_number':938,'multiline':True]['text':'*
+ * Diagnostic assert (see MOZ_DIAGNOSTIC_ASSERT) that GC cannot occur while this
+ * class is live. This class does not disable the static rooting hazard
+ * analysis.
+ *
+ * This works by entering a GC unsafe region, which is checked on allocation and
+ * on GC.
+ ','line_number':949,'multiline':True]['text':' This gets the context from TLS if it is not passed in.','line_number':962,'multiline':False]['text':'*
+ * Disable the static rooting hazard analysis in the live region and assert in
+ * debug builds if any allocation that could potentially trigger a GC occurs
+ * while this guard object is live. This is most useful to help the exact
+ * rooting hazard analysis in complex regions, since it cannot understand
+ * dataflow.
+ *
+ * Note: GC behavior is unpredictable even when deterministic and is generally
+ *       non-deterministic in practice. The fact that this guard has not
+ *       asserted is not a guarantee that a GC cannot happen in the guarded
+ *       region. As a rule, anyone performing a GC unsafe action should
+ *       understand the GC properties of all code in that region and ensure
+ *       that the hazard analysis is correct for that code, rather than relying
+ *       on this class.
+ ','line_number':972,'multiline':True]['text':'*
+ * Assert that code is only ever called from a GC callback, disable the static
+ * rooting hazard analysis and assert if any allocation that could potentially
+ * trigger a GC occurs while this guard object is live.
+ *
+ * This is useful to make the static analysis ignore code that runs in GC
+ * callbacks.
+ ','line_number':1000,'multiline':True]['text':'*
+ * Place AutoCheckCannotGC in scopes that you believe can never GC. These
+ * annotations will be verified both dynamically via AutoAssertNoGC, and
+ * statically with the rooting hazard analysis (implemented by making the
+ * analysis consider AutoCheckCannotGC to be a GC pointer, and therefore
+ * complain if it is live across a GC call.) It is useful when dealing with
+ * internal pointers to GC things where the GC thing itself may not be present
+ * for the static analysis: e.g. acquiring inline chars from a JSString* on the
+ * heap.
+ *
+ * We only do the assertion checking in DEBUG builds.
+ ','line_number':1017,'multiline':True]['text':'
+ * Internal to Firefox.
+ ','line_number':1043,'multiline':True]['text':' namespace JS ','line_number':1048,'multiline':True]['text':'*
+ * Register externally maintained GC roots.
+ *
+ * traceOp: the trace operation. For each root the implementation should call
+ *          JS::TraceEdge whenever the root contains a traceable thing.
+ * data:    the data argument to pass to each invocation of traceOp.
+ ','line_number':1053,'multiline':True]['text':'* Undo a call to JS_AddExtraGCRootsTracer. ','line_number':1064,'multiline':True]['text':'
+ * Weak pointers and garbage collection
+ *
+ * Weak pointers are by their nature not marked as part of garbage collection,
+ * but they may need to be updated in two cases after a GC:
+ *
+ *  1) Their referent was found not to be live and is about to be finalized
+ *  2) Their referent has been moved by a compacting GC
+ *
+ * To handle this, any part of the system that maintain weak pointers to
+ * JavaScript GC things must register a callback with
+ * JS_(Add,Remove)WeakPointer{ZoneGroup,Compartment}Callback(). This callback
+ * must then call JS_UpdateWeakPointerAfterGC() on all weak pointers it knows
+ * about.
+ *
+ * Since sweeping is incremental, we have several callbacks to avoid repeatedly
+ * having to visit all embedder structures. The WeakPointerZonesCallback is
+ * called once for each strongly connected group of zones, whereas the
+ * WeakPointerCompartmentCallback is called once for each compartment that is
+ * visited while sweeping. Structures that cannot contain references in more
+ * than one compartment should sweep the relevant per-compartment structures
+ * using the latter callback to minimizer per-slice overhead.
+ *
+ * The argument to JS_UpdateWeakPointerAfterGC() is an in-out param. If the
+ * referent is about to be finalized the pointer will be set to null. If the
+ * referent has been moved then the pointer will be updated to point to the new
+ * location.
+ *
+ * Callers of this method are responsible for updating any state that is
+ * dependent on the object's address. For example, if the object's address is
+ * used as a key in a hashtable, then the object must be removed and
+ * re-inserted with the correct hash.
+ ','line_number':1087,'multiline':True]['text':'*
+ * Create a new JSString whose chars member refers to external memory, i.e.,
+ * memory requiring application-specific finalization.
+ ','line_number':1155,'multiline':True]['text':'*
+ * Create a new JSString whose chars member may refer to external memory.
+ * If a new external string is allocated, |*allocatedExternal| is set to true.
+ * Otherwise the returned string is either not an external string or an
+ * external string allocated by a previous call and |*allocatedExternal| is set
+ * to false. If |*allocatedExternal| is false, |fin| won't be called.
+ ','line_number':1163,'multiline':True]['text':'*
+ * Return the 'callbacks' arg passed to JS_NewExternalString or
+ * JS_NewMaybeExternalString.
+ ','line_number':1174,'multiline':True]['text':'*
+ * Clear kept alive objects in JS WeakRef.
+ * https://tc39.es/proposal-weakrefs/#sec-clear-kept-objects
+ ','line_number':1190,'multiline':True]['text':' namespace JS','line_number':1200,'multiline':False]['text':'*
+ * Create an object providing access to the garbage collector's internal notion
+ * of the current state of memory (both GC heap memory and GCthing-controlled
+ * malloc memory.
+ ','line_number':1205,'multiline':True]['text':'
+ * Run the finalizer of a nursery-allocated JSObject that is known to be dead.
+ *
+ * This is a dangerous operation - only use this if you know what you're doing!
+ *
+ * This is used by the browser to implement nursery-allocated wrapper cached
+ * wrappers.
+ ','line_number':1212,'multiline':True]['text':' namespace gc ','line_number':1223,'multiline':True]['text':' namespace js ','line_number':1224,'multiline':True]['text':' js_GCAPI_h ','line_number':1243,'multiline':True]

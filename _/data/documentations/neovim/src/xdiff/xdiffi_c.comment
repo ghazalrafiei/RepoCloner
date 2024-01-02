@@ -1,0 +1,243 @@
+['text':'
+ *  LibXDiff by Davide Libenzi ( File Differential Library )
+ *  Copyright (C) 2003	Davide Libenzi
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public
+ *  License as published by the Free Software Foundation; either
+ *  version 2.1 of the License, or (at your option) any later version.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, see
+ *  <http://www.gnu.org/licenses/>.
+ *
+ *  Davide Libenzi <davidel@xmailserver.org>
+ *
+ ','line_number':1,'multiline':True]['text':'
+ * See "An O(ND) Difference Algorithm and its Variations", by Eugene Myers.
+ * Basically considers a "box" (off1, off2, lim1, lim2) and scan from both
+ * the forward diagonal starting from (off1, off2) and the backward diagonal
+ * starting from (lim1, lim2). If the K values on the same diagonal crosses
+ * returns the furthest point of reach. We might encounter expensive edge cases
+ * using this algorithm, so a little bit of heuristic is needed to cut the
+ * search and to return a suboptimal point.
+ ','line_number':36,'multiline':True]['text':'
+	 * Set initial diagonal values for both forward and backward path.
+	 ','line_number':56,'multiline':True]['text':'
+		 * We need to extend the diagonal "domain" by one. If the next
+		 * values exits the box boundaries we need to change it in the
+		 * opposite direction because (max - min) must be a power of
+		 * two.
+		 *
+		 * Also we initialize the external K value to -1 so that we can
+		 * avoid extra conditions in the check inside the core loop.
+		 ','line_number':65,'multiline':True]['text':'
+		 * We need to extend the diagonal "domain" by one. If the next
+		 * values exits the box boundaries we need to change it in the
+		 * opposite direction because (max - min) must be a power of
+		 * two.
+		 *
+		 * Also we initialize the external K value to -1 so that we can
+		 * avoid extra conditions in the check inside the core loop.
+		 ','line_number':102,'multiline':True]['text':'
+		 * If the edit cost is above the heuristic trigger and if
+		 * we got a good snake, we sample current diagonals to see
+		 * if some of them have reached an "interesting" path. Our
+		 * measure is a function of the distance from the diagonal
+		 * corner (i1 + i2) penalized with the distance from the
+		 * mid diagonal itself. If this value is above the current
+		 * edit cost times a magic factor (XDL_K_HEUR) we consider
+		 * it interesting.
+		 ','line_number':142,'multiline':True]['text':'
+		 * Enough is enough. We spent too much time here and now we
+		 * collect the furthest reaching path using the (i1 + i2)
+		 * measure.
+		 ','line_number':202,'multiline':True]['text':'
+ * Rule: "Divide et Impera" (divide & conquer). Recursively split the box in
+ * sub-boxes by calling the box splitting function. Note that the real job
+ * (marking changed lines) is done in the two boundary reaching checks.
+ ','line_number':251,'multiline':True]['text':'
+	 * Shrink the box by walking through each diagonal snake (SW and NE).
+	 ','line_number':261,'multiline':True]['text':'
+	 * If one dimension is empty, then all records on the other one must
+	 * be obviously changed.
+	 ','line_number':267,'multiline':True]['text':'
+		 * Divide ...
+		 ','line_number':287,'multiline':True]['text':'
+		 * ... et Impera.
+		 ','line_number':296,'multiline':True]['text':'
+	 * Allocate and setup K vectors to be used by the differential
+	 * algorithm.
+	 *
+	 * One is to store the forward path and one to store the backward path.
+	 ','line_number':330,'multiline':True]['text':'
+ * If a line is indented more than this, xget_indent() just returns this value.
+ * This avoids having to do absurd amounts of work for data that are not
+ * human-readable text, and also ensures that the output of xget_indent fits within
+ * an int.
+ ','line_number':401,'multiline':True]['text':'
+ * Return the amount of indentation of the specified line, treating TAB as 8
+ * columns. Return -1 if line is empty or contains only whitespace. Clamp the
+ * output value at MAX_INDENT.
+ ','line_number':409,'multiline':True]['text':' ignore other whitespace characters ','line_number':428,'multiline':True]['text':' The line contains only whitespace. ','line_number':434,'multiline':True]['text':'
+ * If more than this number of consecutive blank rows are found, just return
+ * this value. This avoids requiring O(N^2) work for pathological cases, and
+ * also ensures that the output of score_split fits in an int.
+ ','line_number':438,'multiline':True]['text':' Characteristics measured about a hypothetical split position. ','line_number':445,'multiline':True]['text':'
+	 * Is the split at the end of the file (aside from any blank lines)?
+	 ','line_number':447,'multiline':True]['text':'
+	 * How much is the line immediately following the split indented (or -1
+	 * if the line is blank):
+	 ','line_number':452,'multiline':True]['text':'
+	 * How many consecutive lines above the split are blank?
+	 ','line_number':458,'multiline':True]['text':'
+	 * How much is the nearest non-blank line above the split indented (or
+	 * -1 if there is no such line)?
+	 ','line_number':463,'multiline':True]['text':'
+	 * How many lines after the line following the split are blank?
+	 ','line_number':469,'multiline':True]['text':'
+	 * How much is the nearest non-blank line after the line following the
+	 * split indented (or -1 if there is no such line)?
+	 ','line_number':474,'multiline':True]['text':' The effective indent of this split (smaller is preferred). ','line_number':482,'multiline':True]['text':' Penalty for this split (smaller is preferred). ','line_number':485,'multiline':True]['text':'
+ * Fill m with information about a hypothetical split of xdf above line split.
+ ','line_number':489,'multiline':True]['text':'
+ * The empirically-determined weight factors used by score_split() below.
+ * Larger values means that the position is a less favorable place to split.
+ *
+ * Note that scores are only ever compared against each other, so multiplying
+ * all of these weight/penalty values by the same factor wouldn't change the
+ * heuristic's behavior. Still, we need to set that arbitrary scale *somehow*.
+ * In practice, these numbers are chosen to be large enough that they can be
+ * adjusted relative to each other with sufficient precision despite using
+ * integer math.
+ ','line_number':532,'multiline':True]['text':' Penalty if there are no non-blank lines before the split ','line_number':544,'multiline':True]['text':' Penalty if there are no non-blank lines after the split ','line_number':547,'multiline':True]['text':' Multiplier for the number of blank lines around the split ','line_number':550,'multiline':True]['text':' Multiplier for the number of blank lines after the split ','line_number':553,'multiline':True]['text':'
+ * Penalties applied if the line is indented more than its predecessor
+ ','line_number':556,'multiline':True]['text':'
+ * Penalties applied if the line is indented less than both its predecessor and
+ * its successor
+ ','line_number':562,'multiline':True]['text':'
+ * Penalties applied if the line is indented less than its predecessor but not
+ * less than its successor
+ ','line_number':569,'multiline':True]['text':'
+ * We only consider whether the sum of the effective indents for splits are
+ * less than (-1), equal to (0), or greater than (+1) each other. The resulting
+ * value is multiplied by the following weight and combined with the penalty to
+ * determine the better of two scores.
+ ','line_number':576,'multiline':True]['text':'
+ * How far do we slide a hunk at most?
+ ','line_number':584,'multiline':True]['text':'
+ * Compute a badness score for the hypothetical split whose measurements are
+ * stored in m. The weight factors were determined empirically using the tools
+ * and corpus described in
+ *
+ *     https://github.com/mhagger/diff-slider-tools
+ *
+ * Also see that project if you want to improve the weights based on, for
+ * example, a larger or more diverse corpus.
+ ','line_number':589,'multiline':True]['text':'
+	 * A place to accumulate penalty factors (positive makes this index more
+	 * favored):
+	 ','line_number':601,'multiline':True]['text':'
+	 * Set post_blank to the number of blank lines following the split,
+	 * including the line immediately after the split:
+	 ','line_number':613,'multiline':True]['text':' Penalties based on nearby blank lines: ','line_number':620,'multiline':True]['text':' Note that the effective indent is -1 at the end of the file: ','line_number':631,'multiline':True]['text':' No additional adjustments needed. ','line_number':635,'multiline':True]['text':' No additional adjustments needed. ','line_number':637,'multiline':True]['text':'
+		 * The line is indented more than its predecessor.
+		 ','line_number':639,'multiline':True]['text':'
+		 * The line has the same indentation level as its predecessor.
+		 * No additional adjustments needed.
+		 ','line_number':646,'multiline':True]['text':'
+		 * The line is indented less than its predecessor. It could be
+		 * the block terminator of the previous block, but it could
+		 * also be the start of a new block (e.g., an "else" block, or
+		 * maybe the previous block didn't have a block terminator).
+		 * Try to distinguish those cases based on what comes next:
+		 ','line_number':651,'multiline':True]['text':'
+			 * The following line is indented more. So it is likely
+			 * that this line is the start of a block.
+			 ','line_number':659,'multiline':True]['text':'
+			 * That was probably the end of a block.
+			 ','line_number':667,'multiline':True]['text':' -1 if s1.effective_indent < s2->effective_indent, etc. ','line_number':679,'multiline':True]['text':'
+ * Represent a group of changed lines in an xdfile_t (i.e., a contiguous group
+ * of lines that was inserted or deleted from the corresponding version of the
+ * file). We consider there to be such a group at the beginning of the file, at
+ * the end of the file, and between any two unchanged lines, though most such
+ * groups will usually be empty.
+ *
+ * If the first line in a group is equal to the line following the group, then
+ * the group can be slid down. Similarly, if the last line in a group is equal
+ * to the line preceding the group, then the group can be slid up. See
+ * group_slide_down() and group_slide_up().
+ *
+ * Note that loops that are testing for changed lines in xdf->rchg do not need
+ * index bounding since the array is prepared with a zero at position -1 and N.
+ ','line_number':686,'multiline':True]['text':'
+	 * The index of the first changed line in the group, or the index of
+	 * the unchanged line above which the (empty) group is located.
+	 ','line_number':702,'multiline':True]['text':'
+	 * The index of the first unchanged line after the group. For an empty
+	 * group, end is equal to start.
+	 ','line_number':708,'multiline':True]['text':'
+ * Initialize g to point at the first group in xdf.
+ ','line_number':715,'multiline':True]['text':'
+ * Move g to describe the next (possibly empty) group in xdf and return 0. If g
+ * is already at the end of the file, do nothing and return -1.
+ ','line_number':725,'multiline':True]['text':'
+ * Move g to describe the previous (possibly empty) group in xdf and return 0.
+ * If g is already at the beginning of the file, do nothing and return -1.
+ ','line_number':741,'multiline':True]['text':'
+ * If g can be slid toward the end of the file, do so, and if it bumps into a
+ * following group, expand this group to include it. Return 0 on success or -1
+ * if g cannot be slid down.
+ ','line_number':757,'multiline':True]['text':'
+ * If g can be slid toward the beginning of the file, do so, and if it bumps
+ * into a previous group, expand this group to include it. Return 0 on success
+ * or -1 if g cannot be slid up.
+ ','line_number':778,'multiline':True]['text':'
+ * Move back and forward change groups for a consistent and pretty diff output.
+ * This also helps in finding joinable change groups and reducing the diff
+ * size.
+ ','line_number':805,'multiline':True]['text':'
+		 * If the group is empty in the to-be-compacted file, skip it:
+		 ','line_number':819,'multiline':True]['text':'
+		 * Now shift the change up and then down as far as possible in
+		 * each direction. If it bumps into any other changes, merge
+		 * them.
+		 ','line_number':825,'multiline':True]['text':'
+			 * Keep track of the last "end" index that causes this
+			 * group to align with a group of changed lines in the
+			 * other file. -1 indicates that we haven't found such
+			 * a match yet:
+			 ','line_number':833,'multiline':True]['text':' Shift the group backward as much as possible: ','line_number':841,'multiline':True]['text':'
+			 * This is this highest that this group can be shifted.
+			 * Record its end index:
+			 ','line_number':846,'multiline':True]['text':' Now shift the group forward as far as possible: ','line_number':855,'multiline':True]['text':'
+		 * If the group can be shifted, then we can possibly use this
+		 * freedom to produce a more intuitive diff.
+		 *
+		 * The group is currently shifted as far down as possible, so
+		 * the heuristics below only have to handle upwards shifts.
+		 ','line_number':867,'multiline':True]['text':' no shifting was possible ','line_number':876,'multiline':True]['text':'
+			 * Move the possibly merged group of changes back to
+			 * line up with the last group of changes from the
+			 * other file that it can align with.
+			 ','line_number':878,'multiline':True]['text':'
+			 * Indent heuristic: a group of pure add/delete lines
+			 * implies two splits, one between the end of the
+			 * "before" context and the start of the group, and
+			 * another between the end of the group and the
+			 * beginning of the "after" context. Some splits are
+			 * aesthetically better and some are worse. We compute
+			 * a badness "score" for each split, and add the scores
+			 * for the two splits to define a "score" for each
+			 * position that the group can be shifted to. Then we
+			 * pick the shift with the lowest score.
+			 ','line_number':890,'multiline':True]['text':' Move past the just-processed group: ','line_number':935,'multiline':True]['text':'
+	 * Trivial. Collects "groups" of changes and creates an edit script.
+	 ','line_number':954,'multiline':True]['text':' unused by Vim','line_number':1022,'multiline':False]['text':'
+		 * Do not override --ignore-blank-lines.
+		 ','line_number':1045,'multiline':True]

@@ -1,0 +1,517 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]['text':'
+ * ex_eval.c: functions for Ex command line for the +eval feature.
+ ','line_number':10,'multiline':True]['text':'
+ * Exception handling terms:
+ *
+ *	:try		":try" command		\
+ *	    ...		try block		|
+ *	:catch RE	":catch" command	|
+ *	    ...		catch clause		|- try conditional
+ *	:finally	":finally" command	|
+ *	    ...		finally clause		|
+ *	:endtry		":endtry" command	/
+ *
+ * The try conditional may have any number of catch clauses and at most one
+ * finally clause.  A ":throw" command can be inside the try block, a catch
+ * clause, the finally clause, or in a function called or script sourced from
+ * there or even outside the try conditional.  Try conditionals may be nested.
+ ','line_number':20,'multiline':True]['text':'
+ * Configuration whether an exception is thrown on error or interrupt.  When
+ * the preprocessor macros below evaluate to FALSE, an error (did_emsg) or
+ * interrupt (got_int) under an active try conditional terminates the script
+ * after the non-active finally clauses of all active try conditionals have been
+ * executed.  Otherwise, errors and/or interrupts are converted into catchable
+ * exceptions (did_throw additionally set), which terminate the script only if
+ * not caught.  For user exceptions, only did_throw is set.  (Note: got_int can
+ * be set asynchronously afterwards by a SIGINT, so did_throw && got_int is not
+ * a reliant test that the exception currently being thrown is an interrupt
+ * exception.  Similarly, did_emsg can be set afterwards on an error in an
+ * (unskipped) conditional command inside an inactive conditional, so did_throw
+ * && did_emsg is not a reliant test that the exception currently being thrown
+ * is an error exception.)  -  The macros can be defined as expressions checking
+ * for a variable that is allowed to be changed during execution of a script.
+ ','line_number':37,'multiline':True]['text':' Expressions used for testing during the development phase.','line_number':54,'multiline':False]['text':' Values used for the Vim release.','line_number':59,'multiline':False]['text':'
+ * When several errors appear in a row, setting "force_abort" is delayed until
+ * the failing command returned.  "cause_abort" is set to TRUE meanwhile, in
+ * order to indicate that situation.  This is useful when "force_abort" was set
+ * during execution of a function call from an expression: the aborting of the
+ * expression evaluation is done without producing any error messages, but all
+ * error messages on parsing errors during the expression evaluation are given
+ * (even if a try conditional is active).
+ ','line_number':66,'multiline':True]['text':'
+ * Return TRUE when immediately aborting on error, or when an interrupt
+ * occurred or an exception was thrown but not caught.  Use for ":{range}call"
+ * to check whether an aborted function that does not handle a range itself
+ * should be called again for the next line in the range.  Also used for
+ * cancelling expression evaluation after a function call caused an immediate
+ * abort.  Note that the first emsg() call temporarily resets "force_abort"
+ * until the throw point for error messages has been reached.  That is, during
+ * cancellation of an expression evaluation after an aborting function call or
+ * due to a parsing error, aborting() always returns the same value.
+ * "got_int" is also set by calling interrupt().
+ ','line_number':77,'multiline':True]['text':'
+ * The value of "force_abort" is temporarily reset by the first emsg() call
+ * during an expression evaluation, and "cause_abort" is used instead.  It might
+ * be necessary to restore "force_abort" even before the throw point for the
+ * error message has been reached.  update_force_abort() should be called then.
+ ','line_number':95,'multiline':True]['text':'
+ * Return TRUE if a command with a subcommand resulting in "retcode" should
+ * abort the script processing.  Can be used to suppress an autocommand after
+ * execution of a failing subcommand as long as the error message has not been
+ * displayed and actually caused the abortion.
+ ','line_number':108,'multiline':True]['text':'
+ * Return TRUE if a function with the "abort" flag should not be considered
+ * ended on an error.  This means that parsing commands is continued in order
+ * to find finally clauses to be executed, and that some errors in skipped
+ * commands are still reported.
+ ','line_number':120,'multiline':True]['text':' This function is only called after an error.  In this case, "force_abort"','line_number':129,'multiline':False]['text':' determines whether searching for finally clauses is necessary.','line_number':130,'multiline':False]['text':'
+ * cause_errthrow(): Cause a throw of an error exception if appropriate.
+ * Return TRUE if the error message should not be displayed by emsg().
+ * Sets "ignore", if the emsg() call should be ignored completely.
+ *
+ * When several messages appear in the same command, the first is usually the
+ * most specific one and used as the exception value.  The "severe" flag can be
+ * set to TRUE, if a later but severer message should be used instead.
+ ','line_number':134,'multiline':True]['text':'
+     * Do nothing when displaying the interrupt message or reporting an
+     * uncaught exception (which has already been discarded then) at the top
+     * level.  Also when no exception can be thrown.  The message will be
+     * displayed by emsg().
+     ','line_number':152,'multiline':True]['text':'
+     * If emsg() has not been called previously, temporarily reset
+     * "force_abort" until the throw point for error messages has been
+     * reached.  This ensures that aborting() returns the same value for all
+     * errors that appear in the same command.  This means particularly that
+     * for parsing errors during expression evaluation emsg() will be called
+     * multiply, even when the expression is evaluated from a finally clause
+     * that was activated due to an aborting error, interrupt, or exception.
+     ','line_number':161,'multiline':True]['text':'
+     * If no try conditional is active and no exception is being thrown and
+     * there has not been an error in a try conditional or a throw so far, do
+     * nothing (for compatibility of non-EH scripts).  The message will then
+     * be displayed by emsg().  When ":silent!" was used and we are not
+     * currently throwing an exception, do nothing.  The message text will
+     * then be stored to v:errmsg by emsg() without displaying it.
+     ','line_number':176,'multiline':True]['text':'
+     * Ignore an interrupt message when inside a try conditional or when an
+     * exception is being thrown or when an error in a try conditional or
+     * throw has been detected previously.  This is important in order that an
+     * interrupt exception is catchable by the innermost try conditional and
+     * not replaced by an interrupt message error exception.
+     ','line_number':187,'multiline':True]['text':'
+     * Ensure that all commands in nested function calls and sourced files
+     * are aborted immediately.
+     ','line_number':200,'multiline':True]['text':'
+     * When an exception is being thrown, some commands (like conditionals) are
+     * not skipped.  Errors in those commands may affect what of the subsequent
+     * commands are regarded part of catch and finally clauses.  Catching the
+     * exception would then cause execution of commands not intended by the
+     * user, who wouldn't even get aware of the problem.  Therefore, discard the
+     * exception currently being thrown to prevent it from being caught.  Just
+     * execute finally clauses and terminate.
+     ','line_number':206,'multiline':True]['text':' When discarding an interrupt exception, reset got_int to prevent the','line_number':217,'multiline':False]['text':' same interrupt being converted to an exception again and discarding','line_number':218,'multiline':False]['text':' the error exception we are about to throw here.','line_number':219,'multiline':False]['text':'
+	 * Print error message immediately without searching for a matching
+	 * catch clause; just finally clauses are executed before the script
+	 * is terminated.
+	 ','line_number':228,'multiline':True]['text':'
+	 * Prepare the throw of an error exception, so that everything will
+	 * be aborted (except for executing finally clauses), until the error
+	 * exception is caught; if still uncaught at the top level, the error
+	 * message will be displayed and the script processing terminated
+	 * then.  -  This function has no access to the conditional stack.
+	 * Thus, the actual throw is made after the failing command has
+	 * returned.  -  Throw only the first of several errors in a row, except
+	 * a severe error is following.
+	 ','line_number':238,'multiline':True]['text':' Skip the extra "Vim " prefix for message "E458".','line_number':278,'multiline':False]['text':' Get the source name and lnum now, it may change before','line_number':291,'multiline':False]['text':' reaching do_errthrow().','line_number':292,'multiline':False]['text':'
+ * Free a "msg_list" and the messages it contains.
+ ','line_number':303,'multiline':True]['text':'
+ * Free global "*msg_list" and the messages it contains, then set "*msg_list"
+ * to NULL.
+ ','line_number':322,'multiline':True]['text':'
+ * Throw the message specified in the call to cause_errthrow() above as an
+ * error exception.  If cstack is NULL, postpone the throw until do_cmdline()
+ * has returned (see do_one_cmd()).
+ ','line_number':333,'multiline':True]['text':'
+     * Ensure that all commands in nested function calls and sourced files
+     * are aborted immediately.
+     ','line_number':341,'multiline':True]['text':' If no exception is to be thrown or the conversion should be done after','line_number':351,'multiline':False]['text':' returning to a previous invocation of do_one_cmd(), do nothing.','line_number':352,'multiline':False]['text':'
+ * do_intthrow(): Replace the current exception by an interrupt or interrupt
+ * exception if appropriate.  Return TRUE if the current exception is discarded,
+ * FALSE otherwise.
+ ','line_number':368,'multiline':True]['text':'
+     * If no interrupt occurred or no try conditional is active and no exception
+     * is being thrown, do nothing (for compatibility of non-EH scripts).
+     ','line_number':376,'multiline':True]['text':' avoid warning for condition always true','line_number':383,'multiline':False]['text':'
+	 * The interrupt aborts everything except for executing finally clauses.
+	 * Discard any user or error or interrupt exception currently being
+	 * thrown.
+	 ','line_number':386,'multiline':True]['text':'
+	 * Throw an interrupt exception, so that everything will be aborted
+	 * (except for executing finally clauses), until the interrupt exception
+	 * is caught; if still uncaught at the top level, the script processing
+	 * will be terminated then.  -  If an interrupt exception is already
+	 * being thrown, do nothing.
+	 *
+	 ','line_number':397,'multiline':True]['text':' An interrupt exception replaces any user or error exception.','line_number':410,'multiline':False]['text':'
+ * Get an exception message that is to be stored in current_exception->value.
+ ','line_number':420,'multiline':True]['text':' msg_add_fname may have been used to prefix the message with a file','line_number':458,'multiline':False]['text':' name in quotes.  In the exception value, put the file name in','line_number':459,'multiline':False]['text':' parentheses and move it to the end.','line_number':460,'multiline':False]['text':' 'E123' missing or at beginning','line_number':473,'multiline':False]['text':' '"filename" E123: message text'','line_number':476,'multiline':False]['text':' "E123:" is part of the file name.','line_number':479,'multiline':False]['text':'
+ * Throw a new exception.  Return FAIL when out of memory or it was tried to
+ * throw an illegal user exception.  "value" is the exception string for a
+ * user or interrupt exception, or points to a message list in case of an
+ * error exception.
+ ','line_number':501,'multiline':True]['text':'
+     * Disallow faking Interrupt or error exceptions as user exceptions.  They
+     * would be treated differently from real interrupt or error exceptions
+     * when no active try block is found, see do_cmdline().
+     ','line_number':513,'multiline':True]['text':' Store the original message and prefix the exception value with','line_number':534,'multiline':False]['text':' "Vim:" or, if a command name is given, "Vim(cmdname):".','line_number':535,'multiline':False]['text':' display messages','line_number':570,'multiline':False]['text':' always scroll up, don't overwrite','line_number':575,'multiline':False]['text':' don't overwrite this either','line_number':578,'multiline':False]['text':'
+ * Discard an exception.  "was_finished" is set when the exception has been
+ * caught and the catch clause has been ended normally.
+ ','line_number':601,'multiline':True]['text':' display messages','line_number':624,'multiline':False]['text':' always scroll up, don't overwrite','line_number':629,'multiline':False]['text':' don't overwrite this either','line_number':634,'multiline':False]['text':'
+ * Discard the exception currently being thrown.
+ ','line_number':653,'multiline':True]['text':'
+ * Put an exception on the caught stack.
+ ','line_number':665,'multiline':True]['text':' throw_name not set on an exception from a command that was typed.','line_number':684,'multiline':False]['text':' display messages','line_number':692,'multiline':False]['text':' always scroll up, don't overwrite','line_number':697,'multiline':False]['text':' don't overwrite this either','line_number':700,'multiline':False]['text':'
+ * Remove an exception from the caught stack.
+ ','line_number':712,'multiline':True]['text':' throw_name not set on an exception from a command that was','line_number':736,'multiline':False]['text':' typed.','line_number':737,'multiline':False]['text':' Discard the exception, but use the finish message for 'verbose'.','line_number':746,'multiline':False]['text':'
+ * Save the current exception state in "estate"
+ ','line_number':750,'multiline':True]['text':'
+ * Restore the current exception state from "estate"
+ ','line_number':763,'multiline':True]['text':' Handle any outstanding exceptions before restoring the state','line_number':769,'multiline':False]['text':'
+ * Clear the current exception state
+ ','line_number':779,'multiline':True]['text':'
+ * Flags specifying the message displayed by report_pending.
+ ','line_number':792,'multiline':True]['text':'
+ * Report information about something pending in a finally clause if required by
+ * the 'verbose' option or when debugging.  "action" tells whether something is
+ * made pending or something pending is resumed or discarded.  "pending" tells
+ * what is pending.  "value" specifies the return value for a pending ":return"
+ * or the exception value for a pending exception.
+ ','line_number':799,'multiline':True]['text':' case RP_DISCARD:','line_number':822,'multiline':False]['text':' ":return" command producing value, allocated','line_number':843,'multiline':False]['text':' if (pending & CSTP_INTERRUPT)','line_number':859,'multiline':False]['text':' display messages','line_number':865,'multiline':False]['text':' always scroll up, don't overwrite','line_number':867,'multiline':False]['text':' don't overwrite this either','line_number':869,'multiline':False]['text':'
+ * If something is made pending in a finally clause, report it if required by
+ * the 'verbose' option or when debugging.
+ ','line_number':881,'multiline':True]['text':'
+ * If something pending in a finally clause is resumed at the ":endtry", report
+ * it if required by the 'verbose' option or when debugging.
+ ','line_number':898,'multiline':True]['text':'
+ * If something pending in a finally clause is discarded, report it if required
+ * by the 'verbose' option or when debugging.
+ ','line_number':915,'multiline':True]['text':'
+ * Return TRUE if "arg" is only a variable, register, environment variable,
+ * option name or string.
+ ','line_number':932,'multiline':True]['text':'
+ * ":eval".
+ ','line_number':977,'multiline':True]['text':'
+ * Start a new scope/block.  Caller should have checked that cs_idx is not
+ * exceeding CSTACK_LEN.
+ ','line_number':1009,'multiline':True]['text':' Just in case in_vim9script() does not return the same value when the','line_number':1027,'multiline':False]['text':' block ends.','line_number':1028,'multiline':False]['text':' sv_name is set to NULL if it was already removed.  This happens','line_number':1049,'multiline':False]['text':' when it was defined in an inner block and no functions were','line_number':1050,'multiline':False]['text':' defined there.','line_number':1051,'multiline':False]['text':' Remove a variable declared inside the block, if it still','line_number':1053,'multiline':False]['text':' exists, from sn_vars and move the value into sn_all_vars','line_number':1054,'multiline':False]['text':' if "func_defined" is non-zero.','line_number':1055,'multiline':False]['text':'
+ * ":if".
+ ','line_number':1067,'multiline':True]['text':'
+	 * Don't do something after an error, interrupt, or throw, or when
+	 * there is a surrounding conditional and it was not active.
+	 ','line_number':1085,'multiline':True]['text':' set TRUE, so this conditional will never get active','line_number':1100,'multiline':False]['text':'
+ * ":endif".
+ ','line_number':1105,'multiline':True]['text':'
+	 * When debugging or a breakpoint was encountered, display the debug
+	 * prompt (if not already done).  This shows the user that an ":endif"
+	 * is executed when the ":if" or a previous ":elseif" was not TRUE.
+	 * Handle a ">quit" debug command as if an interrupt had occurred before
+	 * the ":endif".  That is, throw an interrupt exception if appropriate.
+	 * Doing this here prevents an exception for a parsing error being
+	 * discarded by throwing the interrupt exception later on.
+	 ','line_number':1122,'multiline':True]['text':'
+ * ":else" and ":elseif".
+ ','line_number':1139,'multiline':True]['text':'
+     * Don't do something after an error, interrupt, or throw, or when there is
+     * a surrounding conditional and it was not active.
+     ','line_number':1150,'multiline':True]['text':' Variables declared in the previous block can no longer be','line_number':1182,'multiline':False]['text':' used.  Needs to be done before setting "cs_flags".','line_number':1183,'multiline':False]['text':' if skipping or the ":if" was TRUE, reset ACTIVE, otherwise set it','line_number':1188,'multiline':False]['text':' don't evaluate an ":elseif"','line_number':1193,'multiline':False]['text':'
+     * When debugging or a breakpoint was encountered, display the debug prompt
+     * (if not already done).  This shows the user that an ":else" or ":elseif"
+     * is executed when the ":if" or previous ":elseif" was not TRUE.  Handle
+     * a ">quit" debug command as if an interrupt had occurred before the
+     * ":else" or ":elseif".  That is, set "skip" and throw an interrupt
+     * exception if appropriate.  Doing this here prevents that an exception
+     * for a parsing errors is discarded when throwing the interrupt exception
+     * later on.
+     ','line_number':1198,'multiline':True]['text':' When skipping we ignore most errors, but a missing expression is','line_number':1216,'multiline':False]['text':' wrong, perhaps it should have been "else".','line_number':1217,'multiline':False]['text':' A double quote here is the start of a string, not a comment.','line_number':1218,'multiline':False]['text':' When throwing error exceptions, we want to throw always the first','line_number':1224,'multiline':False]['text':' of several errors in a row.  This is what actually happens when','line_number':1225,'multiline':False]['text':' a conditional error was detected above and there is another failure','line_number':1226,'multiline':False]['text':' when parsing the expression.  Since the skip flag is set in this','line_number':1227,'multiline':False]['text':' case, the parsing error will be ignored by emsg().','line_number':1228,'multiline':False]['text':' set TRUE, so this conditional will never get active','line_number':1237,'multiline':False]['text':'
+ * Handle ":while" and ":for".
+ ','line_number':1244,'multiline':True]['text':'
+	 * The loop flag is set when we have jumped back from the matching
+	 * ":endwhile" or ":endfor".  When not set, need to initialise this
+	 * cstack entry.
+	 ','line_number':1260,'multiline':True]['text':' Any variables defined in the previous round are no longer','line_number':1281,'multiline':False]['text':' visible.  Keep the first one for ":for", it is the loop','line_number':1282,'multiline':False]['text':' variable that we reuse every time around.','line_number':1283,'multiline':False]['text':' Do this backwards, so that vars defined in a later round are','line_number':1284,'multiline':False]['text':' found first.','line_number':1285,'multiline':False]['text':' sv_name is set to NULL if it was already removed.  This','line_number':1298,'multiline':False]['text':' happens when it was defined in an inner block and no','line_number':1299,'multiline':False]['text':' functions were defined there.','line_number':1300,'multiline':False]['text':' Remove a variable declared inside the block, if it','line_number':1302,'multiline':False]['text':' still exists, from sn_vars.','line_number':1303,'multiline':False]['text':' Start a new block ID, so that variables defined inside the','line_number':1307,'multiline':False]['text':' loop are created new and not shared with the previous loop.','line_number':1308,'multiline':False]['text':' Matters when used in a closure.','line_number':1309,'multiline':False]['text':'
+	 * Don't do something after an error, interrupt, or throw, or when
+	 * there is a surrounding conditional and it was not active.
+	 ','line_number':1318,'multiline':True]['text':'
+	     * ":while bool-expr"
+	     ','line_number':1326,'multiline':True]['text':'
+	     * ":for var in list-expr"
+	     ','line_number':1336,'multiline':True]['text':' Jumping here from a ":continue" or ":endfor": use the','line_number':1342,'multiline':False]['text':' previously evaluated list.','line_number':1343,'multiline':False]['text':' the "in expr" is not used, skip over it','line_number':1347,'multiline':False]['text':' Evaluate the argument and get the info in a structure.','line_number':1354,'multiline':False]['text':' Errors should use the first line number.','line_number':1358,'multiline':False]['text':' use the element at the start of the list and advance','line_number':1362,'multiline':False]['text':' OR all the cs_flags together, if a function was defined in','line_number':1368,'multiline':False]['text':' any round then the loop variable may have been used.','line_number':1369,'multiline':False]['text':' If a function was defined in any round then set the','line_number':1374,'multiline':False]['text':' CSF_FUNC_DEF flag now, so that it's seen by leave_block().','line_number':1375,'multiline':False]['text':'
+	 * If this cstack entry was just initialised and is active, set the
+	 * loop flag, so do_cmdline() will set the line number in cs_line[].
+	 * If executing the command a second time, clear the loop flag.
+	 ','line_number':1385,'multiline':True]['text':' If the ":while" evaluates to FALSE or ":for" is past the end of','line_number':1398,'multiline':False]['text':' the list, show the debug prompt at the ":endwhile"/":endfor" as','line_number':1399,'multiline':False]['text':' if there was a ":break" in a ":while"/":for" evaluating to','line_number':1400,'multiline':False]['text':' TRUE.','line_number':1401,'multiline':False]['text':'
+ * ":continue"
+ ','line_number':1408,'multiline':True]['text':' Try to find the matching ":while".  This might stop at a try','line_number':1421,'multiline':False]['text':' conditional not in its finally clause (which is then to be executed','line_number':1422,'multiline':False]['text':' next).  Therefore, inactivate all conditionals except the ":while"','line_number':1423,'multiline':False]['text':' itself (if reached).','line_number':1424,'multiline':False]['text':'
+	     * Set CSL_HAD_CONT, so do_cmdline() will jump back to the
+	     * matching ":while".
+	     ','line_number':1430,'multiline':True]['text':' let do_cmdline() handle it','line_number':1434,'multiline':False]['text':' If a try conditional not in its finally clause is reached first,','line_number':1438,'multiline':False]['text':' make the ":continue" pending for execution at the ":endtry".','line_number':1439,'multiline':False]['text':'
+ * ":break"
+ ','line_number':1446,'multiline':True]['text':' Inactivate conditionals until the matching ":while" or a try','line_number':1459,'multiline':False]['text':' conditional not in its finally clause (which is then to be','line_number':1460,'multiline':False]['text':' executed next) is found.  In the latter case, make the ":break"','line_number':1461,'multiline':False]['text':' pending for execution at the ":endtry".','line_number':1462,'multiline':False]['text':'
+ * ":endwhile" and ":endfor"
+ ','line_number':1472,'multiline':True]['text':' If we are in a ":while" or ":for" but used the wrong endloop','line_number':1505,'multiline':False]['text':' command, do not rewind to the next enclosing ":for"/":while".','line_number':1506,'multiline':False]['text':' Try to find the matching ":while" and report what's missing.','line_number':1518,'multiline':False]['text':' Give up at a try conditional not in its finally clause.','line_number':1524,'multiline':False]['text':' Ignore the ":endwhile"/":endfor".','line_number':1525,'multiline':False]['text':' Cleanup and rewind all contained (and unclosed) conditionals.','line_number':1532,'multiline':False]['text':'
+	 * When debugging or a breakpoint was encountered, display the debug
+	 * prompt (if not already done).  This shows the user that an
+	 * ":endwhile"/":endfor" is executed when the ":while" was not TRUE or
+	 * after a ":break".  Handle a ">quit" debug command as if an
+	 * interrupt had occurred before the ":endwhile"/":endfor".  That is,
+	 * throw an interrupt exception if appropriate.  Doing this here
+	 * prevents that an exception for a parsing error is discarded when
+	 * throwing the interrupt exception later on.
+	 ','line_number':1537,'multiline':True]['text':' Set loop flag, so do_cmdline() will jump back to the matching','line_number':1552,'multiline':False]['text':' ":while" or ":for".','line_number':1553,'multiline':False]['text':'
+ * "{" start of a block in Vim9 script
+ ','line_number':1558,'multiline':True]['text':'
+ * "}" end of a block in Vim9 script
+ ','line_number':1575,'multiline':True]['text':'
+ * ":throw expr"
+ ','line_number':1602,'multiline':True]['text':' On error or when an exception is thrown during argument evaluation, do','line_number':1619,'multiline':False]['text':' not throw.','line_number':1620,'multiline':False]['text':'
+ * Throw the current exception through the specified cstack.  Common routine
+ * for ":throw" (user exception) and error and interrupt exceptions.  Also
+ * used for rethrowing an uncaught exception.
+ ','line_number':1630,'multiline':True]['text':'
+     * Cleanup and inactivate up to the next surrounding try conditional that
+     * is not in its finally clause.  Normally, do not inactivate the try
+     * conditional itself, so that its ACTIVE flag can be tested below.  But
+     * if a previous error or interrupt has not been converted to an exception,
+     * inactivate the try conditional, too, as if the conversion had been done,
+     * and reset the did_emsg or got_int flag, so this won't happen again at
+     * the next surrounding try conditional.
+     ','line_number':1641,'multiline':True]['text':'
+	 * If this try conditional is active and we are before its first
+	 * ":catch", set THROWN so that the ":catch" commands will check
+	 * whether the exception matches.  When the exception came from any of
+	 * the catch clauses, it will be made pending at the ":finally" (if
+	 * present) and rethrown at the ":endtry".  This will also happen if
+	 * the try conditional is inactive.  This is the case when we are
+	 * throwing an exception due to an error or interrupt on the way from
+	 * a preceding ":continue", ":break", ":return", ":finish", error or
+	 * interrupt (not converted to an exception) to the finally clause or
+	 * from a preceding throw of a user or error or interrupt exception to
+	 * the matching catch clause or the finally clause.
+	 ','line_number':1667,'multiline':True]['text':' THROWN may have already been set for a catchable exception','line_number':1685,'multiline':False]['text':' that has been discarded.  Ensure it is reset for the new','line_number':1686,'multiline':False]['text':' exception.','line_number':1687,'multiline':False]['text':' TODO: Add optimization below.  Not yet done because of interface','line_number':1694,'multiline':False]['text':' problems to eval.c and ex_cmds2.c. (Servatius)','line_number':1695,'multiline':False]['text':'
+	 * There are no catch clauses to check or finally clauses to execute.
+	 * End the current script or function.  The exception will be rethrown
+	 * in the caller.
+	 ','line_number':1698,'multiline':True]['text':'
+ * ":try"
+ ','line_number':1713,'multiline':True]['text':'
+	 * Don't do something after an error, interrupt, or throw, or when there
+	 * is a surrounding conditional and it was not active.
+	 ','line_number':1734,'multiline':True]['text':' Set ACTIVE and TRUE.  TRUE means that the corresponding ":catch"','line_number':1743,'multiline':False]['text':' commands should check for a match if an exception is thrown and','line_number':1744,'multiline':False]['text':' that the finally clause needs to be executed.','line_number':1745,'multiline':False]['text':'
+	     * ":silent!", even when used in a try conditional, disables
+	     * displaying of error messages and conversion of errors to
+	     * exceptions.  When the silent commands again open a try
+	     * conditional, save "emsg_silent" and reset it so that errors are
+	     * again converted to exceptions.  The value is restored when that
+	     * try conditional is left.  If it is left normally, the commands
+	     * following the ":endtry" are again silent.  If it is left by
+	     * a ":continue", ":break", ":return", or ":finish", the commands
+	     * executed next are again silent.  If it is left due to an
+	     * aborting error, an interrupt, or an exception, restoring
+	     * "emsg_silent" does not matter since we are already in the
+	     * aborting state and/or the exception has already been thrown.
+	     * The effect is then just freeing the memory that was allocated
+	     * to save the value.
+	     ','line_number':1748,'multiline':True]['text':'
+ * ":catch /{pattern}/" and ":catch"
+ ','line_number':1785,'multiline':True]['text':' Report what's missing if the matching ":try" is not in its','line_number':1815,'multiline':False]['text':' finally clause.','line_number':1816,'multiline':False]['text':' Give up for a ":catch" after ":finally" and ignore it.','line_number':1827,'multiline':False]['text':' Just parse.','line_number':1828,'multiline':False]['text':' no argument, catch all errors','line_number':1837,'multiline':False]['text':'
+	 * Don't do something when no exception has been thrown or when the
+	 * corresponding try block never got active (because of an inactive
+	 * surrounding conditional or after an error or interrupt or throw).
+	 ','line_number':1853,'multiline':True]['text':'
+	 * Check for a match only if an exception is thrown but not caught by
+	 * a previous ":catch".  An exception that has replaced a discarded
+	 * exception is not checked (THROWN is not set then).
+	 ','line_number':1861,'multiline':True]['text':' When debugging or a breakpoint was encountered, display the','line_number':1876,'multiline':False]['text':' debug prompt (if not already done) before checking for a match.','line_number':1877,'multiline':False]['text':' This is a helpful hint for the user when the regular expression','line_number':1878,'multiline':False]['text':' matching fails.  Handle a ">quit" debug command as if an','line_number':1879,'multiline':False]['text':' interrupt had occurred before the ":catch".  That is, discard','line_number':1880,'multiline':False]['text':' the original exception, replace it by an interrupt exception,','line_number':1881,'multiline':False]['text':' and don't catch it in this try block.','line_number':1882,'multiline':False]['text':' Terminate the pattern and avoid the 'l' flag in 'cpoptions'','line_number':1885,'multiline':False]['text':' while compiling it.','line_number':1886,'multiline':False]['text':' Disable error messages, it will make current_exception','line_number':1894,'multiline':False]['text':' invalid.','line_number':1895,'multiline':False]['text':'
+		     * Save the value of got_int and reset it.  We don't want
+		     * a previous interruption cancel matching, only hitting
+		     * CTRL-C while matching should abort it.
+		     ','line_number':1907,'multiline':True]['text':' Make this ":catch" clause active and reset did_emsg, got_int,','line_number':1924,'multiline':False]['text':' and did_throw.  Put the exception on the caught stack.','line_number':1925,'multiline':False]['text':' Variables declared in the previous block can no longer be','line_number':1933,'multiline':False]['text':' used.','line_number':1934,'multiline':False]['text':' It's mandatory that the current exception is stored in the cstack','line_number':1939,'multiline':False]['text':' so that it can be discarded at the next ":catch", ":finally", or','line_number':1940,'multiline':False]['text':' ":endtry" or when the catch clause is left by a ":continue",','line_number':1941,'multiline':False]['text':' ":break", ":return", ":finish", error, interrupt, or another','line_number':1942,'multiline':False]['text':' exception.','line_number':1943,'multiline':False]['text':'
+	     * If there is a preceding catch clause and it caught the exception,
+	     * finish the exception now.  This happens also after errors except
+	     * when this ":catch" was after the ":finally" or not within
+	     * a ":try".  Make the try conditional inactive so that the
+	     * following catch clauses are skipped.  On an error or interrupt
+	     * after the preceding try block or catch clause was left by
+	     * a ":continue", ":break", ":return", or ":finish", discard the
+	     * pending action.
+	     ','line_number':1949,'multiline':True]['text':'
+ * ":finally"
+ ','line_number':1967,'multiline':True]['text':' Make this error pending, so that the commands in the following','line_number':1993,'multiline':False]['text':' finally clause can be executed.  This overrules also a pending','line_number':1994,'multiline':False]['text':' ":continue", ":break", ":return", or ":finish".','line_number':1995,'multiline':False]['text':' Give up for a multiple ":finally" and ignore it.','line_number':2001,'multiline':False]['text':'
+     * Don't do something when the corresponding try block never got active
+     * (because of an inactive surrounding conditional or after an error or
+     * interrupt or throw) or for a ":finally" without ":try" or a multiple
+     * ":finally".  After every other error (did_emsg or the conditional
+     * errors detected above) or after an interrupt (got_int) or an
+     * exception (did_throw), the finally clause must be executed.
+     ','line_number':2008,'multiline':True]['text':' When debugging or a breakpoint was encountered, display the','line_number':2020,'multiline':False]['text':' debug prompt (if not already done).  The user then knows that the','line_number':2021,'multiline':False]['text':' finally clause is executed.','line_number':2022,'multiline':False]['text':' Handle a ">quit" debug command as if an interrupt had','line_number':2025,'multiline':False]['text':' occurred before the ":finally".  That is, discard the','line_number':2026,'multiline':False]['text':' original exception and replace it by an interrupt','line_number':2027,'multiline':False]['text':' exception.','line_number':2028,'multiline':False]['text':'
+	 * If there is a preceding catch clause and it caught the exception,
+	 * finish the exception now.  This happens also after errors except
+	 * when this is a multiple ":finally" or one not within a ":try".
+	 * After an error or interrupt, this also discards a pending
+	 * ":continue", ":break", ":finish", or ":return" from the preceding
+	 * try block or catch clause.
+	 ','line_number':2032,'multiline':True]['text':' Variables declared in the previous block can no longer be','line_number':2045,'multiline':False]['text':' used.','line_number':2046,'multiline':False]['text':'
+	 * Make did_emsg, got_int, did_throw pending.  If set, they overrule
+	 * a pending ":continue", ":break", ":return", or ":finish".  Then
+	 * we have particularly to discard a pending return value (as done
+	 * by the call to cleanup_conditionals() above when did_emsg or
+	 * got_int is set).  The pending values are restored by the
+	 * ":endtry", except if there is a new error, interrupt, exception,
+	 * ":continue", ":break", ":return", or ":finish" in the following
+	 * finally clause.  A missing ":endwhile", ":endfor" or ":endif"
+	 * detected here is treated as if did_emsg and did_throw had
+	 * already been set, respectively in case that the error is not
+	 * converted to an exception, did_throw had already been unset.
+	 * We must not set did_emsg here since that would suppress the
+	 * error message.
+	 ','line_number':2051,'multiline':True]['text':' It's mandatory that the current exception is stored in the','line_number':2082,'multiline':False]['text':' cstack so that it can be rethrown at the ":endtry" or be','line_number':2083,'multiline':False]['text':' discarded if the finally clause is left by a ":continue",','line_number':2084,'multiline':False]['text':' ":break", ":return", ":finish", error, interrupt, or another','line_number':2085,'multiline':False]['text':' exception.  When emsg() is called for a missing ":endif" or','line_number':2086,'multiline':False]['text':' a missing ":endwhile"/":endfor" detected here, the','line_number':2087,'multiline':False]['text':' exception will be discarded.','line_number':2088,'multiline':False]['text':'
+	 * Set CSL_HAD_FINA, so do_cmdline() will reset did_emsg,
+	 * got_int, and did_throw and make the finally clause active.
+	 * This will happen after emsg() has been called for a missing
+	 * ":endif" or a missing ":endwhile"/":endfor" detected here, so
+	 * that the following finally clause will be executed even then.
+	 ','line_number':2094,'multiline':True]['text':'
+ * ":endtry"
+ ','line_number':2105,'multiline':True]['text':'
+     * Don't do something after an error, interrupt or throw in the try
+     * block, catch clause, or finally clause preceding this ":endtry" or
+     * when an error or interrupt occurred after a ":continue", ":break",
+     * ":return", or ":finish" in a try block or catch clause preceding this
+     * ":endtry" or when the try block never got active (because of an
+     * inactive surrounding conditional or after an error or interrupt or
+     * throw) or when there is a surrounding conditional and it has been
+     * made inactive by a ":continue", ":break", ":return", or ":finish" in
+     * the finally clause.  The latter case need not be tested since then
+     * anything pending has already been discarded. ','line_number':2130,'multiline':True]['text':' Find the matching ":try" and report what's missing.','line_number':2148,'multiline':False]['text':'
+	 * If an exception is being thrown, discard it to prevent it from
+	 * being rethrown at the end of this function.  It would be
+	 * discarded by the error message, anyway.  Resets did_throw.
+	 * This does not affect the script termination due to the error
+	 * since "trylevel" is decremented after emsg() has been called.
+	 ','line_number':2153,'multiline':True]['text':' report eap->errmsg, also when there already was an error','line_number':2163,'multiline':False]['text':' Check the flags only when not in a skipped block.','line_number':2170,'multiline':False]['text':' try/endtry without any catch or finally: give an error and','line_number':2174,'multiline':False]['text':' continue.','line_number':2175,'multiline':False]['text':'
+	 * If we stopped with the exception currently being thrown at this
+	 * try conditional since we didn't know that it doesn't have
+	 * a finally clause, we need to rethrow it after closing the try
+	 * conditional.
+	 ','line_number':2179,'multiline':True]['text':' If there was no finally clause, show the user when debugging or','line_number':2190,'multiline':False]['text':' a breakpoint was encountered that the end of the try conditional has','line_number':2191,'multiline':False]['text':' been reached: display the debug prompt (if not already done).  Do','line_number':2192,'multiline':False]['text':' this on normal control flow or when an exception was thrown, but not','line_number':2193,'multiline':False]['text':' on an interrupt or error not converted to an exception or when','line_number':2194,'multiline':False]['text':' a ":break", ":continue", ":return", or ":finish" is pending.  These','line_number':2195,'multiline':False]['text':' actions are carried out immediately.','line_number':2196,'multiline':False]['text':' Handle a ">quit" debug command as if an interrupt had occurred','line_number':2201,'multiline':False]['text':' before the ":endtry".  That is, throw an interrupt exception and','line_number':2202,'multiline':False]['text':' set "skip" and "rethrow".','line_number':2203,'multiline':False]['text':' The do_intthrow() call may have reset did_throw or','line_number':2208,'multiline':False]['text':' cstack->cs_pending[idx].','line_number':2209,'multiline':False]['text':'
+     * If a ":return" is pending, we need to resume it after closing the
+     * try conditional; remember the return value.  If there was a finally
+     * clause making an exception pending, we need to rethrow it.  Make it
+     * the exception currently being thrown.
+     ','line_number':2216,'multiline':True]['text':'
+     * Discard anything pending on an error, interrupt, or throw in the
+     * finally clause.  If there was no ":finally", discard a pending
+     * ":continue", ":break", ":return", or ":finish" if an error or
+     * interrupt occurred afterwards, but before the ":endtry" was reached.
+     * If an exception was caught by the last of the catch clauses and there
+     * was no finally clause, finish the exception now.  This happens also
+     * after errors except when this ":endtry" is not within a ":try".
+     * Restore "emsg_silent" if it has been reset by this try conditional.
+     ','line_number':2232,'multiline':True]['text':' Reactivate a pending ":continue", ":break", ":return",','line_number':2258,'multiline':False]['text':' ":finish" from the try block or a catch clause of this try','line_number':2259,'multiline':False]['text':' conditional.  This is skipped, if there was an error in an','line_number':2260,'multiline':False]['text':' (unskipped) conditional command or an interrupt afterwards','line_number':2261,'multiline':False]['text':' or if the finally clause is present and executed a new error,','line_number':2262,'multiline':False]['text':' interrupt, throw, ":continue", ":break", ":return", or','line_number':2263,'multiline':False]['text':' ":finish".','line_number':2264,'multiline':False]['text':' When the finally clause was entered due to an error,','line_number':2278,'multiline':False]['text':' interrupt or throw (as opposed to a ":continue", ":break",','line_number':2279,'multiline':False]['text':' ":return", or ":finish"), restore the pending values of','line_number':2280,'multiline':False]['text':' did_emsg, got_int, and did_throw.  This is skipped, if there','line_number':2281,'multiline':False]['text':' was a new error, interrupt, throw, ":continue", ":break",','line_number':2282,'multiline':False]['text':' ":return", or ":finish".  in the finally clause.','line_number':2283,'multiline':False]['text':' Rethrow the current exception (within this cstack).','line_number':2296,'multiline':False]['text':'
+ * enter_cleanup() and leave_cleanup()
+ *
+ * Functions to be called before/after invoking a sequence of autocommands for
+ * cleanup for a failed command.  (Failure means here that a call to emsg()
+ * has been made, an interrupt occurred, or there is an uncaught exception
+ * from a previous autocommand execution of the same command.)
+ *
+ * Call enter_cleanup() with a pointer to a cleanup_T and pass the same
+ * pointer to leave_cleanup().  The cleanup_T structure stores the pending
+ * error/interrupt/exception state.
+ ','line_number':2300,'multiline':True]['text':'
+ * This function works a bit like ex_finally() except that there was not
+ * actually an extra try block around the part that failed and an error or
+ * interrupt has not (yet) been converted to an exception.  This function
+ * saves the error/interrupt/ exception state and prepares for the call to
+ * do_cmdline() that is going to be made for the cleanup autocommand
+ * execution.
+ ','line_number':2313,'multiline':True]['text':'
+     * Postpone did_emsg, got_int, did_throw.  The pending values will be
+     * restored by leave_cleanup() except if there was an aborting error,
+     * interrupt, or uncaught exception after this function ends.
+     ','line_number':2326,'multiline':True]['text':' If we are currently throwing an exception (did_throw), save it as','line_number':2338,'multiline':False]['text':' well.  On an error not yet converted to an exception, update','line_number':2339,'multiline':False]['text':' "force_abort" and reset "cause_abort" (as do_errthrow() would do).','line_number':2340,'multiline':False]['text':' This is needed for the do_cmdline() call that is going to be made','line_number':2341,'multiline':False]['text':' for autocommand execution.  We need not save *msg_list because','line_number':2342,'multiline':False]['text':' there is an extra instance for every call of do_cmdline(), anyway.','line_number':2343,'multiline':False]['text':' Report if required by the 'verbose' option or when debugging.','line_number':2360,'multiline':False]['text':'
+ * See comment above enter_cleanup() for how this function is used.
+ *
+ * This function is a bit like ex_endtry() except that there was not actually
+ * an extra try block around the part that failed and an error or interrupt
+ * had not (yet) been converted to an exception when the cleanup autocommand
+ * sequence was invoked.
+ *
+ * This function has to be called with the address of the cleanup_T structure
+ * filled by enter_cleanup() as an argument; it restores the error/interrupt/
+ * exception state saved by that function - except there was an aborting
+ * error, an interrupt or an uncaught exception during execution of the
+ * cleanup autocommands.  In the latter case, the saved error/interrupt/
+ * exception state is discarded.
+ ','line_number':2370,'multiline':True]['text':' nothing to do','line_number':2390,'multiline':False]['text':' If there was an aborting error, an interrupt, or an uncaught exception','line_number':2393,'multiline':False]['text':' after the corresponding call to enter_cleanup(), discard what has been','line_number':2394,'multiline':False]['text':' made pending by it.  Report this to the user if required by the','line_number':2395,'multiline':False]['text':' 'verbose' option or when debugging.','line_number':2396,'multiline':False]['text':' Cancel the pending exception (includes report).','line_number':2400,'multiline':False]['text':' If an error was about to be converted to an exception when','line_number':2405,'multiline':False]['text':' enter_cleanup() was called, free the message list.','line_number':2406,'multiline':False]['text':'
+     * If there was no new error, interrupt, or throw between the calls
+     * to enter_cleanup() and leave_cleanup(), restore the pending
+     * error/interrupt/exception state.
+     ','line_number':2411,'multiline':True]['text':'
+	 * If there was an exception being thrown when enter_cleanup() was
+	 * called, we need to rethrow it.  Make it the exception currently
+	 * being thrown.
+	 ','line_number':2418,'multiline':True]['text':'
+	 * If an error was about to be converted to an exception when
+	 * enter_cleanup() was called, let "cause_abort" take the part of
+	 * "force_abort" (as done by cause_errthrow()).
+	 ','line_number':2426,'multiline':True]['text':'
+	 * Restore the pending values of did_emsg, got_int, and did_throw.
+	 ','line_number':2437,'multiline':True]['text':' did_throw will be set by do_one_cmd()','line_number':2445,'multiline':False]['text':' Report if required by the 'verbose' option or when debugging.','line_number':2447,'multiline':False]['text':'
+ * Make conditionals inactive and discard what's pending in finally clauses
+ * until the conditional type searched for or a try conditional not in its
+ * finally clause is reached.  If this is in an active catch clause, finish
+ * the caught exception.
+ * Return the cstack index where the search stopped.
+ * Values used for "searched_cond" are (CSF_WHILE | CSF_FOR) or CSF_TRY or 0,
+ * the latter meaning the innermost try conditional not in its finally clause.
+ * "inclusive" tells whether the conditional searched for should be made
+ * inactive itself (a try conditional not in its finally clause possibly find
+ * before is always made inactive).  If "inclusive" is TRUE and
+ * "searched_cond" is CSF_TRY|CSF_SILENT, the saved former value of
+ * "emsg_silent", if reset when the try conditional finally reached was
+ * entered, is restored (used by ex_endtry()).  This is normally done only
+ * when such a try conditional is left.
+ ','line_number':2454,'multiline':True]['text':'
+	     * Discard anything pending in a finally clause and continue the
+	     * search.  There may also be a pending ":continue", ":break",
+	     * ":return", or ":finish" before the finally clause.  We must not
+	     * discard it, unless an error or interrupt occurred afterwards.
+	     ','line_number':2483,'multiline':True]['text':' Cancel the pending exception.  This is in the','line_number':2516,'multiline':False]['text':' finally clause, so that the stack of the','line_number':2517,'multiline':False]['text':' caught exceptions is not involved.','line_number':2518,'multiline':False]['text':'
+	     * Stop at a try conditional not in its finally clause.  If this try
+	     * conditional is in an active catch clause, finish the caught
+	     * exception.
+	     ','line_number':2532,'multiline':True]['text':' Stop at this try conditional - except the try block never','line_number':2546,'multiline':False]['text':' got active (because of an inactive surrounding conditional','line_number':2547,'multiline':False]['text':' or when the ":try" appeared after an error or interrupt or','line_number':2548,'multiline':False]['text':' throw).','line_number':2549,'multiline':False]['text':' Stop on the searched conditional type (even when the surrounding','line_number':2559,'multiline':False]['text':' conditional is not active or something has been made pending).','line_number':2560,'multiline':False]['text':' If "inclusive" is TRUE and "searched_cond" is CSF_TRY|CSF_SILENT,','line_number':2561,'multiline':False]['text':' check first whether "emsg_silent" needs to be restored.','line_number':2562,'multiline':False]['text':'
+	 * When leaving a try conditional that reset "emsg_silent" on its
+	 * entry after saving the original value, restore that value here and
+	 * free the memory used to store it.
+	 ','line_number':2573,'multiline':True]['text':'
+ * Return an appropriate error message for a missing endwhile/endfor/endif.
+ ','line_number':2595,'multiline':True]['text':'
+ * Rewind conditionals until index "idx" is reached.  "cond_type" and
+ * "cond_level" specify a conditional type and the address of a level variable
+ * which is to be decremented with each skipped conditional of the specified
+ * type.
+ * Also free "for info" structures where needed.
+ ','line_number':2609,'multiline':True]['text':'
+ * ":endfunction" or ":enddef" when not after a ":function"
+ ','line_number':2633,'multiline':True]['text':'
+ * Return TRUE if the string "p" looks like a ":while" or ":for" command.
+ ','line_number':2645,'multiline':True]['text':' skip modifiers, white space and ':'','line_number':2653,'multiline':False]['text':' FEAT_EVAL','line_number':2669,'multiline':False]

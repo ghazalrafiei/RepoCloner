@@ -1,0 +1,94 @@
+['text':' special-case empty tensors since they may have no meta()','line_number':131,'multiline':False]['text':' A simple strategy to copy tensor if needed, and have the tensor pointer','line_number':158,'multiline':False]['text':' pointing to the right instantiation. Note that tensor_copy_if_needed','line_number':159,'multiline':False]['text':' will handle memory deallocation itself so no smart pointer is needed.','line_number':160,'multiline':False]['text':' sync copy','line_number':166,'multiline':False]['text':'*
+ * @brief Alias op makes the output and the input share the same underlying
+ * storage.
+ *
+ * WARNING: in general, in caffe2's operator interface different tensors should
+ * have different underlying storage, which is the assumption made by
+ * components such as the dependency engine and memory optimization. Thus, in
+ * normal situations you should not use the AliasOp, especially in a normal
+ * forward-backward pass.
+ *
+ * The Alias op is provided so one can achieve true asynchrony, such as
+ * Hogwild, in a graph. But make sure you understand all the implications
+ * similar to multi-thread computation before you use it explicitly.
+ ','line_number':180,'multiline':True]['text':'*
+ * @brief Pass inputs to outputs.
+ * Input:
+ *   DATA - dense tensor.
+ * Output:
+ *   DATA - same tensor as input.
+ ','line_number':208,'multiline':True]['text':' it is allowed to have the output inplace overwrite the input but also','line_number':225,'multiline':False]['text':' allow the output to be copied from the input','line_number':226,'multiline':False]['text':'async','line_number':229,'multiline':True]['text':' Output gets the data of input(0), but reshapes it like input(1).','line_number':256,'multiline':False]['text':' TODO: better TensorOptions argument passing(e.g. default argument)','line_number':289,'multiline':False]['text':' I'll change the order of argument in another diff, so that we don't','line_number':292,'multiline':False]['text':' need to write this','line_number':293,'multiline':False]['text':'async','line_number':296,'multiline':True]['text':' Dimension checking','line_number':301,'multiline':False]['text':' Add the first two - works if in-place or not.','line_number':315,'multiline':False]['text':' Add remaining.','line_number':322,'multiline':False]['text':' WeightedSumOp computes the weighted sum of several tensors. The input should','line_number':349,'multiline':False]['text':' be in the form X_0, weight_0, X_1, weight_1, ... where X_i all have the same','line_number':350,'multiline':False]['text':' shape, and weight_i are size 1 tensors that specifies the weight of each','line_number':351,'multiline':False]['text':' vector. Note that if one wants to do in-place computation, it could only be','line_number':352,'multiline':False]['text':' done with X_0 also as the output, but not other X_i.','line_number':353,'multiline':False]['text':' the code is written this way because of 10.1 + gcc 7.3.1 compiler bug','line_number':364,'multiline':False]['text':' as discussed at','line_number':365,'multiline':False]['text':' https://devtalk.nvidia.com/default/topic/1048037/linux/cuda-10-1-nvidia-you-re-now-quot-fixing-quot-gcc-bugs-that-gcc-doesn-t-even-have/','line_number':366,'multiline':False]['text':' Note: removed Aliasing check, since Output already has','line_number':373,'multiline':False]['text':' caching capability','line_number':374,'multiline':False]['text':' Do a check: if the input is the same as output, we have a problem -','line_number':410,'multiline':False]['text':' in-place update should always only happen with the zeroth input.','line_number':411,'multiline':False]['text':' The input size should be the input size of the forward op plus 1','line_number':451,'multiline':False]['text':'*
+ * @brief Update slices of the tensor in-place with weighted sum.
+ *
+ * ScatterWeightedSumOp is similar to WeightedSum and computes the weighted sum
+ * of several tensors. The first tensor has to be in-place and only slices of it
+ * on the first dimension as indexed by INDICES will be updated.
+ *
+ * Input:
+ *   X_0 - tensor to be updated
+ *   weight_0 - scalar weight for X_0, applied only to slices affected,
+ *   INDICES - 1-D list of indices on the first dimension of X_0 that need to be
+ * updated
+ *   X_1 - update slices, has to have shape of len(INDICES) + shape(X_0)[1:]
+ *   weight_1 - scalar weight for X_1 update
+ *   X_2, weight_2, ...
+ *
+ * Output:
+ *   X_0 - has to be exactly the same tensor as the input 0
+ *
+ * Note: The op pretty much ignores the exact shapes of the input arguments and
+ * cares only about sizes. It's done for performance consideration to avoid
+ * unnecessary reshapes. Only first dimension of X_0 is important, let's call it
+ * N. If M is the total size of X_0 and K is the size of INDICES then X_i is
+ * assumed to be of shape K x (M / N) regardless of the real shape.
+ *
+ * Note: Each update in INDICES is applied independently which means that if
+ * duplicated elements are present in INDICES the corresponding slice of X_0
+ * will be scaled multiple times. Manual collapsing of INDICES is required
+ * beforehand if necessary.
+ *
+ * Note: Updates are applied sequentially by inputs which might have undesired
+ * consequences if the input tensor is accessed concurrently by different op
+ * (e.g. when doing Hogwild). Other threads might see intermediate results even
+ * on individual slice level, e.g. X_0 scaled by weight_0 but without any
+ * updates applied.
+ *
+ * For now really works only on CPU because of INDICES access
+ ','line_number':488,'multiline':True]['text':' It's most likely a constant so exact comparison is fine','line_number':578,'multiline':False]['text':' double-checking the indices, but it's fine as it's DCHECK only','line_number':605,'multiline':False]['text':'*
+ * @brief Update slices of the tensor in-place by overriding.
+ *
+ * Input:
+ *   DATA - tensor to be updated (also referred to here as X_0)
+ *   INDICES - 1-D list of indices on the first dimension of X_0 that need to be
+ *             updated
+ *   SLICES - update slices, has to have shape of len(INDICES) + shape(X_0)[1:]
+ *
+ * Output:
+ *   DATA - has to be exactly the same tensor as the input 0
+ *
+ * Example: For the inputs
+ *
+ *    DATA = [[1, 2], [3, 4], [5, 6]]
+ *    INDICES = [2, 0]
+ *    SLICES = [[0, 9], [7, 8]]
+ *
+ * ScatterAssignOp will modify DATA in place to insert the entries at
+ * INDICES with the values in SLICES, so DATA[INDICES[i]] = SLICES[INDICES[i]].
+ * So the final output will then be
+ *
+ *    DATA = [[7, 8], [3, 4], [0, 9]]
+ *
+ * Note: If DATA is empty, INDICES and SLICES must be empty as well, and this is
+ * a no-op.
+ *
+ * Note: The op pretty much ignores the exact shapes of the input arguments and
+ * cares only about sizes. It's done for performance consideration to avoid
+ * unnecessary reshapes. Only first dimension of X_0 is important, let's call it
+ * N. If M is the total size of X_0 and K is the size of INDICES then X_i is
+ * assumed to be of shape K x (M / N) regardless of the real shape.
+ *
+ * Note: Each update in INDICES is applied independently which means that if
+ * duplicated elements are present in INDICES arbitrary one will win.
+ *
+ * For now really works only on CPU because of INDICES access
+ ','line_number':624,'multiline':True]['text':' TODO(dzhulgakov): it can be made to work with arbitrary data type by','line_number':755,'multiline':False]['text':' using raw_mutable_data','line_number':756,'multiline':False]['text':' double-checking the indices, but it's fine as it's DCHECK only','line_number':773,'multiline':False]['text':' ONNX allows negative axis to index from the back, valid range: [-r, r].','line_number':813,'multiline':False]['text':' Succeed if size of output is zero, which can happen for empty batch which','line_number':825,'multiline':False]['text':' would have data dimension size of 0.','line_number':826,'multiline':False]['text':' This *must* be done AFTER output->raw_mutable_data() above as that has','line_number':827,'multiline':False]['text':' important allocation side effect that we must see.','line_number':828,'multiline':False]['text':' For a 3-D tensor, dst is updated as:','line_number':852,'multiline':False]['text':'    dst[i][idxs[i][j][k]][k] = src[i][j][k]  # if dim == 1','line_number':853,'multiline':False]['text':' where i, j, k are iterating over their corresponding axis I, J, K.','line_number':854,'multiline':False]['text':' For a given i, j, k tuple.','line_number':855,'multiline':False]['text':' idxs offset can be computed as i * J_src * K + j * K + k.','line_number':856,'multiline':False]['text':' src offset can be computed as i * J_src * K + j * K + k.','line_number':857,'multiline':False]['text':' dst offset can be computed as i * J_dst * K + idxs[idxs_offset] * K + K','line_number':858,'multiline':False]['text':' Note that idxs and src should have the same rank and shape.','line_number':859,'multiline':False]['text':' dst should have the same rank as idxs and src, but the dimension of dim','line_number':860,'multiline':False]['text':' axis can be different. That is why in the above equation, there is the','line_number':861,'multiline':False]['text':' difference of J_src and J_dst.','line_number':862,'multiline':False]['text':' Check that indices fall within dimension array size with CAFFE_ENFORCE.','line_number':884,'multiline':False]['text':' segment id starts from 0','line_number':1022,'multiline':False]['text':' Assume that segment_id >= 0.','line_number':1040,'multiline':False]['text':' segment id starts from 0','line_number':1073,'multiline':False]['text':'power','line_number':1139,'multiline':True]['text':'power','line_number':1143,'multiline':True]['text':' Return the size of a tensor','line_number':1193,'multiline':False]['text':' returns a shape to be passed to Reshape','line_number':1214,'multiline':False]['text':' 2 more for histograms < lower_bound, >= upper_bound respectively','line_number':1406,'multiline':False]['text':' Avoid casting to and from floats in case it introduces rounding and','line_number':1508,'multiline':False]['text':' avoid mod because the compiler doesn't strip unused code until later.','line_number':1509,'multiline':False]['text':' Match numpy's behavior here.','line_number':1518,'multiline':False]['text':' local CPU tensor for copying constants.','line_number':1532,'multiline':False]['text':' namespace caffe2','line_number':1602,'multiline':False]['text':' CAFFE2_OPERATORS_UTILITY_OPS_H_','line_number':1604,'multiline':False]

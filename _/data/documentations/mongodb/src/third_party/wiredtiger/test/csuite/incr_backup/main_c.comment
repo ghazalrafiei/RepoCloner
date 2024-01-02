@@ -1,0 +1,184 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]['text':'
+ * This program tests incremental backup in a randomized way. The random seed used is reported and
+ * can be used in another run.
+ ','line_number':29,'multiline':True]['text':'
+ * Note: set this to true to copy incremental files completely.
+ ','line_number':64,'multiline':True]['text':'
+ * We keep an array of tables, each one may or may not be in use. "In use" means it has been
+ * created, and will be updated from time to time.
+ ','line_number':78,'multiline':True]['text':' non-null entries represent tables in use ','line_number':83,'multiline':True]['text':' bumped when we rename or drop, so we get unique names. ','line_number':84,'multiline':True]['text':' number of changes so far to the table ','line_number':85,'multiline':True]['text':'
+ * The set of all tables in play, and other information used for this run.
+ ','line_number':91,'multiline':True]['text':' set of potential tables ','line_number':95,'multiline':True]['text':' size of table array ','line_number':96,'multiline':True]['text':' count of tables that exist ','line_number':97,'multiline':True]['text':'
+ * The set of active files in a backup. This is our "memory" of files that are used in each backup,
+ * so we can remove any that are not mentioned in the next backup.
+ ','line_number':102,'multiline':True]['text':'
+ * The choices of operations we do to each table. Please do not initialize enum elements with custom
+ * values as there's an assumption that the first element has the default value of 0 and the last
+ * element is always reserved to check count on elements.
+ ','line_number':114,'multiline':True]['text':'
+ * Cycle of changes to a table.
+ *
+ * When making changes to a table, the first KEYS_PER_TABLE changes are all inserts, the next
+ * KEYS_PER_TABLE are updates of the same records. The next KEYS_PER_TABLE are modifications of
+ * existing records, and the last KEYS_PER_TABLE will be removes. This defines one "cycle", and
+ * CHANGES_PER_CYCLE is the number of changes in a complete cycle. Thus at the end/beginning of each
+ * cycle, there are zero keys in the table.
+ *
+ * Having a predictable cycle makes it easy on the checking side (knowing how many total changes
+ * have been made) to check the state of the table.
+ ','line_number':121,'multiline':True]['text':'
+ * usage --
+ *     Print usage message and exit.
+ ','line_number':136,'multiline':True]['text':'
+ * die --
+ *     Called when testutil_assert or testutil_check fails.
+ ','line_number':147,'multiline':True]['text':'
+ * get_operation_type --
+ *     Get operation type based on the number of changes.
+ ','line_number':160,'multiline':True]['text':'
+ * key_value --
+ *     Return the key, value and operation type for a given change to a table. See "Cycle of changes
+ *     to a table" above.
+ *
+ * The keys generated are unique among the 10000, but we purposely don't make them sequential, so
+ *     that insertions tend to be scattered among the pages in the B-tree.
+ *
+ * "key-0-0", "key-1-0", "key-2-0""... "key-99-0", "key-0-1", "key-1-1", ...
+ ','line_number':175,'multiline':True]['text':' remove needs no key ','line_number':199,'multiline':True]['text':' The value sizes vary "predictably" up to the max value size for this table. ','line_number':201,'multiline':True]['text':'
+     * For a given key, a value is first inserted, then later updated, then modified. When a value
+     * is inserted, it is all the letter 'a'. When the value is updated, is it mostly 'b', with some
+     * 'c' mixed in. When the value is to modified, we'll end up with a value with mostly 'b' and
+     * 'M' mixed in, in different spots. Thus the modify operation will have both additions ('M')
+     * and subtractions ('c') from the previous version.
+     ','line_number':205,'multiline':True]['text':'
+ * active_files_init --
+ *     Initialize (clear) the active file struct.
+ ','line_number':228,'multiline':True]['text':'
+ * active_files_print --
+ *     Print the set of active files for debugging.
+ ','line_number':238,'multiline':True]['text':'
+ * active_files_add --
+ *     Add a new name to the active file list.
+ ','line_number':252,'multiline':True]['text':'
+ * active_files_sort_function --
+ *     Sort function for qsort.
+ ','line_number':266,'multiline':True]['text':'
+ * active_files_sort --
+ *     Sort the list of names in the active file list.
+ ','line_number':276,'multiline':True]['text':'
+ * active_files_remove_missing --
+ *     Files in the previous list that are missing from the current list are removed.
+ ','line_number':286,'multiline':True]['text':'
+     * Walk through the two lists looking for non-matches.
+     ','line_number':300,'multiline':True]['text':' There are extra entries at the end of the prev list ','line_number':306,'multiline':True]['text':'
+             * There is something in the prev list not in the current list. Remove it, and continue
+             * - don't advance the current list.
+             ','line_number':313,'multiline':True]['text':'
+             * There is something in the current list not in the prev list. Walk past it in the
+             * current list and try again.
+             ','line_number':321,'multiline':True]['text':'
+ * active_files_free --
+ *     Free the list of active files.
+ ','line_number':331,'multiline':True]['text':'
+ * active_files_move --
+ *     Move an active file list to the destination list.
+ ','line_number':346,'multiline':True]['text':'
+ * table_changes --
+ *     Potentially make changes to a single table.
+ ','line_number':358,'multiline':True]['text':'
+     * We change each table in use about half the time.
+     ','line_number':375,'multiline':True]['text':'
+             * To satisfy code analysis checks, we must handle all elements of the enum in the
+             * switch statement.
+             ','line_number':391,'multiline':True]['text':'
+ * create_table --
+ *     Create a table for the given slot.
+ ','line_number':426,'multiline':True]['text':'
+     * A quarter of the time use a non-default allocation size on the table. This is set
+     * independently of the granularity to stress mismatched values.
+     ','line_number':442,'multiline':True]['text':'
+ * rename_table --
+ *     TODO: Add a comment describing this function.
+ ','line_number':460,'multiline':True]['text':'
+ * drop_table --
+ *     TODO: Add a comment describing this function.
+ ','line_number':481,'multiline':True]['text':'
+ * tables_free --
+ *     Free the list of tables.
+ ','line_number':501,'multiline':True]['text':'
+ * base_backup --
+ *     TODO: Add a comment describing this function.
+ ','line_number':520,'multiline':True]['text':' Half of the runs with very low granularity to stress bitmaps ','line_number':547,'multiline':True]['text':'
+ * reopen_file --
+ *     Open a file if it isn't already open. The "memory" of the open file name is kept in the
+ *     buffer passed in.
+ ','line_number':582,'multiline':True]['text':' Do we already have this file open? ','line_number':590,'multiline':True]['text':'
+ * incr_backup --
+ *     Perform an incremental backup into an existing backup directory.
+ ','line_number':600,'multiline':True]['text':'
+             * The "slow" version of an incremental backup is to copy the entire file that was
+             * indicated to be changed. This may be useful for debugging problems that occur in
+             * backup. This path is typically disabled for the test program.
+             ','line_number':637,'multiline':True]['text':'
+             * Here is the normal incremental backup. Now that we know what file has changed, we get
+             * the specific changes
+             ','line_number':647,'multiline':True]['text':' Use the read size since we may have read less than the granularity. ','line_number':672,'multiline':True]['text':' Move the active list to the current list. ','line_number':699,'multiline':True]['text':'
+ * check_table --
+ *     TODO: Add a comment describing this function.
+ ','line_number':703,'multiline':True]['text':'
+     * To satisfy code analysis checks, we must handle all elements of the enum in the switch
+     * statement.
+     ','line_number':727,'multiline':True]['text':'
+         * Reconstruct the change number from the key. See key_value() for details on how the key is
+         * constructed.
+         ','line_number':753,'multiline':True]['text':'
+ * check_backup --
+ *     Verify the backup to make sure the proper tables exist and have the correct content.
+ ','line_number':780,'multiline':True]['text':'
+ * main --
+ *     TODO: Add a comment describing this function.
+ ','line_number':809,'multiline':True]['text':' Set our own abort handler ','line_number':831,'multiline':True]['text':' Put the backup directories as the same level as the home directory. ','line_number':868,'multiline':True]['text':'
+     * We create an overall max_value_size.  From that, we'll set a random max_value_size per table.
+     * In addition, individual values put into each table vary randomly in size, up to the
+     * max_value_size of the table.
+     * This tends to make sure that 1) each table has a "personality" of size ranges within it
+     * 2) there are some runs that tend to have a lot more data than other runs.  If we made every
+     * insert choose a uniform random size between 1 and MAX_VALUE_SIZE, once we did a bunch
+     * of inserts, each run would look very much the same with respect to value size.
+     ','line_number':879,'multiline':True]['text':' Compute a random value of file_max. ','line_number':890,'multiline':True]['text':' small log files, min 100K ','line_number':893,'multiline':True]['text':' 200K to ~1M ','line_number':895,'multiline':True]['text':' 1M to ~20M ','line_number':897,'multiline':True]['text':'
+     * Give each table its own random generator. This makes it easier to simplify a failing test to
+     * use fewer tables, but have those just tables behave the same.
+     ','line_number':907,'multiline':True]['text':' How many files should we update until next checkpoint. ','line_number':917,'multiline':True]['text':'
+         * We have schema changes during about half the iterations. The number of schema changes
+         * varies, averaging 10.
+         ','line_number':923,'multiline':True]['text':'
+                 * For schema events, we choose to create, rename or drop tables. We pick a random
+                 * slot, and if it is empty, create a table there. Otherwise, we rename or drop.
+                 * That should give us a steady state with slots mostly filled.
+                 ','line_number':929,'multiline':True]['text':' Close and reopen the connection once in a while. ','line_number':954,'multiline':True]['text':' Check the source bitmap after restart. Copy while closed. ','line_number':958,'multiline':True]['text':' Test against the copied directory. ','line_number':965,'multiline':True]

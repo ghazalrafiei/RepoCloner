@@ -1,0 +1,304 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]['text':' File: dpml_ux_inv_trig.c ','line_number':31,'multiline':True]['text':'
+**
+**
+**
+**  Facility:
+**
+**	DPML
+**
+**  Abstract:
+**
+**	This file contains the code for computing the radian and degree
+**	inverse trig functions of an unpacked x-float value.  In addition,
+**	it contains the user interface code for the pack x-float inverse
+**	trig functions and the mphoc code for building the class to action
+**	table.
+**
+**  Modification History:
+**
+**	1-001	Original version.  RNH 21-Sep-95
+**	1-002	atan(2q0) bug fix. GWK 20-Nov-98
+**      1-003   Fixed problem with quotient estimation in atan2 when the
+**              high digits of y and x are equal. RNH 19-Apr-02
+**      1-004   Added special intel specific switch in class to
+**              action map. Added class to action map for atan2 and atan2d
+**              when y is -0. SBN 22-Apr-2002.    
+**      1-005   Modified unpacked_result to array of 2 in C_UX_ATAN2.
+**              SBN 24-Apr-2002. 
+**      1-006   Added interface macros. SBN 29-Apr-2002.
+**      1-007   Changed type of diff from unsigned to signed in quotient
+**              estimation. SBN 30-Apr-2002. 
+**      1-008   Modified interface macros. SBN 15-May-2002.
+**
+** Build Info:
+**
+**	Preprocess this file with MAKE_INCLUDE defined to produce a .h
+**	file containing the class-to-action map and appropriate constants
+**	for the inverse trig functions.  Then compile this file with *NO*
+**	defines to get the code for inverse trig functions.
+','line_number':32,'multiline':True]['text':' 
+** 1. BASIC DESIGN/ALGORITHMS
+** --------------------------
+** 
+** The basic design of for the inverse trig functions relies on two evaluation
+** routines, one for the atan family of functions and one for the asin/acos
+** family.  Within each family, the differences between the degree and radian
+** versions are handled by multiplying the radian result by 180/pi to get
+** the degree result before rounding back to X_FLOAT precision.  It is possible
+** to account for the radian/degree differences by using different sets of
+** constants.  In order to discuss some of the design issues independent of the
+** choice mechanism for dealing with the radian/degree differences, we will use
+** the symbolic name CYCLE to refer to 180 or pi.
+** 
+** 
+** 1.1 ATAN
+** --------
+** 
+** We note that the atan(x) = atan2(x,1), so we will confine most of the
+** discussion to the atan2 case.  The basic algorithm makes use of the
+** following identities:
+** 
+** 		atan2(-y,x) = - atan2(y,x)			(1)
+** 		atan2(y,-x) = CYCLE - atan(y,x)			(2)
+** 		atan2(y, x) = atan(y/x)	x,y >= 0		(3)
+** 		atan(z) = atan(a) + atan[(z - a)/(1 + a*z)	(4)
+** 		atan(1/z) = CYCLE/2 - atan(z)			(5)
+** 
+** Items (1) through (3) imply that for the most part we need only deal with
+** |y/x|.  In particular, based on the above we make the following definitions
+** of i, C(i), S(i) and z(i), according to the size of |y/x|:
+** 
+** 	Size of |y/x|	 i	  c(i)	  s(i)        z(i)
+** 	-------------	---	--------- ---- ------------------
+** 	[0, 1/2)	 0	    0	    1         |y/x|
+** 	[1/2, 2]	 1	 CYCLE/4    1  (|y|-|x|)/(|y|+|x|)
+** 	(2, Inf)	 2	 CYCLE/2   -1         |x/y|
+** 
+** From which it follows that:
+** 
+** 		atan2(|y|,|x|) = c(i) + s(i)*atan(z(i))
+** 
+** where 0 <= z(i) < 1/2.  Using (2) we can extend the above table for negative
+** x as
+** 	Size of |y/x|	 i	   c(i)	  s(i)        z(i)
+** 	--------------	---	--------- ---- ------------------
+** 	[0, 1/2) x < 0	 3	CYCLE	   -1         |y/x|
+** 	[1/2, 2] x < 0	 4	3*CYCLE/4  -1  (|y|-|x|)/(|y|+|x|)
+** 	(2, Inf) x < 0	 5	CYCLE/2	    1         |x/y|
+** 
+** Finally, using (1) we have
+** 
+** 		atan2(y,x) = sign(y)*[c(i) + s(i)*atan(z(i))]
+** 
+** Based on the above, the general approach to evaluating atan2(y,x) is: 
+** 
+** 	(a) compute the exponent value, n, of y/x
+** 	(b) Based on n and the sign of x, compute the index i, and the
+** 	    value z(i).
+** 	(c) compute atan(z(i)) using a rational approximation (see section
+** 	    2)
+** 	(d) based on i, compute c(i) + atan(z(i)) or c(i) - atan(z(i))
+** 	(e) copy the sign of y onto the last result.
+** 
+** At this point we would like to discuss step (d) in more detail.  We note
+** the following:
+** 
+** 		o c(i) = (i/4)*CYCLE      for i = 0, 1, 2
+** 		o c(i+3) = (4-i)/4]*CYCLE for i = 0, 1, 2
+** 		o s(i+3) = -s(i)          for i = 0, 1, 2
+** 
+** This implies that during the screening to determine the interval, we can
+** determine c(i) and s(i) for i = 0, 1, or 2 and then adjust c(i) and s(i)
+** to reflect the sign of x.  
+** 
+** 
+** EVALUATE_RATIONAL depends on the reduced argument x satisfying
+** |x| < 1 , and the coefficients decreasing.  If the coefficients
+** don't decrease, shifting the exponent of the reduced argument 
+** (effectively multiplying by 2, 4, or more) and pulling this factor
+** out of the coefficients can then allow them to decrease.
+** For atan, the reduced argument has its exponent shifted by 1,
+** which effectively mutliplies it by 2.  If the argument is
+** exactly 1/2, the shift makes it 1, and EVALUATE_RATIONAL won't work.
+** So, we want to avoid a reduced argument of 1/2 for atan. 
+**
+** In order to call the polynomial evaluation routine with
+** a reduced argument strictly less than 1/2 we check the
+** value of the reduced argument after |y/x| is calculated.
+**
+** But rather than calculate |y/x|, its value is estimated by 
+** calculating its exponentt.  The value of this exponent
+** determines which of |y/x|, (|y|-|x|)/(|y|+|x|), or |x/y| is
+** actually calculated and used as the reduced argument.  
+** When the exponent is >1, the value is >= 2, and |x/y| is
+** calculated as the reduced argument.  But if |y/x| is
+** exactly = 2, |x/y| = 1/2, which should not be sent to the polynomial
+** evaluation routine.
+** So, the un-normalized exponent is checked, and decremented 
+** if the most significant bit of the fraction field is 0.
+** If the exponent is still >= 0, the initial reduced_argument = 1/2,
+** so we want to use (|y|-|x|)/(|y|+|x|) = 1/3 instead
+** To make this so:
+**   (1) decrement the index
+**   (2) un-toggle the sign bit
+**   (3) change the reduced argument to 1/3 (via a table entry)
+** 
+** 
+** 
+** 2. ATAN/ATAN2 EVALUATION
+** ------------------------
+** 
+** The atan family of functions call a common routine to unpack their arguments
+** and invoke the evaluation routine UX_ATAN2.  For atan and atand, the 'x'
+** argument passed to UX_ATAN2 is a null pointer.  UX_ATAN2 uses the null
+** pointer to distinguish between an atan evaluation and an atan2 evaluation.
+** Also, the null pointer is passed onto the divide routine, where it is
+** implicitly treated as a pointer to the value 1.  In this way, very little
+** special casing is required for atan cases being processed by UX_ATAN2.
+','line_number':80,'multiline':True]['text':' Determine (estimate ?) the exponent of y/x ','line_number':228,'multiline':True]['text':' This is a atan, rather than atan2 function ','line_number':231,'multiline':True]['text':' Do argument reduction ','line_number':248,'multiline':True]['text':' reduced argument is x/y ','line_number':255,'multiline':True]['text':' reduced argument is (y-x)/(y+x) ','line_number':263,'multiline':True]['text':' force reduced argument to be less than 1/2 ','line_number':274,'multiline':True]['text':' Evaluate the reduced argument ','line_number':285,'multiline':True]['text':' Add in the appropriate constant ','line_number':295,'multiline':True]['text':' Convert to degrees if necessary ','line_number':317,'multiline':True]['text':' Determine final sign and return ','line_number':322,'multiline':True]['text':'
+** C_UX_ATAN2 is the common processing routine for atanl, atan2l, atandl and
+** atan2dl.  C_UX_ATAN2 unpacks the input arguments, calls UX_ATAN2 and then
+** packs the results
+','line_number':328,'multiline':True]['text':'
+** The following routines are the user level interfaces to the packed x-float
+** atan family of routines
+','line_number':377,'multiline':True]['text':' 
+** 3.0 ASIN/ACOS
+** -------------
+** 
+** The overall design for the asin/acos functions is remarkably similar to the
+** atan functions.  The asin/acos evaluations are based on the following
+** identities:
+** 
+** 		asin(-x) = -asin(x)				(1)
+** 		asin(x)  = CYCLE/2 - 2*asin(sqrt((1-x)/2))	(2)
+** 		acos(x)  = CYCLE/2 - asin(x)			(3)
+** 
+** As for atan, based on the above identities and the size of x, we can define
+** quantities i, j, c(i), s(i), t(i) and z(i) such that
+** 
+** 	asin(x) or acos(x) = s(i)*[ c(i) + t(i)*2^j*asin(z(i))]
+** 
+** 
+** 	Function      x	     i	s(i)    c(i)  t(i)  j     z(i)
+** 	-------- ---------- ---	---- -------- ---- --- ------------------
+** 	  asin   [-1, -1/2)  3   -1   CYCLE/2  -1   1  sqrt((1-|x|)/2)
+** 	         [-1/2, 0)   2   -1      0      1   0       |x|
+** 	         [0, 1/2)    0    1      0      1   0       |x|
+** 	         [1/2, 1)    1    1   CYCLE/2  -1   1  sqrt((1-|x|)/2)
+** 
+** 	  acos   [-1, -1/2)  3    1    CYCLE   -1   1  sqrt((1-|x|)/2)
+** 	         [-1/2, 0)   2    1   CYCLE/2   1   0       |x|
+** 	         [0, 1/2)    0    1   CYCLE/2  -1   0       |x|
+** 	         [1/2, 1)    1    1      0      1   1  sqrt((1-|x|)/2)
+** 
+** With the above in mind, the general approach to evaluating asin or acos is: 
+** 
+** 	(a) Based on the exponent and sign of x, compute the index i, and the
+** 	    values of j and z(i).
+** 	(b) compute w = asin(z(i)) using a rational approximation (see section
+** 	    2)
+** 	(c) increment the exponent of w by j.
+** 	(d) based on i, compute s(i)*[c(i) + t(i)*w]
+** 
+** The algorithm for determining s(i), t(i) and c(i) for asin and acos is more
+** complicated, so we resort to a "table look-up" scheme.  That is, We assume
+** that there will be a array of _UX_FLOAT constants that contains the values
+** CYCLE/4, CYCLE/2, 3*CYCLE/4 and CYCLE.  For each i in step (b), we can
+** allocate a 7 bit field within a U_INT_32 value that encodes the index of
+** c(i) in the constant table and the values of s(i) and t(i).  This allocation
+** can be done at compile time, so that at run time, step (d) consists of
+** accessing the appropriate 7 bit field and extracting s(i), t(i) and the
+** index for c(i).  We assume that the 7 bit fields are allocated as
+** 
+** 		        7          2  1  0
+** 			 +----------+--+--+
+** 			 |  index   | s| t|
+** 			 +----------+--+--+
+** 
+** with the first field starting at bit 4.  We further assume that the bit 0 is
+** one for a degree evaluation and 0 otherwise.
+** 
+** 
+** 4. ATAN AND ASIN EVALUATION
+** ---------------------------
+** 
+** Both atan and asin are more efficiently evaluated using rational
+** approximations than polynomial evaluations.  Extrapolating from the tables
+** in Hart and the current x-float asin polynomial, the number of terms in a
+** polynomial and a rational approximations are:
+** 
+** 		Function	polynomial	rational
+** 		--------	----------	--------
+** 		  asin		    32		 (10,10)
+** 		  atan		    30		 (10,10)
+** 
+** 5. ASIN/ACOS EVALUATION
+** -----------------------
+** 
+** Since asin and acos do not require unpacked interfaces, the user level
+** routines do not unpack their arguments.  Instead they simply pass them on to
+** the general asin/acos evaluation routine, UX_ASIN_ACOS.  The interface
+** to UX_ASIN_ACOS is:
+** 
+** 	static void
+** 	UX_ASIN_ACOS(
+** 	    _X_FLOAT     * packed_argument,
+** 	    WORD           index_map,
+**          WORD           invalid_error,
+**          U_WORD const * class_to_action_map,
+** 	    _X_FLOAT     * packed_result);
+** 
+** where: 'index_map' is the 32 bit data item used to encode the c(i)'s, s(i)'s
+** and t(i)'s defined in section 1; 'invalid_error' is the error code for the
+** indicated error and 'class_to_action_array' is the mapping array for the
+** given function.
+','line_number':471,'multiline':True]['text':'
+    ** Determine the index based on size of x and sign(x).  Also
+    ** screen out arguments |x| > 1.
+    ','line_number':605,'multiline':True]['text':' |x| >= 1/2 ','line_number':616,'multiline':True]['text':' 1/2 <= |argument| < 1, compute sqrt((1-x)/2) ','line_number':620,'multiline':True]['text':' separate |x| = 1 from |x| > 1 ','line_number':628,'multiline':True]['text':' |x| = 1, make "reduced argument" zero ','line_number':632,'multiline':True]['text':' Force "overflow" to signal error ','line_number':636,'multiline':True]['text':'
+     ** Set sign for polynomial evaluation and scale by 2 if needed
+     ','line_number':652,'multiline':True]['text':' Add in c(i) ','line_number':660,'multiline':True]['text':' Set sign of result and convert to degrees ','line_number':665,'multiline':True]['text':'
+** The following routines are the user level interfaces to the packed
+** asin, acos, asind and acosd routines.
+','line_number':681,'multiline':True]['text':' Interval   Constant Index    t  s ','line_number':689,'multiline':True]['text':' Interval    Constant Index    t  s ','line_number':695,'multiline':True]['text':'
+** MPHOC code for generatings the class-to-action mappings, rational
+** coefficients and miscellaneous constants.
+','line_number':783,'multiline':True]['text':' data 1 ','line_number':809,'multiline':True]['text':' data 1 ','line_number':823,'multiline':True]['text':' data 2 ','line_number':824,'multiline':True]['text':' data 1 ','line_number':837,'multiline':True]['text':' data 1 ','line_number':851,'multiline':True]['text':' data 2 ','line_number':852,'multiline':True]['text':' data 1 ','line_number':866,'multiline':True]['text':' data 1 ','line_number':877,'multiline':True]['text':' Index 0: class-to-action for y ','line_number':883,'multiline':True]['text':' Index 1: class-to-index mapping ','line_number':889,'multiline':True]['text':' index 2: mapping for x when y is +/- Inf ','line_number':901,'multiline':True]['text':' index 3: mapping for x when y is +/-Norm or +/-Denorm ','line_number':929,'multiline':True]['text':' index 4: mapping for x when y is +Zero ','line_number':944,'multiline':True]['text':' index 5: mapping for x when y is -Zero ','line_number':959,'multiline':True]['text':' index 4: mapping for x when y is +Zero ','line_number':972,'multiline':True]['text':' index 5: mapping for x when y is -Zero ','line_number':986,'multiline':True]['text':' data 1 ','line_number':999,'multiline':True]['text':' data 2 ','line_number':1001,'multiline':True]['text':' data 3 ','line_number':1002,'multiline':True]['text':' data 2 ','line_number':1004,'multiline':True]['text':' data 3 ','line_number':1005,'multiline':True]['text':' data 4 ','line_number':1007,'multiline':True]['text':' data 5 ','line_number':1008,'multiline':True]['text':' data 6 ','line_number':1009,'multiline':True]['text':' Index 0: class-to-action for y ','line_number':1015,'multiline':True]['text':' Index 1: class-to-index mapping ','line_number':1021,'multiline':True]['text':' index 2: mapping for x when y is +Inf ','line_number':1033,'multiline':True]['text':' index 3: mapping for x when y is -Inf ','line_number':1047,'multiline':True]['text':' index 4: mapping for x when y is +Norm or +Denorm ','line_number':1061,'multiline':True]['text':' index 5: mapping for x when y is -Norm or -Denorm ','line_number':1075,'multiline':True]['text':' index 6: mapping for x when y is +Zero ','line_number':1089,'multiline':True]['text':' index 7: mapping for x when y is -Zero ','line_number':1103,'multiline':True]['text':' data 1 ','line_number':1133,'multiline':True]['text':' data 2 ','line_number':1134,'multiline':True]['text':' data 3 ','line_number':1135,'multiline':True]['text':' data 4 ','line_number':1136,'multiline':True]['text':' data 5 ','line_number':1137,'multiline':True]['text':' data 6 ','line_number':1138,'multiline':True]['text':'
+    ** The following code generates the "table" of constants that the
+    ** UX_ATAN2 and UX_ASIN_ACOS routines index into find the appropriate
+    ** additive term.  As each value is added to the table, its offset
+    ** (in bytes) is computed and recorded as a #define.
+    ','line_number':1140,'multiline':True]['text':' Miscellaneous constants ','line_number':1162,'multiline':True]['text':'
+    ** Get the rational coefficients for atan.  Since the reduced argument
+    ** is always less that 1/2, we can scale the argument up by 2, which
+    ** puts more leading zeros in the coefficients and there by promotes
+    ** early exits from the polynomial loop
+    ','line_number':1169,'multiline':True]['text':' One more time for asin rational coefficients.  Again, we scale by 2 ','line_number':1202,'multiline':True]

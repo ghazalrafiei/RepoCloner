@@ -1,0 +1,240 @@
+['text':'*
+ *    Copyright (C) 2020-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * A PrimaryOnlyService is a group of tasks (represented in memory as Instances) that should only
+ * be run when the node is primary, and should continue running until completion even across
+ * replica set failovers, resuming on the new primary after any successful election. Each service
+ * will have a dedicated collection where state documents are stored containing the state of any
+ * running instances, which are used to recreate the running instances after failover.
+ ','line_number':84,'multiline':True]['text':'*
+     * Client decoration used by Clients that are a part of a PrimaryOnlyService.
+     ','line_number':93,'multiline':True]['text':'*
+     * Every instance must have an ID that is unique among instances of that service. The
+     * InstanceID will be the _id of the state document corresponding to that instance.
+     ','line_number':101,'multiline':True]['text':'*
+     * A PrimaryOnlyService::Instance represents one running PrimaryOnlyService task.  These
+     * correspond 1-1 to state documents persisted in the service's state document collection.
+     * Instances objects live for no longer than the length of a single primary's term, however the
+     * tasks they conceptually represent can live on across terms. Instance objects are released on
+     * stepDown, and recreated on stepUp if they have not yet finished their work (and therefore
+     * have a corresponding document in the service's state document collection). After being
+     * released from the PrimaryOnlyService object on stepdown, instance objects may continue to
+     * exist until the subsequent stepUp. During stepUp, however, we join() any remaining tasks from
+     * the previous term, guaranteeing that there will never be 2 Instance objects representing the
+     * same conceptual task coexisting. Instance objects are released from the PrimaryOnlyService
+     * object when their corresponding state documents are removed.
+     * NOTE: PrimaryOnlyService
+     * implementations shouldn't have their Instance subclass extended this Instance class directly,
+     * instead they should extend TypedInstance, defined below.
+     ','line_number':107,'multiline':True]['text':'*
+         * This is the main function that PrimaryOnlyService implementations will need to implement,
+         * and is where the bulk of the work those services perform is scheduled. All work run for
+         * this Instance *must* be scheduled on 'executor'. Instances are responsible for inserting,
+         * updating, and deleting their state documents as needed.
+         *
+         * IMPORTANT NOTES:
+         * 1. Once the state document for this Instance is deleted, all shared_ptr
+         * references to this Instance that are managed by the PrimaryOnlyService machinery are
+         * removed, so all work running on behalf of this Instance must extend the Instance's
+         * lifetime by getting a shared_ptr via 'shared_from_this' or else the Instance may be
+         * destroyed out from under them.
+         *
+         * 2. On stepdown/shutdown of a PrimaryOnlyService, the input cancellation token will be
+         * marked canceled.
+         *
+         * 3. Currently, 'run()' is scheduled on the Instance ScopedTaskExecutor, which means it's
+         * possible the task never gets executed if the scheduling executor is shutdown
+         * (eg. as part of stepdown) before the task gets run. This also implies that creating
+         * an instance does not guarantee that run() will be called before destruction, and so
+         * PrimaryOnlyService implementations should not rely on run() to guarantee behavior around
+         * safe destruction of an Instance.
+         ','line_number':127,'multiline':True]['text':'*
+         * This is the function that is called when this running Instance needs to be interrupted.
+         * It should unblock any work managed by this Instance by, for example, emplacing the given
+         * error into any unresolved promises that the Instance manages.
+         ','line_number':153,'multiline':True]['text':'*
+         * Returns a BSONObj containing information about the state of this running Instance, to be
+         * reported in currentOp() output, or boost::none if this Instance should not show up in
+         * currentOp, based on the given 'connMode' and 'sessionMode' that currentOp() is running
+         * with.
+         ','line_number':160,'multiline':True]['text':'*
+         * Validate the found instance matches options in the state document of a new instance.
+         * Called in PrimaryOnlyService::getOrCreateInstance to check found instances for conflict.
+         * Throws an exception if state document conflicts with found instance.
+         ','line_number':170,'multiline':True]['text':'*
+     * Extends Instance with a template specifier that subclasses should specialize on
+     * themselves. This allows providing a function to lookup an Instance object that returns the
+     * proper derived Instance type.
+     ','line_number':178,'multiline':True]['text':'*
+         * Same functionality as PrimaryOnlyService::lookupInstance, but returns a pointer of
+         * the proper derived class for the Instance.
+         ','line_number':189,'multiline':True]['text':' If there is an active instance, the service must be running.','line_number':200,'multiline':False]['text':'*
+         * Same functionality as PrimaryOnlyService::getOrCreateInstance, but returns a pointer of
+         * the proper derived class for the Instance.
+         ','line_number':206,'multiline':True]['text':'*
+     * Returns the name of this Primary Only Service.
+     ','line_number':223,'multiline':True]['text':'*
+     * Returns the collection where state documents corresponding to instances of this service are
+     * persisted.
+     ','line_number':228,'multiline':True]['text':'*
+     * Returns the limits that should be imposed on the size of the underlying thread pool used for
+     * running Instances of this PrimaryOnlyService.
+     ','line_number':234,'multiline':True]['text':'*
+     * Constructs and starts up _executor.
+     ','line_number':240,'multiline':True]['text':'*
+     * Releases all running Instances, then shuts down and joins _executor, ensuring that
+     * there are no remaining tasks running.
+     ','line_number':245,'multiline':True]['text':'*
+     * Called on transition to primary. Resumes any running Instances of this service
+     * based on their persisted state documents (after waiting for the first write of the new term
+     * to be majority committed). Also joins() any outstanding jobs from the previous term, thereby
+     * ensuring that two Instance objects with the same InstanceID cannot coexist.
+     ','line_number':251,'multiline':True]['text':'*
+     * Called on stepDown. Releases all running Instances of this service from management by this
+     * PrimaryOnlyService object. The Instances will have their OperationContexts interrupted
+     * independently. Instance objects may continue to exist in memory in a detached state until the
+     * next stepUp. Also shuts down _executor, forcing all outstanding jobs to complete.
+     ','line_number':259,'multiline':True]['text':'*
+     * Releases the shared_ptr for the given InstanceID (if present) from management by this
+     * service. This is called by the OpObserver when a state document in this service's state
+     * document collection is deleted, and is the main way that instances get removed from
+     * _activeInstances and deleted.
+     * If 'status' is not OK, it is passed as argument to the interrupt() method on the instance.
+     ','line_number':267,'multiline':True]['text':'*
+     * Releases all Instances from _activeInstances. Called by the OpObserver if this service's
+     * state document collection is dropped. If 'status' is not OK, it is passed as argument to the
+     * interrupt() method on each instance.
+     ','line_number':276,'multiline':True]['text':'*
+     * Adds information of this service to the result 'BSONObjBuilder', containing the number of
+     * active instances and the state of this service.
+     ','line_number':283,'multiline':True]['text':'*
+     * Adds information about the Instances belonging to this service to 'ops', to show up in
+     * currentOp(). 'connMode' and 'sessionMode' are arguments provided to currentOp, and can be
+     * used to make decisions about whether or not various Instances should actually show up in the
+     * currentOp() output for this invocation of currentOp().
+     ','line_number':289,'multiline':True]['text':'*
+     * Registers that this OperationContext is being used by a thread running on behalf of this
+     * PrimaryOnlyService.  Ensures that this OperationContext will be interrupted during stepDown.
+     * If this service is not currently running, pro-actively interrupts the opCtx, unless
+     * 'allowOpCtxWhileRebuilding' is true and the current _state is kRebuilding.
+     ','line_number':299,'multiline':True]['text':'*
+     * Unregisters a previously registered OperationContext. Indicates that this OpCtx is done
+     * performing work (and most likely is about to be deleted) and thus doesn't need to be
+     * interrupted at stepDown.
+     ','line_number':307,'multiline':True]['text':'*
+     * Allows OpCtxs created on PrimaryOnlyService threads to remain uninterrupted, even if the
+     * service they are associated with aren't in state kRunning, so long as the state is
+     * kRebuilding instead. Used during the stepUp process to allow the database read or write
+     * required to rebuild a service and get it running in the first place. Does not prevent other
+     * forms of OpCtx interruption, such as from stepDown or calls to killOp.
+     ','line_number':317,'multiline':True]['text':'*
+     * Validate the instance to be created with initialState does not conflict with any existing
+     * ones. The implementation can choose to throw ConflictingOperationInProgress if there is a
+     * conflict or a named error code specified to the particular service if it would like to attach
+     * ErrorExtraInfo.
+     ','line_number':334,'multiline':True]['text':'*
+     * Constructs a new Instance object with the given initial state.
+     ','line_number':345,'multiline':True]['text':'*
+     * Given an InstanceId returns the corresponding running Instance object (or boost::none if
+     * there is none), as well as a boolean flag indicating whether the service is paused (i.e.
+     * stepped down) or shutdown, in which case all the instances have been released so we will
+     * always return boost::none. If the service state is kRebuilding, we will first wait
+     * (interruptibly on the opCtx) for the rebuild to complete.
+     ','line_number':350,'multiline':True]['text':'*
+     * Extracts an InstanceID from the _id field of the given 'initialState' object. If an Instance
+     * with the extracted InstanceID already exists in _activeInstances, returns true and the
+     * instance itself.  If not, constructs a new Instance (by calling constructInstance()),
+     * registers it in _activeInstances, and returns it with the boolean set to false. It is illegal
+     * to call this more than once with 'initialState' documents that have the same _id but are
+     * otherwise not completely identical.
+     *
+     * Returns a pair with an Instance and a boolean, the boolean indicates if the Instance have
+     * been created in this invocation (true) or already existed (false).
+     *
+     * Throws NotWritablePrimary if the node is not currently primary.
+     ','line_number':360,'multiline':True]['text':'*
+     * Since, scoped task executor shuts down on stepdown, we might need to run some instance work,
+     * like cleanup, even while the node is not primary. So, use the parent executor in that case.
+     ','line_number':377,'multiline':True]['text':'*
+     * Returns shared pointers to all Instance objects that belong to this service.
+     ','line_number':383,'multiline':True]['text':'*
+     * Represents a PrimaryOnlyService::Instance that has already been scheduled to be run.
+     ','line_number':397,'multiline':True]['text':'*
+         * Blocking call that returns once the instance has finished running.
+         ','line_number':417,'multiline':True]['text':' A future that will be resolved when the passed in Instance has finished running.','line_number':436,'multiline':False]['text':' Each instance of a PrimaryOnlyService will own a CancellationSource for memory management','line_number':439,'multiline':False]['text':' purposes. Any memory associated with an instance's CancellationSource will be cleaned up','line_number':440,'multiline':False]['text':' upon the destruction of an instance. It must be instantiated from a token from the','line_number':441,'multiline':False]['text':' CancellationSource of the PrimaryOnlyService class in order to attain a hierarchical','line_number':442,'multiline':False]['text':' ownership pattern that allows for cancellation token clean up if the PrimaryOnlyService','line_number':443,'multiline':False]['text':' is shutdown/stepdown.','line_number':444,'multiline':False]['text':'
+     * This method is called once the _executor is initialized. This can be called only once
+     * in the lifetime of the POS object instance.
+     ','line_number':448,'multiline':True]['text':'
+     * Returns true if the _executor is initialized.
+     ','line_number':453,'multiline':True]['text':'*
+     * Called as part of onSetUp before rebuilding instances. This function should do any additional
+     * work required to rebuild the service on stepup, for example, creating a TTL index for the
+     * state machine collection.
+     ','line_number':458,'multiline':True]['text':'*
+     * Called as part of the POS onStepDown/onShutdown hooks before interrupting instances.
+     ','line_number':468,'multiline':True]['text':'*
+     * Called as part of onStepUp.  Queries the state document collection for this
+     * PrimaryOnlyService, constructs Instance objects for each document found, and schedules work
+     * to run all the newly recreated Instances.
+     ','line_number':473,'multiline':True]['text':'*
+     * Schedules work to call the provided instance's 'run' method and inserts the new instance into
+     * the _activeInstances map as a ActiveInstance.
+     ','line_number':480,'multiline':True]['text':'*
+     * Interrupts all running instances.
+     ','line_number':487,'multiline':True]['text':'*
+     * Returns a string representation of the current state.
+     ','line_number':492,'multiline':True]['text':'*
+     *  Blocks until `_state` is not equal to `kRebuilding`. May release the mutex, but always
+     * acquires it before returning.
+     ','line_number':497,'multiline':True]['text':'*
+     * Updates `_state` with `newState` and notifies waiters on `_stateChangeCV`.
+     ','line_number':503,'multiline':True]['text':' All member variables are labeled with one of the following codes indicating the','line_number':510,'multiline':False]['text':' synchronization rules for accessing them.','line_number':511,'multiline':False]['text':'','line_number':512,'multiline':False]['text':' (R)  Read-only in concurrent operation; no synchronization required.','line_number':513,'multiline':False]['text':' (S)  Self-synchronizing; access according to class's own rules.','line_number':514,'multiline':False]['text':' (M)  Reads and writes guarded by _mutex.','line_number':515,'multiline':False]['text':' (W)  Synchronization required only for writes.','line_number':516,'multiline':False]['text':' Condvar to receive notifications when _state changes.','line_number':519,'multiline':False]['text':' (S)','line_number':520,'multiline':False]['text':' A ScopedTaskExecutor that is used to perform all work run on behalf of an Instance.','line_number':522,'multiline':False]['text':' This ScopedTaskExecutor wraps _executor and is created at stepUp and destroyed at','line_number':523,'multiline':False]['text':' stepDown so that all outstanding tasks get interrupted.','line_number':524,'multiline':False]['text':' (M)','line_number':525,'multiline':False]['text':' TODO SERVER-52901: Remove _hasExecutor.','line_number':527,'multiline':False]['text':' Note: This method has to be accessed only via _setHasExecutor() and _getHasExecutor()','line_number':528,'multiline':False]['text':' methods. This is present to make PrimaryOnlyService::_executor to have (W) synchronization','line_number':529,'multiline':False]['text':' rule instead of (M).','line_number':530,'multiline':False]['text':'(S)','line_number':531,'multiline':False]['text':' TODO SERVER-52901: Make the synchronization rule as (R).','line_number':533,'multiline':False]['text':' The concrete TaskExecutor backing _scopedExecutor. While _scopedExecutor is created and','line_number':534,'multiline':False]['text':' destroyed with each stepUp/stepDown, _executor persists for the lifetime of the process. We','line_number':535,'multiline':False]['text':' want _executor to survive failover to prevent us from having to reallocate lots of','line_number':536,'multiline':False]['text':' thread and connection resources on every stepUp. Service instances should never have access','line_number':537,'multiline':False]['text':' to _executor directly, they should only ever use _scopedExecutor so that they get the','line_number':538,'multiline':False]['text':' guarantee that all outstanding tasks are interrupted at stepDown.','line_number':539,'multiline':False]['text':' (W)','line_number':540,'multiline':False]['text':' (M)','line_number':542,'multiline':False]['text':' If rebuilding the instances fails, for example due to a failure reloading the state documents','line_number':544,'multiline':False]['text':' from disk, this Status gets set to a non-ok value and calls to lookup() or getOrCreate() will','line_number':545,'multiline':False]['text':' throw this status until the node steps down. Note that this status must be populated with the','line_number':546,'multiline':False]['text':' relevant error before _setState is used to change the status to kRebuildFailed and waiters on','line_number':547,'multiline':False]['text':' _stateChangeCV are notified, as those waiters may attempt to read this status.','line_number':548,'multiline':False]['text':' (M)','line_number':549,'multiline':False]['text':' The term that this service is running under.','line_number':551,'multiline':False]['text':' (M)','line_number':552,'multiline':False]['text':' Map of running instances, keyed by InstanceID.','line_number':554,'multiline':False]['text':' (M)','line_number':555,'multiline':False]['text':' A set of OpCtxs running on Client threads associated with this PrimaryOnlyService.','line_number':557,'multiline':False]['text':' (M)','line_number':558,'multiline':False]['text':' CancellationSource used on stepdown/shutdown to cancel work in all running instances of a','line_number':560,'multiline':False]['text':' PrimaryOnlyService.','line_number':561,'multiline':False]['text':'*
+ * Registry that contains all PrimaryOnlyServices.  Services should be registered at process start
+ * up before accepting connections, and the set of registered services should not change from that
+ * point on.
+ * The Registry is responsible for notifying all PrimaryOnlyServices of replication state changes
+ * into and out of primary state.
+ ','line_number':565,'multiline':True]['text':'*
+     * Registers a new PrimaryOnlyService. Should only be called at startup.
+     ','line_number':579,'multiline':True]['text':'*
+     * Looks up a registered service by service name.  Calling it with a non-registered service name
+     * is a programmer error as all services should be known statically and registered at startup.
+     * Since all services live for the lifetime of the mongod process (unlike their Instance
+     * objects), there's no concern about the returned pointer becoming invalid.
+     ','line_number':584,'multiline':True]['text':'*
+     * Looks up a registered service by the namespace of its state document collection. Returns
+     * nullptr if no service is found with the given state document namespace.
+     ','line_number':592,'multiline':True]['text':'*
+     * Adds a 'primaryOnlyServices' sub-obj to the 'result' BSONObjBuilder containing information
+     * (given by PrimaryService::reportForServerStatus) of each registered service.
+     ','line_number':598,'multiline':True]['text':'*
+     * Adds information about the Instances running in all registered services to 'ops', to show up
+     * in currentOp(). 'connMode' and 'sessionMode' are arguments provided to currentOp, and can be
+     * used to make decisions about whether or not various Instances should actually show up in the
+     * currentOp() output for this invocation of currentOp().
+     ','line_number':604,'multiline':True]['text':' Doesn't own the service, contains a pointer to the service owned by _servicesByName.','line_number':630,'multiline':False]['text':' This is safe since services don't change after startup.','line_number':631,'multiline':False]['text':' namespace repl','line_number':635,'multiline':False]['text':' namespace mongo','line_number':636,'multiline':False]

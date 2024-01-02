@@ -1,0 +1,91 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]['text':'
+*******************************************************************************
+*
+*   Copyright (C) 2003-2012, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+*******************************************************************************
+*   file name:  ucmstate.c
+*   encoding:   UTF-8
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 2003oct09
+*   created by: Markus W. Scherer
+*
+*   This file handles ICU .ucm file state information as part of the ucm module.
+*   Most of this code used to be in makeconv.c.
+','line_number':3,'multiline':True]['text':' MBCS state handling ------------------------------------------------------ ','line_number':34,'multiline':True]['text':'
+ * state table row grammar (ebnf-style):
+ * (whitespace is allowed between all tokens)
+ *
+ * row=[[firstentry ','] entry (',' entry)*]
+ * firstentry="initial" | "surrogates"
+ *            (initial state (default for state 0), output is all surrogate pairs)
+ * entry=range [':' nextstate] ['.' action]
+ * range=number ['-' number]
+ * nextstate=number
+ *           (0..7f)
+ * action='u' | 's' | 'p' | 'i'
+ *        (unassigned, state change only, surrogate pair, illegal)
+ * number=(1- or 2-digit hexadecimal number)
+ ','line_number':36,'multiline':True]['text':' initialize the state: all illegal with U+ffff ','line_number':57,'multiline':True]['text':' skip leading white space ','line_number':62,'multiline':True]['text':' is there an "initial" or "surrogates" directive? ','line_number':65,'multiline':True]['text':' empty state row: all-illegal ','line_number':79,'multiline':True]['text':' read an entry, the start of the range first ','line_number':84,'multiline':True]['text':' read the end of the range if there is one ','line_number':92,'multiline':True]['text':' determine the state entrys for this range ','line_number':104,'multiline':True]['text':' the default is: final state with valid entries ','line_number':106,'multiline':True]['text':' get the next state, default to 0 ','line_number':111,'multiline':True]['text':' get the state action, default to valid ','line_number':123,'multiline':True]['text':' this is a final state ','line_number':125,'multiline':True]['text':' unassigned set U+fffe ','line_number':130,'multiline':True]['text':' illegal set U+ffff ','line_number':144,'multiline':True]['text':' default to valid ','line_number':148,'multiline':True]['text':' this is an intermediate state, nothing to do ','line_number':152,'multiline':True]['text':' adjust "final valid" states according to the state flags ','line_number':156,'multiline':True]['text':' no adjustment ','line_number':160,'multiline':True]['text':' set the valid-direct code point to "unassigned"==0xfffe ','line_number':163,'multiline':True]['text':' set this entry for the range ','line_number':174,'multiline':True]['text':' remove comments and trailing CR and LF and remove whitespace from the end ','line_number':215,'multiline':True]['text':' skip leading white space and ignore empty lines ','line_number':226,'multiline':True]['text':' stop at the beginning of the mapping section ','line_number':232,'multiline':True]['text':' get the key name, bracketed in <> ','line_number':237,'multiline':True]['text':' get the value string, possibly quoted ','line_number':252,'multiline':True]['text':' remove the quotes ','line_number':257,'multiline':True]['text':' collect the information from the header field, ignore unknown keys ','line_number':264,'multiline':True]['text':' if an SBCS/DBCS/EBCDIC_STATEFUL converter has icu:state, then turn it into MBCS ','line_number':299,'multiline':True]['text':' post-processing ---------------------------------------------------------- ','line_number':331,'multiline':True]['text':'
+     * Sum up the offsets for all states.
+     * In each final state (where there are only final entries),
+     * the offsets add up directly.
+     * In all other state table rows, for each transition entry to another state,
+     * the offsets sum of that state needs to be added.
+     * This is achieved in at most countStates iterations.
+     ','line_number':338,'multiline':True]['text':' at first, add up only the final delta offsets to keep them <512 ','line_number':354,'multiline':True]['text':' no addition ','line_number':368,'multiline':True]['text':' now, add up the delta offsets for the transitional entries ','line_number':374,'multiline':True]['text':' that next state does not have a sum yet, we cannot finish the one for this state ','line_number':382,'multiline':True]['text':'
+     * For all "direct" (i.e., initial) states>0,
+     * the offsets need to be increased by the sum of
+     * the previous initial states.
+     ','line_number':402,'multiline':True]['text':' round up to the next even number to have the following data 32-bit-aligned ','line_number':421,'multiline':True]['text':' SBCS: use MBCS data structure with a default state table ','line_number':437,'multiline':True]['text':' EBCDIC_STATEFUL: use MBCS data structure with a default state table ','line_number':450,'multiline':True]['text':' DBCS: use MBCS data structure with a default state table ','line_number':463,'multiline':True]['text':'
+     * check that the min/max character lengths are reasonable;
+     * to do this right, all paths through the state table would have to be
+     * recursively walked while keeping track of the sequence lengths,
+     * but these simple checks cover most state tables in practice
+     ','line_number':481,'multiline':True]['text':' count non-direct states and compare with max B/char ','line_number':492,'multiline':True]['text':'
+         * if there are single-byte characters,
+         * then the initial state must have direct result states
+         ','line_number':507,'multiline':True]['text':'
+     * make sure that all "next state" values are within limits
+     * and that all next states after final ones have the "direct"
+     * flag of initial states
+     ','line_number':526,'multiline':True]['text':' is this an SI/SO (like EBCDIC-stateful) state table? ','line_number':551,'multiline':True]['text':' are the SI/SO all in the right places? ','line_number':561,'multiline':True]['text':' check that no unexpected state is a "direct" one ','line_number':578,'multiline':True]['text':' find a fallback for this offset; return the index or -1 if not found ','line_number':590,'multiline':True]['text':' shortcut: most codepages do not have fallbacks from codepage to Unicode ','line_number':597,'multiline':True]['text':' do a linear search for the fallback mapping (the table is not yet sorted) ','line_number':601,'multiline':True]['text':'
+ * This function tries to compact toUnicode tables for 2-byte codepages
+ * by finding lead bytes with all-unassigned trail bytes and adding another state
+ * for them.
+ ','line_number':610,'multiline':True]['text':' find the lead state ','line_number':627,'multiline':True]['text':' use the DBCS lead state for SI/SO codepages ','line_number':629,'multiline':True]['text':' find the main trail state: the most used target state ','line_number':635,'multiline':True]['text':' count possible savings from lead bytes with all-unassigned results in all trail bytes ','line_number':650,'multiline':True]['text':' for each lead byte ','line_number':653,'multiline':True]['text':' the offset is different for each lead byte ','line_number':658,'multiline':True]['text':' for each trail byte for this lead byte ','line_number':660,'multiline':True]['text':' do not count for this lead byte because there are assignments ','line_number':669,'multiline':True]['text':' do not count for this lead byte because there are assignments ','line_number':677,'multiline':True]['text':' all trail bytes for this lead byte are unassigned ','line_number':685,'multiline':True]['text':' subtract from the possible savings the cost of an additional state ','line_number':692,'multiline':True]['text':' count bytes, not 16-bit words ','line_number':693,'multiline':True]['text':' make a copy of the state table ','line_number':705,'multiline':True]['text':' add the new state ','line_number':713,'multiline':True]['text':'
+     * this function does not catch the degenerate case where all lead bytes
+     * have all-unassigned trail bytes and the lead state could be removed
+     ','line_number':714,'multiline':True]['text':' copy the old trail state, turning all assigned states into unassigned ones ','line_number':720,'multiline':True]['text':' in the lead state, redirect all lead bytes with all-unassigned trail bytes to the new state ','line_number':734,'multiline':True]['text':' sum up the new state table ','line_number':741,'multiline':True]['text':' allocate a new, smaller code units array ','line_number':747,'multiline':True]['text':' revert to the old state table ','line_number':761,'multiline':True]['text':' copy the code units for all assigned characters ','line_number':772,'multiline':True]['text':'
+     * The old state table has the same lead _and_ trail states for assigned characters!
+     * The differences are in the offsets, and in the trail states for some unassigned characters.
+     * For each character with an assigned state in the new table, it was assigned in the old one.
+     * Only still-assigned characters are copied.
+     * Note that fallback mappings need to get their offset values adjusted.
+     ','line_number':773,'multiline':True]['text':' for each initial state ','line_number':781,'multiline':True]['text':' for each lead byte from there ','line_number':784,'multiline':True]['text':' the new state does not have assigned states ','line_number':789,'multiline':True]['text':' for each trail byte ','line_number':793,'multiline':True]['text':' copy assigned-character code units and adjust fallback offsets ','line_number':796,'multiline':True]['text':' find the old offset according to the old state table ','line_number':800,'multiline':True]['text':' find the old offset according to the old state table ','line_number':809,'multiline':True]['text':' remove temporary flags from fallback offsets that protected them from being modified twice ','line_number':824,'multiline':True]['text':' free temporary memory ','line_number':829,'multiline':True]['text':'
+ * recursive sub-function of compactToUnicodeHelper()
+ * returns:
+ * >0 number of bytes that are used in unicodeCodeUnits[] that could be saved,
+ *    if all sequences from this state are unassigned, returns the
+ * <0 there are assignments in unicodeCodeUnits[]
+ * 0  no use of unicodeCodeUnits[]
+ ','line_number':834,'multiline':True]['text':' helper function for finding compaction opportunities ','line_number':898,'multiline':True]['text':' for each initial state ','line_number':905,'multiline':True]['text':' test each state table entry ','line_number':936,'multiline':True]['text':'
+             * if the entry is a final one with an MBCS_STATE_VALID_DIRECT_16 action code
+             * and the code point is "unassigned" (0xfffe), then change it to
+             * the "unassigned" action code with bits 26..23 set to zero and U+fffe.
+             ','line_number':940,'multiline':True]['text':' try to compact the toUnicode tables ','line_number':951,'multiline':True]['text':' sort toUFallbacks ','line_number':960,'multiline':True]['text':'
+     * It should be safe to sort them before compactToUnicode2() is called,
+     * because it should not change the relative order of the offset values
+     * that it adjusts, but they need to be sorted at some point, and
+     * it is safest here.
+     ','line_number':961,'multiline':True]['text':' nothing bad will happen... ','line_number':968,'multiline':True]['text':' use a complete state table ----------------------------------------------- ','line_number':975,'multiline':True]['text':' for SI/SO (like EBCDIC-stateful), double-byte sequences start in state 1 ','line_number':993,'multiline':True]['text':'
+     * Walk down the state table like in conversion,
+     * much like getNextUChar().
+     * We assume that c<=0x10ffff.
+     ','line_number':998,'multiline':True]['text':' count a complete character and prepare for a new one ','line_number':1023,'multiline':True]['text':' reserved, must never occur ','line_number':1029,'multiline':True]['text':'
+     * for SI/SO (like EBCDIC-stateful), multiple-character results
+     * must consist of only double-byte sequences
+     ','line_number':1041,'multiline':True]

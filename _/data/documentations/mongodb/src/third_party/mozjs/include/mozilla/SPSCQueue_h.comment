@@ -1,0 +1,171 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]['text':' Single producer single consumer lock-free and wait-free queue. ','line_number':7,'multiline':True]['text':'*
+   * This allows zeroing (using memset) or default-constructing a number of
+   * elements calling the constructors if necessary.
+   ','line_number':28,'multiline':True]['text':'*
+   * This allows either moving (if T supports it) or copying a number of
+   * elements from a `aSource` pointer to a `aDestination` pointer.
+   * If it is safe to do so and this call copies, this uses PodCopy. Otherwise,
+   * constructors and destructors are called in a loop.
+   ','line_number':33,'multiline':True]['text':' namespace detail','line_number':63,'multiline':False]['text':'*
+ * This data structure allows producing data from one thread, and consuming it
+ * on another thread, safely and without explicit synchronization.
+ *
+ * The role for the producer and the consumer must be constant, i.e., the
+ * producer should always be on one thread and the consumer should always be on
+ * another thread.
+ *
+ * Some words about the inner workings of this class:
+ * - Capacity is fixed. Only one allocation is performed, in the constructor.
+ *   When reading and writing, the return value of the method allows checking if
+ *   the ring buffer is empty or full.
+ * - We always keep the read index at least one element ahead of the write
+ *   index, so we can distinguish between an empty and a full ring buffer: an
+ *   empty ring buffer is when the write index is at the same position as the
+ *   read index. A full buffer is when the write index is exactly one position
+ *   before the read index.
+ * - We synchronize updates to the read index after having read the data, and
+ *   the write index after having written the data. This means that the each
+ *   thread can only touch a portion of the buffer that is not touched by the
+ *   other thread.
+ * - Callers are expected to provide buffers. When writing to the queue,
+ *   elements are copied into the internal storage from the buffer passed in.
+ *   When reading from the queue, the user is expected to provide a buffer.
+ *   Because this is a ring buffer, data might not be contiguous in memory;
+ *   providing an external buffer to copy into is an easy way to have linear
+ *   data for further processing.
+ ','line_number':65,'multiline':True]['text':'*
+   * Constructor for a ring buffer.
+   *
+   * This performs an allocation on the heap, but is the only allocation that
+   * will happen for the life time of a `SPSCRingBufferBase`.
+   *
+   * @param Capacity The maximum number of element this ring buffer will hold.
+   ','line_number':96,'multiline':True]['text':' One more element to distinguish from empty and full buffer. ','line_number':107,'multiline':True]['text':'*
+   * Push `aCount` zero or default constructed elements in the array.
+   *
+   * Only safely called on the producer thread.
+   *
+   * @param count The number of elements to enqueue.
+   * @return The number of element enqueued.
+   ','line_number':118,'multiline':True]['text':'*
+   * @brief Put an element in the queue.
+   *
+   * Only safely called on the producer thread.
+   *
+   * @param element The element to put in the queue.
+   *
+   * @return 1 if the element was inserted, 0 otherwise.
+   ','line_number':129,'multiline':True]['text':'*
+   * Push `aCount` elements in the ring buffer.
+   *
+   * Only safely called on the producer thread.
+   *
+   * @param elements a pointer to a buffer containing at least `count` elements.
+   * If `elements` is nullptr, zero or default constructed elements are enqueud.
+   * @param count The number of elements to read from `elements`
+   * @return The number of elements successfully coped from `elements` and
+   * inserted into the ring buffer.
+   ','line_number':139,'multiline':True]['text':' First part, from the write index to the end of the array. ','line_number':164,'multiline':True]['text':' Second part, from the beginning of the array ','line_number':166,'multiline':True]['text':'*
+   * Retrieve at most `count` elements from the ring buffer, and copy them to
+   * `elements`, if non-null.
+   *
+   * Only safely called on the consumer side.
+   *
+   * @param elements A pointer to a buffer with space for at least `count`
+   * elements. If `elements` is `nullptr`, `count` element will be discarded.
+   * @param count The maximum number of elements to Dequeue.
+   * @return The number of elements written to `elements`.
+   ','line_number':185,'multiline':True]['text':'*
+   * Get the number of available elements for consuming.
+   *
+   * Only safely called on the consumer thread. This can be less than the actual
+   * number of elements in the queue, since the mWriteIndex is updated at the
+   * very end of the Enqueue method on the producer thread, but consequently
+   * always returns a number of elements such that a call to Dequeue return this
+   * number of elements.
+   *
+   * @return The number of available elements for reading.
+   ','line_number':225,'multiline':True]['text':'*
+   * Get the number of available elements for writing.
+   *
+   * Only safely called on the producer thread. This can be less than than the
+   * actual number of slots that are available, because mReadIndex is update at
+   * the very end of the Deque method. It always returns a number such that a
+   * call to Enqueue with this number will succeed in enqueuing this number of
+   * elements.
+   *
+   * @return The number of empty slots in the buffer, available for writing.
+   ','line_number':244,'multiline':True]['text':'*
+   * Get the total Capacity, for this ring buffer.
+   *
+   * Can be called safely on any thread.
+   *
+   * @return The maximum Capacity of this ring buffer.
+   ','line_number':263,'multiline':True]['text':'*
+   * Reset the consumer and producer thread identifier, in case the threads are
+   * being changed. This has to be externally synchronized. This is no-op when
+   * asserts are disabled.
+   ','line_number':271,'multiline':True]['text':'* Return true if the ring buffer is empty.
+   *
+   * This can be called from the consumer or the producer thread.
+   *
+   * @param aReadIndex the read index to consider
+   * @param writeIndex the write index to consider
+   * @return true if the ring buffer is empty, false otherwise.
+   *','line_number':283,'multiline':True]['text':'* Return true if the ring buffer is full.
+   *
+   * This happens if the write index is exactly one element behind the read
+   * index.
+   *
+   * This can be called from the consummer or the producer thread.
+   *
+   * @param aReadIndex the read index to consider
+   * @param writeIndex the write index to consider
+   * @return true if the ring buffer is full, false otherwise.
+   *','line_number':294,'multiline':True]['text':'*
+   * Return the size of the storage. It is one more than the number of elements
+   * that can be stored in the buffer.
+   *
+   * This can be called from any thread.
+   *
+   * @return the number of elements that can be stored in the buffer.
+   ','line_number':308,'multiline':True]['text':'*
+   * Returns the number of elements available for reading.
+   *
+   * This can be called from the consummer or producer thread, but see the
+   * comment in `AvailableRead`.
+   *
+   * @return the number of available elements for reading.
+   ','line_number':317,'multiline':True]['text':'*
+   * Returns the number of empty elements, available for writing.
+   *
+   * This can be called from the consummer or producer thread, but see the
+   * comment in `AvailableWrite`.
+   *
+   * @return the number of elements that can be written into the array.
+   ','line_number':332,'multiline':True]['text':' We subtract one element here to always keep at least one sample
+     * free in the buffer, to distinguish between full and empty array. ','line_number':341,'multiline':True]['text':'*
+   * Increments an index, wrapping it around the storage.
+   *
+   * Incrementing `mWriteIndex` can be done on the producer thread.
+   * Incrementing `mReadIndex` can be done on the consummer thread.
+   *
+   * @param index a reference to the index to increment.
+   * @param increment the number by which `index` is incremented.
+   * @return the new index.
+   ','line_number':349,'multiline':True]['text':'*
+   * @brief This allows checking that Enqueue (resp. Dequeue) are always
+   * called by the right thread.
+   *
+   * The role of the thread are assigned the first time they call Enqueue or
+   * Dequeue, and cannot change, except when ResetThreadIds is called..
+   *
+   * @param id the id of the thread that has called the calling method first.
+   ','line_number':364,'multiline':True]['text':'* Index at which the oldest element is. ','line_number':382,'multiline':True]['text':'* Index at which to write new elements. `mWriteIndex` is always at
+   * least one element ahead of `mReadIndex`. ','line_number':384,'multiline':True]['text':'* Maximum number of elements that can be stored in the ring buffer. ','line_number':387,'multiline':True]['text':'* Data storage, of size `mCapacity + 1` ','line_number':389,'multiline':True]['text':'* The id of the only thread that is allowed to read from the queue. ','line_number':392,'multiline':True]['text':'* The id of the only thread that is allowed to write from the queue. ','line_number':394,'multiline':True]['text':'*
+ * Instantiation of the `SPSCRingBufferBase` type. This is safe to use
+ * from two threads, one producer, one consumer (that never change role),
+ * without explicit synchronization.
+ ','line_number':399,'multiline':True]['text':' namespace mozilla','line_number':407,'multiline':False]['text':' mozilla_LockFreeQueue_h','line_number':409,'multiline':False]

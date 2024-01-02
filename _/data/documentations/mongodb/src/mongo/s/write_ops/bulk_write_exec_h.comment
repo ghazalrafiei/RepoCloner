@@ -1,0 +1,147 @@
+['text':'*
+ *    Copyright (C) 2023-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * Contains counters which aggregate all the individual bulk write responses.
+ ','line_number':58,'multiline':True]['text':'*
+ * Contains replies for individual bulk write ops along with the summary fields for all responses.
+ ','line_number':70,'multiline':True]['text':'*
+ * Attempt to run the bulkWriteCommandRequest through Queryable Encryption code path.
+ * Returns kNotProcessed if falling back to the regular bulk write code path is needed instead.
+ *
+ * This function does not throw, any errors are reported via the function return.
+ ','line_number':80,'multiline':True]['text':'*
+ * Processes a response from an FLE insert/update/delete command and converts it to equivalent
+ * BulkWriteReplyInfo.
+ ','line_number':89,'multiline':True]['text':'*
+ * Executes a client bulkWrite request by sending child batches to several shard endpoints, and
+ * returns a vector of BulkWriteReplyItem (each of which is a reply for an individual op) along
+ * with a count of how many of those replies are errors.
+ *
+ * This function does not throw, any errors are reported via the function return.
+ ','line_number':96,'multiline':True]['text':'*
+ * The BulkWriteOp class manages the lifecycle of a bulkWrite request received by mongos. Each op in
+ * the ops array is tracked via a WriteOp, and the function of the BulkWriteOp is to aggregate the
+ * dispatched requests and responses for the underlying WriteOps.
+ *
+ * Overall, the BulkWriteOp lifecycle is similar to the WriteOp lifecycle, with the following
+ * stages:
+ *
+ * 0) Client request comes in, a BulkWriteOp is initialized.
+ *
+ * 1a) One or more ops in the bulkWrite are targeted, resulting in TargetedWriteBatches for these
+ *     ops. OR
+ * 1b) There are targeting errors, and the ops must be retargeted after refreshing the
+ *     NSTargeter(s).
+ *
+ * 2) Child bulkWrite requests (referred to in code as child batches) are built for each
+ *    TargetedWriteBatch before sending.
+ *
+ * 3) Responses for sent child batches are noted, and errors are stored and aggregated per-write-op.
+ *    Certain errors are returned immediately (e.g. any error in a transaction).
+ *
+ * 4) If the whole bulkWrite is not finished, goto 0.
+ *
+ * 5) When all responses come back for all write ops, success responses and errors are aggregated
+ *    and returned in a client response.
+ *
+ ','line_number':107,'multiline':True]['text':'*
+     * Targets one or more of the next write ops in this bulkWrite request using the given
+     * NSTargeters (targeters[i] corresponds to the targeter of the collection in nsInfo[i]). The
+     * resulting TargetedWrites are aggregated together in the returned TargetedWriteBatches.
+     *
+     * If 'recordTargetErrors' is false, any targeting error will abort all current batches and
+     * the method will return the targeting error. No targetedBatches will be returned on error.
+     *
+     * Otherwise, if 'recordTargetErrors' is true, targeting errors will be recorded for each
+     * write op that fails to target, and the method will return OK.
+     *
+     * (The idea here is that if we are sure our NSTargeters are up-to-date we should record
+     * targeting errors, but if not we should refresh once first.)
+     *
+     * Returned TargetedWriteBatches are owned by the caller.
+     * If a write without a shard key or a time-series retryable update is detected, return an OK
+     * StatusWith that has the corresponding WriteType as the value.
+     ','line_number':143,'multiline':True]['text':'*
+     * Fills a BulkWriteCommandRequest from a TargetedWriteBatch for this BulkWriteOp.
+     ','line_number':165,'multiline':True]['text':'*
+     * Returns false if the bulk write op needs more processing.
+     ','line_number':173,'multiline':True]['text':'*
+     * Saves all the write concern errors received from all the shards so that they can
+     * be concatenated into a single error when mongos responds to the client.
+     ','line_number':182,'multiline':True]['text':'*
+     * Marks this bulkWrite request as aborted if the error falls under one of the following cases:
+     * 1. A shutdown error and the router/mongos is shutting down.
+     * 2. The bulkWrite request is part of a transaction and we get an error.
+     *
+     * This may also throw if the bulkWrite request should fail with a top-level error code.
+     ','line_number':192,'multiline':True]['text':'*
+     * Marks any further writes for this BulkWriteOp as failed with the provided error status. There
+     * must be no pending ops awaiting results when this method is called.
+     ','line_number':201,'multiline':True]['text':'*
+     * Processes the response to a TargetedWriteBatch. Sharding related errors are then grouped
+     * by namespace and captured in the map passed in.
+     ','line_number':207,'multiline':True]['text':'*
+     * Records the error contained in the given status for write(s) in the given targetedBatch.
+     * This is used in cases where we get a top-level error in response to a batch sent to a shard
+     * but that we do not want to return the top-level error directly to the user.
+     * Instead, we treat the error as a failure of the relevant write(s) within the batch: for
+     * unordered writes that is all writes in the batch, and for ordered writes it is only the first
+     * write (since we would stop after that failed and not attempt execution of further writes.)
+     ','line_number':223,'multiline':True]['text':'*
+     * Processes a local error encountered while trying to send a child batch to a shard. This could
+     * be e.g. a network error or an error due to this mongos shutting down.
+     ','line_number':233,'multiline':True]['text':'*
+     * Processes an error encountered while trying to target writes in this BulkWriteOp.
+     ','line_number':241,'multiline':True]['text':'*
+     * Processes the response to a single WriteOp at index opIdx directly and cleans up all
+     * associated childOps. The response is captured by the BulkWriteReplyItem. It also captures the
+     * writeConcern from ShardWCError if the WriteConcernErrorDetail inside is non-OK. We don't
+     * expect sharding related stale version/db errors because response set by this method should be
+     * final (i.e. not retryable).
+     *
+     * This is currently used by retryable timeseries updates and writes without shard key because
+     * those operations are processed individually with the use of internal transactions.
+     ','line_number':246,'multiline':True]['text':'*
+     * Mark the corresponding targeter stale based on errorsPerNamespace.
+     ','line_number':261,'multiline':True]['text':'*
+     * Returns a vector of BulkWriteReplyItem based on the end state of each individual write in
+     * this bulkWrite operation, along with the number of error replies contained in the vector.
+     ','line_number':268,'multiline':True]['text':'*
+     * Creates a BulkWriteWriteConcernError object which combines write concern errors
+     * from all shards. If no write concern errors exist, returns boost::none.
+     ','line_number':274,'multiline':True]['text':'*
+     * Calculates an estimate of the size, in bytes, required to store the common fields that will
+     * go into each child batch command sent to a shard, i.e. all fields besides the actual write
+     * ops.
+     ','line_number':280,'multiline':True]['text':' The OperationContext the client bulkWrite request is run on.','line_number':296,'multiline':False]['text':' The incoming client bulkWrite request.','line_number':299,'multiline':False]['text':' Array of ops being processed from the client bulkWrite request.','line_number':302,'multiline':False]['text':' Cached transaction number (if one is present on the operation contex).','line_number':305,'multiline':False]['text':' The write concern that the bulk write command was issued with.','line_number':308,'multiline':False]['text':' A list of write concern errors from all shards.','line_number':310,'multiline':False]['text':' Statement ids for the ops that had already been executed, thus were not executed in this','line_number':313,'multiline':False]['text':' bulkWrite.','line_number':314,'multiline':False]['text':' Set to true if this write is part of a transaction.','line_number':317,'multiline':False]['text':' Set to true if we encountered an error that prevents us from executing the rest of the','line_number':321,'multiline':False]['text':' bulkWrite. Note this does *not* include cases where we saw an error for an individual','line_number':322,'multiline':False]['text':' statement in an ordered bulkWrite, but instead covers these cases:','line_number':323,'multiline':False]['text':' - Any error encountered while in a transaction besides WouldChangeOwningShard.','line_number':324,'multiline':False]['text':' - A local error indicating that this process is shutting down.','line_number':325,'multiline':False]['text':' Summary fields.','line_number':328,'multiline':False]['text':'*
+ * Adds an _id field to any document to insert that is missing one. It is necessary to add _id on
+ * mongos so that, if _id is in the shard key pattern, we can correctly route the insert based on
+ * that _id.
+ * If we did not set it on mongos, mongod would generate an _id, but that generated _id might
+ * actually mean the document belongs on a different shard. See SERVER-79914 for details.
+ ','line_number':336,'multiline':True]['text':' namespace bulk_write_exec','line_number':345,'multiline':False]['text':' namespace mongo','line_number':346,'multiline':False]

@@ -1,0 +1,46 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]['text':'
+ * A generic callable type that can be initialized from any compatible callable,
+ * suitable for use as a function argument for the duration of the function
+ * call (and no longer).
+ ','line_number':7,'multiline':True]['text':' mozilla::NotNull, ::operator new','line_number':16,'multiline':False]['text':' std::nullptr_t','line_number':18,'multiline':False]['text':' std::{declval,integral_constant}, std::is_{convertible,same,void}_v, std::{enable_if,remove_reference,remove_cv}_t','line_number':19,'multiline':False]['text':' std::forward','line_number':20,'multiline':False]['text':' This concept and its implementation are substantially inspired by foonathan's','line_number':22,'multiline':False]['text':' prior art:','line_number':23,'multiline':False]['text':'','line_number':24,'multiline':False]['text':' https://foonathan.net/2017/01/function-ref-implementation/','line_number':25,'multiline':False]['text':' https://github.com/foonathan/type_safe/blob/2017851053f8dd268372f1612865792c5c621570/include/type_safe/reference.hpp','line_number':26,'multiline':False]['text':' Template helper to determine if |Returned| is a return type compatible with','line_number':32,'multiline':False]['text':' |Required|: if the former converts to the latter, or if |Required| is |void|','line_number':33,'multiline':False]['text':' and nothing is returned.','line_number':34,'multiline':False]['text':' Template helper to check if |Func| called with |Params| arguments returns','line_number':40,'multiline':False]['text':' a type compatible with |Ret|.','line_number':41,'multiline':False]['text':' Template helper to determine the proper way to store |Callable|: as function','line_number':52,'multiline':False]['text':' pointer, as pointer to object, or unstorable.','line_number':53,'multiline':False]['text':' Match the case where |Callable| is a compatible function pointer or','line_number':56,'multiline':False]['text':' converts to one.  (|+obj| invokes such a conversion.)','line_number':57,'multiline':False]['text':' Match the case where |Callable| is callable but can't be converted to a','line_number':62,'multiline':False]['text':' function pointer.  (|short| is a worse match for 0 than |int|, causing the','line_number':63,'multiline':False]['text':' function pointer match to be preferred if both apply.)','line_number':64,'multiline':False]['text':' Match all remaining cases.  (Any other match is preferred to an ellipsis','line_number':69,'multiline':False]['text':' match.)','line_number':70,'multiline':False]['text':' If the callable is |nullptr|, |std::declval<std::nullptr_t&>()| will be an','line_number':76,'multiline':False]['text':' error.  Provide a specialization for |nullptr| that will fail substitution.','line_number':77,'multiline':False]['text':' namespace detail','line_number':87,'multiline':False]['text':'*
+ * An efficient, type-erasing, non-owning reference to a callable. It is
+ * intended for use as the type of a function parameter that is not used after
+ * the function in question returns.
+ *
+ * This class does not own the callable, so in general it is unsafe to store a
+ * FunctionRef.
+ ','line_number':89,'multiline':True]['text':' |FunctionRef| stores an adaptor function pointer, determined by the','line_number':104,'multiline':False]['text':' arguments passed to the constructor.  That adaptor will perform the steps','line_number':105,'multiline':False]['text':' needed to invoke the callable passed at construction time.','line_number':106,'multiline':False]['text':' If |FunctionRef|'s callable can be stored as a function pointer, that','line_number':109,'multiline':False]['text':' function pointer is stored after being cast to this *different* function','line_number':110,'multiline':False]['text':' pointer type.  |mAdaptor| then casts back to the original type to call it.','line_number':111,'multiline':False]['text':' ([expr.reinterpret.cast]p6 guarantees that A->B->A function pointer casts','line_number':112,'multiline':False]['text':' produce the original function pointer value.)  An outlandish signature is','line_number':113,'multiline':False]['text':' used to emphasize that the exact function pointer type doesn't matter.','line_number':114,'multiline':False]['text':'*
+   * An adaptor function (used by this class's function call operator) that
+   * invokes the callable in |mPayload|, forwarding arguments and converting
+   * return type as needed.
+   ','line_number':117,'multiline':True]['text':'* Storage for the wrapped callable value. ','line_number':124,'multiline':True]['text':' This arm is used if |FunctionRef| is passed a compatible function pointer','line_number':126,'multiline':False]['text':' or a lambda/callable that converts to a compatible function pointer.','line_number':127,'multiline':False]['text':' This arm is used if |FunctionRef| is passed some other callable or','line_number':130,'multiline':False]['text':' |nullptr|.','line_number':131,'multiline':False]['text':'*
+   * Construct a |FunctionRef| that's like a null function pointer that can't be
+   * called.
+   ','line_number':150,'multiline':True]['text':' This is technically unnecessary, but it seems best to always initialize','line_number':155,'multiline':False]['text':' a union arm.','line_number':156,'multiline':False]['text':'*
+   * Constructs a |FunctionRef| from an object callable with |Params| arguments,
+   * that returns a type convertible to |Ret|, where the callable isn't
+   * convertible to function pointer (often because it contains some internal
+   * state).  For example:
+   *
+   *   int x = 5;
+   *   auto doSideEffect = [&x]{ x++; }; // state is captured reference to |x|
+   *   FunctionRef<void()> f(doSideEffect);
+   ','line_number':162,'multiline':True]['text':' Unable to use std::forward here due to llvm windows bug','line_number':182,'multiline':False]['text':' https://bugs.llvm.org/show_bug.cgi?id=28299','line_number':183,'multiline':False]['text':'','line_number':184,'multiline':False]['text':' This prevents use of move-only arguments for functors and lambdas.','line_number':185,'multiline':False]['text':' Move only arguments can be used when using function pointers','line_number':186,'multiline':False]['text':'*
+   * Constructs a |FunctionRef| from an value callable with |Params| arguments,
+   * that returns a type convertible to |Ret|, where the callable is stateless
+   * and is (or is convertible to) a function pointer.  For example:
+   *
+   *   // Exact match
+   *   double twice(double d) { return d * 2; }
+   *   FunctionRef<double(double)> func1(&twice);
+   *
+   *   // Compatible match
+   *   float thrice(long double d) { return static_cast<float>(d) * 3; }
+   *   FunctionRef<double(double)> func2(&thrice);
+   *
+   *   // Non-generic lambdas that don't capture anything have a conversion
+   *   // function to the appropriate function pointer type.
+   *   FunctionRef<int(double)> f([](long double){ return 'c'; });
+   ','line_number':192,'multiline':True]['text':'* Call the callable stored in this with the given arguments. ','line_number':215,'multiline':True]['text':'* Return true iff this wasn't created from |nullptr|. ','line_number':220,'multiline':True]['text':' namespace mozilla ','line_number':224,'multiline':True]['text':' mozilla_FunctionRef_h ','line_number':226,'multiline':True]

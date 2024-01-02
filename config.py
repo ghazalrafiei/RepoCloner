@@ -80,6 +80,8 @@ NOT_CODE_FILE_FORMATS = [
     'CSV'
 ]
 
+DOC_FILE_FORMATS = ['.md', '.rst']
+
 DATA_DIR = './data/datasets/'
 DOCS_DIR = './data/documentations/'
 STATS_FILE_DIR = './stats.csv'

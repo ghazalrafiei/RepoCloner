@@ -1,0 +1,310 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]['text':' for towupper() and towlower()','line_number':13,'multiline':False]['text':' b_chartab[] is an array of 32 bytes, each bit representing one of the','line_number':21,'multiline':False]['text':' characters 0-255.','line_number':22,'multiline':False]['text':' table used below, see init_chartab() for an explanation','line_number':27,'multiline':False]['text':'
+ * Flags for g_chartab[].
+ ','line_number':30,'multiline':True]['text':' mask: nr of display cells (1, 2 or 4)','line_number':33,'multiline':False]['text':' flag: set for printable chars','line_number':34,'multiline':False]['text':' flag: set for ID chars','line_number':35,'multiline':False]['text':' flag: set for file name chars','line_number':36,'multiline':False]['text':'
+ * Fill g_chartab[].  Also fills curbuf->b_chartab[] with flags for keyword
+ * characters for current buffer.
+ *
+ * Depends on the option settings 'iskeyword', 'isident', 'isfname',
+ * 'isprint' and 'encoding'.
+ *
+ * The index in g_chartab[] depends on 'encoding':
+ * - For non-multi-byte index with the byte (same as the character).
+ * - For DBCS index with the first byte.
+ * - For UTF-8 index with the character (when first byte is up to 0x80 it is
+ *   the same as the character, if the first byte is 0x80 and above it depends
+ *   on further bytes).
+ *
+ * The contents of g_chartab[]:
+ * - The lower two bits, masked by CT_CELL_MASK, give the number of display
+ *   cells the character occupies (1 or 2).  Not valid for UTF-8 above 0x80.
+ * - CT_PRINT_CHAR bit is set when the character is printable (no need to
+ *   translate the character before displaying it).  Note that only DBCS
+ *   characters can have 2 display cells and still be printable.
+ * - CT_FNAME_CHAR bit is set when the character can be in a file name.
+ * - CT_ID_CHAR bit is set when the character can be in an identifier.
+ *
+ * Return FAIL if 'iskeyword', 'isident', 'isfname' or 'isprint' option has an
+ * error, OK otherwise.
+ ','line_number':40,'multiline':True]['text':' FALSE: only set buf->b_chartab[]','line_number':75,'multiline':False]['text':'
+	 * Set the default size for printable characters:
+	 * From <Space> to '~' is 1 (printable), others are 2 (not printable).
+	 * This also inits all 'isident' and 'isfname' flags to FALSE.
+	 ','line_number':86,'multiline':True]['text':' UTF-8: bytes 0xa0 - 0xff are printable (latin1)','line_number':98,'multiline':False]['text':' euc-jp characters starting with 0x8e are single width','line_number':101,'multiline':False]['text':' other double-byte chars can be printable AND double-width','line_number':104,'multiline':False]['text':' the rest is unprintable by default','line_number':108,'multiline':False]['text':' Assume that every multi-byte char is a filename character.','line_number':112,'multiline':False]['text':'
+     * Init word char flags all to FALSE
+     ','line_number':120,'multiline':True]['text':' double-byte characters are probably word characters','line_number':127,'multiline':False]['text':'
+     * In lisp mode the '-' character is included in keywords.
+     ','line_number':132,'multiline':True]['text':' Walk through the 'isident', 'iskeyword', 'isfname' and 'isprint'','line_number':138,'multiline':False]['text':' options Each option is a list of characters, character numbers or','line_number':139,'multiline':False]['text':' ranges, separated by commas, e.g.: "200-210,x,#-178,-"','line_number':140,'multiline':False]['text':' first round: 'isident'','line_number':144,'multiline':False]['text':' second round: 'isprint'','line_number':146,'multiline':False]['text':' third round: 'isfname'','line_number':148,'multiline':False]['text':' i == 3','line_number':149,'multiline':False]['text':' fourth round: 'iskeyword'','line_number':150,'multiline':False]['text':' not a range','line_number':182,'multiline':False]['text':'
+		 * A single '@' (not "@-@"):
+		 * Decide on letters being ID/printable/keyword chars with
+		 * standard function isalpha(). This takes care of locale for
+		 * single-byte characters).
+		 ','line_number':184,'multiline':True]['text':' Use the MB_ functions here, because isalpha() doesn't','line_number':201,'multiline':False]['text':' work properly when 'encoding' is "latin1" and the locale is','line_number':202,'multiline':False]['text':' "C".','line_number':203,'multiline':False]['text':' (re)set ID flag','line_number':206,'multiline':False]['text':' (re)set printable','line_number':213,'multiline':False]['text':' For double-byte we keep the cell width, so','line_number':216,'multiline':False]['text':' that we can detect it from the first byte.','line_number':217,'multiline':False]['text':' (re)set fname flag','line_number':234,'multiline':False]['text':' i == 3		 (re)set keyword flag','line_number':241,'multiline':False]['text':' Trailing comma is not allowed.','line_number':255,'multiline':False]['text':'
+ * Translate any special characters in buf[bufsize] in-place.
+ * The result is a string with only printable characters, but if there is not
+ * enough room, not all characters will be translated.
+ ','line_number':263,'multiline':True]['text':' length of string needing translation','line_number':273,'multiline':False]['text':' room in buffer after string','line_number':274,'multiline':False]['text':' translated character','line_number':275,'multiline':False]['text':' length of trs[]','line_number':276,'multiline':False]['text':' Assume a multi-byte character doesn't need translation.','line_number':282,'multiline':False]['text':'
+ * Translate a string into allocated memory, replacing special chars with
+ * printable chars.  Returns NULL when out of memory.
+ ','line_number':303,'multiline':True]['text':' Compute the length of the result, taking account of unprintable','line_number':317,'multiline':False]['text':' multi-byte characters.','line_number':318,'multiline':False]['text':' illegal byte sequence','line_number':341,'multiline':False]['text':' append printable multi-byte char','line_number':360,'multiline':False]['text':'
+ * Convert the string "str[orglen]" to do ignore-case comparing.  Uses the
+ * current locale.
+ * When "buf" is NULL returns an allocated string (NULL for out-of-memory).
+ * Otherwise puts the result in "buf[buflen]".
+ ','line_number':371,'multiline':True]['text':' Copy "str" into "buf" or allocated memory, unmodified.','line_number':393,'multiline':False]['text':' Ugly!','line_number':404,'multiline':False]['text':' Make each character lower case.','line_number':413,'multiline':False]['text':' Only replace the character when it is not an invalid','line_number':425,'multiline':False]['text':' sequence (ASCII character or more than one byte) and','line_number':426,'multiline':False]['text':' utf_tolower() doesn't return the original character.','line_number':427,'multiline':False]['text':' If the byte length changes need to shift the following','line_number':432,'multiline':False]['text':' characters forward or backward.','line_number':433,'multiline':False]['text':' out of memory, keep old char','line_number':442,'multiline':False]['text':' skip to next multi-byte char','line_number':464,'multiline':False]['text':'
+ * Catch 22: g_chartab[] can't be initialized before the options are
+ * initialized, and initializing options may cause transchar() to be called!
+ * When chartab_initialized == FALSE don't use g_chartab[].
+ * Does NOT work for multi-byte characters, c must be <= 255.
+ * Also doesn't work for the first byte of a multi-byte, "c" must be a
+ * character!
+ ','line_number':482,'multiline':True]['text':' special key code, display as ~@ char','line_number':504,'multiline':False]['text':' printable character','line_number':515,'multiline':False]['text':'
+ * Like transchar(), but called with a byte instead of a character.  Checks
+ * for an illegal UTF-8 byte.  Uses 'fileformat' of the current buffer.
+ ','line_number':524,'multiline':True]['text':'
+ * Like transchar_buf(), but called with a byte instead of a character.  Checks
+ * for an illegal UTF-8 byte.  Uses 'fileformat' of "buf", unless it is NULL.
+ ','line_number':534,'multiline':True]['text':'
+ * Convert non-printable character to two or more printable characters in
+ * "charbuf[]".  "charbuf" needs to be able to hold five bytes.
+ * Does NOT work for multi-byte characters, c must be <= 255.
+ ','line_number':548,'multiline':True]['text':' we use newline in place of a NUL','line_number':557,'multiline':False]['text':' we use CR in place of  NL in this case','line_number':559,'multiline':False]['text':' 'display' has "uhex"','line_number':561,'multiline':False]['text':' 0x00 - 0x1f and 0x7f','line_number':564,'multiline':False]['text':' DEL displayed as ^?','line_number':567,'multiline':False]['text':' 0xa0 - 0xfe','line_number':574,'multiline':False]['text':' 0x80 - 0x9f and 0xff','line_number':580,'multiline':False]['text':' 0xff displayed as ~?','line_number':583,'multiline':False]['text':'
+ * Convert the lower 4 bits of byte "c" to its hex character.
+ * Lower case letters are used to avoid the confusion of <F1> being 0xf1 or
+ * function key 1.
+ ','line_number':605,'multiline':True]['text':'
+ * Return number of display cells occupied by byte "b".
+ * Caller must make sure 0 <= b <= 255.
+ * For multi-byte mode "b" must be the first byte of a character.
+ * A TAB is counted as two cells: "^I".
+ * For UTF-8 mode this will return 0 for bytes >= 0x80, because the number of
+ * cells depends on further bytes.
+ ','line_number':618,'multiline':True]['text':'
+ * Return number of display cells occupied by character "c".
+ * "c" can be a special key (negative number) in which case 3 or 4 is returned.
+ * A TAB is counted as two cells: "^I" or four: "<09>".
+ ','line_number':634,'multiline':True]['text':' UTF-8: above 0x80 need to check the value','line_number':646,'multiline':False]['text':' DBCS: double-byte means double-width, except for euc-jp with first','line_number':649,'multiline':False]['text':' byte 0x8e','line_number':650,'multiline':False]['text':'
+ * Return number of display cells occupied by character at "*p".
+ * A TAB is counted as two cells: "^I" or four: "<09>".
+ ','line_number':661,'multiline':True]['text':' For UTF-8 we need to look at more bytes if the first byte is >= 0x80.','line_number':671,'multiline':False]['text':' For DBCS we can tell the cell count from the first byte.','line_number':674,'multiline':False]['text':'
+ * Return the number of character cells string "s" will take on the screen,
+ * counting TABs as two characters: "^I".
+ ','line_number':678,'multiline':True]['text':'
+ * Return the number of character cells string "s[len]" will take on the
+ * screen, counting TABs as two characters: "^I".
+ ','line_number':688,'multiline':True]['text':'
+ * Return the number of characters 'c' will take on the screen, taking
+ * into account the size of a tab.
+ * Use a define to make it fast, this is used very often!!!
+ * Also see getvcol() below.
+ ','line_number':709,'multiline':True]['text':'
+ * Return the number of characters the string "s" will take on the screen,
+ * taking into account the size of a tab.
+ * Does not handle text properties, since "s" is not a buffer line.
+ ','line_number':750,'multiline':True]['text':'
+ * Like linetabsize_str(), but "s" starts at column "startcol".
+ ','line_number':761,'multiline':True]['text':'
+ * Like linetabsize_str(), but for a given window instead of the current one.
+ ','line_number':776,'multiline':True]['text':'
+ * Return the number of cells line "lnum" of window "wp" will take on the
+ * screen, taking into account the size of a tab and text properties.
+ ','line_number':790,'multiline':True]['text':' check for a virtual text at the end of a line or on an empty line','line_number':811,'multiline':False]['text':' when properties are above or below the empty line must also be','line_number':816,'multiline':False]['text':' counted','line_number':817,'multiline':False]['text':'
+ * Return TRUE if 'c' is a normal identifier character:
+ * Letters and characters from the 'isident' option.
+ ','line_number':824,'multiline':True]['text':'
+ * Like vim_isIDc() but not using the 'isident' option: letters, numbers and
+ * underscore.
+ ','line_number':834,'multiline':True]['text':'
+ * return TRUE if 'c' is a keyword character: Letters and characters from
+ * 'iskeyword' option for the current buffer.
+ * For multi-byte characters mb_get_class() is used (builtin rules).
+ ','line_number':844,'multiline':True]['text':'
+ * Just like vim_iswordc() but uses a pointer to the (multi-byte) character.
+ ','line_number':869,'multiline':True]['text':'
+ * Return TRUE if 'c' is a valid file-name character as specified with the
+ * 'isfname' option.
+ * Assume characters above 0x100 are valid (multi-byte).
+ * To be used for commands like "gf".
+ ','line_number':888,'multiline':True]['text':'
+ * Return TRUE if 'c' is a valid file-name character, including characters left
+ * out of 'isfname' to make "gf" work, such as comma, space, '@', etc.
+ ','line_number':901,'multiline':True]['text':'
+ * return TRUE if 'c' is a valid file-name character or a wildcard character
+ * Assume characters above 0x100 are valid (multi-byte).
+ * Explicitly interpret ']' as a wildcard character as mch_has_wildcard("]")
+ * returns false.
+ ','line_number':912,'multiline':True]['text':'
+ * Return TRUE if 'c' is a printable character.
+ * Assume characters above 0x100 are printable (multi-byte), except for
+ * Unicode.
+ ','line_number':928,'multiline':True]['text':'
+ * Strict version of vim_isprintc(c), don't return TRUE if "c" is the head
+ * byte of a double-byte character.
+ ','line_number':941,'multiline':True]['text':'
+ * Prepare the structure passed to chartabsize functions.
+ * "line" is the start of the line, "ptr" is the first relevant character.
+ * When "lnum" is zero do not use text properties that insert text.
+ ','line_number':955,'multiline':True]['text':' Make a copy of the properties, so that they are properly','line_number':984,'multiline':False]['text':' aligned.  Make it twice as long for the sorting below.','line_number':985,'multiline':False]['text':' won't use the text properties, free them','line_number':1007,'multiline':False]['text':' Need to sort the array to get any truncation right.','line_number':1015,'multiline':False]['text':' Do the sorting in the second part of the array, then','line_number':1016,'multiline':False]['text':' move the sorted props to the first part of the array.','line_number':1017,'multiline':False]['text':' Here we want the reverse order.','line_number':1025,'multiline':False]['text':'
+ * Free any allocated item in "cts".
+ ','line_number':1038,'multiline':True]['text':'
+ * Like chartabsize(), but also check for line breaks on the screen and text
+ * properties that insert text.
+ ','line_number':1053,'multiline':True]['text':'
+ * Call lbr_chartabsize() and advance the pointer.
+ ','line_number':1081,'multiline':True]['text':'
+ * Return the screen size of the character indicated by "cts".
+ * "cts->cts_cur_text_width" is set to the extra size for a text property that
+ * inserts text.
+ * This function is used very often, keep it fast!!!!
+ *
+ * If "headp" not NULL, set "*headp" to the size of 'showbreak'/'breakindent'
+ * included in the return value.
+ * When "cts->cts_max_head_vcol" is positive, only count in "*headp" the size
+ * of 'showbreak'/'breakindent' before "cts->cts_max_head_vcol".
+ * When "cts->cts_max_head_vcol" is negative, only count in "*headp" the size
+ * of 'showbreak'/'breakindent' before where cursor should be placed.
+ *
+ * Warning: "*headp" may not be set if it's 0, init to 0 before calling.
+ ','line_number':1094,'multiline':True]['text':' start of the line','line_number':1116,'multiline':False]['text':' start from where to consider linebreak','line_number':1126,'multiline':False]['text':'
+     * No 'linebreak', 'showbreak', 'breakindent' and text properties that
+     * insert text: return quickly.
+     ','line_number':1135,'multiline':True]['text':'
+     * First get the normal size, without 'linebreak' or text properties
+     ','line_number':1157,'multiline':True]['text':' NUL is not displayed','line_number':1162,'multiline':False]['text':' The "$" for 'list' mode will go between the EOL and','line_number':1176,'multiline':False]['text':' the text prop, account for that.','line_number':1177,'multiline':False]['text':' Watch out for the text being deleted.  "cts_text_props" is a','line_number':1189,'multiline':False]['text':' copy, the text prop may actually have been removed from the line.','line_number':1190,'multiline':False]['text':' don't use 'showbreak' now','line_number':1214,'multiline':False]['text':' tab size changes because of the inserted text','line_number':1227,'multiline':False]['text':' count extra line for property above/below','line_number':1234,'multiline':False]['text':' Count the ">" in the last column.','line_number':1252,'multiline':False]['text':'
+     * May have to add something for 'breakindent' and/or 'showbreak'
+     * string at the start of a screen line.
+     ','line_number':1256,'multiline':True]['text':' When "size" is 0, no new screen line is started.','line_number':1262,'multiline':False]['text':' cells taken by 'showbreak'/'breakindent' before current char','line_number':1274,'multiline':False]['text':' cells taken by 'showbreak'/'breakindent' halfway current char','line_number':1301,'multiline':False]['text':' Calculate effective window width.','line_number':1309,'multiline':False]['text':' Divide "size - prev_rem" by "width", rounding up.','line_number':1315,'multiline':False]['text':'
+     * If 'linebreak' set check at a blank before a non-blank if the line
+     * needs a break here
+     ','line_number':1344,'multiline':True]['text':'
+	 * Count all characters from first non-blank after a blank up to next
+	 * non-blank after a blank.
+	 ','line_number':1361,'multiline':True]['text':' doesn't fit','line_number':1389,'multiline':False]['text':'
+ * Like win_lbr_chartabsize(), except that we know 'linebreak' is off, 'wrap'
+ * is on and there are no properties that insert text.  This means we need to
+ * check for a double-byte character that doesn't fit at the end of the screen
+ * line.
+ * Only uses "cts_win", "cts_ptr" and "cts_vcol" from "cts".
+ ','line_number':1405,'multiline':True]['text':' Add one cell for a double-width character in the last column of the','line_number':1433,'multiline':False]['text':' window, displayed with a ">".','line_number':1434,'multiline':False]['text':'
+ * Return TRUE if virtual column "vcol" is in the rightmost column of window
+ * "wp".
+ ','line_number':1444,'multiline':True]['text':' width of first line (after line number)','line_number':1451,'multiline':False]['text':' width of further lines','line_number':1452,'multiline':False]['text':' there is no border','line_number':1454,'multiline':False]['text':'
+ * Get virtual column number of pos.
+ *  start: on the first position of this character (TAB, ctrl)
+ * cursor: where the cursor is on this character (first char, except for TAB)
+ *    end: on the last position of this character (TAB, ctrl)
+ *
+ * This is used very often, keep it fast!
+ ','line_number':1467,'multiline':True]['text':' points to current char','line_number':1484,'multiline':False]['text':' points to char at pos->col','line_number':1485,'multiline':False]['text':' start of the line','line_number':1486,'multiline':False]['text':' continue until the NUL','line_number':1502,'multiline':False]['text':' In a few cases the position can be beyond the end of the line.','line_number':1507,'multiline':False]['text':' always start on the first byte','line_number':1516,'multiline':False]['text':'
+     * This function is used very often, do some speed optimizations.
+     * When 'list', 'linebreak', 'showbreak' and 'breakindent' are not set
+     * and there are no text properties with "text" use a simple loop.
+     * Also use this when 'list' is set but tabs take their normal size.
+     ','line_number':1523,'multiline':True]['text':' make sure we don't go past the end of the line','line_number':1542,'multiline':False]['text':' NUL at end of line only takes one column','line_number':1545,'multiline':False]['text':' A tab gets expanded, depending on the current column','line_number':1548,'multiline':False]['text':' For utf-8, if the byte is >= 0x80, need to look at','line_number':1559,'multiline':False]['text':' further bytes to find the cell width.','line_number':1560,'multiline':False]['text':' If a double-cell char doesn't fit at the end of a line','line_number':1566,'multiline':False]['text':' it wraps to the next line, it's like this char is three','line_number':1567,'multiline':False]['text':' cells wide.','line_number':1568,'multiline':False]['text':' character at pos->col','line_number':1580,'multiline':False]['text':' A tab gets expanded, depending on the current column.','line_number':1591,'multiline':False]['text':' Other things also take up space.','line_number':1592,'multiline':False]['text':' make sure we don't go past the end of the line','line_number':1595,'multiline':False]['text':' NUL at end of line only takes one column','line_number':1598,'multiline':False]['text':' do not count the virtual text above for w_curswant','line_number':1608,'multiline':False]['text':' character at pos->col','line_number':1613,'multiline':False]['text':' cursor at end','line_number':1637,'multiline':False]['text':' in Insert mode, if "start_incl" is true the text gets inserted','line_number':1641,'multiline':False]['text':' after the virtual text, thus add its width','line_number':1642,'multiline':False]['text':' cursor is after inserted text, unless on the NUL','line_number':1644,'multiline':False]['text':' insertion also happens after the "above" virtual text','line_number':1647,'multiline':False]['text':' cursor at start','line_number':1650,'multiline':False]['text':'
+ * Get virtual cursor column in the current window, pretending 'list' is off.
+ ','line_number':1655,'multiline':True]['text':'
+ * Get virtual column in virtual mode.
+ ','line_number':1673,'multiline':True]['text':' For virtual mode, only want one value','line_number':1691,'multiline':False]['text':' Cannot put the cursor on part of a wide character.','line_number':1696,'multiline':False]['text':' past end of line','line_number':1705,'multiline':False]['text':'
+ * Get the leftmost and rightmost virtual column of pos1 and pos2.
+ * Used for Visual block mode.
+ ','line_number':1723,'multiline':True]['text':'
+ * Skip over ' ' and '\t'.
+ ','line_number':1762,'multiline':True]['text':'
+ * skip over ' ', '\t' and '\n'.
+ ','line_number':1776,'multiline':True]['text':'
+ * getwhitecols: return the number of whitespace
+ * columns (bytes) at the start of a given line
+ ','line_number':1790,'multiline':True]['text':'
+ * skip over digits
+ ','line_number':1806,'multiline':True]['text':' skip to next non-digit','line_number':1814,'multiline':False]['text':'
+ * skip over binary digits
+ ','line_number':1820,'multiline':True]['text':' skip to next non-digit','line_number':1828,'multiline':False]['text':'
+ * skip over digits and hex characters
+ ','line_number':1833,'multiline':True]['text':' skip to next non-digit','line_number':1841,'multiline':False]['text':'
+ * skip to bin digit (or NUL after the string)
+ ','line_number':1847,'multiline':True]['text':' skip to next digit','line_number':1855,'multiline':False]['text':'
+ * skip to digit (or NUL after the string)
+ ','line_number':1860,'multiline':True]['text':' skip to next digit','line_number':1868,'multiline':False]['text':'
+ * skip to hex character (or NUL after the string)
+ ','line_number':1873,'multiline':True]['text':' skip to next digit','line_number':1881,'multiline':False]['text':'
+ * Variant of isdigit() that can handle characters > 0x100.
+ * We don't use isdigit() here, because on some systems it also considers
+ * superscript 1 to be a digit.
+ * Use the VIM_ISDIGIT() macro for simple arguments.
+ ','line_number':1886,'multiline':True]['text':'
+ * Variant of isxdigit() that can handle characters > 0x100.
+ * We don't use isxdigit() here, because on some systems it also considers
+ * superscript 1 to be a digit.
+ ','line_number':1898,'multiline':True]['text':'
+ * Corollary of vim_isdigit and vim_isxdigit() that can handle
+ * characters > 0x100.
+ ','line_number':1911,'multiline':True]['text':'
+ * Vim's own character class functions.  These exist because many library
+ * islower()/toupper() etc. do not work properly: they crash when used with
+ * invalid values or can't handle latin1 when the locale is C.
+ * Speed is most important here.
+ ','line_number':1927,'multiline':True]['text':' islower() can't handle these chars and may crash','line_number':1955,'multiline':False]['text':' islower() can't handle these chars and may crash','line_number':1979,'multiline':False]['text':' toupper() can't handle these chars and may crash','line_number':2009,'multiline':False]['text':' tolower() can't handle these chars and may crash','line_number':2035,'multiline':False]['text':'
+ * skiptowhite: skip over text until ' ' or '\t' or NUL.
+ ','line_number':2046,'multiline':True]['text':'
+ * skiptowhite_esc: Like skiptowhite(), but also skip escaped chars
+ ','line_number':2057,'multiline':True]['text':'
+ * Get a number from a string and skip over it.
+ * Note: the argument is a pointer to a char_u pointer!
+ ','line_number':2072,'multiline':True]['text':' skip negative sign','line_number':2084,'multiline':False]['text':' skip to next non-digit','line_number':2086,'multiline':False]['text':'
+ * Like getdigits() but allow for embedded single quotes.
+ ','line_number':2091,'multiline':True]['text':'
+ * Return TRUE if "lbuf" is empty or only contains blanks.
+ ','line_number':2123,'multiline':True]['text':'
+ * Convert a string into a long and/or unsigned long, taking care of
+ * hexadecimal, octal, and binary numbers.  Accepts a '-' sign.
+ * If "prep" is not NULL, returns a flag to indicate the type of the number:
+ *  0	    decimal
+ *  '0'	    octal
+ *  'O'	    octal
+ *  'o'	    octal
+ *  'B'	    bin
+ *  'b'	    bin
+ *  'X'	    hex
+ *  'x'	    hex
+ * If "len" is not NULL, the length of the number in characters is returned.
+ * If "nptr" is not NULL, the signed result is returned in it.
+ * If "unptr" is not NULL, the unsigned result is returned in it.
+ * If "what" contains STR2NR_BIN recognize binary numbers
+ * If "what" contains STR2NR_OCT recognize octal numbers
+ * If "what" contains STR2NR_HEX recognize hex numbers
+ * If "what" contains STR2NR_FORCE always assume bin/oct/hex.
+ * If "what" contains STR2NR_QUOTE ignore embedded single quotes
+ * If maxlen > 0, check at a maximum maxlen chars.
+ * If strict is TRUE, check the number strictly. return *len = 0 if fail.
+ ','line_number':2135,'multiline':True]['text':' return: type of number 0 = decimal, 'x'','line_number':2161,'multiline':False]['text':' or 'X' is hex, '0', 'o' or 'O' is octal,','line_number':2162,'multiline':False]['text':' 'b' or 'B' is bin','line_number':2163,'multiline':False]['text':' return: detected length of number','line_number':2164,'multiline':False]['text':' what numbers to recognize','line_number':2165,'multiline':False]['text':' return: signed result','line_number':2166,'multiline':False]['text':' return: unsigned result','line_number':2167,'multiline':False]['text':' max length of string to check','line_number':2168,'multiline':False]['text':' check strictly','line_number':2169,'multiline':False]['text':' when not NULL set to TRUE for overflow','line_number':2170,'multiline':False]['text':' default is decimal','line_number':2173,'multiline':False]['text':' Recognize hex, octal, and bin.','line_number':2187,'multiline':False]['text':' hexadecimal','line_number':2195,'multiline':False]['text':' binary','line_number':2200,'multiline':False]['text':' octal with prefix "0o"','line_number':2205,'multiline':False]['text':' decimal or octal, default is decimal','line_number':2209,'multiline':False]['text':' Don't interpret "0", "08" or "0129" as octal.','line_number':2213,'multiline':False]['text':' can't be octal','line_number':2218,'multiline':False]['text':' assume octal','line_number':2221,'multiline':False]['text':' Do the conversion manually to avoid sscanf() quirks.','line_number':2227,'multiline':False]['text':' bin','line_number':2232,'multiline':False]['text':' skip over "0b"','line_number':2234,'multiline':False]['text':' avoid ubsan error for overflow','line_number':2237,'multiline':False]['text':' octal','line_number':2261,'multiline':False]['text':' skip over "0o"','line_number':2263,'multiline':False]['text':' avoid ubsan error for overflow','line_number':2266,'multiline':False]['text':' hex','line_number':2289,'multiline':False]['text':' skip over "0x"','line_number':2291,'multiline':False]['text':' avoid ubsan error for overflow','line_number':2294,'multiline':False]['text':' decimal','line_number':2316,'multiline':False]['text':' avoid ubsan error for overflow','line_number':2321,'multiline':False]['text':' Check for an alphanumeric character immediately following, that is','line_number':2343,'multiline':False]['text':' most likely a typo.','line_number':2344,'multiline':False]['text':' account for leading '-' for decimal numbers','line_number':2354,'multiline':False]['text':' avoid ubsan error for overflow','line_number':2356,'multiline':False]['text':' prevent a large unsigned number to become negative','line_number':2368,'multiline':False]['text':'
+ * Return the value of a single hex character.
+ * Only valid when the argument is '0' - '9', 'A' - 'F' or 'a' - 'f'.
+ ','line_number':2382,'multiline':True]['text':'
+ * Convert two hex characters to a byte.
+ * Return -1 if one of the characters is not hex.
+ ','line_number':2396,'multiline':True]['text':'
+ * Return TRUE if "str" starts with a backslash that should be removed.
+ * For MS-DOS, MSWIN and OS/2 this is only done when the character after the
+ * backslash is not a normal file name character.
+ * '$' is a valid file name character, we don't remove the backslash before
+ * it.  This means it is not possible to use an environment variable after a
+ * backslash.  "C:\$VIM\doc" is taken literally, only "$VIM\doc" works.
+ * Although "\ name" is valid, the backslash in "Program\ files" must be
+ * removed.  Assume a file name doesn't start with a space.
+ * For multi-byte names, never remove a backslash before a non-ascii
+ * character, assume that all multi-byte characters are valid file name
+ * characters.
+ ','line_number':2408,'multiline':True]['text':'
+ * Halve the number of backslashes in a file name argument.
+ * For MS-DOS we only do this if the character after the backslash
+ * is not a normal file character.
+ ','line_number':2437,'multiline':True]['text':'
+ * backslash_halve() plus save the result in allocated memory.
+ * However, returns "p" when out of memory.
+ ','line_number':2450,'multiline':True]

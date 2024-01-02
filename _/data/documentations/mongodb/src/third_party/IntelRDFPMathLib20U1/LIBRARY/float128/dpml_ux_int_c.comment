@@ -1,0 +1,112 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]['text':'
+** The basic approach is based on the observation that directed rounding
+** can be done by "incrementing" the fraction field based on the value of
+** four bits.  Consider the following diagram:
+**
+**	+-+-----------+------------------------+-+-+--------------+
+**	|S|    exp    |                        |L|R|              |
+**	+-+-----------+------------------------+-+-+--------------+
+**	 ^                                     / | \
+**	 |                Least significant bit  |  Rounding bit
+**	sign bit                          Rounding Position
+**
+** Define K to be the "sticky" bit - i.e. the 'logical or' of all of the bits
+** to the right of R.  Then, for a given rounding mode, the values of S, L, R
+** and K uniquely determine whether or not to increment L.  Or to put it
+** another way, S, L, R and K defines a binary value I to be added to L.  The
+** following table defines I as a function of rounding mode and S, L, R and K
+**
+**				                  I
+**				-------------------------------------
+**		S K L R		 RZ	  RP	  RM	  RN	  RV
+**		-------		----     ----    ----    ----    ----
+**		0 0 0 0		  0	   0	   0	   0	   0
+**		0 0 0 1		  0	   1	   0	   0	   1
+**		0 0 1 0		  0	   0	   0	   0	   0
+**		0 0 1 1		  0	   1	   0	   1	   1
+**		0 1 0 0		  0	   1	   0	   0	   0
+**		0 1 0 1		  0	   1	   0	   1	   1
+**		0 1 1 0		  0	   1	   0	   0	   0
+**		0 1 1 1		  0	   1	   0	   1	   1
+**		1 0 0 0		  0	   0	   0	   0	   0
+**		1 0 0 1		  0	   0	   1	   0	   1
+**		1 0 1 0		  0	   0	   0	   0	   0
+**		1 0 1 1		  0	   0	   1	   1	   1
+**		1 1 0 0		  0	   0	   1	   0	   0
+**		1 1 0 1		  0	   0	   1	   1	   1
+**		1 1 1 0		  0	   0	   1	   0	   0
+**		1 1 1 1		  0	   0	   1	   1	   1
+**
+** The above table gives rise to bit vectors, one per rounding mode, that
+** determines I as a function of index = 8*S + 4*K + 2*L + R
+** 
+**	#define RZ_BIT_VECTOR	0x0000	(* 0000 0000 0000 0000 *)
+**	#define RP_BIT_VECTOR	0x00fa	(* 0000 0000 1111 1010 *)
+**	#define RM_BIT_VECTOR	0xfa00	(* 1111 1010 0000 0000 *)
+**	#define RN_BIT_VECTOR	0xa8a8	(* 1010 1000 1010 1000 *)
+**	#define RV_BIT_VECTOR	0xaaaa	(* 1010 1010 1010 1010 *)
+**
+** the UX_RND_TO_INT routine is the common logic for all of the "round-to-
+** integer" routines.  Most of the arguments are self explanatory.  The
+** low 16 bits of the 'flags' is one of the R<Z,P,M,N,V>_BIT_VECTOR's
+** described above.  Bits 16 and 17 of 'flags' determine which results to
+** compute according to the flags:
+**
+**		INTEGER_PART
+**		FRACTION_PART
+**
+** Additionally, UX_RND_TO_INT returns the low BITS_PER_WORD of the integer
+** result.
+','line_number':38,'multiline':True]['text':'
+    ** Get fraction digits into integer variables and initialize state
+    ','line_number':109,'multiline':True]['text':'
+        ** The current digit is completely to the right of the binary point
+        ** so zero out the corresponding digit in the result and accumulate
+        ** the current digit into the sticky bits
+        ','line_number':128,'multiline':True]['text':'
+    ** At this point, we introduce a bit or a wort, but it makes processing in
+    ** other routines easier.  We compute the least significant digit of the
+    ** abs(int(x)) as the return value.  This mean we have to fetch one extra
+    ** digit.
+    ','line_number':150,'multiline':True]['text':' The L and R bits straddle a digit.  Get them back together ','line_number':160,'multiline':True]['text':' L and R are contiguous ','line_number':166,'multiline':True]['text':' Get increment value, add it in and propagate the carry ','line_number':178,'multiline':True]['text':'
+        ** A carry out from the last add ==> result = 2^(exponent + 1) or
+        ** 1, depending on whether or not exponent >= 0.
+        ','line_number':194,'multiline':True]['text':' subtract int_func(x) from x ','line_number':209,'multiline':True]['text':'
+** Each of the round-to-int functions calls a common routine C_UX_RND_TO_INT,
+** to unpack its arguments; handle special input, and pack the results.
+','line_number':215,'multiline':True]['text':' Set error value for fraction also ','line_number':240,'multiline':True]['text':' We assume the following call will normalize unpacked_result ','line_number':262,'multiline':True]['text':'
+** The following code provides the user level interfaces to the trunc, modf,
+** nint, ceil, float and nint routines
+','line_number':274,'multiline':True]['text':'
+    ** the trunc class to action mapping is used by trunc, nint, rint and 
+    ** modf.  In order to accommodate returns for both results in modf, there
+    ** are actually two mappings, the first one is for the integer result, and
+    ** the second one is for the fraction result.
+    ','line_number':461,'multiline':True]['text':' data 1 ','line_number':492,'multiline':True]['text':' data 2 ','line_number':493,'multiline':True]

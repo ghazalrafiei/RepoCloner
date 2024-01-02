@@ -1,0 +1,107 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]['text':'
+ * We need to include the configuration file to detect whether this extension is being built into
+ * the WiredTiger library; application-loaded compression functions won't need it.
+ ','line_number':34,'multiline':True]['text':' Local compressor structure. ','line_number':47,'multiline':True]['text':' Must come first ','line_number':49,'multiline':True]['text':' Extension API ','line_number':51,'multiline':True]['text':'
+ * LZ4 decompression requires the exact compressed byte count returned by the LZ4_compress_default
+ * and LZ4_compress_destSize functions. WiredTiger doesn't track that value, store it in the
+ * destination buffer.
+ *
+ * Additionally, LZ4_compress_destSize may compress into the middle of a record, and after
+ * decompression we return the length to the last record successfully decompressed, not the number
+ * of bytes decompressed; store that value in the destination buffer as well.
+ *
+ * (Since raw compression has been removed from WiredTiger, the lz4 compression code no longer calls
+ * LZ4_compress_destSize. Some support remains to support existing compressed objects.)
+ *
+ * Use fixed-size, 4B values (WiredTiger never writes buffers larger than 4GB).
+ *
+ * The unused field is available for a mode flag if one is needed in the future, we guarantee it's
+ * 0.
+ ','line_number':54,'multiline':True]['text':' True compressed length ','line_number':72,'multiline':True]['text':' True uncompressed source length ','line_number':73,'multiline':True]['text':' Decompression return value ','line_number':74,'multiline':True]['text':' Guaranteed to be 0 ','line_number':75,'multiline':True]['text':'
+ * lz4_bswap32 --
+ *     32-bit unsigned little-endian to/from big-endian value.
+ ','line_number':79,'multiline':True]['text':'
+ * lz4_prefix_swap --
+ *     The additional information is written in little-endian format, handle the conversion.
+ ','line_number':90,'multiline':True]['text':'
+ * lz4_error --
+ *     Output an error message, and return a standard error code.
+ ','line_number':104,'multiline':True]['text':'
+ *  lz4_compress --
+ *	WiredTiger LZ4 compression.
+ ','line_number':119,'multiline':True]['text':' Unused parameters ','line_number':130,'multiline':True]['text':' Compress, starting after the prefix bytes. ','line_number':133,'multiline':True]['text':'
+     * If compression succeeded and the compressed length is smaller than the original size, return
+     * success.
+     ','line_number':137,'multiline':True]['text':'
+ * lz4_decompress --
+ *     WiredTiger LZ4 decompression.
+ ','line_number':160,'multiline':True]['text':'
+     * Retrieve the true length of the compressed block and source and the decompressed bytes to
+     * return from the start of the source buffer.
+     ','line_number':175,'multiline':True]['text':'
+     * Decompress, starting after the prefix bytes. Use safe decompression: we rely on decompression
+     * to detect corruption.
+     *
+     * Two code paths, one with and one without a bounce buffer. When doing raw compression, we
+     * compress to a target size irrespective of row boundaries, and return to our caller a "useful"
+     * compression length based on the last complete row that was compressed. Our caller stores that
+     * length, not the length of bytes actually compressed by LZ4. In other words, our caller
+     * doesn't know how many bytes will result from decompression, likely hasn't provided us a large
+     * enough buffer, and we have to allocate a scratch buffer.
+     *
+     * Even though raw compression has been removed from WiredTiger, this code remains for backward
+     * compatibility with existing objects.
+     ','line_number':189,'multiline':True]['text':'
+         * In the majority of cases, when the compressor successfully decompresses the entire source
+         * data, the decoded bytes matches the useful length. However, there are some situations
+         * where the data is corrupted and the compressor is unable to decompress the entire source
+         * data, in which case it differs and we should return an error.
+         ','line_number':218,'multiline':True]['text':'
+ * lz4_pre_size --
+ *     WiredTiger LZ4 destination buffer sizing for compression.
+ ','line_number':236,'multiline':True]['text':' Unused parameters ','line_number':244,'multiline':True]['text':'
+     * In block mode, LZ4 can use more space than the input data size, use the library calculation
+     * of that overhead (plus our overhead) to be safe.
+     ','line_number':248,'multiline':True]['text':'
+ * lz4_terminate --
+ *     WiredTiger LZ4 compression termination.
+ ','line_number':256,'multiline':True]['text':' Unused parameters ','line_number':263,'multiline':True]['text':'
+ * lz4_add_compressor --
+ *     Add a LZ4 compressor.
+ ','line_number':269,'multiline':True]['text':' Load the compressor ','line_number':289,'multiline':True]['text':'
+ * lz4_extension_init --
+ *     WiredTiger LZ4 compression extension - called directly when LZ4 support is built in, or via
+ *     wiredtiger_extension_init when LZ4 support is included via extension loading.
+ ','line_number':300,'multiline':True]['text':' Unused parameters ','line_number':310,'multiline':True]['text':' Raw compression API backward compatibility. ','line_number':315,'multiline':True]['text':'
+ * We have to remove this symbol when building as a builtin extension otherwise it will conflict
+ * with other builtin libraries.
+ ','line_number':321,'multiline':True]['text':'
+ * wiredtiger_extension_init --
+ *     WiredTiger LZ4 compression extension.
+ ','line_number':326,'multiline':True]

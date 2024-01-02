@@ -1,0 +1,181 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]['text':' Various predicates and operations on IEEE-754 floating point types. ','line_number':7,'multiline':True]['text':'
+ * It's reasonable to ask why we have this header at all.  Don't isnan,
+ * copysign, the built-in comparison operators, and the like solve these
+ * problems?  Unfortunately, they don't.  We've found that various compilers
+ * (MSVC, MSVC when compiling with PGO, and GCC on OS X, at least) miscompile
+ * the standard methods in various situations, so we can't use them.  Some of
+ * these compilers even have problems compiling seemingly reasonable bitwise
+ * algorithms!  But with some care we've found algorithms that seem to not
+ * trigger those compiler bugs.
+ *
+ * For the aforementioned reasons, be very wary of making changes to any of
+ * these algorithms.  If you must make changes, keep a careful eye out for
+ * compiler bustage, particularly PGO-specific bustage.
+ ','line_number':26,'multiline':True]['text':'
+ * These implementations assume float/double are 32/64-bit single/double
+ * format number types compatible with the IEEE-754 standard.  C++ doesn't
+ * require this, but we required it in implementations of these algorithms that
+ * preceded this header, so we shouldn't break anything to continue doing so.
+ ','line_number':43,'multiline':True]['text':' namespace detail','line_number':70,'multiline':False]['text':'
+ *  This struct contains details regarding the encoding of floating-point
+ *  numbers that can be useful for direct bit manipulation. As of now, the
+ *  template parameter has to be float or double.
+ *
+ *  The nested typedef |Bits| is the unsigned integral type with the same size
+ *  as T: uint32_t for float and uint64_t for double (static assertions
+ *  double-check these assumptions).
+ *
+ *  kExponentBias is the offset that is subtracted from the exponent when
+ *  computing the value, i.e. one plus the opposite of the mininum possible
+ *  exponent.
+ *  kExponentShift is the shift that one needs to apply to retrieve the
+ *  exponent component of the value.
+ *
+ *  kSignBit contains a bits mask. Bit-and-ing with this mask will result in
+ *  obtaining the sign bit.
+ *  kExponentBits contains the mask needed for obtaining the exponent bits and
+ *  kSignificandBits contains the mask needed for obtaining the significand
+ *  bits.
+ *
+ *  Full details of how floating point number formats are encoded are beyond
+ *  the scope of this comment. For more information, see
+ *  http://en.wikipedia.org/wiki/IEEE_floating_point
+ *  http://en.wikipedia.org/wiki/Floating_point#IEEE_754:_floating_point_in_modern_computers
+ ','line_number':72,'multiline':True]['text':'*
+   * An unsigned integral type suitable for accessing the bitwise representation
+   * of T.
+   ','line_number':104,'multiline':True]['text':'* The bit-width of the exponent component of T. ','line_number':112,'multiline':True]['text':'* The bit-width of the significand component of T. ','line_number':115,'multiline':True]['text':'*
+   * The exponent field in an IEEE-754 floating point number consists of bits
+   * encoding an unsigned number.  The *actual* represented exponent (for all
+   * values finite and not denormal) is that value, minus a bias |kExponentBias|
+   * so that a useful range of numbers is represented.
+   ','line_number':121,'multiline':True]['text':'*
+   * The amount by which the bits of the exponent-field in an IEEE-754 floating
+   * point number are shifted from the LSB of the floating point type.
+   ','line_number':129,'multiline':True]['text':'* The sign bit in the floating point representation. ','line_number':135,'multiline':True]['text':'* The exponent bits in the floating point representation. ','line_number':139,'multiline':True]['text':'* The significand bits in the floating point representation. ','line_number':143,'multiline':True]['text':'* Determines whether a float/double is NaN. ','line_number':158,'multiline':True]['text':'
+   * A float/double is NaN if all exponent bits are 1 and the significand
+   * contains at least one non-zero bit.
+   ','line_number':161,'multiline':True]['text':'* Determines whether a float/double is +Infinity or -Infinity. ','line_number':172,'multiline':True]['text':' Infinities have all exponent bits set to 1 and an all-0 significand. ','line_number':175,'multiline':True]['text':'* Determines whether a float/double is not NaN or infinite. ','line_number':182,'multiline':True]['text':'
+   * NaN and Infinities are the only non-finite floats/doubles, and both have
+   * all exponent bits set to 1.
+   ','line_number':185,'multiline':True]['text':'*
+ * Determines whether a float/double is negative or -0.  It is an error
+ * to call this method on a float/double which is NaN.
+ ','line_number':195,'multiline':True]['text':' The sign bit is set if the double is negative. ','line_number':203,'multiline':True]['text':'* Determines whether a float/double represents -0. ','line_number':210,'multiline':True]['text':' Only the sign bit is set if the value is -0. ','line_number':213,'multiline':True]['text':'* Determines wether a float/double represents +0. ','line_number':220,'multiline':True]['text':' All bits are zero if the value is +0. ','line_number':223,'multiline':True]['text':'*
+ * Returns 0 if a float/double is NaN or infinite;
+ * otherwise, the float/double is returned.
+ ','line_number':230,'multiline':True]['text':'*
+ * Returns the exponent portion of the float/double.
+ *
+ * Zero is not special-cased, so ExponentComponent(0.0) is
+ * -int_fast16_t(Traits::kExponentBias).
+ ','line_number':239,'multiline':True]['text':'
+   * The exponent component of a float/double is an unsigned number, biased
+   * from its actual value.  Subtract the bias to retrieve the actual exponent.
+   ','line_number':247,'multiline':True]['text':'* Returns +Infinity. ','line_number':259,'multiline':True]['text':'
+   * Positive infinity has all exponent bits set, sign bit set to 0, and no
+   * significand.
+   ','line_number':262,'multiline':True]['text':'* Returns -Infinity. ','line_number':270,'multiline':True]['text':'
+   * Negative infinity has all exponent bits set, sign bit set to 1, and no
+   * significand.
+   ','line_number':273,'multiline':True]['text':'*
+ * Computes the bit pattern for an infinity with the specified sign bit.
+ ','line_number':281,'multiline':True]['text':'*
+ * Computes the bit pattern for a NaN with the specified sign bit and
+ * significand bits.
+ ','line_number':293,'multiline':True]['text':'*
+ * Constructs a NaN value with the specified sign bit and significand bits.
+ *
+ * There is also a variant that returns the value directly.  In most cases, the
+ * two variants should be identical.  However, in the specific case of x86
+ * chips, the behavior differs: returning floating-point values directly is done
+ * through the x87 stack, and x87 loads and stores turn signaling NaNs into
+ * quiet NaNs... silently.  Returning floating-point values via outparam,
+ * however, is done entirely within the SSE registers when SSE2 floating-point
+ * is enabled in the compiler, which has semantics-preserving behavior you would
+ * expect.
+ *
+ * If preserving the distinction between signaling NaNs and quiet NaNs is
+ * important to you, you should use the outparam version.  In all other cases,
+ * you should use the direct return version.
+ ','line_number':311,'multiline':True]['text':'* Computes the smallest non-zero positive float/double value. ','line_number':349,'multiline':True]['text':' NaNs and infinities are not integers.','line_number':372,'multiline':False]['text':' Otherwise do direct comparisons against the minimum/maximum |SignedInteger|','line_number':377,'multiline':False]['text':' values that can be encoded in |Float|.','line_number':378,'multiline':False]['text':' e.g. INT32_MAX','line_number':381,'multiline':False]['text':' e.g. INT32_MIN','line_number':383,'multiline':False]['text':' Careful!  |MaxIntValue| may not be the maximum |SignedInteger| value that','line_number':392,'multiline':False]['text':' can be encoded in |Float|.  Its |SignedIntegerWidth - 1| bits of precision','line_number':393,'multiline':False]['text':' may exceed |Float|'s |ExponentShift + 1| bits of precision.  If necessary,','line_number':394,'multiline':False]['text':' compute the maximum |SignedInteger| that fits in |Float| from IEEE-754','line_number':395,'multiline':False]['text':' first principles.  (|MinValue| doesn't have this problem because as a','line_number':396,'multiline':False]['text':' [relatively] small power of two it's always representable in |Float|.)','line_number':397,'multiline':False]['text':' Per C++11 [expr.const]p2, unevaluated subexpressions of logical AND/OR and','line_number':399,'multiline':False]['text':' conditional expressions *may* contain non-constant expressions, without','line_number':400,'multiline':False]['text':' making the enclosing expression not constexpr.  MSVC implements this -- but','line_number':401,'multiline':False]['text':' it sometimes warns about undefined behavior in unevaluated subexpressions.','line_number':402,'multiline':False]['text':' This bites us if we initialize |MaxValue| the obvious way including an','line_number':403,'multiline':False]['text':' |uint64_t(1) << (SignedIntegerWidth - 2 - ExponentShift)| subexpression.','line_number':404,'multiline':False]['text':' Pull that shift-amount out and give it a not-too-huge value when it's in an','line_number':405,'multiline':False]['text':' unevaluated subexpression.  🙄','line_number':406,'multiline':False]['text':' namespace detail','line_number':450,'multiline':False]['text':'*
+ * If |aValue| is identical to some |int32_t| value, set |*aInt32| to that value
+ * and return true.  Otherwise return false, leaving |*aInt32| in an
+ * indeterminate state.
+ *
+ * This method returns false for negative zero.  If you want to consider -0 to
+ * be 0, use NumberEqualsInt32 below.
+ ','line_number':452,'multiline':True]['text':'*
+ * If |aValue| is identical to some |int64_t| value, set |*aInt64| to that value
+ * and return true.  Otherwise return false, leaving |*aInt64| in an
+ * indeterminate state.
+ *
+ * This method returns false for negative zero.  If you want to consider -0 to
+ * be 0, use NumberEqualsInt64 below.
+ ','line_number':465,'multiline':True]['text':'*
+ * If |aValue| is equal to some int32_t value (where -0 and +0 are considered
+ * equal), set |*aInt32| to that value and return true.  Otherwise return false,
+ * leaving |*aInt32| in an indeterminate state.
+ *
+ * |NumberEqualsInt32(-0.0, ...)| will return true.  To test whether a value can
+ * be losslessly converted to |int32_t| and back, use NumberIsInt32 above.
+ ','line_number':478,'multiline':True]['text':'*
+ * If |aValue| is equal to some int64_t value (where -0 and +0 are considered
+ * equal), set |*aInt64| to that value and return true.  Otherwise return false,
+ * leaving |*aInt64| in an indeterminate state.
+ *
+ * |NumberEqualsInt64(-0.0, ...)| will return true.  To test whether a value can
+ * be losslessly converted to |int64_t| and back, use NumberIsInt64 above.
+ ','line_number':491,'multiline':True]['text':'*
+ * Computes a NaN value.  Do not use this method if you depend upon a particular
+ * NaN value being returned.
+ ','line_number':504,'multiline':True]['text':'
+   * If we can use any quiet NaN, we might as well use the all-ones NaN,
+   * since it's cheap to materialize on common platforms (such as x64, where
+   * this value can be represented in a 32-bit signed immediate field, allowing
+   * it to be stored to memory in a single instruction).
+   ','line_number':510,'multiline':True]['text':'*
+ * Compare two doubles for equality, *without* equating -0 to +0, and equating
+ * any NaN value to any other NaN value.  (The normal equality operators equate
+ * -0 with +0, and they equate NaN to no other value.)
+ ','line_number':520,'multiline':True]['text':'*
+ * Compare two floating point values for bit-wise equality.
+ ','line_number':534,'multiline':True]['text':'*
+ * Return true iff |aValue| and |aValue2| are equal (ignoring sign if both are
+ * zero) or both NaN.
+ ','line_number':543,'multiline':True]['text':'*
+ * Return NaN if either |aValue1| or |aValue2| is NaN, or the minimum of
+ * |aValue1| and |aValue2| otherwise.
+ ','line_number':555,'multiline':True]['text':'*
+ * Return NaN if either |aValue1| or |aValue2| is NaN, or the maximum of
+ * |aValue1| and |aValue2| otherwise.
+ ','line_number':567,'multiline':True]['text':' A number near 1e-5 that is exactly representable in a float.','line_number':586,'multiline':False]['text':' A number near 1e-12 that is exactly representable in a double.','line_number':592,'multiline':False]['text':' namespace detail','line_number':596,'multiline':False]['text':'*
+ * Compare two floating point values for equality, modulo rounding error. That
+ * is, the two values are considered equal if they are both not NaN and if they
+ * are less than or equal to aEpsilon apart. The default value of aEpsilon is
+ * near 1e-5.
+ *
+ * For most scenarios you will want to use FuzzyEqualsMultiplicative instead,
+ * as it is more reasonable over the entire range of floating point numbers.
+ * This additive version should only be used if you know the range of the
+ * numbers you are dealing with is bounded and stays around the same order of
+ * magnitude.
+ ','line_number':598,'multiline':True]['text':'*
+ * Compare two floating point values for equality, allowing for rounding error
+ * relative to the magnitude of the values. That is, the two values are
+ * considered equal if they are both not NaN and they are less than or equal to
+ * some aEpsilon apart, where the aEpsilon is scaled by the smaller of the two
+ * argument values.
+ *
+ * In most cases you will want to use this rather than FuzzyEqualsAdditive, as
+ * this function effectively masks out differences in the bottom few bits of
+ * the floating point numbers being compared, regardless of what order of
+ * magnitude those numbers are at.
+ ','line_number':617,'multiline':True]['text':' can't use std::min because of bug 965340','line_number':633,'multiline':False]['text':'*
+ * Returns true if |aValue| can be losslessly represented as an IEEE-754 single
+ * precision number, false otherwise.  All NaN values are considered
+ * representable (even though the bit patterns of double precision NaNs can't
+ * all be exactly represented in single precision).
+ ','line_number':638,'multiline':True]['text':' namespace mozilla ','line_number':646,'multiline':True]['text':' mozilla_FloatingPoint_h ','line_number':648,'multiline':True]

@@ -1,0 +1,257 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]['text':' A type/length-parametrized vector class. ','line_number':7,'multiline':True]['text':' for placement new','line_number':12,'multiline':False]['text':' for PointerRangeSize','line_number':17,'multiline':False]['text':'
+ * Check that the given capacity wastes the minimal amount of space if
+ * allocated on the heap. This means that aCapacity*sizeof(T) is as close to a
+ * power-of-two as possible. growStorageBy() is responsible for ensuring this.
+ ','line_number':35,'multiline':True]['text':'
+ * This template class provides a default implementation for vector operations
+ * when the element type is not known to be a POD, as judged by IsPod.
+ ','line_number':46,'multiline':True]['text':'
+   * Constructs an object in the uninitialized memory at *aDst with aArgs.
+   ','line_number':52,'multiline':True]['text':' Destroys constructed objects in the range [aBegin, aEnd). ','line_number':61,'multiline':True]['text':' Constructs objects in the uninitialized range [aBegin, aEnd). ','line_number':69,'multiline':True]['text':'
+   * Copy-constructs objects in the uninitialized range
+   * [aDst, aDst+(aSrcEnd-aSrcStart)) from the range [aSrcStart, aSrcEnd).
+   ','line_number':77,'multiline':True]['text':'
+   * Move-constructs objects in the uninitialized range
+   * [aDst, aDst+(aSrcEnd-aSrcStart)) from the range [aSrcStart, aSrcEnd).
+   ','line_number':90,'multiline':True]['text':'
+   * Copy-constructs objects in the uninitialized range [aDst, aDst+aN) from
+   * the same object aU.
+   ','line_number':102,'multiline':True]['text':'
+   * Grows the given buffer to have capacity aNewCap, preserving the objects
+   * constructed in the range [begin, end) and updating aV. Assumes that (1)
+   * aNewCap has not overflowed, and (2) multiplying aNewCap by sizeof(T) will
+   * not overflow.
+   ','line_number':113,'multiline':True]['text':' aV.mLength is unchanged. ','line_number':135,'multiline':True]['text':'
+ * This partial template specialization provides a default implementation for
+ * vector operations when the element type is known to be a POD, as judged by
+ * IsPod.
+ ','line_number':141,'multiline':True]['text':' Explicitly construct a local object instead of using a temporary since','line_number':151,'multiline':False]['text':' T(args...) will be treated like a C-style cast in the unary case and','line_number':152,'multiline':False]['text':' allow unsafe conversions. Both forms should be equivalent to an','line_number':153,'multiline':False]['text':' optimizing compiler.','line_number':154,'multiline':False]['text':'
+     * You would think that memset would be a big win (or even break even)
+     * when we know T is a POD. But currently it's not. This is probably
+     * because |append| tends to be given small ranges and memset requires
+     * a function call that doesn't get inlined.
+     *
+     * memset(aBegin, 0, sizeof(T) * (aEnd - aBegin));
+     ','line_number':162,'multiline':True]['text':'
+     * See above memset comment. Also, notice that copyConstruct is
+     * currently templated (T != U), so memcpy won't work without
+     * requiring T == U.
+     *
+     * memcpy(aDst, aSrcStart, sizeof(T) * (aSrcEnd - aSrcStart));
+     ','line_number':179,'multiline':True]['text':' aV.mLength is unchanged. ','line_number':214,'multiline':True]['text':' A struct for TestVector.cpp to access private internal fields.','line_number':220,'multiline':False]['text':' DO NOT DEFINE IN YOUR OWN CODE.','line_number':221,'multiline':False]['text':' namespace detail','line_number':224,'multiline':False]['text':'
+ * STL-like container providing a short-lived, dynamic buffer.  Vector calls the
+ * constructors/destructors of all elements stored in its internal buffer, so
+ * non-PODs may be safely used.  Additionally, Vector will store the first N
+ * elements in-place before resorting to dynamic allocation.
+ *
+ * T requirements:
+ *  - default and copy constructible, assignable, destructible
+ *  - operations do not throw
+ * MinInlineCapacity requirements:
+ *  - any value, however, MinInlineCapacity is clamped to min/max values
+ * AllocPolicy:
+ *  - see "Allocation policies" in AllocPolicy.h (defaults to
+ *    mozilla::MallocAllocPolicy)
+ *
+ * Vector is not reentrant: T member functions called during Vector member
+ * functions must not call back into the same object!
+ ','line_number':226,'multiline':True]['text':' utilities ','line_number':247,'multiline':True]['text':' magic constants ','line_number':261,'multiline':True]['text':'*
+   * The maximum space allocated for inline element storage.
+   *
+   * We reduce space by what the AllocPolicy base class and prior Vector member
+   * fields likely consume to attempt to play well with binary size classes.
+   ','line_number':263,'multiline':True]['text':'*
+   * The number of T elements of inline capacity built into this Vector.  This
+   * is usually |MinInlineCapacity|, but it may be less (or zero!) for large T.
+   *
+   * We use a partially-specialized template (not explicit specialization, which
+   * is only allowed at namespace scope) to compute this value.  The benefit is
+   * that |sizeof(T)| need not be computed, and |T| doesn't have to be fully
+   * defined at the time |Vector<T>| appears, if no inline storage is requested.
+   ','line_number':273,'multiline':True]['text':'* The actual inline capacity in number of elements T.  This may be zero! ','line_number':293,'multiline':True]['text':' member data ','line_number':297,'multiline':True]['text':'
+   * Pointer to the buffer, be it inline or heap-allocated. Only [mBegin,
+   * mBegin + mLength) hold valid constructed T objects. The range [mBegin +
+   * mLength, mBegin + mCapacity) holds uninitialized memory. The range
+   * [mBegin + mLength, mBegin + mReserved) also holds uninitialized memory
+   * previously allocated by a call to reserve().
+   ','line_number':299,'multiline':True]['text':' Number of elements in the vector. ','line_number':308,'multiline':True]['text':'
+   * Memory used to store capacity, reserved element count (debug builds only),
+   * and inline storage.  The simple "answer" is:
+   *
+   *   size_t mCapacity;
+   *   #ifdef DEBUG
+   *   size_t mReserved;
+   *   #endif
+   *   alignas(T) unsigned char mBytes[kInlineCapacity * sizeof(T)];
+   *
+   * but there are complications.  First, C++ forbids zero-sized arrays that
+   * might result.  Second, we don't want zero capacity to affect Vector's size
+   * (even empty classes take up a byte, unless they're base classes).
+   *
+   * Yet again, we eliminate the zero-sized array using partial specialization.
+   * And we eliminate potential size hit by putting capacity/reserved in one
+   * struct, then putting the array (if any) in a derived struct.  If no array
+   * is needed, the derived struct won't consume extra space.
+   ','line_number':311,'multiline':True]['text':' Max number of elements storable in the vector without resizing. ','line_number':341,'multiline':True]['text':' Max elements of reserved or used space in this vector. ','line_number':345,'multiline':True]['text':' Silence warnings about this struct possibly being padded dued to the','line_number':350,'multiline':False]['text':' alignas() in it -- there's nothing we can do to avoid it.','line_number':351,'multiline':False]['text':' _MSC_VER','line_number':355,'multiline':False]['text':' GCC fails due to -Werror=strict-aliasing if |mBytes| is directly cast to','line_number':365,'multiline':False]['text':' T*.  Indirecting through this function addresses the problem.','line_number':366,'multiline':False]['text':' If this returns |nullptr|, functions like |Vector::begin()| would too,','line_number':379,'multiline':False]['text':' breaking callers that pass a vector's elements as pointer/length to','line_number':380,'multiline':False]['text':' code that bounds its operation by length but (even just as a sanity','line_number':381,'multiline':False]['text':' check) always wants a non-null pointer.  Fake up an aligned, non-null','line_number':382,'multiline':False]['text':' pointer to support these callers.','line_number':383,'multiline':False]['text':' _MSC_VER','line_number':392,'multiline':False]['text':' private accessors ','line_number':399,'multiline':True]['text':'*
+   * The amount of explicitly allocated space in this vector that is immediately
+   * available to be filled by appending additional elements.  This value is
+   * always greater than or equal to |length()| -- the vector's actual elements
+   * are implicitly reserved.  This value is always less than or equal to
+   * |capacity()|.  It may be explicitly increased using the |reserve()| method.
+   ','line_number':414,'multiline':True]['text':' Append operations guaranteed to succeed due to pre-reserved space. ','line_number':430,'multiline':True]['text':' Move constructor. ','line_number':447,'multiline':True]['text':' Move assignment. ','line_number':448,'multiline':True]['text':' accessors ','line_number':451,'multiline':True]['text':' Explicitly specify template argument here to avoid instantiating Span<T>','line_number':510,'multiline':False]['text':' first and then implicitly converting to Span<const T>','line_number':511,'multiline':False]['text':' mutators ','line_number':570,'multiline':True]['text':'*
+   * Reverse the order of the elements in the vector in place.
+   ','line_number':572,'multiline':True]['text':'*
+   * Given that the vector is empty, grow the internal capacity to |aRequest|,
+   * keeping the length 0.
+   ','line_number':577,'multiline':True]['text':'*
+   * Given that the vector is empty, grow the internal capacity and length to
+   * |aRequest| leaving the elements' memory completely uninitialized (with all
+   * the associated hazards and caveats). This avoids the usual allocation-size
+   * rounding that happens in resize and overhead of initialization for elements
+   * that are about to be overwritten.
+   ','line_number':583,'multiline':True]['text':'*
+   * If reserve(aRequest) succeeds and |aRequest >= length()|, then appending
+   * |aRequest - length()| elements, in any sequence of append/appendAll calls,
+   * is guaranteed to succeed.
+   *
+   * A request to reserve an amount less than the current length does not affect
+   * reserved space.
+   ','line_number':592,'multiline':True]['text':'*
+   * Destroy elements in the range [end() - aIncr, end()). Does not deallocate
+   * or unreserve storage for those elements.
+   ','line_number':602,'multiline':True]['text':'*
+   * Destroy elements in the range [aNewLength, end()). Does not deallocate
+   * or unreserve storage for those elements.
+   ','line_number':608,'multiline':True]['text':'* Grow the vector by aIncr elements. ','line_number':614,'multiline':True]['text':'* Call shrinkBy or growBy based on whether newSize > length(). ','line_number':617,'multiline':True]['text':'*
+   * Increase the length of the vector, but don't initialize the new elements
+   * -- leave them as uninitialized memory.
+   ','line_number':620,'multiline':True]['text':'* Shorthand for shrinkBy(length()). ','line_number':628,'multiline':True]['text':'* Clears and releases any heap-allocated storage. ','line_number':631,'multiline':True]['text':'*
+   * Shrinks the storage to drop excess capacity if possible.
+   *
+   * The return value indicates whether the operation succeeded, otherwise, it
+   * represents an OOM. The bool can be safely ignored unless you want to
+   * provide the guarantee that `length() == capacity()`.
+   *
+   * For PODs, it calls the AllocPolicy's pod_realloc. For non-PODs, it moves
+   * the elements into the new storage.
+   ','line_number':634,'multiline':True]['text':'*
+   * If true, appending |aNeeded| elements won't reallocate elements storage.
+   * This *doesn't* mean that infallibleAppend may be used!  You still must
+   * reserve the extra space, even if this method indicates that appends won't
+   * need to reallocate elements storage.
+   ','line_number':646,'multiline':True]['text':'* Potentially fallible append operations. ','line_number':654,'multiline':True]['text':'*
+   * This can take either a T& or a T&&. Given a T&&, it moves |aU| into the
+   * vector, instead of copying it. If it fails, |aU| is left unmoved. ("We are
+   * not amused.")
+   ','line_number':656,'multiline':True]['text':'*
+   * Construct a T in-place as a new entry at the end of this vector.
+   ','line_number':664,'multiline':True]['text':'
+   * Guaranteed-infallible append operations for use upon vectors whose
+   * memory has been pre-reserved.  Don't use this if you haven't reserved the
+   * memory!
+   ','line_number':686,'multiline':True]['text':'*
+   * If elements are stored in-place, return nullptr and leave this vector
+   * unmodified.
+   *
+   * Otherwise return this vector's elements buffer, and clear this vector as if
+   * by clearAndFree(). The caller now owns the buffer and is responsible for
+   * deallocating it consistent with this vector's AllocPolicy.
+   *
+   * N.B. Although a T*, only the range [0, length()) is constructed.
+   ','line_number':714,'multiline':True]['text':'*
+   * If elements are stored in-place, allocate a new buffer, move this vector's
+   * elements into it, and return that buffer.
+   *
+   * Otherwise return this vector's elements buffer. The caller now owns the
+   * buffer and is responsible for deallocating it consistent with this vector's
+   * AllocPolicy.
+   *
+   * This vector is cleared, as if by clearAndFree(), when this method
+   * succeeds. This method fails and returns nullptr only if new elements buffer
+   * allocation fails.
+   *
+   * N.B. Only the range [0, length()) of the returned buffer is constructed.
+   * If any of these elements are uninitialized (as growByUninitialized
+   * enables), behavior is undefined.
+   ','line_number':726,'multiline':True]['text':'*
+   * Transfer ownership of an array of objects into the vector.  The caller
+   * must have allocated the array in accordance with this vector's
+   * AllocPolicy.
+   *
+   * N.B. This call assumes that there are no uninitialized elements in the
+   *      passed range [aP, aP + aLength). The range [aP + aLength, aP +
+   *      aCapacity) must be allocated uninitialized memory.
+   ','line_number':744,'multiline':True]['text':'*
+   * Transfer ownership of an array of objects into the vector.  The caller
+   * must have allocated the array in accordance with this vector's
+   * AllocPolicy.
+   *
+   * N.B. This call assumes that there are no uninitialized elements in the
+   *      passed array.
+   ','line_number':755,'multiline':True]['text':'*
+   * Places |aVal| at position |aP|, shifting existing elements from |aP| onward
+   * one position higher.  On success, |aP| should not be reused because it'll
+   * be a dangling pointer if reallocation of the vector storage occurred; the
+   * return value should be used instead.  On failure, nullptr is returned.
+   *
+   * Example usage:
+   *
+   *   if (!(p = vec.insert(p, val))) {
+   *     <handle failure>
+   *   }
+   *   <keep working with p>
+   *
+   * This is inherently a linear-time operation.  Be careful!
+   ','line_number':765,'multiline':True]['text':'*
+   * Removes the element |aT|, which must fall in the bounds [begin, end),
+   * shifting existing elements from |aT + 1| onward one position lower.
+   ','line_number':783,'multiline':True]['text':'*
+   * Removes the elements [|aBegin|, |aEnd|), which must fall in the bounds
+   * [begin, end), shifting existing elements from |aEnd| onward to aBegin's old
+   * position.
+   ','line_number':789,'multiline':True]['text':'*
+   * Removes all elements that satisfy the predicate, shifting existing elements
+   * lower to fill erased gaps.
+   ','line_number':796,'multiline':True]['text':'*
+   * Removes all elements that compare equal to |aU|, shifting existing elements
+   * lower to fill erased gaps.
+   ','line_number':803,'multiline':True]['text':'*
+   * Measure the size of the vector's heap-allocated storage.
+   ','line_number':810,'multiline':True]['text':'*
+   * Like sizeOfExcludingThis, but also measures the size of the vector
+   * object (which must be heap-allocated) itself.
+   ','line_number':815,'multiline':True]['text':' This does the re-entrancy check plus several other sanity checks. ','line_number':828,'multiline':True]['text':' Vector Implementation ','line_number':836,'multiline':True]['text':' Move constructor. ','line_number':851,'multiline':True]['text':' We can't move the buffer over in this case, so copy elements. ','line_number':867,'multiline':True]['text':'
+     * Leave aRhs's mLength, mBegin, mCapacity, and mReserved as they are.
+     * The elements in its in-line storage still need to be destroyed.
+     ','line_number':870,'multiline':True]['text':'
+     * Take src's buffer, and turn src into an empty vector using
+     * in-line storage.
+     ','line_number':875,'multiline':True]['text':' Move assignment. ','line_number':889,'multiline':True]['text':'
+ * This function will create a new heap buffer with capacity aNewCap,
+ * move all elements in the inline buffer to this new buffer,
+ * and fail on OOM.
+ ','line_number':918,'multiline':True]['text':' Allocate buffer. ','line_number':927,'multiline':True]['text':' Copy inline elements into heap buffer. ','line_number':934,'multiline':True]['text':' Switch in heap buffer. ','line_number':938,'multiline':True]['text':' mLength is unchanged. ','line_number':940,'multiline':True]['text':'
+   * When choosing a new capacity, its size should is as close to 2**N bytes
+   * as possible.  2**N-sized requests are best because they are unlikely to
+   * be rounded up by the allocator.  Asking for a 2**N number of elements
+   * isn't as good, because if sizeof(T) is not a power-of-two that would
+   * result in a non-2**N request size.
+   ','line_number':949,'multiline':True]['text':' This case occurs in ~70--80% of the calls to this function. ','line_number':961,'multiline':True]['text':' This case occurs in ~0--10% of the calls to this function. ','line_number':969,'multiline':True]['text':' This case occurs in ~15--20% of the calls to this function. ','line_number':974,'multiline':True]['text':'
+     * Will mLength * 4 *sizeof(T) overflow?  This condition limits a vector
+     * to 1GB of memory on a 32-bit system, which is a reasonable limit.  It
+     * also ensures that
+     *
+     *   static_cast<char*>(end()) - static_cast<char*>(begin())
+     *
+     * doesn't overflow ptrdiff_t (see bug 510319).
+     ','line_number':976,'multiline':True]['text':'
+     * If we reach here, the existing capacity will have a size that is already
+     * as close to 2^N as sizeof(T) will allow.  Just double the capacity, and
+     * then there might be space for one more element.
+     ','line_number':990,'multiline':True]['text':' This case occurs in ~2% of the calls to this function. ','line_number':1000,'multiline':True]['text':' Did mLength + aIncr overflow?  Will newCap * sizeof(T) overflow? ','line_number':1003,'multiline':True]['text':' remove_if finds the first element to be erased, and then efficiently move-','line_number':1342,'multiline':False]['text':' assigns elements to effectively overwrite elements that satisfy the','line_number':1343,'multiline':False]['text':' predicate. It returns the new end pointer, after which there are only','line_number':1344,'multiline':False]['text':' moved-from elements ready to be destroyed, so we just need to shrink the','line_number':1345,'multiline':False]['text':' vector accordingly.','line_number':1346,'multiline':False]['text':' Destroy what we have. ','line_number':1534,'multiline':True]['text':' Take in the new buffer. ','line_number':1540,'multiline':True]['text':'
+     * We convert to inline storage if possible, even though aP might
+     * otherwise be acceptable.  Maybe this behaviour should be
+     * specifiable with an argument to this function.
+     ','line_number':1542,'multiline':True]['text':' This only works when inline storage is always empty.','line_number':1584,'multiline':False]['text':' This case is a no-op, since we'd set both to use their inline storage.','line_number':1594,'multiline':False]['text':' namespace mozilla','line_number':1604,'multiline':False]['text':' mozilla_Vector_h ','line_number':1606,'multiline':True]

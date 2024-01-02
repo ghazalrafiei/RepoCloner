@@ -1,0 +1,302 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * __logmgr_sync_cfg --
+ *     Interpret the transaction_sync config.
+ ','line_number':11,'multiline':True]['text':'
+     * Collect all the flag settings into a local variable and then assign into the connection after
+     * we're done so that there is no chance of another thread seeing an interim value while we're
+     * processing during a reconfigure.
+     ','line_number':24,'multiline':True]['text':'
+ * __logmgr_force_remove --
+ *     Force a checkpoint out and then force a removal, waiting for the first log to be removed up
+ *     to the given log number.
+ ','line_number':47,'multiline':True]['text':'
+         * Force a checkpoint to be written in the new log file and force the removal of all
+         * previous log files. We do the checkpoint in the loop because the checkpoint LSN in the
+         * log record could still reflect the previous log file in cases such as the write LSN has
+         * not yet advanced into the new log file due to another group of threads still in progress
+         * with their slot copies or writes.
+         ','line_number':66,'multiline':True]['text':'
+         * It's reasonable to start the back off prior to trying at all because the backoff is very
+         * gradual.
+         ','line_number':74,'multiline':True]['text':'
+ * __logmgr_get_log_version --
+ *     Get the log version required for the given WiredTiger version.
+ ','line_number':88,'multiline':True]['text':'
+ * __wt_logmgr_compat_version --
+ *     Set up the compatibility versions in the log manager. This is split out because it is called
+ *     much earlier than log subsystem creation on startup so that we can verify the system state in
+ *     files before modifying files.
+ ','line_number':110,'multiline':True]['text':'
+ * __logmgr_version --
+ *     Set up the versions in the log manager.
+ ','line_number':126,'multiline':True]['text':'
+     * Set the log file format versions based on compatibility versions set in the connection. The
+     * compatibility version must be set at this point. We must set this before we call log_open to
+     * open or create a log file.
+     ','line_number':144,'multiline':True]['text':'
+     * If the version is the same, there is nothing to do.
+     ','line_number':159,'multiline':True]['text':'
+     * Note: downgrade in this context means the new version is not the latest possible version. It
+     * does not mean the direction of change from the release we may be running currently.
+     ','line_number':165,'multiline':True]['text':'
+     * If we are reconfiguring and at a new version we need to force the log file to advance so that
+     * we write out a log file at the correct version. When we are downgrading we must force a
+     * checkpoint and finally log removal, even if disabled, so that all new version log files are
+     * gone.
+     *
+     * All of the version changes must be handled with locks on reconfigure because other threads
+     * may be changing log files, using pre-allocated files.
+     ','line_number':171,'multiline':True]['text':'
+     * Set the version. If it is a live change the logging subsystem will do other work as well to
+     * move to a new log file.
+     ','line_number':180,'multiline':True]['text':'
+ * __wt_logmgr_config --
+ *     Parse and setup the logging server options.
+ ','line_number':190,'multiline':True]['text':'
+     * A note on reconfiguration: the standard "is this configuration string allowed" checks should
+     * fail if reconfiguration has invalid strings, for example, "log=(enabled)", or
+     * "statistics_log=(path=XXX)", because the connection reconfiguration method doesn't allow
+     * those strings. Additionally, the base configuration values during reconfiguration are the
+     * currently configured values (so we don't revert to default values when repeatedly
+     * reconfiguring), and configuration processing of a currently set value should not change the
+     * currently set value.
+     *
+     * In this code path, log server reconfiguration does not stop/restart the log server, so
+     * there's no point in re-evaluating configuration strings that cannot be reconfigured, risking
+     * bugs in configuration setup, and depending on evaluation of currently set values to always
+     * result in the currently set value. Skip tests for any configuration strings which don't make
+     * sense during reconfiguration, but don't worry about error reporting because it should never
+     * happen.
+     ','line_number':201,'multiline':True]['text':'
+     * If we're reconfiguring, enabled must match the already existing setting.
+     *
+     * If it is off and the user it turning it on, or it is on and the user is turning it off,
+     * return an error.
+     *
+     * See above: should never happen.
+     ','line_number':223,'multiline':True]['text':' Logging is incompatible with in-memory ','line_number':237,'multiline':True]['text':'
+     * Setup a log path and compression even if logging is disabled in case we are going to print a
+     * log. Only do this on creation. Once a compressor or log path are set they cannot be changed.
+     *
+     * See above: should never happen.
+     ','line_number':250,'multiline':True]['text':' We are done if logging isn't enabled. ','line_number':266,'multiline':True]['text':'
+     * The configuration string log.archive is deprecated, only take it if it's explicitly set by
+     * the application, that is, ignore its default value. Look for an explicit log.remove setting,
+     * then an explicit log.archive setting, then the default log.remove setting.
+     ','line_number':270,'multiline':True]['text':'
+     * The file size cannot be reconfigured. The amount of memory allocated to the log slots may be
+     * based on the log file size at creation and we don't want to re-allocate that memory while
+     * running.
+     *
+     * See above: should never happen.
+     ','line_number':281,'multiline':True]['text':'
+         * With the default log file extend configuration or if the log file extension size is
+         * larger than the configured maximum log file size, set the log file extension size to the
+         * configured maximum log file size.
+         ','line_number':293,'multiline':True]['text':'
+     * If pre-allocation is configured, set the initial number to a few. We'll adapt as load
+     * dictates.
+     ','line_number':307,'multiline':True]['text':'
+     * Note it's meaningless to reconfigure this value during runtime, it only matters on create
+     * before recovery runs.
+     *
+     * See above: should never happen.
+     ','line_number':319,'multiline':True]['text':'
+ * __wt_logmgr_reconfig --
+ *     Reconfigure logging.
+ ','line_number':345,'multiline':True]['text':'
+ * __log_remove_once_int --
+ *     Helper for __log_remove_once. Intended to be called while holding the hot backup read lock.
+ ','line_number':356,'multiline':True]['text':'
+ * __compute_min_lognum --
+ *     Determine the number of the earliest log file we must keep.
+ ','line_number':376,'multiline':True]['text':'
+     * If we're coming from a backup cursor we want the smaller of the last full log file copied in
+     * backup or the checkpoint LSN. Otherwise we want the minimum of the last log file written to
+     * disk and the checkpoint LSN.
+     ','line_number':388,'multiline':True]['text':' Adjust the number of log files to retain based on debugging options. ','line_number':398,'multiline':True]['text':'
+         * If we're performing checkpoints, apply the retain value as a minimum, increasing the
+         * number the log files we keep. If not performing checkpoints, it's an absolute number of
+         * log files to keep. This means we can potentially remove log files required for recovery
+         * if the number of log files exceeds the configured value and the system has yet to be
+         * checkpointed.
+         *
+         * Check for N+1, that is, we retain N full log files, and one partial.
+         ','line_number':404,'multiline':True]['text':'
+ * __log_remove_once --
+ *     Perform one iteration of log removal. Must be called with the log removal lock held.
+ ','line_number':425,'multiline':True]['text':' We want to retain all log files. Nothing to do here. ','line_number':446,'multiline':True]['text':'
+     * Main remove code. Get the list of all log files and remove any earlier than the minimum log
+     * number.
+     ','line_number':451,'multiline':True]['text':'
+     * If backup_file is non-zero we know we're coming from an incremental backup cursor. In that
+     * case just perform the remove operation without the lock.
+     ','line_number':457,'multiline':True]['text':'
+     * Indicate what is our new earliest LSN. It is the start of the log file containing the last
+     * checkpoint.
+     ','line_number':468,'multiline':True]['text':'
+ * __log_prealloc_once --
+ *     Perform one iteration of log pre-allocation.
+ ','line_number':481,'multiline':True]['text':'
+     * Allocate up to the maximum number, accounting for any existing files that may not have been
+     * used yet.
+     ','line_number':499,'multiline':True]['text':'
+     * Adjust the number of files to pre-allocate if we find that the critical path had to allocate
+     * them since we last ran.
+     ','line_number':505,'multiline':True]['text':'
+         * If we used less than half, then start adjusting down.
+         ','line_number':514,'multiline':True]['text':'
+     * Allocate up to the maximum number that we just computed and detected.
+     ','line_number':524,'multiline':True]['text':'
+     * Reset the missed count now. If we missed during pre-allocating the log files, it means the
+     * allocation is not keeping up, not that we didn't allocate enough. So we don't just want to
+     * keep adding in more.
+     ','line_number':531,'multiline':True]['text':'
+ * __wt_log_truncate_files --
+ *     Truncate log files via remove once. Requires that the server is not currently running.
+ ','line_number':545,'multiline':True]['text':'
+ * __log_file_server --
+ *     The log file server thread. This worker thread manages log file operations such as closing
+ *     and syncing.
+ ','line_number':581,'multiline':True]['text':'
+         * If there is a log file to close, make sure any outstanding write operations have
+         * completed, then fsync and close it.
+         *
+         * The read from the log close file handle is ordered with the read from the log close lsn.
+         * Writers will set the log close lsn first and then the log close file handle, so we need
+         * to read them in the reverse order to see a consistent state.
+         ','line_number':601,'multiline':True]['text':'
+             * The closing file handle should have a correct close LSN.
+             ','line_number':612,'multiline':True]['text':'
+                 * We've copied the file handle, clear out the one in the log structure to allow it
+                 * to be set again. Copy the LSN before clearing the file handle. Use a barrier to
+                 * make sure the compiler does not reorder the following two statements.
+                 ','line_number':618,'multiline':True]['text':'
+                 * Set the close_end_lsn to the LSN immediately after ours. That is, the beginning
+                 * of the next log file. We need to know the LSN file number of our own close in
+                 * case earlier calls are still in progress and the next one to move the sync_lsn
+                 * into the next file for later syncs.
+                 ','line_number':626,'multiline':True]['text':'
+                 * We want to have the file size reflect actual data with minimal pre-allocated
+                 * zeroed space. We can't truncate the file during hot backup, or the underlying
+                 * file system may not support truncate: both are OK, it's just more work during
+                 * cursor traversal.
+                 ','line_number':634,'multiline':True]['text':' Wait until the next event. ','line_number':655,'multiline':True]['text':'
+ * Simple structure for sorting written slots.
+ ','line_number':667,'multiline':True]['text':'
+ * WT_WRLSN_ENTRY_CMP_LT --
+ *	Return comparison of a written slot pair by LSN.
+ ','line_number':675,'multiline':True]['text':'
+ * __wt_log_wrlsn --
+ *     Process written log slots and attempt to coalesce them if the LSNs are contiguous. The
+ *     purpose of this function is to advance the write_lsn in LSN order after the buffer is written
+ *     to the log file.
+ ','line_number':684,'multiline':True]['text':'
+     * Walk the array once saving any slots that are in the WT_LOG_SLOT_WRITTEN state.
+     ','line_number':710,'multiline':True]['text':'
+     * If we found any written slots process them. We sort them based on the release LSN, and then
+     * look for them in order.
+     ','line_number':721,'multiline':True]['text':'
+         * We know the written array is sorted by LSN. Go through them either advancing write_lsn or
+         * coalesce contiguous ranges of written slots.
+         ','line_number':729,'multiline':True]['text':'
+             * The log server thread pushes out slots periodically. Sometimes they are empty slots.
+             * If we find an empty slot, where empty means the start and end LSN are the same, free
+             * it and continue.
+             ','line_number':735,'multiline':True]['text':'
+                 * If the write_lsn changed, we may be able to process slots. Try again.
+                 ','line_number':746,'multiline':True]['text':'
+                 * If we get here we have a slot to coalesce and free.
+                 ','line_number':755,'multiline':True]['text':'
+                 * Copy the flag for later closing.
+                 ','line_number':761,'multiline':True]['text':'
+                 * If this written slot is not the next LSN, try to start coalescing with later
+                 * slots. A synchronous write may update write_lsn so save the last one we saw to
+                 * check when coalescing slots.
+                 ','line_number':767,'multiline':True]['text':'
+                 * If we get here we have a slot to process. Advance the LSN and process the slot.
+                 ','line_number':777,'multiline':True]['text':'
+                 * We need to maintain the starting offset of a log record so that the checkpoint
+                 * LSN refers to the beginning of a real record. The last offset in a slot is kept
+                 * so that the checkpoint LSN is close to the end of the record.
+                 ','line_number':781,'multiline':True]['text':'
+                 * Signal the close thread if needed.
+                 ','line_number':792,'multiline':True]['text':'
+ * __log_wrlsn_server --
+ *     The log wrlsn server thread.
+ ','line_number':804,'multiline':True]['text':'
+         * Write out any log record buffers if anything was done since last time. Only call the
+         * function to walk the slots if the system is not idle. On an idle system the alloc_lsn
+         * will not advance and the written lsn will match the alloc_lsn.
+         ','line_number':825,'multiline':True]['text':'
+         * If __wt_log_wrlsn did work we want to yield instead of sleep.
+         ','line_number':838,'multiline':True]['text':'
+     * On close we need to do this one more time because there could be straggling log writes that
+     * need to be written.
+     ','line_number':846,'multiline':True]['text':'
+ * __log_server --
+ *     The log server thread.
+ ','line_number':859,'multiline':True]['text':'
+     * Set this to the number of milliseconds we want to run log force write, remove and
+     * pre-allocation. Start it so that we run on the first time through.
+     ','line_number':880,'multiline':True]['text':'
+     * The log server thread does a variety of work. It forces out any buffered log writes. It
+     * pre-allocates log files and it performs log removal. The reason the wrlsn thread does not
+     * force out the buffered writes is because we want to process and move the write_lsn forward as
+     * quickly as possible. The same reason applies to why the log file server thread does not force
+     * out the writes. That thread does fsync calls which can take a long time and we don't want log
+     * records sitting in the buffer over the time it takes to sync out an earlier file.
+     ','line_number':887,'multiline':True]['text':'
+         * Slots depend on future activity. Force out buffered writes in case we are idle. This
+         * cannot be part of the wrlsn thread because of interaction advancing the write_lsn and a
+         * buffer may need to wait for the write_lsn to advance in the case of a synchronous buffer.
+         * We end up with a hang.
+         ','line_number':897,'multiline':True]['text':'
+         * We don't want to remove or pre-allocate files as often as we want to force out log
+         * buffers. Only do it once per second or if the condition was signalled.
+         ','line_number':908,'multiline':True]['text':'
+             * Perform log pre-allocation.
+             ','line_number':914,'multiline':True]['text':'
+                 * Log file pre-allocation is disabled when a hot backup cursor is open because we
+                 * have agreed not to rename or remove any files in the database directory.
+                 ','line_number':918,'multiline':True]['text':'
+             * Perform the removal.
+             ','line_number':926,'multiline':True]['text':' Wait until the next event. ','line_number':941,'multiline':True]['text':'
+ * __wt_logmgr_create --
+ *     Initialize the log subsystem (before running recovery).
+ ','line_number':955,'multiline':True]['text':'
+     * Logging configuration is parsed early on for compatibility checking. It is separated from
+     * turning on the subsystem. We only need to proceed here if logging is enabled.
+     ','line_number':967,'multiline':True]['text':'
+     * Logging is on, allocate the WT_LOG structure and open the log file.
+     ','line_number':975,'multiline':True]['text':'
+     * We only use file numbers for directory sync, so this needs to initialized to zero.
+     ','line_number':994,'multiline':True]['text':'
+ * __wt_logmgr_open --
+ *     Start the log service threads.
+ ','line_number':1012,'multiline':True]['text':' If no log thread services are configured, we're done. ','line_number':1024,'multiline':True]['text':'
+     * Start the log close thread. It is not configurable. If logging is enabled, this thread runs.
+     ','line_number':1030,'multiline':True]['text':'
+     * Start the log file close thread.
+     ','line_number':1038,'multiline':True]['text':'
+     * Start the log write LSN thread. It is not configurable. If logging is enabled, this thread
+     * runs.
+     ','line_number':1045,'multiline':True]['text':'
+     * If a log server thread exists, the user may have reconfigured removal or pre-allocation.
+     * Signal the thread. Otherwise the user wants removal and/or allocation and we need to start up
+     * the thread.
+     ','line_number':1057,'multiline':True]['text':' The log server gets its own session. ','line_number':1067,'multiline':True]['text':'
+         * Start the thread.
+         ','line_number':1073,'multiline':True]['text':'
+ * __wt_logmgr_destroy --
+ *     Destroy the log removal server thread and logging subsystem.
+ ','line_number':1084,'multiline':True]['text':'
+         * We always set up the log_path so printlog can work without recovery. Therefore, always
+         * free it, even if logging isn't on.
+         ','line_number':1099,'multiline':True]['text':' Close the server thread's session. ','line_number':1133,'multiline':True]['text':' Destroy the condition variables now that all threads are stopped ','line_number':1139,'multiline':True]

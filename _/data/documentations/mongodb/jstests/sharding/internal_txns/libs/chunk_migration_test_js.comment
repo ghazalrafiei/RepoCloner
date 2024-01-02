@@ -1,0 +1,59 @@
+['text':'
+ * Utilities for performing a set of retryable or non-retryable internal transactions during or
+ * before a chunk migration, and verifying that the transaction history is correctly transferred or
+ * not transferred to the recipient shard.
+ *
+ * Example usage:
+ *      const transactionTest = new InternalTransactionChunkMigrationTest();
+ *      transactionTest.runTest*(...);
+ *      transactionTest.stop();
+ *
+ * Note that this fixture runs each runTest() against its own collection so it is illegal to make
+ * more than one runTest() call.
+ ','line_number':1,'multiline':True]['text':' Helper for setting up a sharded collection and defining migrations to be run during each','line_number':42,'multiline':False]['text':' test.','line_number':43,'multiline':False]['text':' Chunk distribution before migrations:','line_number':51,'multiline':False]['text':'      shard0: [MinKey, 1]','line_number':52,'multiline':False]['text':'      shard1: [0, MaxKey]','line_number':53,'multiline':False]['text':' Chunk distribution after migration0:','line_number':54,'multiline':False]['text':'      shard2: [MinKey, 1]','line_number':55,'multiline':False]['text':'      shard1: [1, MaxKey]','line_number':56,'multiline':False]['text':' Chunk distribution after migration1:','line_number':57,'multiline':False]['text':'      shard1: [MinKey, 1], [1, MaxKey]','line_number':58,'multiline':False]['text':' Helpers for defining transaction test cases.','line_number':114,'multiline':False]['text':' Define the retryable insert, update and delete statements to be run in the test internal','line_number':132,'multiline':False]['text':' transaction. Prior to migration0, these write statements will be routed to shard0.','line_number':133,'multiline':False]['text':' If testing a prepared and/or large transaction, define additional insert statements to','line_number':172,'multiline':False]['text':' make the transaction a prepared and/or large transaction.','line_number':173,'multiline':False]['text':' Define the retryable findAndModify statement to be run in the test internal transaction.','line_number':216,'multiline':False]['text':' Prior to migration0, the write statement will be routed to shard0.','line_number':217,'multiline':False]['text':' If testing a prepared and/or large transaction, define additional insert statements to','line_number':247,'multiline':False]['text':' make the transaction a prepared and/or large transaction.','line_number':248,'multiline':False]['text':' Prior to migration0, the insert statements below will be routed to shard0.','line_number':275,'multiline':False]['text':' Use stmtId -1 to get test coverage for "applyOps" entries without a stmtId.','line_number':283,'multiline':False]['text':' Prior to migration0, this insert statement below will be routed to shard1.','line_number':297,'multiline':False]['text':'
+     * Runs the commands defined inside 'testCase' in an internal transaction of the specified
+     * type.
+     ','line_number':345,'multiline':True]['text':' isTxnCommitted ','line_number':380,'multiline':True]['text':'
+     * Retries the commands defined inside 'testCase' in an internal transaction of the specified
+     * type.
+     ','line_number':383,'multiline':True]['text':' Give the session a different txnUUID to simulate a retry from a different mongos.','line_number':399,'multiline':False]['text':' The transaction has already committed and the statement in this command','line_number':408,'multiline':False]['text':' is not retryable so do not retry it.','line_number':409,'multiline':False]['text':' isTxnCommitted ','line_number':424,'multiline':True]['text':'
+     * Retries the commands specified inside 'testCase' as retryable writes.
+     ','line_number':427,'multiline':True]['text':' The statement in this command is not retryable so do not retry it.','line_number':447,'multiline':False]['text':' isTxnCommitted ','line_number':457,'multiline':True]['text':'
+     * Below are the steps in this test:
+     * 1. Run migration0, i.e. migrate chunk [MinKey, 1] from shard0 to shard2. Pause the migration
+     *    while it is in the transfer mods phase.
+     * 2. Run the commands specified in each 'testCase' inside an internal transaction of the
+     *    specified type.
+     * 3. Unpause migration0 and wait for it to complete.
+     * 4. Retry writes in an internal transaction and retryable write.
+     * 5. Restart shard2.
+     * 6. Retry writes in an internal transaction and retryable write.
+     * 7. Run migration1, i.e. migrate chunk [MinKey, 1] from shard2 to shard1.
+     * 8. Retry writes in an internal transaction and retryable write.
+     *
+     * - If the type is non-retryable, verifies that none of the transactions has a
+     *   config.transactions entry on the recipient after migration0 and returns early after step 4.
+     * - If the type is retryable, verifies that the retryable write statements in each transaction
+     *   are retryable on the recipient after each migration completes regardless of whether the
+     *   transaction committed or aborted on the donor. For each transaction that aborts on the
+     *   initial try, additionally verifies that the transaction does not have a config.transactions
+     *   entry on the recipient after migration0.
+     ','line_number':460,'multiline':True]['text':' isRetryAfterAbort ','line_number':514,'multiline':True]['text':' Also retry the write statements as retryable writes.','line_number':515,'multiline':False]['text':' signal ','line_number':520,'multiline':True]['text':'forRestart ','line_number':520,'multiline':True]['text':' isRetryAfterAbort ','line_number':527,'multiline':True]['text':' Also retry the write statements as retryable writes.','line_number':528,'multiline':False]['text':' isRetryAfterAbort ','line_number':538,'multiline':True]['text':' Also retry the write statements as retryable writes.','line_number':539,'multiline':False]['text':'
+     * Below are the steps in this test:
+     * 1. Runs the commands specified in each 'testCase' inside an internal transaction of the
+     *    specified type.
+     * 2. Run migration0, i.e. migrate chunk [MinKey, 1] from shard0 to shard2.
+     * 3. Retry writes in an internal transaction and retryable write.
+     * 4. Restart shard2.
+     * 5. Retry writes in an internal transaction and retryable write.
+     * 6. Run migration1, i.e. migrate chunk [MinKey, 1] from shard2 to shard1.
+     * 7. Retry writes in an internal transaction and retryable write.
+     *
+     * - If the type is non-retryable, verifies that none of the transactions has a
+     *   config.transactions entry on the recipient after migration0 and returns early after step 3.
+     * - If the type is retryable, verifies that the retryable write statements in each transaction
+     *   are retryable on the recipient after each migration completes regardless of whether the
+     *   transaction committed or aborted on the donor. For each transaction that aborts on the
+     *   initial try, additionally verifies that the transaction does not have a config.transactions
+     *   entry on the recipient after migration0.
+     ','line_number':545,'multiline':True]['text':' isRetryAfterAbort ','line_number':592,'multiline':True]['text':' Also retry the write statements as retryable writes.','line_number':593,'multiline':False]['text':' signal ','line_number':598,'multiline':True]['text':'forRestart ','line_number':598,'multiline':True]['text':' isRetryAfterAbort ','line_number':605,'multiline':True]['text':' Also retry the write statements as retryable writes.','line_number':606,'multiline':False]['text':' isRetryAfterAbort ','line_number':616,'multiline':True]['text':' Also retry the write statements as retryable writes.','line_number':617,'multiline':False]['text':' Helpers for testing retryable internal transactions with chunk migration. Each helper defines','line_number':625,'multiline':False]['text':' transaction test cases using the makeTransactionOptions*() helpers above and runs one','line_number':626,'multiline':False]['text':' of the test*ChunkMigration() helpers above.','line_number':627,'multiline':False]

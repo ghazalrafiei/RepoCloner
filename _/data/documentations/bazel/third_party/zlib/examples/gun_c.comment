@@ -1,0 +1,111 @@
+['text':' gun.c -- simple gunzip to give an example of the use of inflateBack()
+ * Copyright (C) 2003, 2005, 2008, 2010, 2012 Mark Adler
+ * For conditions of distribution and use, see copyright notice in zlib.h
+   Version 1.7  12 August 2012  Mark Adler ','line_number':1,'multiline':True]['text':' Version history:
+   1.0  16 Feb 2003  First version for testing of inflateBack()
+   1.1  21 Feb 2005  Decompress concatenated gzip streams
+                     Remove use of "this" variable (C++ keyword)
+                     Fix return value for in()
+                     Improve allocation failure checking
+                     Add typecasting for void * structures
+                     Add -h option for command version and usage
+                     Add a bunch of comments
+   1.2  20 Mar 2005  Add Unix compress (LZW) decompression
+                     Copy file attributes from input file to output file
+   1.3  12 Jun 2005  Add casts for error messages [Oberhumer]
+   1.4   8 Dec 2006  LZW decompression speed improvements
+   1.5   9 Feb 2008  Avoid warning in latest version of gcc
+   1.6  17 Jan 2010  Avoid signed/unsigned comparison warnings
+   1.7  12 Aug 2012  Update for z_const usage in zlib 1.2.8
+ ','line_number':6,'multiline':True]['text':'
+   gun [ -t ] [ name ... ]
+
+   decompresses the data in the named gzip files.  If no arguments are given,
+   gun will decompress from stdin to stdout.  The names must end in .gz, -gz,
+   .z, -z, _z, or .Z.  The uncompressed data will be written to a file name
+   with the suffix stripped.  On success, the original file is deleted.  On
+   failure, the output file is deleted.  For most failures, the command will
+   continue to process the remaining names on the command line.  A memory
+   allocation failure will abort the command.  If -t is specified, then the
+   listed files or stdin will be tested as gzip files for integrity (without
+   checking for a proper suffix), no output will be written, and no files
+   will be deleted.
+
+   Like gzip, gun allows concatenated gzip streams and will decompress them,
+   writing all of the uncompressed data to the output.  Unlike gzip, gun allows
+   an empty file on input, and will produce no error writing an empty output
+   file.
+
+   gun will also decompress files made by Unix compress, which uses LZW
+   compression.  These files are automatically detected by virtue of their
+   magic header bytes.  Since the end of Unix compress stream is marked by the
+   end-of-file, they cannot be concatenated.  If a Unix compress stream is
+   encountered in an input file, it is the last stream in that file.
+
+   Like gunzip and uncompress, the file attributes of the original compressed
+   file are maintained in the final uncompressed file, to the extent that the
+   user permissions allow it.
+
+   On my Mac OS X PowerPC G4, gun is almost twice as fast as gunzip (version
+   1.2.4) is on the same file, when gun is linked with zlib 1.2.2.  Also the
+   LZW decompression provided by gun is about twice as fast as the standard
+   Unix uncompress command.
+ ','line_number':24,'multiline':True]['text':' external functions and related types and constants ','line_number':59,'multiline':True]['text':' fprintf() ','line_number':60,'multiline':True]['text':' malloc(), free() ','line_number':61,'multiline':True]['text':' strerror(), strcmp(), strlen(), memcpy() ','line_number':62,'multiline':True]['text':' errno ','line_number':63,'multiline':True]['text':' open() ','line_number':64,'multiline':True]['text':' read(), write(), close(), chown(), unlink() ','line_number':65,'multiline':True]['text':' stat(), chmod() ','line_number':67,'multiline':True]['text':' utime() ','line_number':68,'multiline':True]['text':' inflateBackInit(), inflateBack(), ','line_number':69,'multiline':True]['text':' inflateBackEnd(), crc32() ','line_number':70,'multiline':True]['text':' function declaration ','line_number':72,'multiline':True]['text':' buffer constants ','line_number':75,'multiline':True]['text':' input and output buffer sizes ','line_number':76,'multiline':True]['text':' limits i/o chunks for 16-bit int case ','line_number':77,'multiline':True]['text':' structure for infback() to pass to input function in() -- it maintains the
+   input file and a buffer of size SIZE ','line_number':79,'multiline':True]['text':' Load input buffer, assumed to be empty, and return bytes loaded and a
+   pointer to them.  read() is called until the buffer is full, or until it
+   returns end-of-file or error.  Return 0 on error. ','line_number':86,'multiline':True]['text':' structure for infback() to pass to output function out() -- it maintains the
+   output file, a running CRC-32 check on the output and the total number of
+   bytes output, both for checking against the gzip trailer.  (The length in
+   the gzip trailer is stored modulo 2^32, so it's ok if a long is 32 bits and
+   the output is greater than 4 GB.) ','line_number':114,'multiline':True]['text':' true if checking crc and total ','line_number':121,'multiline':True]['text':' Write output buffer and update the CRC-32 and total bytes written.  write()
+   is called until all of the output is written or an error is encountered.
+   On success out() returns 0.  For a write failure, out() returns 1.  If the
+   output file descriptor is -1, then nothing is written.
+ ','line_number':126,'multiline':True]['text':' next input byte macro for use inside lunpipe() and gunpipe() ','line_number':154,'multiline':True]['text':' memory for gunpipe() and lunpipe() --
+   the first 256 entries of prefix[] and suffix[] are never used, could
+   have offset the index, but it's faster to waste the memory ','line_number':158,'multiline':True]['text':' input buffer ','line_number':161,'multiline':True]['text':' output buffer ','line_number':162,'multiline':True]['text':' index to LZW prefix string ','line_number':163,'multiline':True]['text':' one-character LZW suffix ','line_number':164,'multiline':True]['text':' buffer for reversed match or gzip
+                                           32K sliding window ','line_number':165,'multiline':True]['text':' throw out what's left in the current bits byte buffer (this is a vestigial
+   aspect of the compressed data format derived from an implementation that
+   made use of a special VAX machine instruction!) ','line_number':168,'multiline':True]['text':' Decompress a compress (LZW) file from indp to outfile.  The compress magic
+   header (two bytes) has already been read and verified.  There are have bytes
+   of buffered input at next.  strm is used for passing error information back
+   to gunpipe().
+
+   lunpipe() will return Z_OK on success, Z_BUF_ERROR for an unexpected end of
+   file, read error, or write error (a write error indicated by strm->next_in
+   not equal to Z_NULL), or Z_DATA_ERROR for invalid input.
+ ','line_number':191,'multiline':True]['text':' last byte read by NEXT(), or -1 if EOF ','line_number':203,'multiline':True]['text':' bytes left in current chunk ','line_number':204,'multiline':True]['text':' bits left in rem ','line_number':205,'multiline':True]['text':' unused bits from input ','line_number':206,'multiline':True]['text':' current bits per code ','line_number':207,'multiline':True]['text':' code, table traversal index ','line_number':208,'multiline':True]['text':' mask for current bits codes ','line_number':209,'multiline':True]['text':' maximum bits per code for this stream ','line_number':210,'multiline':True]['text':' compress flags, then block compress flag ','line_number':211,'multiline':True]['text':' last valid entry in prefix/suffix tables ','line_number':212,'multiline':True]['text':' current code ','line_number':213,'multiline':True]['text':' previous code ','line_number':214,'multiline':True]['text':' last character written for previous code ','line_number':215,'multiline':True]['text':' next position for reversed string ','line_number':216,'multiline':True]['text':' bytes in output buffer ','line_number':217,'multiline':True]['text':' output structure ','line_number':218,'multiline':True]['text':' set up output ','line_number':221,'multiline':True]['text':' process remainder of compress header -- a flags byte ','line_number':225,'multiline':True]['text':' 9 doesn't really mean 9 ','line_number':238,'multiline':True]['text':' true if block compress ','line_number':240,'multiline':True]['text':' clear table ','line_number':242,'multiline':True]['text':' set up: get first 9-bit code, which is the first decompressed byte, but
+       don't create a table entry until the next code ','line_number':247,'multiline':True]['text':' no compressed data is ok ','line_number':249,'multiline':True]['text':' low 8 bits of code ','line_number':251,'multiline':True]['text':' missing a bit ','line_number':252,'multiline':True]['text':' code must be < 256 ','line_number':254,'multiline':True]['text':' remaining 7 bits ','line_number':258,'multiline':True]['text':' 7 bytes left in this chunk ','line_number':260,'multiline':True]['text':' write first decompressed byte ','line_number':261,'multiline':True]['text':' decode codes ','line_number':264,'multiline':True]['text':' if the table will be full after this, increment the code size ','line_number':267,'multiline':True]['text':' get a code of length bits ','line_number':275,'multiline':True]['text':' decrement chunk modulo bits ','line_number':276,'multiline':True]['text':' low bits of code ','line_number':278,'multiline':True]['text':' EOF is end of compressed data ','line_number':279,'multiline':True]['text':' write remaining buffered output ','line_number':280,'multiline':True]['text':' signal write error ','line_number':282,'multiline':True]['text':' middle (or high) bits of code ','line_number':287,'multiline':True]['text':' need more bits ','line_number':290,'multiline':True]['text':' can't end in middle of code ','line_number':291,'multiline':True]['text':' high bits of code ','line_number':293,'multiline':True]['text':' mask to current code length ','line_number':297,'multiline':True]['text':' number of unused bits ','line_number':298,'multiline':True]['text':' unused bits from last byte ','line_number':299,'multiline':True]['text':' process clear code (256) ','line_number':301,'multiline':True]['text':' initialize bits and mask ','line_number':304,'multiline':True]['text':' empty table ','line_number':306,'multiline':True]['text':' get next code ','line_number':307,'multiline':True]['text':' special code to reuse last match ','line_number':310,'multiline':True]['text':' save the current code ','line_number':311,'multiline':True]['text':' Be picky on the allowed code here, and make sure that the code
+               we drop through (prev) will be a valid index so that random
+               input does not cause an exception.  The code != end + 1 check is
+               empirically derived, and not checked in the original uncompress
+               code.  If this ever causes a problem, that check could be safely
+               removed.  Leaving this check in greatly improves gun's ability
+               to detect random or corrupted input after a compress header.
+               In any case, the prev > end check must be retained. ','line_number':313,'multiline':True]['text':' walk through linked list to generate output in reverse order ','line_number':329,'multiline':True]['text':' link new table entry ','line_number':339,'multiline':True]['text':' set previous code for next iteration ','line_number':346,'multiline':True]['text':' write output in forward order ','line_number':349,'multiline':True]['text':' signal write error ','line_number':354,'multiline':True]['text':' loop for next code with final and prev as the last match, rem and
+           left provide the first 0..7 bits of the next code, end is the last
+           valid table entry ','line_number':365,'multiline':True]['text':' Decompress a gzip file from infile to outfile.  strm is assumed to have been
+   successfully initialized with inflateBackInit().  The input file may consist
+   of a series of gzip streams, in which case all of them will be decompressed
+   to the output file.  If outfile is -1, then the gzip stream(s) integrity is
+   checked and nothing is written.
+
+   The return value is a zlib error code: Z_MEM_ERROR if out of memory,
+   Z_DATA_ERROR if the header or the compressed data is invalid, or if the
+   trailer CRC-32 check or length doesn't match, Z_BUF_ERROR if the input ends
+   prematurely or a write error occurs, or Z_ERRNO if junk (not a another gzip
+   stream) follows a valid gzip stream.
+ ','line_number':371,'multiline':True]['text':' setup input buffer ','line_number':391,'multiline':True]['text':' decompress concatenated gzip streams ','line_number':396,'multiline':True]['text':' no input data read in yet ','line_number':397,'multiline':True]['text':' looking for first gzip header ','line_number':398,'multiline':True]['text':' so Z_BUF_ERROR means EOF ','line_number':399,'multiline':True]['text':' look for the two magic header bytes for a gzip stream ','line_number':401,'multiline':True]['text':' empty gzip stream is ok ','line_number':404,'multiline':True]['text':' not a gzip or compress header ','line_number':409,'multiline':True]['text':' next non-header is junk ','line_number':411,'multiline':True]['text':' process a compress (LZW) file -- can't be concatenated after this ','line_number':413,'multiline':True]['text':' process remainder of gzip header ','line_number':419,'multiline':True]['text':' only deflate method allowed ','line_number':421,'multiline':True]['text':' header flags ','line_number':427,'multiline':True]['text':' discard mod time, xflgs, os ','line_number':428,'multiline':True]['text':' extra field ','line_number':440,'multiline':True]['text':' file name ','line_number':454,'multiline':True]['text':' comment ','line_number':457,'multiline':True]['text':' header crc ','line_number':460,'multiline':True]['text':' set up output ','line_number':466,'multiline':True]['text':' decompress data to output ','line_number':472,'multiline':True]['text':' so Z_BUF_ERROR means EOF ','line_number':479,'multiline':True]['text':' check trailer ','line_number':481,'multiline':True]['text':' crc error ','line_number':487,'multiline':True]['text':' length error ','line_number':498,'multiline':True]['text':' go back and look for another gzip stream ','line_number':506,'multiline':True]['text':' clean up and return ','line_number':509,'multiline':True]['text':' Copy file attributes, from -> to, as best we can.  This is best effort, so
+   no errors are reported.  The mode bits, including suid, sgid, and the sticky
+   bit are copied (if allowed), the owner's user id and group id are copied
+   (again if allowed), and the access and modify times are copied. ','line_number':513,'multiline':True]['text':' get all of from's Unix meta data, return if not a regular file ','line_number':522,'multiline':True]['text':' set to's mode bits, ignore errors ','line_number':526,'multiline':True]['text':' copy owner's user and group, ignore errors ','line_number':529,'multiline':True]['text':' copy access and modify times, ignore errors ','line_number':532,'multiline':True]['text':' Decompress the file inname to the file outnname, of if test is true, just
+   decompress without writing and check the gzip trailer for integrity.  If
+   inname is NULL or an empty string, read from stdin.  If outname is NULL or
+   an empty string, write to stdout.  strm is a pre-initialized inflateBack
+   structure.  When appropriate, copy the file attributes from inname to
+   outname.
+
+   gunzip() returns 1 if there is an out-of-memory error or an unexpected
+   return code from gunpipe().  Otherwise it returns 0.
+ ','line_number':538,'multiline':True]['text':' open files ','line_number':553,'multiline':True]['text':' stdin ','line_number':556,'multiline':True]['text':' stdout ','line_number':569,'multiline':True]['text':' decompress ','line_number':581,'multiline':True]['text':' interpret result ','line_number':586,'multiline':True]['text':' copy attributes ','line_number':591,'multiline':True]['text':' Process the gun command line arguments.  See the command syntax near the
+   beginning of this source file. ','line_number':629,'multiline':True]['text':' initialize inflateBack state for repeated use ','line_number':638,'multiline':True]['text':' reuse LZW match buffer ','line_number':639,'multiline':True]['text':' decompress each file to the same name with the suffix removed ','line_number':649,'multiline':True]['text':' clean up ','line_number':699,'multiline':True]

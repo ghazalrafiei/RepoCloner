@@ -1,0 +1,127 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * __wt_lsm_merge_update_tree --
+ *     Merge a set of chunks and populate a new one. Must be called with the LSM lock held.
+ ','line_number':13,'multiline':True]['text':' Update the current chunk list. ','line_number':25,'multiline':True]['text':'
+ * __lsm_merge_aggressive_clear --
+ *     We found a merge to do - clear the aggressive timer.
+ ','line_number':36,'multiline':True]['text':'
+ * __lsm_merge_aggressive_update --
+ *     Update the merge aggressiveness for an LSM tree.
+ ','line_number':47,'multiline':True]['text':'
+     * If the tree is open read-only or we are compacting, be very aggressive. Otherwise, we can
+     * spend a long time waiting for merges to start in read-only applications.
+     ','line_number':61,'multiline':True]['text':'
+     * Only get aggressive if a reasonable number of flushes have been completed since opening the
+     * tree.
+     ','line_number':70,'multiline':True]['text':'
+     * Start the timer if it isn't running. Use a bool to define whether the timer is running -
+     * since clearing and checking a special timer value isn't simple.
+     ','line_number':79,'multiline':True]['text':'
+     * If there is no estimate for how long it's taking to fill chunks pick 10 seconds.
+     ','line_number':91,'multiline':True]['text':'
+     * Don't consider getting aggressive until enough time has passed that we should have created
+     * enough chunks to trigger a new merge. We track average chunk-creation time - hence the
+     * "should"; the average fill time may not reflect the actual state if an application generates
+     * a variable load.
+     ','line_number':97,'multiline':True]['text':'
+     * Bump how aggressively we look for merges based on how long since the last merge complete. The
+     * aggressive setting only increases slowly - triggering merges across generations of chunks
+     * isn't an efficient use of resources.
+     ','line_number':106,'multiline':True]['text':'
+ * __lsm_merge_clear --
+ *     Clear merge flag on chunks that was set during __lsm_merge_span.
+ ','line_number':124,'multiline':True]['text':'
+ * __lsm_merge_span --
+ *     Figure out the best span of chunks to merge. Return an error if there is no need to do any
+ *     merges. Called with the LSM tree locked.
+ ','line_number':141,'multiline':True]['text':' Clear the return parameters ','line_number':158,'multiline':True]['text':'
+     * If there aren't any chunks to merge, or some of the chunks aren't yet written, we're done. A
+     * non-zero error indicates that the worker should assume there is no work to do: if there are
+     * unwritten chunks, the worker should write them immediately.
+     ','line_number':170,'multiline':True]['text':'
+     * Only include chunks that already have a Bloom filter or are the result of a merge and not
+     * involved in a merge.
+     ','line_number':178,'multiline':True]['text':'
+     * Give up immediately if there aren't enough on disk chunks in the tree for a merge.
+     ','line_number':193,'multiline':True]['text':'
+ * Look for the most efficient merge we can do. We define efficiency as collapsing as many levels as
+ * possible while processing the smallest number of rows.
+ *
+ * We make a distinction between "major" and "minor" merges. The difference is whether the oldest
+ * chunk is involved: if it is, we can discard tombstones, because there can be no older record to
+ * marked deleted.
+ *
+ * Respect the configured limit on the number of chunks to merge: start with the most recent set of
+ * chunks and work backwards until going further becomes significantly less efficient.
+ ','line_number':199,'multiline':True]['text':'
+         * If the chunk is already involved in a merge or a Bloom filter is being built for it,
+         * stop.
+         ','line_number':217,'multiline':True]['text':'
+         * Look for small merges before trying a big one: some threads should stay in low levels
+         * until we get more aggressive.
+         ','line_number':224,'multiline':True]['text':'
+         * If we have enough chunks for a merge and the next chunk is in too high a generation,
+         * stop.
+         ','line_number':231,'multiline':True]['text':'
+         * If the size of the chunks selected so far exceeds the configured maximum chunk size,
+         * stop. Keep going if we can slide the window further into the tree: we don't want to leave
+         * small chunks in the middle.
+         ','line_number':238,'multiline':True]['text':' Track chunk generations seen while looking for a merge ','line_number':249,'multiline':True]['text':'
+         * If the merge would be too big, or we have a full window and we could include an older
+         * chunk if the window wasn't full, remove the youngest chunk.
+         ','line_number':263,'multiline':True]['text':'
+             * Try again with smaller range. Unfortunately all the intermediate state will be reset.
+             * Since there's no easy way to restore youngest_gen and oldest_gen.
+             ','line_number':270,'multiline':True]['text':' We've found the best full merge we can ','line_number':278,'multiline':True]['text':' Be paranoid, check that we setup the merge properly. ','line_number':283,'multiline':True]['text':'
+     * Don't do merges that are too small or across too many generations.
+     ','line_number':294,'multiline':True]['text':'
+         * If we didn't find a merge with appropriate gaps, try again with a smaller range.
+         ','line_number':299,'multiline':True]['text':' Consider getting aggressive if no merge was found ','line_number':306,'multiline':True]['text':'
+ * __wt_lsm_merge --
+ *     Merge a set of chunks of an LSM tree.
+ ','line_number':318,'multiline':True]['text':' Fast path if it's obvious no merges could be done. ','line_number':343,'multiline':True]['text':'
+     * Use the lsm_tree lock to read the chunks (so no switches occur), but avoid holding it while
+     * the merge is in progress: that may take a long time.
+     ','line_number':348,'multiline':True]['text':' Find the merge generation. ','line_number':361,'multiline':True]['text':' Allocate an ID for the merge. ','line_number':368,'multiline':True]['text':'
+     * We only want to do the chunk loop if we're running with verbose, so we wrap these statements
+     * in the conditional. Avoid the loop in the normal path.
+     ','line_number':371,'multiline':True]['text':'
+     * Special setup for the merge cursor: first, reset to open the dependent cursors; then restrict
+     * the cursor to a specific number of chunks; then set MERGE so the cursor doesn't track updates
+     * to the tree.
+     ','line_number':396,'multiline':True]['text':' Discard pages we read as soon as we're done with them. ','line_number':414,'multiline':True]['text':' Call the callback. ','line_number':426,'multiline':True]['text':' Make sure the source is ready to start the scan. ','line_number':429,'multiline':True]['text':'
+     * Closing and syncing the files can take a while. Set the merge_syncing field so that compact
+     * knows it is still in progress.
+     ','line_number':459,'multiline':True]['text':'
+     * We've successfully created the new chunk. Now install it. We need to ensure that the NO_CACHE
+     * flag is cleared and the bloom filter is closed (even if a step fails), so track errors but
+     * don't return until we've cleaned up.
+     ','line_number':465,'multiline':True]['text':'
+     * We're doing advisory reads to fault the new trees into cache. Don't block if the cache is
+     * full: our next unit of work may be to discard some trees to free space.
+     ','line_number':476,'multiline':True]['text':'
+         * Read in a key to make sure the Bloom filters btree handle is open before it becomes
+         * visible to application threads. Otherwise application threads will stall while it is
+         * opened and internal pages are read into cache.
+         ','line_number':486,'multiline':True]['text':'
+     * Open a handle on the new chunk before application threads attempt to access it, opening it
+     * pre-loads internal pages into the file system cache.
+     ','line_number':501,'multiline':True]['text':'
+     * Check whether we raced with another merge, and adjust the chunk array offset as necessary.
+     ','line_number':518,'multiline':True]['text':'
+     * It is safe to error out here - since the update can only fail prior to making updates to the
+     * tree.
+     ','line_number':526,'multiline':True]['text':'
+     * We have no current way of continuing if the metadata update fails, so we will panic in that
+     * case. Put some effort into cleaning up after ourselves here - so things have a chance of
+     * shutting down.
+     *
+     * Any errors that happened after the tree was locked are fatal - we can't guarantee the state
+     * of the tree.
+     ','line_number':537,'multiline':True]['text':' Update the throttling while holding the tree lock. ','line_number':550,'multiline':True]['text':' Schedule a pass to discard old chunks ','line_number':553,'multiline':True]['text':' Drop the newly-created files on error. ','line_number':568,'multiline':True]

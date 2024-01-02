@@ -1,0 +1,222 @@
+['text':'************************************************
+*      Perl-Compatible Regular Expressions       *
+************************************************','line_number':1,'multiline':True]['text':' PCRE is a library of functions to support regular expressions whose syntax
+and semantics are as close as possible to those of the Perl 5 language.
+
+                       Written by Philip Hazel
+     Original API code Copyright (c) 1997-2012 University of Cambridge
+          New API code Copyright (c) 2016-2022 University of Cambridge
+
+-----------------------------------------------------------------------------
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the name of the University of Cambridge nor the names of its
+      contributors may be used to endorse or promote products derived from
+      this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+-----------------------------------------------------------------------------
+','line_number':5,'multiline':True]['text':' This module contains functions that scan a compiled pattern and change
+repeats into possessive repeats where possible. ','line_number':41,'multiline':True]['text':'************************************************
+*        Tables for auto-possessification        *
+************************************************','line_number':53,'multiline':True]['text':' This table is used to check whether auto-possessification is possible
+between adjacent character-type opcodes. The left-hand (repeated) opcode is
+used to select the row, and the right-hand opcode is use to select the column.
+A value of 1 means that auto-possessification is OK. For example, the second
+value in the first row means that \D+\d can be turned into \D++\d.
+
+The Unicode property types (\P and \p) have to be present to fill out the table
+because of what their opcode values are, but the table values should always be
+zero because property types are handled separately in the code. The last four
+columns apply to items that cannot be repeated, so there is no need to have
+rows for them. Note that OP_DIGIT etc. are generated only when PCRE_UCP is
+*not* set. When it is set, \d etc. are converted into OP_(NOT_)PROP codes. ','line_number':57,'multiline':True]['text':' \D \d \S \s \W \w  . .+ \C \P \p \R \H \h \V \v \X \Z \z  $ $M ','line_number':74,'multiline':True]['text':' \D ','line_number':75,'multiline':True]['text':' \d ','line_number':76,'multiline':True]['text':' \S ','line_number':77,'multiline':True]['text':' \s ','line_number':78,'multiline':True]['text':' \W ','line_number':79,'multiline':True]['text':' \w ','line_number':80,'multiline':True]['text':' .  ','line_number':81,'multiline':True]['text':' .+ ','line_number':82,'multiline':True]['text':' \C ','line_number':83,'multiline':True]['text':' \P ','line_number':84,'multiline':True]['text':' \p ','line_number':85,'multiline':True]['text':' \R ','line_number':86,'multiline':True]['text':' \H ','line_number':87,'multiline':True]['text':' \h ','line_number':88,'multiline':True]['text':' \V ','line_number':89,'multiline':True]['text':' \v ','line_number':90,'multiline':True]['text':' \X ','line_number':91,'multiline':True]['text':' This table is used to check whether auto-possessification is possible
+between adjacent Unicode property opcodes (OP_PROP and OP_NOTPROP). The
+left-hand (repeated) opcode is used to select the row, and the right-hand
+opcode is used to select the column. The values are as follows:
+
+  0   Always return FALSE (never auto-possessify)
+  1   Character groups are distinct (possessify if both are OP_PROP)
+  2   Check character categories in the same group (general or particular)
+  3   TRUE if the two opcodes are not the same (PROP vs NOTPROP)
+
+  4   Check left general category vs right particular category
+  5   Check right general category vs left particular category
+
+  6   Left alphanum vs right general category
+  7   Left space vs right general category
+  8   Left word vs right general category
+
+  9   Right alphanum vs left general category
+ 10   Right space vs left general category
+ 11   Right word vs left general category
+
+ 12   Left alphanum vs right particular category
+ 13   Left space vs right particular category
+ 14   Left word vs right particular category
+
+ 15   Right alphanum vs left particular category
+ 16   Right space vs left particular category
+ 17   Right word vs left particular category
+','line_number':95,'multiline':True]['text':' ANY LAMP GC  PC  SC  SCX ALNUM SPACE PXSPACE WORD CLIST UCNC BIDICL BOOL ','line_number':126,'multiline':True]['text':' PT_ANY ','line_number':127,'multiline':True]['text':' PT_LAMP ','line_number':128,'multiline':True]['text':' PT_GC ','line_number':129,'multiline':True]['text':' PT_PC ','line_number':130,'multiline':True]['text':' PT_SC ','line_number':131,'multiline':True]['text':' PT_SCX ','line_number':132,'multiline':True]['text':' PT_ALNUM ','line_number':133,'multiline':True]['text':' PT_SPACE ','line_number':134,'multiline':True]['text':' PT_PXSPACE ','line_number':135,'multiline':True]['text':' PT_WORD ','line_number':136,'multiline':True]['text':' PT_CLIST ','line_number':137,'multiline':True]['text':' PT_UCNC ','line_number':138,'multiline':True]['text':' PT_BIDICL ','line_number':139,'multiline':True]['text':' PT_BOOL ','line_number':140,'multiline':True]['text':' This table is used to check whether auto-possessification is possible
+between adjacent Unicode property opcodes (OP_PROP and OP_NOTPROP) when one
+specifies a general category and the other specifies a particular category. The
+row is selected by the general category and the column by the particular
+category. The value is 1 if the particular category is not part of the general
+category. ','line_number':143,'multiline':True]['text':' Cc Cf Cn Co Cs Ll Lm Lo Lt Lu Mc Me Mn Nd Nl No Pc Pd Pe Pf Pi Po Ps Sc Sk Sm So Zl Zp Zs ','line_number':151,'multiline':True]['text':' C ','line_number':152,'multiline':True]['text':' L ','line_number':153,'multiline':True]['text':' M ','line_number':154,'multiline':True]['text':' N ','line_number':155,'multiline':True]['text':' P ','line_number':156,'multiline':True]['text':' S ','line_number':157,'multiline':True]['text':' Z ','line_number':158,'multiline':True]['text':' This table is used when checking ALNUM, (PX)SPACE, SPACE, and WORD against
+a general or particular category. The properties in each row are those
+that apply to the character set in question. Duplication means that a little
+unnecessary work is done when checking, but this keeps things much simpler
+because they can all use the same code. For more details see the comment where
+this table is used.
+
+Note: SPACE and PXSPACE used to be different because Perl excluded VT from
+"space", but from Perl 5.18 it's included, so both categories are treated the
+same here. ','line_number':161,'multiline':True]['text':' ALNUM, 3rd and 4th values redundant ','line_number':173,'multiline':True]['text':' SPACE and PXSPACE, 2nd value redundant ','line_number':174,'multiline':True]['text':' WORD ','line_number':175,'multiline':True]['text':' SUPPORT_UNICODE ','line_number':177,'multiline':True]['text':'************************************************
+*        Check a character and a property        *
+************************************************','line_number':182,'multiline':True]['text':' This function is called by compare_opcodes() when a property item is
+adjacent to a fixed character.
+
+Arguments:
+  c            the character
+  ptype        the property type
+  pdata        the data for the type
+  negated      TRUE if it's a negated property (\P or \p{^)
+
+Returns:       TRUE if auto-possessifying is OK
+','line_number':186,'multiline':True]['text':' These are specials ','line_number':227,'multiline':True]['text':' Perl space used to exclude VT, but from Perl 5.18 it is included, which
+  means that Perl space and POSIX space are now identical. PCRE was changed
+  at release 8.34. ','line_number':233,'multiline':True]['text':' Perl space ','line_number':237,'multiline':True]['text':' POSIX space ','line_number':238,'multiline':True]['text':' Control never reaches here ','line_number':248,'multiline':True]['text':' Control never reaches here ','line_number':262,'multiline':True]['text':' Haven't yet thought these through. ','line_number':264,'multiline':True]['text':' SUPPORT_UNICODE ','line_number':275,'multiline':True]['text':'************************************************
+*        Base opcode of repeated opcodes         *
+************************************************','line_number':279,'multiline':True]['text':' Returns the base opcode for repeated single character type opcodes. If the
+opcode is not a repeated character type, it returns with the original value.
+
+Arguments:  c opcode
+Returns:    base opcode for the type
+','line_number':283,'multiline':True]['text':'************************************************
+*        Fill the character property list        *
+************************************************','line_number':302,'multiline':True]['text':' Checks whether the code points to an opcode that can take part in auto-
+possessification, and if so, fills a list with its properties.
+
+Arguments:
+  code        points to start of expression
+  utf         TRUE if in UTF mode
+  ucp         TRUE if in UCP mode
+  fcc         points to the case-flipping table
+  list        points to output list
+              list[0] will be filled with the opcode
+              list[1] will be non-zero if this opcode
+                can match an empty character string
+              list[2..7] depends on the opcode
+
+Returns:      points to the start of the next opcode if *code is accepted
+              NULL if *code is not accepted
+','line_number':306,'multiline':True]['text':' Suppress "unused parameter" compiler warnings ','line_number':337,'multiline':True]['text':' The othercase might be the same value. ','line_number':428,'multiline':True]['text':' Convert only if we have enough space. ','line_number':446,'multiline':True]['text':' Early return if there is not enough space. This should never
+       happen, since all clists are shorter than 5 character now. ','line_number':455,'multiline':True]['text':' All characters are stored. The terminating NOTACHAR is copied from the
+  clist itself. ','line_number':465,'multiline':True]['text':' Opcode not accepted ','line_number':511,'multiline':True]['text':'************************************************
+*    Scan further character sets for match       *
+************************************************','line_number':516,'multiline':True]['text':' Checks whether the base and the current opcode have a common character, in
+which case the base cannot be possessified.
+
+Arguments:
+  code        points to the byte code
+  utf         TRUE in UTF mode
+  ucp         TRUE in UCP mode
+  cb          compile data block
+  base_list   the data list of the base opcode
+  base_end    the end of the base opcode
+  rec_limit   points to recursion depth counter
+
+Returns:      TRUE if the auto-possessification is possible
+','line_number':520,'multiline':True]['text':' Recursion has gone too deep ','line_number':554,'multiline':True]['text':' Note: the base_list[1] contains whether the current opcode has a greedy
+(represented by a non-zero value) quantifier. This is a different from
+other character type lists, which store here that the character iterator
+matches to an empty string (also represented by a non-zero value). ','line_number':556,'multiline':True]['text':' All operations move the code pointer forward.
+  Therefore infinite recursions are not possible. ','line_number':563,'multiline':True]['text':' Skip over callouts ','line_number':568,'multiline':True]['text':' At the end of a branch, skip to the end of the group. ','line_number':582,'multiline':True]['text':' Inspect the next opcode. ','line_number':590,'multiline':True]['text':' We can always possessify a greedy iterator at the end of the pattern,
+    which is reached after skipping over the final OP_KET. A non-greedy
+    iterator must never be possessified. ','line_number':594,'multiline':True]['text':' When an iterator is at the end of certain kinds of group we can inspect
+    what follows the group by skipping over the closing ket. Note that this
+    does not apply to OP_KETRMAX or OP_KETRMIN because what follows any given
+    iteration is variable (could be another iteration or could be the next
+    item). As these two opcodes are not listed in the next switch, they will
+    end up as the next code to inspect, and return FALSE by virtue of being
+    unsupported. ','line_number':601,'multiline':True]['text':' The non-greedy case cannot be converted to a possessive form. ','line_number':611,'multiline':True]['text':' If the bracket is capturing it might be referenced by an OP_RECURSE
+    so its last iterator can never be possessified if the pattern contains
+    recursions. (This could be improved by keeping a list of group numbers that
+    are called by recursion.) ','line_number':615,'multiline':True]['text':' A script run might have to backtrack if the iterated item can match
+      characters from more than one script. So give up unless repeating an
+      explicit character. ','line_number':629,'multiline':True]['text':' Atomic sub-patterns and assertions can always auto-possessify their
+      last iterator. However, if the group was entered as a result of checking
+      a previous iterator, this is not possible. ','line_number':638,'multiline':True]['text':' Non-atomic assertions - don't possessify last iterator. This needs
+      more thought. ','line_number':649,'multiline':True]['text':' Skip over the bracket and inspect what comes next. ','line_number':657,'multiline':True]['text':' Handle cases where the next item is a group. ','line_number':662,'multiline':True]['text':' Check each branch. We have to recurse a level for all but the last
+    branch. ','line_number':670,'multiline':True]['text':' The bracket content will be checked by the OP_BRA/OP_CBRA case above. ','line_number':693,'multiline':True]['text':' The next opcode does not need special handling; fall through and use it
+    to see if the base can be possessified. ','line_number':703,'multiline':True]['text':' We now have the next appropriate opcode to compare with the base. Check
+  for a supported opcode, and load its properties. ','line_number':710,'multiline':True]['text':' Unsupported ','line_number':714,'multiline':True]['text':' If either opcode is a small character list, set pointers for comparing
+  characters from that list with another list, or with a property. ','line_number':716,'multiline':True]['text':' Character bitsets can also be compared to certain opcodes. ','line_number':730,'multiline':True]['text':' In 8 bit, non-UTF mode, OP_CLASS and OP_NCLASS are the same. ','line_number':734,'multiline':True]['text':' No bits are set for characters < 256. ','line_number':769,'multiline':True]['text':' Might be an empty repeat. ','line_number':771,'multiline':True]['text':' Fall through ','line_number':780,'multiline':True]['text':' Fall through ','line_number':787,'multiline':True]['text':' Fall through ','line_number':794,'multiline':True]['text':' Because the bit sets are unaligned bytes, we need to perform byte
+    comparison here. ','line_number':803,'multiline':True]['text':' Might be an empty repeat. ','line_number':825,'multiline':True]['text':' Some property combinations also acceptable. Unicode property opcodes are
+  processed specially; the rest can be handled with a lookup table. ','line_number':829,'multiline':True]['text':' Always set in non-unicode case. ','line_number':840,'multiline':True]['text':' There's a table that specifies how each combination is to be
+        processed:
+          0   Always return FALSE (never auto-possessify)
+          1   Character groups are distinct (possessify if both are OP_PROP)
+          2   Check character categories in the same group (general or particular)
+          3   Return TRUE if the two opcodes are not the same
+          ... see comments below
+        ','line_number':854,'multiline':True]['text':' Left general category, right particular category ','line_number':871,'multiline':True]['text':' Right general category, left particular category ','line_number':875,'multiline':True]['text':' This code is logically tricky. Think hard before fiddling with it.
+          The posspropstab table has four entries per row. Each row relates to
+          one of PCRE's special properties such as ALNUM or SPACE or WORD.
+          Only WORD actually needs all four entries, but using repeats for the
+          others means they can all use the same code below.
+
+          The first two entries in each row are Unicode general categories, and
+          apply always, because all the characters they include are part of the
+          PCRE character set. The third and fourth entries are a general and a
+          particular category, respectively, that include one or more relevant
+          characters. One or the other is used, depending on whether the check
+          is for a general or a particular category. However, in both cases the
+          category contains more characters than the specials that are defined
+          for the property being tested against. Therefore, it cannot be used
+          in a NOTPROP case.
+
+          Example: the row for WORD contains ucp_L, ucp_N, ucp_P, ucp_Po.
+          Underscore is covered by ucp_P or ucp_Po. ','line_number':879,'multiline':True]['text':' Left alphanum vs right general category ','line_number':898,'multiline':True]['text':' Left space vs right general category ','line_number':899,'multiline':True]['text':' Left word vs right general category ','line_number':900,'multiline':True]['text':' Right alphanum vs left general category ','line_number':908,'multiline':True]['text':' Right space vs left general category ','line_number':909,'multiline':True]['text':' Right word vs left general category ','line_number':910,'multiline':True]['text':' Left alphanum vs right particular category ','line_number':918,'multiline':True]['text':' Left space vs right particular category ','line_number':919,'multiline':True]['text':' Left word vs right particular category ','line_number':920,'multiline':True]['text':' Right alphanum vs left particular category ','line_number':928,'multiline':True]['text':' Right space vs left particular category ','line_number':929,'multiline':True]['text':' Right word vs left particular category ','line_number':930,'multiline':True]['text':' SUPPORT_UNICODE ','line_number':942,'multiline':True]['text':' Might be an empty repeat. ','line_number':951,'multiline':True]['text':' Control reaches here only if one of the items is a small character list.
+  All characters are checked against the other side. ','line_number':955,'multiline':True]['text':' Not found ','line_number':983,'multiline':True]['text':' Note that OP_DIGIT etc. are generated only when PCRE2_UCP is *not*
+      set. When it is set, \d etc. are converted into OP_(NOT_)PROP codes. ','line_number':986,'multiline':True]['text':' Not EBCDIC ','line_number':1058,'multiline':True]['text':' Can always possessify before \z ','line_number':1063,'multiline':True]['text':' Fall through ','line_number':1077,'multiline':True]['text':' At least one character must be matched from this opcode. ','line_number':1101,'multiline':True]['text':' Control never reaches here. There used to be a fail-save return FALSE; here,
+but some compilers complain about an unreachable statement. ','line_number':1106,'multiline':True]['text':'************************************************
+*    Scan compiled regex for auto-possession     *
+************************************************','line_number':1112,'multiline':True]['text':' Replaces single character iterations with their possessive alternatives
+if appropriate. This function modifies the compiled opcode! Hitting a
+non-existent opcode may indicate a bug in PCRE2, but it can also be caused if a
+bad UTF string was compiled with PCRE2_NO_UTF_CHECK. The rec_limit catches
+overly complicated or large patterns. In these cases, the check just stops,
+leaving the remainder of the pattern unpossessified.
+
+Arguments:
+  code        points to start of the byte code
+  cb          compile data block
+
+Returns:      0 for success
+              -1 if a non-existant opcode is encountered
+','line_number':1116,'multiline':True]['text':' Was 10,000 but clang+ASAN uses a lot of stack. ','line_number':1138,'multiline':True]['text':' Something gone wrong ','line_number':1146,'multiline':True]['text':' The return from get_chr_property_list() will never be NULL when
+      *code (aka c) is one of the three class opcodes. However, gcc with
+      -fanalyzer notes that a NULL return is possible, and grumbles. Hence we
+      put in a check. ','line_number':1207,'multiline':True]['text':' Add in the fixed length from the table ','line_number':1289,'multiline':True]['text':' In UTF-8 and UTF-16 modes, opcodes that are followed by a character may be
+  followed by a multi-byte character. The length in the table is a minimum, so
+  we have to arrange to skip the extra code units. ','line_number':1293,'multiline':True]['text':' Keep compiler happy by referencing function argument ','line_number':1360,'multiline':True]['text':' SUPPORT_WIDE_CHARS ','line_number':1361,'multiline':True]['text':' End of pcre2_auto_possess.c ','line_number':1365,'multiline':True]

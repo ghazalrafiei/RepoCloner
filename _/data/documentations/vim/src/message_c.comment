@@ -1,0 +1,424 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]['text':'
+ * message.c: functions for displaying messages on the command line
+ ','line_number':10,'multiline':True]['text':' don't include prototype for smsg()','line_number':14,'multiline':False]['text':' displaying confirm_msg','line_number':35,'multiline':False]['text':' ":confirm" message','line_number':36,'multiline':False]['text':' tail of confirm_msg','line_number':37,'multiline':False]['text':'
+ * When writing messages to the screen, there are many different situations.
+ * A number of variables is used to remember the current state:
+ * msg_didany	    TRUE when messages were written since the last time the
+ *		    user reacted to a prompt.
+ *		    Reset: After hitting a key for the hit-return prompt,
+ *		    hitting <CR> for the command line or input().
+ *		    Set: When any message is written to the screen.
+ * msg_didout	    TRUE when something was written to the current line.
+ *		    Reset: When advancing to the next line, when the current
+ *		    text can be overwritten.
+ *		    Set: When any message is written to the screen.
+ * msg_nowait	    No extra delay for the last drawn message.
+ *		    Used in normal_cmd() before the mode message is drawn.
+ * emsg_on_display  There was an error message recently.  Indicates that there
+ *		    should be a delay before redrawing.
+ * msg_scroll	    The next message should not overwrite the current one.
+ * msg_scrolled	    How many lines the screen has been scrolled (because of
+ *		    messages).  Used in update_screen() to scroll the screen
+ *		    back.  Incremented each time the screen scrolls a line.
+ * msg_scrolled_ign  TRUE when msg_scrolled is non-zero and msg_puts_attr()
+ *		    writes something without scrolling should not make
+ *		    need_wait_return to be set.  This is a hack to make ":ts"
+ *		    work without an extra prompt.
+ * lines_left	    Number of lines available for messages before the
+ *		    more-prompt is to be given.  -1 when not set.
+ * need_wait_return TRUE when the hit-return prompt is needed.
+ *		    Reset: After giving the hit-return prompt, when the user
+ *		    has answered some other prompt.
+ *		    Set: When the ruler or typeahead display is overwritten,
+ *		    scrolling the screen for some message.
+ * keep_msg	    Message to be displayed after redrawing the screen, in
+ *		    main_loop().
+ *		    This is an allocated string or NULL when not used.
+ ','line_number':58,'multiline':True]['text':'
+ * msg(s) - displays the string 's' on the status line
+ * When terminal not initialized (yet) mch_errmsg(..) is used.
+ * return TRUE if wait_return() not called
+ ','line_number':94,'multiline':True]['text':'
+ * Like msg() but keep it silent when 'verbosefile' is set.
+ ','line_number':105,'multiline':True]['text':' TRUE: set keep_msg if it doesn't scroll','line_number':130,'multiline':False]['text':' Skip messages not matching ":filter pattern".','line_number':136,'multiline':False]['text':' Don't filter when there is an error.','line_number':137,'multiline':False]['text':'
+     * It is possible that displaying a messages causes a problem (e.g.,
+     * when redrawing the window), which causes another message, etc..	To
+     * break this loop, limit the recursiveness to 3 levels.
+     ','line_number':146,'multiline':True]['text':' Add message to history (unless it's a repeated kept message or a','line_number':155,'multiline':False]['text':' truncated message)','line_number':156,'multiline':False]['text':' Write message in the channel log.','line_number':166,'multiline':False]['text':' Truncate the message if needed.','line_number':170,'multiline':False]['text':'
+ * Truncate a string such that it can be printed without causing a scroll.
+ * Returns an allocated string or NULL when no truncating is done.
+ ','line_number':191,'multiline':True]['text':' always truncate','line_number':198,'multiline':False]['text':' May truncate message to avoid a hit-return prompt','line_number':204,'multiline':False]['text':' Use all the columns.','line_number':214,'multiline':False]['text':' Use up to 'showcmd' column.','line_number':217,'multiline':False]['text':' may have up to 18 bytes per cell (6 per char, up to two','line_number':222,'multiline':False]['text':' composing chars)','line_number':223,'multiline':False]['text':' may have up to 2 bytes per cell for euc-jp','line_number':226,'multiline':False]['text':'
+ * Truncate a string "s" to "buf" with cell width "room".
+ * "s" and "buf" may be equal.
+ ','line_number':238,'multiline':True]['text':' "..." takes 3 chars','line_number':249,'multiline':False]['text':' First part: Start of the string.','line_number':267,'multiline':False]['text':' text fits without truncating!','line_number':272,'multiline':False]['text':' Last part: End of the string.','line_number':290,'multiline':False]['text':' For DBCS going backwards in a string is slow, but','line_number':294,'multiline':False]['text':' computing the cell width isn't too slow: go forward','line_number':295,'multiline':False]['text':' until the rest fits.','line_number':296,'multiline':False]['text':' For UTF-8 we can go backwards easily.','line_number':306,'multiline':False]['text':' text fits without truncating','line_number':330,'multiline':False]['text':' set the middle and copy the last part','line_number':345,'multiline':False]['text':' can't fit in the "...", just truncate it','line_number':355,'multiline':False]['text':'
+ * Automatic prototype generation does not understand this function.
+ * Note: Caller of smsg() and smsg_attr() must check the resulting string is
+ * shorter than IOSIZE!!!
+ ','line_number':360,'multiline':True]['text':' Very early in initialisation and already something wrong, just','line_number':374,'multiline':False]['text':' give the raw message so the user at least gets a hint.','line_number':375,'multiline':False]['text':' Very early in initialisation and already something wrong, just','line_number':392,'multiline':False]['text':' give the raw message so the user at least gets a hint.','line_number':393,'multiline':False]['text':' Very early in initialisation and already something wrong, just','line_number':410,'multiline':False]['text':' give the raw message so the user at least gets a hint.','line_number':411,'multiline':False]['text':'
+ * Remember the last sourcing name/lnum used in an error message, so that it
+ * isn't printed each time when it didn't change.
+ ','line_number':425,'multiline':True]['text':'
+ * Reset the last used sourcing name/lnum.  Makes sure it is displayed again
+ * for the next error message;
+ ','line_number':432,'multiline':True]['text':'
+ * Return TRUE if "SOURCING_NAME" differs from "last_sourcing_name".
+ ','line_number':443,'multiline':True]['text':'
+ * Get the message about the source, as used for an error message.
+ * Returns an allocated string with room for one more character.
+ * Returns NULL when no message is to be given.
+ ','line_number':458,'multiline':True]['text':'
+ * Get the message about the source lnum, as used for an error message.
+ * Returns an allocated string with room for one more character.
+ * Returns NULL when no message is to be given.
+ ','line_number':491,'multiline':True]['text':' lnum is 0 when executing a command from the command line','line_number':501,'multiline':False]['text':' argument, we don't want a line number then','line_number':502,'multiline':False]['text':'
+ * Display name and line number for the source of an error.
+ * Remember the file name and line number, so that for the next error the info
+ * is only displayed if it changed.
+ ','line_number':516,'multiline':True]['text':' Bail out if something called here causes an error.','line_number':527,'multiline':False]['text':' this will take more than one line','line_number':536,'multiline':False]['text':' only once for each line','line_number':545,'multiline':False]['text':' remember the last sourcing name printed, also when it's empty','line_number':548,'multiline':False]['text':'
+ * Return TRUE if not giving error messages right now:
+ * If "emsg_off" is set: no error messages at the moment.
+ * If "msg" is in 'debug': do error message but without side effects.
+ * If "emsg_skip" is set: never do error messages.
+ ','line_number':560,'multiline':True]['text':'
+ * Replacement for perror() that behaves more or less like emsg() was called.
+ * v:errmsg will be set and called_emsg will be incremented.
+ ','line_number':608,'multiline':True]['text':'
+ * emsg_core() - display an error message
+ *
+ * Rings the bell, if appropriate, and calls message() to do the real work
+ * When terminal not initialized (yet) mch_errmsg(..) is used.
+ *
+ * Return TRUE if wait_return() not called.
+ * Note: caller must check 'emsg_not_now()' before calling this.
+ ','line_number':622,'multiline':True]['text':' When testing some errors are turned into a normal message.','line_number':643,'multiline':False]['text':' don't call msg() if it results in a dialog','line_number':645,'multiline':False]['text':' If "emsg_severe" is TRUE: When an error exception is to be thrown,','line_number':652,'multiline':False]['text':' prefer this message over previous messages for the same command.','line_number':653,'multiline':False]['text':'
+	 * Cause a throw of an error exception if appropriate.  Don't display
+	 * the error message in this case.  (If no matching catch clause will
+	 * be found, the message will be displayed later on.)  "ignore" is set
+	 * when the message should be ignored completely (used for the
+	 * interrupt message).
+	 ','line_number':661,'multiline':True]['text':' set "v:errmsg", also when using ":silent! cmd"','line_number':684,'multiline':False]['text':'
+	 * When using ":silent! cmd" ignore error messages.
+	 * But do write it to the redirection file.
+	 ','line_number':688,'multiline':True]['text':' Only increment did_emsg_def when :silent! wasn't used inside the','line_number':717,'multiline':False]['text':' :def function.','line_number':718,'multiline':False]['text':' Reset msg_silent, an error causes messages to be switched back on.','line_number':730,'multiline':False]['text':' break :global command','line_number':734,'multiline':False]['text':' also includes flush_buffers()','line_number':738,'multiline':False]['text':' flush internal buffers','line_number':740,'multiline':False]['text':' flag for DoOneCmd()','line_number':741,'multiline':False]['text':' remember there is an error message','line_number':750,'multiline':False]['text':' set highlight mode for error messages','line_number':752,'multiline':False]['text':' needed in case emsg() is called after','line_number':754,'multiline':False]['text':' wait_return() has reset need_wait_return','line_number':755,'multiline':False]['text':' and a redraw is expected because','line_number':756,'multiline':False]['text':' msg_scrolled is non-zero','line_number':757,'multiline':False]['text':'
+     * Display name and line number for the source of the error.
+     ','line_number':762,'multiline':True]['text':'
+     * Display the error message itself.
+     ','line_number':768,'multiline':True]['text':' wait for this msg','line_number':771,'multiline':False]['text':'
+ * Print error message "s".  Should already be translated.
+ * Return TRUE if wait_return() not called.
+ ','line_number':780,'multiline':True]['text':' Skip this if not giving error messages at the moment.','line_number':787,'multiline':False]['text':' manual proto with __attribute__','line_number':794,'multiline':False]['text':'
+ * Print error message "s" with format string and variable arguments.
+ * "s" should already be translated.
+ * Note: caller must not use "IObuff" for "s"!
+ * Return TRUE if wait_return() not called.
+ ','line_number':795,'multiline':True]['text':' Skip this if not giving error messages at the moment.','line_number':804,'multiline':False]['text':' Very early in initialisation and already something wrong, just','line_number':809,'multiline':False]['text':' give the raw message so the user at least gets a hint.','line_number':810,'multiline':False]['text':'
+ * Same as emsg(...), but abort on error when ABORT_ON_INTERNAL_ERROR is
+ * defined. It is used for internal errors only, so that they can be
+ * detected when fuzzing vim.
+ ','line_number':822,'multiline':True]['text':' Give a generic error which is translated.  The error itself may not be','line_number':833,'multiline':False]['text':' translated, it almost never shows.','line_number':834,'multiline':False]['text':' avoid overwriting the error message','line_number':840,'multiline':False]['text':' manual proto with __attribute__','line_number':846,'multiline':False]['text':'
+ * Same as semsg(...) but abort on error when ABORT_ON_INTERNAL_ERROR is
+ * defined. It is used for internal errors only, so that they can be
+ * detected when fuzzing vim.
+ * Note: caller must not pass 'IObuff' as 1st argument.
+ ','line_number':847,'multiline':True]['text':' Give a generic error which is translated.  The error itself may not be','line_number':859,'multiline':False]['text':' translated, it almost never shows.','line_number':860,'multiline':False]['text':' Very early in initialisation and already something wrong, just','line_number':865,'multiline':False]['text':' give the raw message so the user at least gets a hint.','line_number':866,'multiline':False]['text':' avoid overwriting the error message','line_number':879,'multiline':False]['text':'
+ * Give an "Internal error" message.
+ ','line_number':886,'multiline':True]['text':' Give a generic error which is translated.  The error itself may not be','line_number':892,'multiline':False]['text':' translated, it almost never shows.','line_number':893,'multiline':False]['text':'
+ * Like internal_error() but do not call abort(), to avoid tests using
+ * test_unknown() and test_void() causing Vim to exit.
+ ','line_number':900,'multiline':True]['text':' Give a generic error which is translated.  The error itself may not be','line_number':907,'multiline':False]['text':' translated, it almost never shows.','line_number':908,'multiline':False]['text':' emsg3() and emsgn() are in misc2.c to avoid warnings for the prototypes.','line_number':915,'multiline':False]['text':'
+ * Give an error message which contains %s for "name[len]".
+ ','line_number':924,'multiline':True]['text':'
+ * Like msg(), but truncate to a single line if p_shm contains 't', or when
+ * "force" is TRUE.  This truncates in another way as for normal messages.
+ * Careful: The string may be changed by msg_may_trunc()!
+ * Returns a pointer to the printed message, if wait_return() not called.
+ ','line_number':937,'multiline':True]['text':' Add message to history before truncating','line_number':949,'multiline':False]['text':'
+ * Check if message "s" should be truncated at the start (for filenames).
+ * Return a pointer to where the truncated message starts.
+ * Note: May change the message by replacing a character with '<'.
+ ','line_number':963,'multiline':True]['text':' If 'cmdheight' is zero or something unexpected happened "room" may be','line_number':974,'multiline':False]['text':' negative.','line_number':975,'multiline':False]['text':' There may be room anyway when there are multibyte chars.','line_number':984,'multiline':False]['text':' -1 for undetermined length','line_number':1004,'multiline':False]['text':' Don't let the message history get too big','line_number':1012,'multiline':False]['text':' allocate an entry and add the message at the end of the history','line_number':1016,'multiline':False]['text':' remove leading and trailing newlines','line_number':1023,'multiline':False]['text':'
+ * Delete the first (oldest) message from the history.
+ * Returns FAIL if there are no messages.
+ ','line_number':1042,'multiline':True]['text':' history is empty','line_number':1056,'multiline':False]['text':'
+ * ":messages" command.
+ ','line_number':1063,'multiline':True]['text':' Count total messages','line_number':1093,'multiline':False]['text':' Skip without number of messages specified','line_number':1099,'multiline':False]['text':' The next comment is extracted by xgettext and put in po file for','line_number':1112,'multiline':False]['text':' translators to read.','line_number':1113,'multiline':False]['text':' Translator: Please replace the name and email address','line_number':1115,'multiline':False]['text':' with the appropriate text for your translation.','line_number':1116,'multiline':False]['text':' Display what was not skipped.','line_number':1121,'multiline':False]['text':'
+ * Call this after prompting the user.  This will avoid a hit-return message
+ * and a delay.
+ ','line_number':1130,'multiline':True]['text':'
+ * Wait for the user to hit a key (normally Enter).
+ * If "redraw" is TRUE, clear and redraw the screen.
+ * If "redraw" is FALSE, just redraw the screen.
+ * If "redraw" is -1, don't redraw at all.
+ ','line_number':1146,'multiline':True]['text':' If using ":silent cmd", don't wait for a return.  Also don't set','line_number':1165,'multiline':False]['text':' need_wait_return to do it later.','line_number':1166,'multiline':False]['text':'
+     * When inside vgetc(), we can't wait for a typed character at all.
+     * With the global command (and some others) we only need one return at
+     * the end. Adjust cmdline_row to avoid the next message overwriting the
+     * last one.
+     ','line_number':1174,'multiline':True]['text':' don't redirect this message','line_number':1190,'multiline':False]['text':' just pretend CR was hit','line_number':1194,'multiline':False]['text':' make sure the cursor is on the right line','line_number':1200,'multiline':False]['text':' no need for a return in ex mode','line_number':1201,'multiline':False]['text':' Make sure the hit-return prompt is on screen when 'guioptions' was','line_number':1206,'multiline':False]['text':' just changed.','line_number':1207,'multiline':False]['text':' disallow scrolling here','line_number':1213,'multiline':False]['text':' Avoid the sequence that the user types ":" at the hit-return prompt','line_number':1217,'multiline':False]['text':' to start an Ex command, but the file-changed dialog gets in the','line_number':1218,'multiline':False]['text':' way.','line_number':1219,'multiline':False]['text':' Remember "got_int", if it is set vgetc() probably returns a','line_number':1227,'multiline':False]['text':' CTRL-C, but we need to loop then.','line_number':1228,'multiline':False]['text':' Don't do mappings here, we put the character back in the','line_number':1231,'multiline':False]['text':' typeahead buffer.','line_number':1232,'multiline':False]['text':' Temporarily disable Recording. If Recording is active, the','line_number':1236,'multiline':False]['text':' character will be recorded later, since it will be added to the','line_number':1237,'multiline':False]['text':' typebuf after the loop','line_number':1238,'multiline':False]['text':' Strange way to allow copying (yanking) a modeless selection at','line_number':1252,'multiline':False]['text':' the hit-enter prompt.  Use CTRL-Y, because the same is used in','line_number':1253,'multiline':False]['text':' Cmdline-mode and it's harmless when there is no selection.','line_number':1254,'multiline':False]['text':'
+	     * Allow scrolling back in the messages.
+	     * Also accept scroll-down commands when messages fill the screen,
+	     * to avoid that typing one 'j' too many makes the messages
+	     * disappear.
+	     ','line_number':1262,'multiline':True]['text':' scroll back to show older messages','line_number':1274,'multiline':False]['text':' just pretend CR was hit','line_number':1288,'multiline':False]['text':' Avoid that the mouse-up event causes Visual mode to start.','line_number':1324,'multiline':False]['text':' Put the character back in the typeahead buffer.  Don't use the','line_number':1330,'multiline':False]['text':' stuff buffer, because lmaps wouldn't work.','line_number':1331,'multiline':False]['text':' need a redraw even though there is','line_number':1333,'multiline':False]['text':' typeahead','line_number':1334,'multiline':False]['text':'
+     * If the user hits ':', '?' or '/' we get a command line from the next
+     * line.
+     ','line_number':1339,'multiline':True]['text':' skip redraw once','line_number':1347,'multiline':False]['text':'
+     * If the window size changed set_shellsize() will redraw the screen.
+     * Otherwise the screen is only redrawn if 'redraw' is set and no ':'
+     * typed.
+     ','line_number':1354,'multiline':True]['text':' restore State before set_shellsize','line_number':1360,'multiline':False]['text':'
+     * When switching screens, we need to output an extra newline on exit.
+     ','line_number':1365,'multiline':True]['text':' can delete error message now','line_number':1374,'multiline':False]['text':' reset lines_left at next msg_start()','line_number':1375,'multiline':False]['text':' don't redisplay message, it's too long','line_number':1379,'multiline':False]['text':' got resize event while in vgetc()','line_number':1381,'multiline':False]['text':' start termcap before redrawing','line_number':1383,'multiline':False]['text':' start termcap before redrawing','line_number':1389,'multiline':False]['text':'
+ * Write the hit-return prompt.
+ ','line_number':1394,'multiline':True]['text':' don't want to see this message when scrolling back','line_number':1402,'multiline':False]['text':' start on a new line','line_number':1403,'multiline':False]['text':'
+ * Set "keep_msg" to "s".  Free the old value and check for NULL pointer.
+ ','line_number':1414,'multiline':True]['text':'
+ * If there currently is a message being displayed, set "keep_msg" to it, so
+ * that it will be displayed again after redraw.
+ ','line_number':1429,'multiline':True]['text':'
+ * Prepare for outputting characters in the command line.
+ ','line_number':1441,'multiline':True]['text':' Halfway an ":echo" command and getting an (error) message: clear','line_number':1461,'multiline':False]['text':' any text from the command.','line_number':1462,'multiline':False]['text':' start a new line','line_number':1477,'multiline':False]['text':' overwrite last message','line_number':1487,'multiline':False]['text':' start message on next line','line_number':1498,'multiline':False]['text':' no output on current line yet','line_number':1508,'multiline':False]['text':' when redirecting, may need to start a new line.','line_number':1512,'multiline':False]['text':'
+ * Note that the current msg position is where messages start.
+ ','line_number':1517,'multiline':True]['text':'
+ * Output 'len' characters in 'str' (including NULs) with translation
+ * if 'len' is -1, output up to a NUL character.
+ * Use attributes 'attr'.
+ * Return the number of characters it takes on the screen.
+ ','line_number':1584,'multiline':True]['text':'
+ * Output one character at "p".  Return pointer to the next character.
+ * Handles multi-byte characters.
+ ','line_number':1608,'multiline':True]['text':' Only quit when got_int was set in here.','line_number':1637,'multiline':False]['text':' if MSG_HIST flag set, add message to history','line_number':1640,'multiline':False]['text':' When drawing over the command line no need to clear it later or remove','line_number':1647,'multiline':False]['text':' the mode message.','line_number':1648,'multiline':False]['text':' If the string starts with a composing character first draw a space on','line_number':1655,'multiline':False]['text':' which the composing char can be drawn.','line_number':1656,'multiline':False]['text':'
+     * Go over the string.  Special characters are translated and printed.
+     * Normal characters are printed several at a time.
+     ','line_number':1660,'multiline':True]['text':' Don't include composing chars after the end.','line_number':1667,'multiline':False]['text':' printable multi-byte char: count the cells.','line_number':1677,'multiline':False]['text':' unprintable multi-byte char: print the printable chars so','line_number':1681,'multiline':False]['text':' far and the translation of the unprintable char.','line_number':1682,'multiline':False]['text':' unprintable char: print the printable chars so far and the','line_number':1699,'multiline':False]['text':' translation of the unprintable char.','line_number':1700,'multiline':False]['text':' print the printable chars at the end','line_number':1715,'multiline':False]['text':'
+ * Output the string 'str' up to a NUL character.
+ * Return the number of characters it takes on the screen.
+ *
+ * If K_SPECIAL is encountered, then it is taken in conjunction with the
+ * following character and shown as <F1>, <S-Up> etc.  Any other character
+ * which is not printable shown in <> form.
+ * If 'from' is TRUE (lhs of a mapping), a space is shown as <Space>.
+ * If a character is displayed in one of these special ways, is also
+ * highlighted (its highlight name is '8' in the p_hl variable).
+ * Otherwise characters are not highlighted.
+ * This function is used to show mappings, where we want to see how to type
+ * the character/string -- webb
+ ','line_number':1743,'multiline':True]['text':' TRUE for lhs of a mapping','line_number':1760,'multiline':False]['text':' screen columns, 0 for unlimited','line_number':1761,'multiline':False]['text':' Leading and trailing spaces need to be displayed in <> form.','line_number':1772,'multiline':False]['text':' single-byte character or illegal byte','line_number':1781,'multiline':False]['text':' Highlight special keys','line_number':1786,'multiline':False]['text':'
+ * Return the lhs or rhs of a mapping, with the key codes turned into printable
+ * strings, in an allocated string.
+ ','line_number':1795,'multiline':True]['text':' TRUE to replace " " with "<Space>".','line_number':1802,'multiline':False]['text':' used for the lhs of mapping and keytrans().','line_number':1803,'multiline':False]['text':' TRUE to replace "<" with "<lt>".','line_number':1804,'multiline':False]['text':'
+ * Return the printable string for the key codes at "*sp".
+ * On illegal byte return a string with only that byte.
+ * Used for translating the lhs or rhs of a mapping to printable chars.
+ * Advances "sp" to the next code.
+ ','line_number':1817,'multiline':True]['text':' TRUE to replace " " with "<Space>".','line_number':1826,'multiline':False]['text':' used for the lhs of mapping and keytrans().','line_number':1827,'multiline':False]['text':' TRUE to replace "<" with "<lt>".','line_number':1828,'multiline':False]['text':' Try to un-escape a multi-byte character.  Return the un-escaped','line_number':1840,'multiline':False]['text':' string if it is a multi-byte character.','line_number':1841,'multiline':False]['text':' special key','line_number':1869,'multiline':False]['text':' Try to un-escape a multi-byte character after modifiers.','line_number':1878,'multiline':False]['text':' Since 'special' is TRUE the multi-byte character 'c' will be','line_number':1881,'multiline':False]['text':' processed by get_special_key_name()','line_number':1882,'multiline':False]['text':' illegal byte','line_number':1885,'multiline':False]['text':' single-byte character, NUL or illegal byte','line_number':1889,'multiline':False]['text':' Make special keys and C0 control characters in <> form, also <M-Space>.','line_number':1892,'multiline':False]['text':'
+ * Translate a key sequence into special key names.
+ ','line_number':1903,'multiline':True]['text':'
+ * print line for :print or :list command
+ ','line_number':1920,'multiline':True]['text':' init to make SASC shut up','line_number':1931,'multiline':False]['text':' find start of trailing whitespace','line_number':1946,'multiline':False]['text':' find end of leading whitespace','line_number':1953,'multiline':False]['text':' in a line full of spaces all of them are treated as trailing','line_number':1960,'multiline':False]['text':' output a space for an empty line, otherwise the line will be','line_number':1966,'multiline':False]['text':' overwritten','line_number':1967,'multiline':False]['text':' tab amount depends on current column','line_number':2020,'multiline':False]['text':' Use special coloring to be able to distinguish <hex> from','line_number':2065,'multiline':False]['text':' the same in plain text.','line_number':2066,'multiline':False]['text':'
+ * Use screen_puts() to output one multi-byte character.
+ * Return the pointer "s" advanced to the next character.
+ ','line_number':2116,'multiline':True]['text':' remember that line is not empty','line_number':2125,'multiline':False]['text':' Doesn't fit, print a highlighted '>' to fill it up.','line_number':2133,'multiline':False]['text':'
+ * Output a string to the screen at position msg_row, msg_col.
+ * Update msg_row and msg_col for the next message.
+ ','line_number':2162,'multiline':True]['text':'
+ * Show a message in such a way that it always fits in the line.  Cut out a
+ * part in the middle and replace it with "..." when necessary.
+ * Does not handle multi-byte characters!
+ ','line_number':2178,'multiline':True]['text':'
+ * Basic function for writing a message with highlight attributes.
+ ','line_number':2205,'multiline':True]['text':'
+ * Like msg_puts_attr(), but with a maximum length "maxlen" (in bytes).
+ * When "maxlen" is -1 there is no maximum length.
+ * When "maxlen" is >= 0 the message is not put in the history.
+ ','line_number':2214,'multiline':True]['text':'
+     * If redirection is on, also write to the redirection file.
+     ','line_number':2222,'multiline':True]['text':'
+     * Don't print anything when using ":silent cmd".
+     ','line_number':2227,'multiline':True]['text':' if MSG_HIST flag set, add message to history','line_number':2233,'multiline':False]['text':' When writing something to the screen after it has scrolled, requires a','line_number':2240,'multiline':False]['text':' wait-return prompt later.  Needed when scrolling, resetting','line_number':2241,'multiline':False]['text':' need_wait_return after some prompt, and then outputting something','line_number':2242,'multiline':False]['text':' without scrolling','line_number':2243,'multiline':False]['text':' Not needed when only using CR to move the cursor.','line_number':2244,'multiline':False]['text':' remember that something was outputted','line_number':2247,'multiline':False]['text':'
+     * If there is no valid screen, use fprintf so we can see error messages.
+     * If termcap is not active, we may be writing in an alternate console
+     * window, cursor positioning may not work correctly (window size may be
+     * different, e.g. for Win32 console) or we just don't know where the
+     * cursor is.
+     ','line_number':2249,'multiline':True]['text':' values for "where"','line_number':2264,'multiline':False]['text':' append to "lnum"','line_number':2265,'multiline':False]['text':' replace "lnum"','line_number':2266,'multiline':False]['text':' add below "lnum"','line_number':2267,'multiline':False]['text':'','line_number':2268,'multiline':False]['text':'
+ * Put text "t_s" until "end" in the message window.
+ * "where" specifies where to put the text.
+ ','line_number':2270,'multiline':True]['text':' set msg_col so that a newline is written if needed','line_number':2317,'multiline':False]['text':'
+ * The display part of msg_puts_attr_len().
+ * May be called recursively to display scroll-back text.
+ ','line_number':2322,'multiline':True]['text':' string from "t_s" to "s" is still todo','line_number':2334,'multiline':False]['text':' screen cells todo, 0 when "t_s" not used','line_number':2335,'multiline':False]['text':' When not showing the message window and the output','line_number':2357,'multiline':False]['text':' starts with a NL show the message normally.','line_number':2358,'multiline':False]['text':' currently hidden, make it empty','line_number':2363,'multiline':False]['text':'
+	 * We are at the end of the screen line when:
+	 * - When outputting a newline.
+	 * - When outputting a character in the last column.
+	 ','line_number':2383,'multiline':True]['text':'
+	     * The screen is scrolled up when at the last row (some terminals
+	     * scroll automatically, some don't.  To avoid problems we scroll
+	     * ourselves).
+	     ','line_number':2402,'multiline':True]['text':' output postponed text','line_number':2409,'multiline':False]['text':' When no more prompt and no more room, truncate here','line_number':2422,'multiline':False]['text':' Scroll the screen up one line.','line_number':2429,'multiline':False]['text':' can happen after screen resize','line_number':2433,'multiline':False]['text':' Display char in last column before showing more-prompt.','line_number':2436,'multiline':False]['text':' avoid including composing chars after the end','line_number':2446,'multiline':False]['text':' store text for scrolling back','line_number':2460,'multiline':False]['text':' may need wait_return() in main()','line_number':2468,'multiline':False]['text':'
+		 * If screen is completely filled and 'more' is set then wait
+		 * for a character.
+		 ','line_number':2473,'multiline':True]['text':' When we displayed a char in last column need to check if there','line_number':2495,'multiline':False]['text':' is still more.','line_number':2496,'multiline':False]['text':' output any postponed text','line_number':2508,'multiline':False]['text':' store text for scrolling back','line_number':2522,'multiline':False]['text':' go to next line','line_number':2525,'multiline':False]['text':' Ignore a NL when the buffer is empty, it is used to scroll','line_number':2530,'multiline':False]['text':' up the text.','line_number':2531,'multiline':False]['text':' remember that line is empty','line_number':2540,'multiline':False]['text':' safety check','line_number':2547,'multiline':False]['text':' go to column 0','line_number':2550,'multiline':False]['text':' go to previous char','line_number':2557,'multiline':False]['text':' translate Tab into spaces','line_number':2562,'multiline':False]['text':' beep (from ":sh")','line_number':2573,'multiline':False]['text':' avoid including composing chars after the end','line_number':2581,'multiline':False]['text':' When drawing from right to left or when a double-wide character','line_number':2592,'multiline':False]['text':' doesn't fit, draw a single character here.  Otherwise collect','line_number':2593,'multiline':False]['text':' characters and draw them all at once later.','line_number':2594,'multiline':False]['text':' postpone this character until later','line_number':2608,'multiline':False]['text':' output any postponed text','line_number':2618,'multiline':False]['text':' Store the text for scroll back, unless it's a newline by itself.','line_number':2633,'multiline':False]['text':'
+ * Return TRUE when ":filter pattern" was used and "msg" does not match
+ * "pattern".
+ ','line_number':2640,'multiline':True]['text':'
+ * Scroll the screen up one line for displaying the next message line.
+ ','line_number':2655,'multiline':True]['text':' Remove the cursor before scrolling, ScreenLines[] is going','line_number':2666,'multiline':False]['text':' to become invalid.','line_number':2667,'multiline':False]['text':' scrolling up always works','line_number':2671,'multiline':False]['text':' Scrolling up doesn't result in the right background.  Set the','line_number':2678,'multiline':False]['text':' background here.  It's not efficient, but avoids that we have to do','line_number':2679,'multiline':False]['text':' it all over the code.','line_number':2680,'multiline':False]['text':' Also clear the last char of the last but one line if it was not','line_number':2683,'multiline':False]['text':' cleared before to avoid a scroll-up.','line_number':2684,'multiline':False]['text':'
+ * Increment "msg_scrolled".
+ ','line_number':2691,'multiline':True]['text':' v:scrollstart is empty, set it to the script/function name and line','line_number':2704,'multiline':False]['text':' number','line_number':2705,'multiline':False]['text':'
+ * To be able to scroll back at the "more" and "hit-enter" prompts we need to
+ * store the displayed text and remember where screen lines start.
+ ','line_number':2727,'multiline':True]['text':' TRUE when line ends after this text','line_number':2736,'multiline':False]['text':' column in which text starts','line_number':2737,'multiline':False]['text':' text attributes','line_number':2738,'multiline':False]['text':' text to be displayed, actually longer','line_number':2739,'multiline':False]['text':' last displayed text','line_number':2742,'multiline':False]['text':' When to clear text on next msg.','line_number':2753,'multiline':False]['text':'
+ * Store part of a printed message for displaying when scrolling back.
+ ','line_number':2756,'multiline':True]['text':' start of string','line_number':2761,'multiline':False]['text':' just after string','line_number':2762,'multiline':False]['text':' line ends','line_number':2765,'multiline':False]['text':' prevent messages from overlapping','line_number':2773,'multiline':False]['text':'
+ * Finished showing messages, clear the scroll-back text on the next message.
+ ','line_number':2808,'multiline':True]['text':'
+ * Starting to edit the command line: do not clear messages now.
+ ','line_number':2817,'multiline':True]['text':' Invoking command line recursively: the previous-level command line','line_number':2824,'multiline':False]['text':' doesn't need to be remembered as it will be redrawn when returning','line_number':2825,'multiline':False]['text':' to that level.','line_number':2826,'multiline':False]['text':'
+ * Redrawing the command line: clear the last unfinished line.
+ ','line_number':2835,'multiline':True]['text':' Needed when returning from nested command line.','line_number':2843,'multiline':False]['text':' No unfinished line: don't clear anything.','line_number':2847,'multiline':False]['text':'
+ * Ending to edit the command line: clear old lines but the last one later.
+ ','line_number':2863,'multiline':True]['text':'
+ * Clear any text remembered for scrolling back.
+ * When "all" is FALSE keep the last line.
+ * Called when redrawing the screen.
+ ','line_number':2872,'multiline':True]['text':'
+ * "g<" command.
+ ','line_number':2900,'multiline':True]['text':' Only show something if there is more than one line, otherwise it looks','line_number':2908,'multiline':False]['text':' weird, typing a command without output results in one line.','line_number':2909,'multiline':False]['text':'
+ * Move to the start of screen line in already displayed text.
+ ','line_number':2920,'multiline':True]['text':'
+ * Mark the last message chunk as finishing the line.
+ ','line_number':2933,'multiline':True]['text':'
+ * Display a screen line from previously displayed text at row "row".
+ * When "clear_to_eol" is set clear the rest of the screen line.
+ * Returns a pointer to the text for the next line (can be NULL).
+ ','line_number':2943,'multiline':True]['text':' don't display the line break','line_number':2959,'multiline':False]['text':' If clearing the screen did not work (e.g. because of a background','line_number':2963,'multiline':False]['text':' color and t_ut isn't set) clear until the last column here.','line_number':2964,'multiline':False]['text':'
+ * Output any postponed text for msg_puts_attr_len().
+ ','line_number':2975,'multiline':True]['text':' output postponed text','line_number':2985,'multiline':False]['text':' remember that line is not empty','line_number':2986,'multiline':False]['text':' If the string starts with a composing character don't increment the','line_number':2990,'multiline':False]['text':' column position for it.','line_number':2991,'multiline':False]['text':'
+ * Returns TRUE when messages should be printed with mch_errmsg().
+ * This is used when there is no valid screen, so we can see error messages.
+ * If termcap is not active, we may be writing in an alternate console
+ * window, cursor positioning may not work correctly (window size may be
+ * different, e.g. for Win32 console) or we just don't know where the
+ * cursor is.
+ ','line_number':3001,'multiline':True]['text':'
+ * Print a message when there is no valid screen.
+ ','line_number':3024,'multiline':True]['text':' handle CR and NL correctly','line_number':3036,'multiline':False]['text':' NL --> CR NL translation (for Unix, not for "--version")','line_number':3042,'multiline':False]['text':' informative message, not an error','line_number':3055,'multiline':False]['text':' primitive way to compute the current column','line_number':3065,'multiline':False]['text':' assume that line is not empty','line_number':3105,'multiline':False]['text':'
+ * Show the more-prompt and handle the user response.
+ * This takes care of scrolling back and displaying previously displayed text.
+ * When at hit-enter prompt "typed_char" is the already typed character,
+ * otherwise it's NUL.
+ * Returns TRUE when jumping ahead to "confirm_msg_tail".
+ ','line_number':3113,'multiline':True]['text':' We get called recursively when a timer callback outputs a message. In','line_number':3135,'multiline':False]['text':' that case don't show another prompt. Also when at the hit-Enter prompt','line_number':3136,'multiline':False]['text':' and nothing was typed.','line_number':3137,'multiline':False]['text':' "g<": Find first line on the last page.','line_number':3144,'multiline':False]['text':'
+	 * Get a typed character directly from the user.
+	 ','line_number':3157,'multiline':True]['text':' was typed at hit-enter prompt','line_number':3162,'multiline':False]['text':' Used a menu.  If it starts with CTRL-Y, it must','line_number':3173,'multiline':False]['text':' be a "Copy" for the clipboard.  Otherwise','line_number':3174,'multiline':False]['text':' assume that we end','line_number':3175,'multiline':False]['text':' scroll one line back','line_number':3189,'multiline':False]['text':' one extra line','line_number':3196,'multiline':False]['text':' Up half a page','line_number':3203,'multiline':False]['text':' Down half a page','line_number':3207,'multiline':False]['text':' one page back','line_number':3211,'multiline':False]['text':' one extra page','line_number':3216,'multiline':False]['text':' all the way back to the start','line_number':3223,'multiline':False]['text':' all the way to the end','line_number':3227,'multiline':False]['text':' start new command line','line_number':3232,'multiline':False]['text':' Since got_int is set all typeahead will be flushed, but we','line_number':3237,'multiline':False]['text':' want to keep this ':', remember that in a special way.','line_number':3238,'multiline':False]['text':' put ':' on this line','line_number':3243,'multiline':False]['text':' skip redraw once','line_number':3244,'multiline':False]['text':' don't wait in main()','line_number':3245,'multiline':False]['text':' FALLTHROUGH','line_number':3247,'multiline':False]['text':' quit','line_number':3248,'multiline':False]['text':' Jump to the choices of the dialog.','line_number':3254,'multiline':False]['text':' When there is some more output (wrapping line) display that','line_number':3263,'multiline':False]['text':' without another prompt.','line_number':3264,'multiline':False]['text':' Strange way to allow copying (yanking) a modeless','line_number':3270,'multiline':False]['text':' selection at the more prompt.  Use CTRL-Y,','line_number':3271,'multiline':False]['text':' because the same is used in Cmdline-mode and at the','line_number':3272,'multiline':False]['text':' hit-enter prompt.  However, scrolling one line up','line_number':3273,'multiline':False]['text':' might be expected...','line_number':3274,'multiline':False]['text':' no valid response','line_number':3279,'multiline':False]['text':' go to start of last line','line_number':3288,'multiline':False]['text':' go to start of line at top of the screen','line_number':3296,'multiline':False]['text':' Find line to be displayed at top.','line_number':3303,'multiline':False]['text':' display line at top','line_number':3318,'multiline':False]['text':' redisplay all lines','line_number':3325,'multiline':False]['text':' First display any text that we scrolled back.','line_number':3337,'multiline':False]['text':' scroll up, display line at bottom','line_number':3340,'multiline':False]['text':' displayed the requested text, more prompt again','line_number':3352,'multiline':False]['text':' display more text, return to caller','line_number':3359,'multiline':False]['text':' clear the --more-- message','line_number':3366,'multiline':False]['text':'
+ * Give an error message.  To be used when the screen hasn't been initialized
+ * yet.  When stderr can't be used, collect error messages until the GUI has
+ * started and they can be displayed in a message box.
+ ','line_number':3421,'multiline':True]['text':' On Unix use stderr if it's a tty.','line_number':3434,'multiline':False]['text':' When not going to start the GUI also use stderr.','line_number':3435,'multiline':False]['text':' On Mac, when started from Finder, stderr is the console.','line_number':3436,'multiline':False]['text':' avoid a delay for a message that isn't there','line_number':3469,'multiline':False]['text':' remove CR characters, they are displayed','line_number':3483,'multiline':False]['text':' don't count the NUL at the end','line_number':3497,'multiline':False]['text':'
+ * Give a message.  To be used when the screen hasn't been initialized yet.
+ * When there is no tty, collect messages until the GUI has started and they
+ * can be displayed in a message box.
+ ','line_number':3528,'multiline':True]['text':' On Unix use stdout if we have a tty.  This allows "vim -h | more" and','line_number':3537,'multiline':False]['text':' uses mch_errmsg() when started from the desktop.','line_number':3538,'multiline':False]['text':' When not going to start the GUI also use stdout.','line_number':3539,'multiline':False]['text':' On Mac, when started from Finder, stderr is the console.','line_number':3540,'multiline':False]['text':' USE_MCH_ERRMSG','line_number':3575,'multiline':False]['text':'
+ * Put a character on the screen at the current message position and advance
+ * to the next position.  Only for printable ASCII!
+ ','line_number':3577,'multiline':True]['text':' remember that line is not empty','line_number':3584,'multiline':False]['text':'
+ * Repeat the message for the current mode: MODE_ASKMORE, MODE_EXTERNCMD,
+ * MODE_CONFIRM or exmode_active.
+ ','line_number':3620,'multiline':True]['text':' display --more-- message again','line_number':3629,'multiline':False]['text':' display ":confirm" message again','line_number':3635,'multiline':False]['text':' put cursor back','line_number':3641,'multiline':False]['text':' Avoid drawing the "hit-enter" prompt below the previous one,','line_number':3647,'multiline':False]['text':' overwrite it.  Esp. useful when regaining focus and a','line_number':3648,'multiline':False]['text':' FocusGained autocmd exists but didn't draw anything.','line_number':3649,'multiline':False]['text':'
+ * msg_check_screen - check if the screen is initialized.
+ * Also check msg_row and msg_col, if they are too big it may cause a crash.
+ * While starting the GUI the terminal codes will be set for the GUI, but the
+ * output goes to the terminal.  Don't use the terminal codes then.
+ ','line_number':3659,'multiline':True]['text':'
+ * Clear from current message position to end of screen.
+ * Skip this when ":silent" was used, no need to clear for redirection.
+ ','line_number':3678,'multiline':True]['text':'
+ * Clear from current message position to end of screen.
+ * Note: msg_col is not updated, so we remember the end of the message
+ * for msg_check().
+ ','line_number':3689,'multiline':True]['text':' messages go into a popup','line_number':3699,'multiline':False]['text':' only when termcap codes are valid','line_number':3703,'multiline':False]['text':' clear to end of display','line_number':3706,'multiline':False]['text':' clear to end of line','line_number':3708,'multiline':False]['text':'
+ * Clear the command line.
+ ','line_number':3729,'multiline':True]['text':'
+ * end putting a message on the screen
+ * call wait_return() if the message does not fit in the available space
+ * return TRUE if wait_return() not called.
+ ','line_number':3740,'multiline':True]['text':'
+     * If the string is larger than the window,
+     * or the ruler option is set and we run into it,
+     * we have to redraw the window.
+     * Do not do this if we are abandoning the file or editing the command line.
+     ','line_number':3748,'multiline':True]['text':'
+ * If the written message runs into the shown command or ruler, we have to
+ * wait for hit-return and redraw the window later.
+ ','line_number':3763,'multiline':True]['text':'
+ * May write a string to the redirection file.
+ * When "maxlen" is -1 write the whole string, otherwise up to "maxlen" bytes.
+ ','line_number':3781,'multiline':True]['text':' Don't do anything for displaying prompts and the like.','line_number':3791,'multiline':False]['text':' If 'verbosefile' is set prepare for writing in that file.','line_number':3795,'multiline':False]['text':' If the string doesn't start with CR or NL, go to msg_col','line_number':3801,'multiline':False]['text':' Write and adjust the current column.','line_number':3832,'multiline':False]['text':' should update msg_col','line_number':3851,'multiline':False]['text':'
+ * Before giving verbose message.
+ * Must always be called paired with verbose_leave()!
+ ','line_number':3866,'multiline':True]['text':'
+ * After giving verbose message.
+ * Must always be called paired with verbose_enter()!
+ ','line_number':3877,'multiline':True]['text':'
+ * Like verbose_enter() and set msg_scroll when displaying the message.
+ ','line_number':3889,'multiline':True]['text':' always scroll up, don't overwrite','line_number':3898,'multiline':False]['text':'
+ * Like verbose_leave() and set cmdline_row when displaying the message.
+ ','line_number':3902,'multiline':True]['text':'
+ * Called when 'verbosefile' is set: stop writing to the file.
+ ','line_number':3917,'multiline':True]['text':'
+ * Open the file 'verbosefile'.
+ * Return FAIL or OK.
+ ','line_number':3931,'multiline':True]['text':' Only give the error message once.','line_number':3940,'multiline':False]['text':'
+ * Give a warning message (for searching).
+ * Use 'w' highlighting and may repeat the message after redrawing
+ ','line_number':3953,'multiline':True]['text':' Don't do this for ":silent".','line_number':3966,'multiline':False]['text':' Don't want a hit-enter prompt here.','line_number':3970,'multiline':False]['text':' Do what msg() does, but with a column offset if the warning should','line_number':3984,'multiline':False]['text':' be after the mode message.','line_number':3985,'multiline':False]['text':' overwrite this message','line_number':3996,'multiline':False]['text':' don't wait for this message','line_number':3997,'multiline':False]['text':' Very early in initialisation and already something wrong, just give','line_number':4009,'multiline':False]['text':' the raw message so the user at least gets a hint.','line_number':4010,'multiline':False]['text':'
+ * Advance msg cursor to column "col".
+ ','line_number':4021,'multiline':True]['text':' nothing to advance to','line_number':4027,'multiline':False]['text':' for redirection, may fill it up later','line_number':4029,'multiline':False]['text':' not enough room','line_number':4032,'multiline':False]['text':'
+ * Used for "confirm()" function, and the :confirm command prefix.
+ * Versions which haven't got flexible dialogs yet, and console
+ * versions, get this generic handler which uses the command line.
+ *
+ * type  = one of:
+ *	   VIM_QUESTION, VIM_INFO, VIM_WARNING, VIM_ERROR or VIM_GENERIC
+ * title = title string (can be NULL for default)
+ * (neither used in console dialogs at the moment)
+ *
+ * Format of the "buttons" string:
+ * "Button1Name\nButton2Name\nButton3Name"
+ * The first button should normally be the default/accept
+ * The second button should be the 'Cancel' button
+ * Other buttons- use your imagination!
+ * A '&' in a button name becomes a shortcut, so each '&' should be before a
+ * different letter.
+ *
+ * Returns 0 if cancelled, otherwise the nth button (1-indexed).
+ ','line_number':4045,'multiline':True]['text':' IObuff for inputdialog(), NULL','line_number':4072,'multiline':False]['text':' otherwise','line_number':4073,'multiline':False]['text':' when TRUE pressing : accepts default and starts','line_number':4074,'multiline':False]['text':' Ex command','line_number':4075,'multiline':False]['text':' Don't output anything in silent mode ("ex -s")','line_number':4085,'multiline':False]['text':' return default option','line_number':4087,'multiline':False]['text':' When GUI is running and 'c' not in 'guioptions', use the GUI dialog','line_number':4091,'multiline':False]['text':' --gui-dialog-file: write text to a file','line_number':4094,'multiline':False]['text':' avoid a hit-enter prompt without clearing the cmdline','line_number':4100,'multiline':False]['text':' Flush output to avoid that further messages and redrawing is done','line_number':4105,'multiline':False]['text':' in the wrong order.','line_number':4106,'multiline':False]['text':' Ensure raw mode here.','line_number':4118,'multiline':False]['text':'
+     * Since we wait for a keypress, don't make the
+     * user press RETURN as well afterwards.
+     ','line_number':4122,'multiline':True]['text':' Get a typed character directly from the user.','line_number':4133,'multiline':False]['text':' User accepts default option','line_number':4137,'multiline':False]['text':' User aborts/cancels','line_number':4141,'multiline':False]['text':' Could be a hotkey?','line_number':4145,'multiline':False]['text':' special keys are ignored here','line_number':4146,'multiline':False]['text':' Make the character lowercase, as chars in "hotkeys" are.','line_number':4155,'multiline':False]['text':' No hotkey match, so keep waiting','line_number':4173,'multiline':False]['text':'
+ * Copy one character from "*from" to "*to", taking care of multi-byte
+ * characters.  Return the length of the character in bytes.
+ ','line_number':4191,'multiline':True]['text':' make character lower case','line_number':4199,'multiline':False]['text':'
+ * Format the dialog string, and display it at the bottom of
+ * the screen. Return a string of hotkey chars (if defined) for
+ * each 'button'. If a button has no hotkey defined, the first character of
+ * the button is used.
+ * The hotkeys can be multi-byte characters, but without combining chars.
+ *
+ * Returns an allocated string with hotkeys, or NULL for error.
+ ','line_number':4228,'multiline':True]['text':' count first button','line_number':4245,'multiline':False]['text':' first char of button is hotkey','line_number':4253,'multiline':False]['text':'
+     * First loop: compute the size of memory to allocate.
+     * Second loop: copy to the allocated memory.
+     ','line_number':4258,'multiline':True]['text':' '\n' -> ', '','line_number':4273,'multiline':False]['text':' advance to next hotkey and set default hotkey','line_number':4275,'multiline':False]['text':' If no hotkey is specified first char is used.','line_number':4284,'multiline':False]['text':' '\n' -> ', '; 'x' -> '(x)'','line_number':4290,'multiline':False]['text':' each button needs a hotkey','line_number':4291,'multiline':False]['text':' '&&a' -> '&a'','line_number':4303,'multiline':False]['text':' '&a' -> '[a]'','line_number':4307,'multiline':False]['text':' redefine hotkey','line_number':4312,'multiline':False]['text':' '&a' -> '[a]'','line_number':4318,'multiline':False]['text':' everything else copy literally','line_number':4325,'multiline':False]['text':' advance to the next character','line_number':4330,'multiline':False]['text':' for the NL's','line_number':4343,'multiline':False]['text':' for the ": " and NUL','line_number':4345,'multiline':False]['text':' for the NUL','line_number':4346,'multiline':False]['text':' If no hotkey is specified first char is used.','line_number':4348,'multiline':False]['text':' "x" -> "[x]"','line_number':4352,'multiline':False]['text':'
+	     * Now allocate and load the strings
+	     ','line_number':4355,'multiline':True]['text':' Define first default hotkey.  Keep the hotkey string NUL','line_number':4373,'multiline':False]['text':' terminated to avoid reading past the end.','line_number':4374,'multiline':False]['text':' Remember where the choices start, displaying starts here when','line_number':4377,'multiline':False]['text':' "hotkp" typed at the more prompt.','line_number':4378,'multiline':False]['text':'
+ * Display the ":confirm" message.  Also called when screen resized.
+ ','line_number':4388,'multiline':True]['text':' avoid that 'q' at the more prompt truncates the message here','line_number':4394,'multiline':False]['text':' FEAT_CON_DIALOG','line_number':4401,'multiline':False]['text':' FEAT_GUI_DIALOG || FEAT_CON_DIALOG','line_number':4459,'multiline':False]

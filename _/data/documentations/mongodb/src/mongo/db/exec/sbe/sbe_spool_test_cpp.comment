@@ -1,0 +1,72 @@
+['text':'*
+ *    Copyright (C) 2021-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+     * Given an input subtree 'outerBranch' and a 'spoolId', constructs a plan of the following
+     * shape:
+     *   nlj
+     *     left
+     *       <outerBranch>
+     *     right
+     *       [c|s]spool spoolId
+     *
+     * The spool may be either a stack spool or regular (non-stack) spool, depending on the value of
+     * the template parameter.
+     ','line_number':59,'multiline':True]['text':'*
+     * Constructs the following plan tree:
+     *
+     *   nlj
+     *     left
+     *       limit 1 -> espool -> mock scan
+     *     right
+     *       cspool
+     *
+     * In other words, the outer branch spools the mock input collection. The inner branch returns
+     * the data after unspooling it.
+     ','line_number':87,'multiline':True]['text':' We expect the input to be returned unchanged after being buffered in the spool and then','line_number':119,'multiline':False]['text':' returned in FIFO order.','line_number':120,'multiline':False]['text':' We expect the input to be returned unchanged since it is returned as it is being buffered in','line_number':143,'multiline':False]['text':' the spool.','line_number':144,'multiline':False]['text':' We expect the input to be returned unchanged after being buffered in the spool and then','line_number':170,'multiline':False]['text':' consumed in FIFO order.','line_number':171,'multiline':False]['text':' We expect the input to be returned unchanged after being buffered in the spool and then','line_number':193,'multiline':False]['text':' consumed in FIFO order.','line_number':194,'multiline':False]['text':' Constructs a plan like the following which uses a lazy spool producer and stack spool','line_number':206,'multiline':False]['text':' consumer to feed the data through the spool before returning it.','line_number':207,'multiline':False]['text':'','line_number':208,'multiline':False]['text':'  nlj','line_number':209,'multiline':False]['text':'    left','line_number':210,'multiline':False]['text':'      lspool -> mock scan','line_number':211,'multiline':False]['text':'    right','line_number':212,'multiline':False]['text':'      sspool','line_number':213,'multiline':False]['text':'*
+ * Tests the following execution plan:
+ *
+ * nlj [] []
+ *   left
+ *       lspool sp1 [unionOutputSlot]
+ *       union [unionOutputSlot] [
+ *         branch1
+ *           mock scan of ["a", "b", "c"]
+ *         branch2
+ *           mock scan of ["d", "e", "f"]
+ *      ]
+ *   right
+ *       sspool sp1 [outputSlot]
+ *
+ * The plan should return the sequence "a", "b", "c", "d", "e", "f" from 'outputSlot', but it does
+ * so by feeding each of these values through the spool 'sp1'. On each getNext(), the lazy spool
+ * consumer adds the next element to the spool, which is then pulled out of the spool by the stack
+ * spool consumer.
+ *
+ * We test that this plan works as expected even after being closed and re-opened mid-execution.
+ * This test was designed to reproduce SERVER-56132.
+ ','line_number':221,'multiline':True]['text':' Generate mock scans for each of the two inputs.','line_number':259,'multiline':False]['text':' Union the two mock scans.','line_number':265,'multiline':False]['text':' The union stage feeds a lazy spool consumer.','line_number':273,'multiline':False]['text':' Partially execute the plan, ensuring that we have started to execute the second branch of the','line_number':282,'multiline':False]['text':' union.','line_number':283,'multiline':False]['text':' Before the plan reaches EOF, close and re-open it.','line_number':296,'multiline':False]['text':' This time, execute the plan until it reaches EOF. It should return the results as expected','line_number':300,'multiline':False]['text':' after being closed and re-opened.','line_number':301,'multiline':False]['text':' namespace mongo::sbe','line_number':316,'multiline':False]

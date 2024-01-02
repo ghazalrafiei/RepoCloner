@@ -1,0 +1,27 @@
+['text':'*
+ * Shards a collection by 'skey' and creates one chunk per thread, filling each chunk with
+ * documents, and assigning each document to a random thread. Meant to be extended by workloads that
+ * test operations with concurrent moveChunks. Assumes each thread has an id from [0, threadCount).
+ *
+ * @tags: [
+ *  requires_sharding,
+ *  assumes_balancer_off,
+ * ]
+ ','line_number':1,'multiline':True]['text':' A 'default' field needs to be specified because the 'setup' phase of the workload','line_number':25,'multiline':False]['text':' won't have access to each collection's current specified shard key.','line_number':26,'multiline':False]['text':' Which skey and _id values are owned by this thread (they are equal by default) for each','line_number':29,'multiline':False]['text':' collection, populated in init().','line_number':30,'multiline':False]['text':' Depending on the operations performed by each workload, it might be expected that a random','line_number':33,'multiline':False]['text':' moveChunk may fail with an error code other than those expected by the helper.','line_number':34,'multiline':False]['text':'*
+     * Returns the _id of a random document owned by this thread for a given collection.
+     ','line_number':37,'multiline':True]['text':'*
+     * Calculates the bounds object for a shard key given a chunk object. Assumes that any
+     * secondary shard key fields exist as a result of the refineCollectionShardKey command, and
+     * thus fills in those fields with the corresponding MinKey/MaxKey values.
+     ','line_number':47,'multiline':True]['text':'*
+     * Picks a random chunk and moves it to a random new shard. The migration is retried on
+     * acceptable errors, e.g. ConflictingOperationInProgress, and is not guaranteed to succeed.
+     ','line_number':73,'multiline':True]['text':' Committing a chunk migration requires acquiring the global X lock on the CSRS primary.','line_number':78,'multiline':False]['text':' This state function is unsafe to automatically run inside a multi-statement transaction','line_number':79,'multiline':False]['text':' because it'll have left an idle transaction on the CSRS primary before attempting to run','line_number':80,'multiline':False]['text':' the moveChunk command, which can lead to a hang.','line_number':81,'multiline':False]['text':' Choose a random chunk in our partition to move.','line_number':84,'multiline':False]['text':' Choose a random shard to move the chunk to.','line_number':88,'multiline':False]['text':' Use chunk_helper.js's moveChunk wrapper to tolerate acceptable failures and to use a','line_number':97,'multiline':False]['text':' limited number of retries with exponential backoff.','line_number':98,'multiline':False]['text':' Failed moveChunks are thrown by the moveChunk helper with the response included as a','line_number':105,'multiline':False]['text':' JSON string in the error's message.','line_number':106,'multiline':False]['text':'*
+     * 1. Loads this thread's partition into memory.
+     * 2. Loads the _ids of owned documents into memory.
+     * 3. Populates the shard key for this collection into memory.
+     ','line_number':116,'multiline':True]['text':' Load this thread's partition.','line_number':122,'multiline':False]['text':' Create entry for this collection in ownedIds','line_number':126,'multiline':False]['text':' Search the collection to find the _ids of docs assigned to this thread.','line_number':129,'multiline':False]['text':' Use a large batch size so that a getMore command is never needed since','line_number':135,'multiline':False]['text':' getMore is not retryable and so running it is not allowed in the suites with','line_number':136,'multiline':False]['text':' stepdown/kill/terminate.','line_number':137,'multiline':False]['text':'*
+     * Sets up the collection so each thread's partition is a single chunk, with partitionSize
+     * documents within it, randomly assigning each document to a thread, ensuring at least one
+     * document is given to each one.
+     ','line_number':149,'multiline':True]['text':' Find the thread's partition.','line_number':158,'multiline':False]['text':' Randomly assign threads, but ensure each thread is given at least one document.','line_number':164,'multiline':False]['text':' If this is the last document being inserted into the partition, and no document','line_number':168,'multiline':False]['text':' from this partition has yet been assigned to the current thread, assign this','line_number':169,'multiline':False]['text':' document to the current thread.','line_number':170,'multiline':False]['text':' Give each document the same shard key and _id value, but a different tid.','line_number':175,'multiline':False]['text':' Create a chunk with boundaries matching the partition's. The low chunk's lower bound','line_number':180,'multiline':False]['text':' is minKey, so a split is not necessary.','line_number':181,'multiline':False]

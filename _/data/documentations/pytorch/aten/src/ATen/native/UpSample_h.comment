@@ -1,0 +1,36 @@
+['text':'*
+ * Note [compute_scales_value]
+ * Note [area_pixel_compute_scale]
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Interpolate with scale_factor can have different behaviors
+ * depending on the value of recompute_scale_factor:
+ *
+ * - With recompute_scale_factor = True (current default behavior):
+ * the scale_factor, when provided by the user, are used to calculate
+ * the output size. The input size and the computed output_size
+ * are then used to infer new values for the scales which are
+ * used in the interpolation.  Because floating-point math is not exact,
+ * this may be a different value from the user-supplied scales.
+ *
+ * - With recompute_scale_factor = False (which will be the default
+ * behavior starting 1.5.0):
+ * the behavior follows opencv logic, and the scales provided by
+ * the user are the ones used in the interpolation calculations.
+ *
+ * If the scales are not provided or if they are provided but
+ * recompute_scale_factor is set to True (default behavior), the scales
+ * are computed from the input and the output size;
+ *
+ *
+ * When the scales are inferred from the input and output sizes,
+ * we view each pixel as an area, idx + 0.5 as its center index.
+ * Here is an example formula in 1D case.
+ * if align_corners: center of two corner pixel areas are preserved,
+ *     (0.5, 0.5) -> (0.5, 0.5),
+ *     (input_size - 0.5, 0.5) -> (output_size - 0.5)
+ *     scale = (input_size - 0.5 - 0.5) / (output_size - 0.5 - 0.5)
+ *     src_index + 0.5 - 0.5 = scale * (dst_index + 0.5 - 0.5)
+ * if not align_corners: the whole range is scaled accordingly
+ *     scale = input_size / output_size
+ *     src_idx + 0.5 = scale * (dst_index + 0.5)
+ ','line_number':11,'multiline':True]['text':' Full input tensor size.','line_number':53,'multiline':False]['text':' namespace upsample','line_number':64,'multiline':False]['text':' Allow for empty batch size but not other dimensions','line_number':234,'multiline':False]['text':' see Note [compute_scales_value]','line_number':255,'multiline':False]['text':' FIXME: remove magic > 0 after we ensure no models were serialized with -1 defaults.','line_number':256,'multiline':False]['text':' see Note [area_pixel_compute_scale]','line_number':268,'multiline':False]['text':' [Note] Follow Opencv resize logic:','line_number':291,'multiline':False]['text':' We allow negative src_idx here and later will use','line_number':292,'multiline':False]['text':'   dx = src_idx - floorf(src_idx)','line_number':293,'multiline':False]['text':' to compute the "distance"(which affects weights).','line_number':294,'multiline':False]['text':' For linear modes, weight distribution doesn't matter','line_number':295,'multiline':False]['text':' for negative indices as they use 2 pixels to interpolate.','line_number':296,'multiline':False]['text':' For example, [-1, 0], they both use pixel 0 value so it','line_number':297,'multiline':False]['text':' doesn't affect if we bound the src_idx to 0 or not.','line_number':298,'multiline':False]['text':' TODO: Our current linear mode impls use unbound indices','line_number':299,'multiline':False]['text':' where we should and then remove this cubic flag.','line_number':300,'multiline':False]['text':' This matters in cubic mode, as we might need [-1, 0, 1, 2]','line_number':301,'multiline':False]['text':' to interpolate and the weights can be affected.','line_number':302,'multiline':False]['text':' Index computation matching OpenCV INTER_NEAREST','line_number':312,'multiline':False]['text':' which is buggy and kept for BC','line_number':313,'multiline':False]['text':' index_f32 = (output_index + 0.5) * scale - 0.5','line_number':323,'multiline':False]['text':' input_index = round(index_f32)','line_number':324,'multiline':False]['text':' Same as Pillow and Scikit-Image/Scipy ndi.zoom','line_number':325,'multiline':False]['text':' This method specificly treats cases: output_size == input_size or','line_number':336,'multiline':False]['text':' output_size == 2 * input_size, that we would like to get rid of','line_number':337,'multiline':False]['text':' We keep this method for BC and consider as deprecated.','line_number':338,'multiline':False]['text':' See nearest_exact_idx as replacement','line_number':339,'multiline':False]['text':' scale_factor = 1, simply copy','line_number':341,'multiline':False]['text':' scale_factor = 2, shift input index','line_number':344,'multiline':False]['text':' Define a typedef to dispatch to nearest_idx or nearest_exact_idx','line_number':361,'multiline':False]['text':' Based on','line_number':389,'multiline':False]['text':' https://en.wikipedia.org/wiki/Bicubic_interpolation#Bicubic_convolution_algorithm','line_number':390,'multiline':False]['text':' opposite coefficients','line_number':411,'multiline':False]['text':' when `real_input_index` becomes larger than the range the floating point','line_number':430,'multiline':False]['text':' type can accurately represent, the type casting to `int64_t` might exceed','line_number':431,'multiline':False]['text':' `input_size`, causing overflow. So we guard it with `std::min` below.','line_number':432,'multiline':False]['text':' scale_factor = 1, simply copy','line_number':454,'multiline':False]['text':'cubic=','line_number':462,'multiline':True]['text':' It will not be used by data types other than BFloat16.','line_number':470,'multiline':False]['text':' namespace at::native','line_number':501,'multiline':False]

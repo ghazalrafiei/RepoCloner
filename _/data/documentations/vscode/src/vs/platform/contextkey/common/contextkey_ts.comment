@@ -1,0 +1,69 @@
+['text':'---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------','line_number':1,'multiline':True]['text':'* allow register constant context keys that are known only after startup; requires running `substituteConstants` on the context key - https://github.com/microsoft/vscode/issues/174218#issuecomment-1437972127 ','line_number':29,'multiline':True]['text':'
+
+Syntax grammar:
+
+```ebnf
+
+expression ::= or
+
+or ::= and { '||' and }*
+
+and ::= term { '&&' term }*
+
+term ::=
+	| '!' (KEY | true | false | parenthesized)
+	| primary
+
+primary ::=
+	| 'true'
+	| 'false'
+	| parenthesized
+	| KEY '=~' REGEX
+	| KEY [ ('==' | '!=' | '<' | '<=' | '>' | '>=' | 'not' 'in' | 'in') value ]
+
+parenthesized ::=
+	| '(' expression ')'
+
+value ::=
+	| 'true'
+	| 'false'
+	| 'in'      	// we support `in` as a value because there's an extension that uses it, ie "when": "languageId == in"
+	| VALUE 		// matched by the same regex as KEY; consider putting the value in single quotes if it's a string (e.g., with spaces)
+	| SINGLE_QUOTED_STR
+	| EMPTY_STR  	// this allows "when": "foo == " which's used by existing extensions
+
+```
+','line_number':92,'multiline':True]['text':'*
+	 * with this option enabled, the parser can recover from regex parsing errors, e.g., unescaped slashes: `/src//` is accepted as `/src\//` would be
+	 ','line_number':130,'multiline':True]['text':'*
+ * A parser for context key expressions.
+ *
+ * Example:
+ * ```ts
+ * const parser = new Parser();
+ * const expr = parser.parse('foo == "bar" && baz == true');
+ *
+ * if (expr === undefined) {
+ * 	// there were lexing or parsing errors
+ * 	// process lexing errors with `parser.lexingErrors`
+ *  // process parsing errors with `parser.parsingErrors`
+ * } else {
+ * 	// expr is a valid expression
+ * }
+ * ```
+ ','line_number':156,'multiline':True]['text':' Note: this doesn't produce an exact syntax tree but a normalized one','line_number':174,'multiline':False]['text':' ContextKeyExpression's that we use as AST nodes do not expose constructors that do not normalize','line_number':175,'multiline':False]['text':' lifetime note: `_scanner` lives as long as the parser does, i.e., is not reset between calls to `parse`','line_number':179,'multiline':False]['text':' lifetime note: `_tokens`, `_current`, and `_parsingErrors` must be reset between calls to `parse`','line_number':182,'multiline':False]['text':' invariant: 0 <= this._current < this._tokens.length ; any incrementation of this value must first call `_isAtEnd`','line_number':184,'multiline':False]['text':'*
+	 * Parse a context key expression.
+	 *
+	 * @param input the expression to parse
+	 * @returns the parsed expression or `undefined` if there's an error - call `lexingErrors` and `parsingErrors` to see the errors
+	 ','line_number':198,'multiline':True]['text':' @ulugbekna: we do not stop parsing if there are lexing errors to be able to reconstruct regexes with unescaped slashes; TODO@ulugbekna: make this respect config option for recovery','line_number':212,'multiline':False]['text':' KEY','line_number':306,'multiline':False]['text':' =~ regex','line_number':310,'multiline':False]['text':' @ulugbekna: we need to reconstruct the regex from the tokens because some extensions use unescaped slashes in regexes','line_number':313,'multiline':False]['text':' also handle an ErrorToken in case of smth such as /(/file)/','line_number':335,'multiline':False]['text':' /REGEX/ or /REGEX/FLAGS','line_number':336,'multiline':False]['text':' replicate old regex parsing behavior','line_number':390,'multiline':False]['text':' [ 'not' 'in' value ]','line_number':421,'multiline':False]['text':' [ ('==' | '!=' | '<' | '<=' | '>' | '>=' | 'in') value ]','line_number':428,'multiline':False]['text':' to preserve old parser behavior: "foo == 'true'" is preserved as "foo == 'true'", but "foo == true" is optimized as "foo"','line_number':435,'multiline':False]['text':' same as above with "foo != 'true'"','line_number':452,'multiline':False]['text':' TODO: ContextKeyExpr.smaller(key, right) accepts only `number` as `right` AND during eval of this node, we just eval to `false` if `right` is not a number','line_number':464,'multiline':False]['text':' consequently, package.json linter should _warn_ the user if they're passing undesired things to ops','line_number':465,'multiline':False]['text':' we support `in` as a value, e.g., "when": "languageId == in" - exists in existing extensions','line_number':514,'multiline':False]['text':' this allows "when": "foo == " which's used by existing extensions','line_number':518,'multiline':False]['text':' we do not call `_advance` on purpose - we don't want to eat unintended tokens','line_number':519,'multiline':False]['text':' careful: this can throw if current token is the initial one (ie index = 0)','line_number':529,'multiline':False]['text':' an empty string needs to be handled by the parser to get a corresponding parsing error reported','line_number':629,'multiline':False]['text':' we run with no recovery to guide users to use correct regexes','line_number':642,'multiline':False]['text':' Intentional ==','line_number':875,'multiline':False]['text':' eslint-disable-next-line eqeqeq','line_number':876,'multiline':False]['text':' Intentional !=','line_number':1074,'multiline':False]['text':' eslint-disable-next-line eqeqeq','line_number':1075,'multiline':False]['text':'','line_number':1427,'multiline':False]['text':'','line_number':1501,'multiline':False]['text':'*
+ * @returns the same instance if nothing changed.
+ ','line_number':1543,'multiline':True]['text':' Allocate array only if there is a difference','line_number':1547,'multiline':False]['text':' something has changed!','line_number':1553,'multiline':False]['text':' allocate array on first difference','line_number':1555,'multiline':False]['text':' no change','line_number':1626,'multiline':False]['text':' anything && true ==> anything','line_number':1651,'multiline':False]['text':' anything && false ==> false','line_number':1657,'multiline':False]['text':' eliminate duplicate terms','line_number':1683,'multiline':False]['text':' We must distribute any OR expression because we don't support parens','line_number':1695,'multiline':False]['text':' OR extensions will be at the end (due to sorting rules)','line_number':1696,'multiline':False]['text':' pop the last element','line_number':1702,'multiline':False]['text':' pop the second to last element','line_number':1705,'multiline':False]['text':' distribute `lastElement` over `secondToLastElement`','line_number':1710,'multiline':False]['text':' resolve false AND expressions','line_number':1727,'multiline':False]['text':' A && !A case','line_number':1732,'multiline':False]['text':' no change','line_number':1825,'multiline':False]['text':' anything || false ==> anything','line_number':1852,'multiline':False]['text':' anything || true ==> true','line_number':1858,'multiline':False]['text':' eliminate duplicate terms','line_number':1885,'multiline':False]['text':' resolve true OR expressions','line_number':1897,'multiline':False]['text':' A || !A case','line_number':1902,'multiline':False]['text':' We don't support parens, so here we distribute the AND over the OR terminals','line_number':1939,'multiline':False]['text':' We always take the first 2 AND pairs and distribute them','line_number':1940,'multiline':False]['text':' collect all context keys into a central place','line_number':1981,'multiline':False]['text':'*
+ * Returns true if it is provable `p` implies `q`.
+ ','line_number':2088,'multiline':True]['text':' false implies anything','line_number':2094,'multiline':False]['text':' anything implies true','line_number':2095,'multiline':False]['text':' `a || b || c` can only imply something like `a || b || c || d`','line_number':2101,'multiline':False]['text':' `a && b && c` implies `a && c`','line_number':2118,'multiline':False]['text':'*
+ * Returns true if all elements in `p` are also present in `q`.
+ * The two arrays are assumed to be sorted
+ ','line_number':2132,'multiline':True]['text':' an element from `p` is missing from `q`','line_number':2143,'multiline':False]

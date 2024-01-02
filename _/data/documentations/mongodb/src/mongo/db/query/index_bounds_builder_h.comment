@@ -1,0 +1,156 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * Translates expressions over fields into bounds on an index.
+ ','line_number':53,'multiline':True]['text':'*
+     * Describes various degrees of precision with which predicates can be evaluated based
+     * on the index bounds.
+     *
+     * Exact vs. inexact is about whether or not you will need to apply a predicate after scanning,
+     * and fetch vs. not fetch is whether you need data which is not in the index to answer the
+     * query. Often if you have inexact bounds it causes you to need more than the index data, but
+     * not always. For example, to correctly match null predicates like {a: {$eq: null}} you may
+     * need to fetch the data to distinguish between a null and missing 'a' value (the index stores
+     * both with a literal null), so would need INEXACT_FETCH bounds. And as an INEXACT_COVERED
+     * example you could think of something like $mod where you can apply the predicate to the data
+     * directly in the index, but $mod won't generate tight bounds so you still need to apply the
+     * predicate.
+     *
+     * The integer values of the enum are significant, and are assigned in order of
+     * increasing tightness. These values are used when we need to do comparison between two
+     * BoundsTightness values. Such comparisons can answer questions such as "Does predicate
+     * X have tighter or looser bounds than predicate Y?".
+     *
+     * These enum values are ordered from loosest to tightest.
+     ','line_number':62,'multiline':True]['text':' Index bounds are inexact, and a fetch is required.','line_number':84,'multiline':False]['text':' Index bounds are inexact, and a fetch may be required depending on the projection.','line_number':87,'multiline':False]['text':' For example, a count $in query on null + a regex can be covered, but a find query with','line_number':88,'multiline':False]['text':' the same filter and no projection cannot.','line_number':89,'multiline':False]['text':' Index bounds are exact, but a fetch may be required depending on the projection.','line_number':92,'multiline':False]['text':' For example, a find query on null may be covered, depending on which fields we project','line_number':93,'multiline':False]['text':' out.','line_number':94,'multiline':False]['text':' Index bounds are inexact, but no fetch is required.','line_number':97,'multiline':False]['text':' Index bounds are exact.','line_number':100,'multiline':False]['text':'*
+     * Populate the provided O.I.L. with one interval goes from MinKey to MaxKey (or vice-versa
+     * depending on the index direction).
+     ','line_number':104,'multiline':True]['text':'*
+     * Returns true if 'expr' can correctly be assigned as an INEXACT_COVERED predicate to an index
+     * scan over 'index'.
+     *
+     * The result of this function is not meaningful when the predicate applies to special fields
+     * such as "hashed", "2d", or "2dsphere". That is, the caller is responsible for ensuring that
+     * 'expr' is a candidate for covered matching over a regular ascending/descending field of the
+     * index.
+     ','line_number':110,'multiline':True]['text':'*
+     * Turn the MatchExpression in 'expr' into a set of index bounds.  The field that 'expr' is
+     * concerned with is indexed according to the keypattern element 'elt' from index 'index'.
+     *
+     * If 'expr' is elemMatch, the index tag is affixed to a child.
+     *
+     * The expression must be a predicate over one field.  That is, expression category must be
+     * kLeaf or kArrayMatching.
+     *
+     * If 'ietBuilder' is not null the given `expr` is turned into a Interval Evaluation Tree which
+     * might be used to restore index bounds from a cached plan.
+     ','line_number':121,'multiline':True]['text':'*
+     * Turn the MatchExpression in 'expr' into a set of index bounds.  The field that 'expr' is
+     * concerned with is indexed according to the keypattern element 'elt' from index 'index'. This
+     * function is used to evaluate index bounds from cached Interval Evaluation Trees.
+     ','line_number':140,'multiline':True]['text':'*
+     * Creates bounds for 'expr' (indexed according to 'elt').  Intersects those bounds
+     * with the bounds in oilOut, which is an in/out parameter.
+     *
+     * If 'ietBuilder' is not null the given `expr` is turned into a Interval Evaluation Tree which
+     * might be used to restore index bounds from a cached plan.
+     ','line_number':149,'multiline':True]['text':'*
+     * Creates bounds for 'expr' (indexed according to 'elt').  Unions those bounds
+     * with the bounds in oilOut, which is an in/out parameter.
+     *
+     * If 'ietBuilder' is not null the given `expr` is turned into a Interval Evaluation Tree which
+     * might be used to restore index bounds from a cached plan.
+     ','line_number':163,'multiline':True]['text':'*
+     * Make a range interval from the provided object.
+     * The object must have exactly two fields.  The first field is the start, the second the
+     * end.
+     * The BoundInclusion indicates whether or not the start/end fields are included in the
+     * interval (closed interval if included, open if not).
+     ','line_number':177,'multiline':True]['text':'*
+     * Make a point interval from the provided object.
+     * The object must have exactly one field which is the value of the point interval.
+     ','line_number':190,'multiline':True]['text':'*
+     * Wraps 'elt' in a BSONObj with an empty field name and returns the result. If 'elt' is a
+     * string, and 'collator' is non-null, the result contains the collator-generated comparison key
+     * rather than the original string.
+     ','line_number':198,'multiline':True]['text':'*
+     * Swap start/end in the provided interval.
+     ','line_number':205,'multiline':True]['text':'*
+     * Returns a std::string that when used as a matcher, would match a superset of regex. Used to
+     * optimize queries in some simple regex cases that start with '^'.
+     *
+     * Returns "" for complex regular expressions that cannot use tight index bounds.
+     ','line_number':210,'multiline':True]['text':'*
+     * Returns an Interval from minKey to maxKey
+     ','line_number':221,'multiline':True]['text':'*
+     * Returns an Interval from minKey to maxKey, preserving the specified inclusion.
+     ','line_number':226,'multiline':True]['text':'*
+     * Fills out 'bounds' with the bounds for an index scan over all values of the
+     * index described by 'keyPattern' in the default forward direction.
+     ','line_number':245,'multiline':True]['text':'*
+     * Assumes each OIL in 'bounds' is increasing.
+     *
+     * Aligns OILs (and bounds) according to the 'kp' direction * the scanDir.
+     ','line_number':253,'multiline':True]['text':'*
+     * Returns 'true' if the bounds 'bounds' can be represented as one interval between
+     * 'startKey' and 'endKey'.  Inclusivity of each bound is set through the relevant
+     * (name)KeyInclusive parameter.  Returns 'false' if otherwise.
+     ','line_number':263,'multiline':True]['text':'*
+     * Returns 'true' if the ordered intervals 'oil' represent a strict null equality predicate.
+     * Returns 'false' otherwise.
+     ','line_number':274,'multiline':True]['text':'*
+     * Returns 'true' if the ordered intervals 'oil' represent a strict equality predicate matching
+     * null and the empty list. Returns 'false' otherwise.
+     ','line_number':280,'multiline':True]['text':'*
+     * Appends the startKey and endKey of the given "all values" 'interval' (which is either
+     * [MinKey, MaxKey] or [MaxKey, MinKey] interval) to the 'startBob' and 'endBob' respectively,
+     * handling inclusivity of each bound through the relevant '*KeyInclusive' parameter.
+     *
+     * If the 'interval' is not an "all values" interval, does nothing.
+     *
+     * Precondition: startBob and endBob should contain one or more leading intervals which are not
+     * "all values" intervals, to make the constructed interval valid.
+     *
+     * The decision whether to append MinKey or MaxKey value either to startBob or endBob is based
+     * on the interval type (min -> max or max -> min), and inclusivity flags.
+     *
+     * As an example, consider the index {a:1, b:1} and a count for {a: {$gt: 2}}. Our start key
+     * isn't inclusive (as it's $gt: 2) and looks like {"":2} so far. Because {a: 2, b: MaxKey}
+     * sorts *after* any real-world data pair {a: 2, b: anything}, setting it as the start value
+     * ensures that the first index entry we encounter will be the smallest key with a > 2.
+     *
+     * Same logic applies if the end key is not inclusive. Consider the index {a:1, b:1} and a count
+     * for {a: {$lt: 2}}. Our end key isn't inclusive as ($lt: 2) and looks like {"":2} so far.
+     * Because {a: 2, b: MinKey} sorts *before* any real-world data pair {a: 2, b: anything},
+     * setting it as the end value ensures that the final index entry we encounter will be the last
+     * key with a < 2.
+     ','line_number':286,'multiline':True]['text':'*
+     * Performs the heavy lifting for IndexBoundsBuilder::translate().
+     ','line_number':317,'multiline':True]['text':'*
+     * Helper method for merging interval tightness for $in expressions.
+     ','line_number':327,'multiline':True]['text':' namespace mongo','line_number':333,'multiline':False]

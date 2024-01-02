@@ -1,0 +1,306 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]['text':'
+ * move.c: Functions for moving the cursor and scrolling text.
+ *
+ * There are two ways to move the cursor:
+ * 1. Move the cursor directly, the text is scrolled to keep the cursor in the
+ *    window.
+ * 2. Scroll the text, the cursor is moved into the text visible in the
+ *    window.
+ * The 'scrolloff' option makes this a bit complicated.
+ ','line_number':9,'multiline':True]['text':' line number','line_number':28,'multiline':False]['text':' filler lines','line_number':30,'multiline':False]['text':' height of added line','line_number':32,'multiline':False]['text':'
+ * Get the number of screen lines skipped with "wp->w_skipcol".
+ ','line_number':38,'multiline':True]['text':'
+ * Return how many lines "lnum" will take on the screen, taking into account
+ * whether it is the first line, whether w_skipcol is non-zero and limiting to
+ * the window height.
+ ','line_number':55,'multiline':True]['text':'
+ * Compute wp->w_botline for the current wp->w_topline.  Can be called after
+ * wp->w_topline changed.
+ ','line_number':77,'multiline':True]['text':'
+     * If w_cline_row is valid, start there.
+     * Otherwise have to start at w_topline.
+     ','line_number':92,'multiline':True]['text':' wp->w_botline is the line that is just below the window','line_number':147,'multiline':False]['text':'
+ * Redraw when w_cline_row changes and 'relativenumber' or 'cursorline' is
+ * set.
+ ','line_number':154,'multiline':True]['text':' win_line() will redraw the number column and cursorline only.','line_number':169,'multiline':False]['text':'
+ * Redraw when w_virtcol changes and 'cursorcolumn' is set or 'cursorlineopt'
+ * contains "screenline".
+ ','line_number':175,'multiline':True]['text':' When 'cursorcolumn' is set need to redraw with UPD_SOME_VALID.','line_number':184,'multiline':False]['text':' When 'cursorlineopt' contains "screenline" need to redraw with','line_number':187,'multiline':False]['text':' UPD_VALID.','line_number':188,'multiline':False]['text':'
+ * Calculates how much the 'listchars' "precedes" or 'smoothscroll' "<<<"
+ * marker overlaps with buffer text for window "wp".
+ * Parameter "extra2" should be the padding on the 2nd line, not the first
+ * line.
+ * Returns the number of columns of overlap with buffer text, excluding the
+ * extra padding on the ledge.
+ ','line_number':195,'multiline':True]['text':' There is no marker overlap when in showbreak mode, thus no need to','line_number':207,'multiline':False]['text':' account for it.  See wlv_screen_line().','line_number':208,'multiline':False]['text':' Overlap when 'list' and 'listchars' "precedes" are set is 1.','line_number':212,'multiline':False]['text':'
+ * Calculates the skipcol offset for window "wp" given how many
+ * physical lines we want to scroll down.
+ ','line_number':219,'multiline':True]['text':'
+ * Set curwin->w_skipcol to zero and redraw later if needed.
+ ','line_number':236,'multiline':True]['text':' Should use the least expensive way that displays all that changed.','line_number':247,'multiline':False]['text':' UPD_NOT_VALID is too expensive, UPD_REDRAW_TOP does not redraw','line_number':248,'multiline':False]['text':' enough when the top line gets another screen line.','line_number':249,'multiline':False]['text':'
+ * Update curwin->w_topline and redraw if necessary.
+ * Used to update the screen before printing a message.
+ ','line_number':253,'multiline':True]['text':'
+ * Update curwin->w_topline to move the cursor onto the screen.
+ ','line_number':265,'multiline':True]['text':' Cursor is updated instead when this is TRUE for 'splitkeep'.','line_number':282,'multiline':False]['text':' If there is no valid screen and when the window height is zero just use','line_number':286,'multiline':False]['text':' the cursor line.','line_number':287,'multiline':False]['text':' When dragging with the mouse, don't scroll that quickly','line_number':301,'multiline':False]['text':'
+     * If the buffer is empty, always set topline to 1.
+     ','line_number':310,'multiline':True]['text':' special case - file is empty','line_number':313,'multiline':False]['text':'
+     * If the cursor is above or near the top of the window, scroll the window
+     * to show the line the cursor is in, with 'scrolloff' context.
+     ','line_number':323,'multiline':True]['text':' If the cursor is above topline, scrolling is always needed.','line_number':331,'multiline':False]['text':' If the cursor is far below topline and there is no folding,','line_number':332,'multiline':False]['text':' scrolling down is never needed.','line_number':333,'multiline':False]['text':' Check that the cursor position is visible.  Add columns for','line_number':343,'multiline':False]['text':' the marker displayed in the top-left if needed.','line_number':344,'multiline':False]['text':' Check if there are more filler lines than allowed.','line_number':353,'multiline':False]['text':' Count the number of logical lines between the cursor and','line_number':368,'multiline':False]['text':' topline + scrolloff (approximation of how much will be','line_number':369,'multiline':False]['text':' scrolled).','line_number':370,'multiline':False]['text':' stop at end of file or when we know we are far off','line_number':376,'multiline':False]['text':' If we weren't very close to begin with, we scroll to put the','line_number':386,'multiline':False]['text':' cursor in the middle of the window.  Otherwise put the cursor','line_number':387,'multiline':False]['text':' near the top of the window.','line_number':388,'multiline':False]['text':' Make sure topline is the first line of a fold.','line_number':401,'multiline':False]['text':'
+     * If the cursor is below the bottom of the window, scroll the window
+     * to put the cursor on the window.
+     * When w_botline is invalid, recompute it first, to avoid a redraw later.
+     * If w_botline was approximated, we might need a redraw later in a few
+     * cases, but we don't want to spend (a lot of) time recomputing w_botline
+     * for every small change.
+     ','line_number':408,'multiline':True]['text':' Cursor is (a few lines) above botline, check if there are','line_number':434,'multiline':False]['text':' 'scrolloff' window lines below the cursor.  If not, need to','line_number':435,'multiline':False]['text':' scroll.','line_number':436,'multiline':False]['text':' In a fold go to its last line.','line_number':440,'multiline':False]['text':' sufficient context, no need to scroll','line_number':460,'multiline':False]['text':' sufficient context, no need to scroll','line_number':464,'multiline':False]['text':' Count the number of logical lines between the cursor and','line_number':472,'multiline':False]['text':' botline - scrolloff (approximation of how much will be','line_number':473,'multiline':False]['text':' scrolled).','line_number':474,'multiline':False]['text':' stop at end of file or when we know we are far off','line_number':480,'multiline':False]['text':'
+     * Need to redraw when topline changed.
+     ','line_number':499,'multiline':True]['text':' When 'smoothscroll' is not set, should reset w_skipcol.','line_number':511,'multiline':False]['text':' May need to set w_skipcol when cursor in w_topline.','line_number':517,'multiline':False]['text':'
+ * Return the scrolljump value to use for the current window.
+ * When 'scrolljump' is positive use it as-is.
+ * When 'scrolljump' is negative use it as a percentage of the window height.
+ ','line_number':525,'multiline':True]['text':'
+ * Return TRUE when there are not 'scrolloff' lines above the cursor for the
+ * current window.
+ ','line_number':538,'multiline':True]['text':' always have this context','line_number':558,'multiline':False]['text':' Count the visible screen lines above the cursor line.','line_number':562,'multiline':False]['text':' Stop when included a line above the window.','line_number':566,'multiline':False]['text':'
+ * Update w_curswant.
+ ','line_number':581,'multiline':True]['text':'
+ * Update w_curswant if w_set_curswant is set.
+ ','line_number':596,'multiline':True]['text':'
+ * Check if the cursor has moved.  Set the w_valid flag accordingly.
+ ','line_number':606,'multiline':True]['text':'
+ * Call this function when some window settings have changed, which require
+ * the cursor position, botline and topline to be recomputed and the window to
+ * be redrawn.  E.g, when changing the 'wrap' option or folding.
+ ','line_number':641,'multiline':True]['text':'
+ * Call changed_window_setting_win() for every window containing "buf".
+ ','line_number':662,'multiline':True]['text':'
+ * Set wp->w_topline to a certain number.
+ ','line_number':677,'multiline':True]['text':' go to first of folded lines','line_number':688,'multiline':False]['text':' Approximate the value of w_botline','line_number':691,'multiline':False]['text':' Keep the filler lines when the topline didn't change.','line_number':699,'multiline':False]['text':' Don't set VALID_TOPLINE here, 'scrolloff' needs to be checked.','line_number':703,'multiline':False]['text':'
+ * Call this function when the length of the cursor line (in screen
+ * characters) has changed, and the change is before the cursor.
+ * If the line length changed the number of screen lines might change,
+ * requiring updating w_topline.  That may also invalidate w_crow.
+ * Need to take care of w_botline separately!
+ ','line_number':707,'multiline':True]['text':'
+ * Call this function when the length of a line (in screen characters) above
+ * the cursor have changed.
+ * Need to take care of w_botline separately!
+ ','line_number':728,'multiline':True]['text':'
+ * Display of line has changed for "buf", invalidate cursor position and
+ * w_botline.
+ ','line_number':748,'multiline':True]['text':'
+ * Make sure the value of curwin->w_botline is valid.
+ ','line_number':765,'multiline':True]['text':'
+ * Make sure the value of wp->w_botline is valid.
+ ','line_number':774,'multiline':True]['text':'
+ * Mark curwin->w_botline as invalid (because of some change in the buffer).
+ ','line_number':784,'multiline':True]['text':'
+ * Return TRUE if curwin->w_wrow and curwin->w_wcol are valid.
+ ','line_number':806,'multiline':True]['text':'
+ * Validate cursor position.  Makes sure w_wrow and w_wcol are valid.
+ * w_topline must be valid, you may need to call update_topline() first!
+ ','line_number':817,'multiline':True]['text':'
+ * validate w_cline_row.
+ ','line_number':831,'multiline':True]['text':'
+     * First make sure that w_topline is valid (after moving the cursor).
+     ','line_number':837,'multiline':True]['text':'
+ * Compute wp->w_cline_row and wp->w_cline_height, based on the current value
+ * of wp->w_topline.
+ ','line_number':847,'multiline':True]['text':' Check if wp->w_lines[].wl_size is invalid','line_number':862,'multiline':False]['text':' skip changed or deleted lines','line_number':874,'multiline':False]['text':' Check for newly inserted lines below this row, in which','line_number':878,'multiline':False]['text':' case we need to check for folded lines.','line_number':879,'multiline':False]['text':' hold at inserted lines','line_number':888,'multiline':False]['text':' Cursor inside folded lines, don't count this row','line_number':899,'multiline':False]['text':' a line that is too long to fit on the last screen line','line_number':950,'multiline':False]['text':'
+ * Validate curwin->w_virtcol only.
+ ','line_number':970,'multiline':True]['text':'
+ * Validate wp->w_virtcol only.
+ ','line_number':979,'multiline':True]['text':'
+ * Validate curwin->w_cline_height only.
+ ','line_number':1000,'multiline':True]['text':'
+ * Validate w_wcol and w_virtcol only.
+ ','line_number':1024,'multiline':True]['text':' long line wrapping, adjust curwin->w_wrow','line_number':1044,'multiline':False]['text':' use same formula as what is used in curs_columns()','line_number':1048,'multiline':False]['text':'
+ * Compute offset of a window, occupied by absolute or relative line number,
+ * fold column and sign column (these don't move when scrolling horizontally).
+ ','line_number':1062,'multiline':True]['text':'
+ * Return the difference in column offset for the second screen line of a
+ * wrapped line.  It's positive if 'number' or 'relativenumber' is on and 'n'
+ * is in 'cpoptions'.
+ ','line_number':1086,'multiline':True]['text':'
+ * Compute curwin->w_wcol and curwin->w_virtcol.
+ * Also updates curwin->w_wrow and curwin->w_cline_row.
+ * Also updates curwin->w_leftcol.
+ ','line_number':1105,'multiline':True]['text':' when TRUE, may scroll horizontally','line_number':1112,'multiline':False]['text':' offset for first screen line','line_number':1115,'multiline':False]['text':' text width for first screen line','line_number':1119,'multiline':False]['text':' text width for second and later screen line','line_number':1120,'multiline':False]['text':'
+     * First make sure that w_topline is valid (after moving the cursor).
+     ','line_number':1129,'multiline':True]['text':'
+     * Next make sure that w_cline_row is valid.
+     ','line_number':1134,'multiline':True]['text':' will be set by getvvcol() but not reset','line_number':1141,'multiline':False]['text':'
+     * Compute the number of virtual columns.
+     ','line_number':1145,'multiline':True]['text':' In a folded line the cursor is always in the first column','line_number':1150,'multiline':False]['text':' remove '$' from change command when cursor moves onto it','line_number':1157,'multiline':False]['text':'
+     * Now compute w_wrow, counting screen lines from w_cline_row.
+     ','line_number':1165,'multiline':True]['text':' No room for text, put cursor in last char of window.','line_number':1173,'multiline':False]['text':' If not wrapping, the last non-empty line.','line_number':1174,'multiline':False]['text':' skip columns that are not visible','line_number':1185,'multiline':False]['text':' Deduct by multiples of width2.  This allows the long line','line_number':1190,'multiline':False]['text':' wrapping formula below to correctly calculate the w_wcol value','line_number':1191,'multiline':False]['text':' when wrapping.','line_number':1192,'multiline':False]['text':' long line wrapping, adjust curwin->w_wrow','line_number':1202,'multiline':False]['text':' this same formula is used in validate_cursor_col()','line_number':1205,'multiline':False]['text':' No line wrapping: compute curwin->w_leftcol if scrolling is on and line','line_number':1212,'multiline':False]['text':' is not folded.','line_number':1213,'multiline':False]['text':' If scrolling is off, curwin->w_leftcol is assumed to be 0','line_number':1214,'multiline':False]['text':' each "above" text prop shifts the text one row down','line_number':1227,'multiline':False]['text':'
+	 * If Cursor is left of the screen, scroll rightwards.
+	 * If Cursor is right of the screen, scroll leftwards
+	 * If we get closer to the edge than 'sidescrolloff', scroll a little
+	 * extra
+	 ','line_number':1234,'multiline':True]['text':' When far off or not enough room on either side, put cursor in','line_number':1250,'multiline':False]['text':' middle of window.','line_number':1251,'multiline':False]['text':' screen has to be redrawn with new curwin->w_leftcol','line_number':1268,'multiline':False]['text':' Skip over filler lines.  At the top use w_topfill, there','line_number':1280,'multiline':False]['text':' may be some filler lines above the window.','line_number':1281,'multiline':False]['text':' Cursor past end of screen.  Happens with a single line that does','line_number':1308,'multiline':False]['text':' not fit on screen.  Find a skipcol to show the text around the','line_number':1309,'multiline':False]['text':' cursor.  Avoid scrolling all the time. compute value of "extra":','line_number':1310,'multiline':False]['text':' 1: Less than 'scrolloff' lines above','line_number':1311,'multiline':False]['text':' 2: Less than 'scrolloff' lines below','line_number':1312,'multiline':False]['text':' 3: both of them','line_number':1313,'multiline':False]['text':' Compute last display line of the buffer line that we want at the','line_number':1317,'multiline':False]['text':' bottom of the window.','line_number':1318,'multiline':False]['text':' not enough room for 'scrolloff', put cursor in the middle','line_number':1331,'multiline':False]['text':' don't skip more than necessary','line_number':1337,'multiline':False]['text':' less than 'scrolloff' lines above, decrease skipcol','line_number':1347,'multiline':False]['text':' less than 'scrolloff' lines below, increase skipcol','line_number':1359,'multiline':False]['text':' adjust w_wrow for the changed w_skipcol','line_number':1367,'multiline':False]['text':' small window, make sure cursor is in it','line_number':1375,'multiline':False]['text':' now w_leftcol and w_skipcol are valid, avoid check_cursor_moved()','line_number':1406,'multiline':False]['text':' thinking otherwise','line_number':1407,'multiline':False]['text':'
+ * Compute the screen position of text character at "pos" in window "wp"
+ * The resulting values are one-based, zero when character is not visible.
+ ','line_number':1415,'multiline':True]['text':' screen row','line_number':1423,'multiline':False]['text':' start screen column','line_number':1424,'multiline':False]['text':' cursor screen column','line_number':1425,'multiline':False]['text':' end screen column','line_number':1426,'multiline':False]['text':' "row" should be the screen line where line "lnum" begins, which can','line_number':1443,'multiline':False]['text':' be negative if "lnum" is "w_topline" and "w_skipcol" is non-zero.','line_number':1444,'multiline':False]['text':' Add filler lines above this buffer line.','line_number':1448,'multiline':False]['text':' similar to what is done in validate_cursor_col()','line_number':1465,'multiline':False]['text':' long line wrapping, adjust row','line_number':1470,'multiline':False]['text':' use same formula as what is used in curs_columns()','line_number':1475,'multiline':False]['text':' character is out of the window','line_number':1489,'multiline':False]['text':'
+ * "screenpos({winid}, {lnum}, {col})" function
+ ','line_number':1501,'multiline':True]['text':'
+ * Convert a virtual (screen) column to a character column.  The first column
+ * is one.  For a multibyte character, the column number of the first byte is
+ * returned.
+ ','line_number':1545,'multiline':True]['text':' empty line','line_number':1559,'multiline':False]['text':' Move to the first byte of the last char.','line_number':1561,'multiline':False]['text':'
+ * "virtcol2col({winid}, {lnum}, {col})" function
+ ','line_number':1567,'multiline':True]['text':'
+ * Scroll the current window down by "line_count" logical lines.  "CTRL-Y"
+ ','line_number':1601,'multiline':True]['text':' TRUE: count a closed fold as one line','line_number':1607,'multiline':False]['text':' total # of physical lines done','line_number':1609,'multiline':False]['text':' Make sure w_topline is at the first of a sequence of folded lines.','line_number':1625,'multiline':False]['text':' w_wrow needs to be valid','line_number':1628,'multiline':False]['text':' break when at the very top','line_number':1641,'multiline':False]['text':' scroll a screen line down','line_number':1647,'multiline':False]['text':' scroll a text line down','line_number':1657,'multiline':False]['text':' A sequence of folded lines only counts for one logical line','line_number':1664,'multiline':False]['text':' approximate w_botline','line_number':1696,'multiline':False]['text':' keep w_wrow updated','line_number':1699,'multiline':False]['text':' keep w_cline_row updated','line_number':1700,'multiline':False]['text':'
+     * Compute the row number of the last row of the cursor line
+     * and move the cursor onto the displayed part of the window.
+     ','line_number':1708,'multiline':True]['text':' Move cursor to first line of closed fold.','line_number':1741,'multiline':False]['text':' make sure the cursor is in the visible text','line_number':1752,'multiline':False]['text':' even so col is not used anymore,','line_number':1764,'multiline':False]['text':' make sure it is correct, just in case','line_number':1765,'multiline':False]['text':'
+ * Scroll the current window up by "line_count" logical lines.  "CTRL-E"
+ ','line_number':1777,'multiline':True]['text':' TRUE: count a closed fold as one line','line_number':1783,'multiline':False]['text':' diff mode: first consume "topfill"','line_number':1804,'multiline':False]['text':' 'smoothscroll': increase "w_skipcol" until it goes over the end of','line_number':1805,'multiline':False]['text':' the line, then advance to the next line.','line_number':1806,'multiline':False]['text':' folding: count each sequence of folded lines as one logical line.','line_number':1807,'multiline':False]['text':' for a closed fold: go to the last line in the fold','line_number':1820,'multiline':False]['text':' 'smoothscroll': increase "w_skipcol" until it goes over','line_number':1825,'multiline':False]['text':' the end of the line, then advance to the next line.','line_number':1826,'multiline':False]['text':' at the last screen line, can't scroll further','line_number':1833,'multiline':False]['text':' approximate w_botline','line_number':1849,'multiline':False]['text':' need to redraw more, because wl_size of the (new) topline may','line_number':1863,'multiline':False]['text':' now be invalid','line_number':1864,'multiline':False]['text':' approximate w_botline','line_number':1870,'multiline':False]['text':' Make sure w_topline is at the first of a sequence of folded lines.','line_number':1884,'multiline':False]['text':' If we have non-zero scrolloff, just ignore the marker as we are','line_number':1909,'multiline':False]['text':' going past it anyway.','line_number':1910,'multiline':False]['text':' Make sure the cursor is in a visible part of the line, taking','line_number':1914,'multiline':False]['text':' 'scrolloff' into account, but using screen lines.','line_number':1915,'multiline':False]['text':' If there are not enough screen lines put the cursor in the middle.','line_number':1916,'multiline':False]['text':' validate_virtcol() marked various things as valid, but after','line_number':1931,'multiline':False]['text':' moving the cursor they need to be recomputed','line_number':1932,'multiline':False]['text':'
+ * Called after changing the cursor column: make sure that curwin->w_skipcol is
+ * valid for 'smoothscroll'.
+ ','line_number':1939,'multiline':True]['text':' no text will be displayed','line_number':1953,'multiline':False]['text':' w_cline_height may be capped at w_height, check there aren't','line_number':1962,'multiline':False]['text':' actually more lines.','line_number':1963,'multiline':False]['text':' the line just fits in the window, don't scroll','line_number':1967,'multiline':False]['text':' scroll a screen line down','line_number':1978,'multiline':False]['text':' don't scroll in the other direction now','line_number':1989,'multiline':False]['text':' col may no longer be used, but make','line_number':2002,'multiline':False]['text':' sure it is correct anyhow, just in case','line_number':2003,'multiline':False]['text':'
+ * Don't end up with too many filler lines in the window.
+ ','line_number':2020,'multiline':True]['text':' when TRUE scroll down when not enough space','line_number':2026,'multiline':False]['text':'
+ * Use as many filler lines as possible for w_topline.  Make sure w_topline
+ * is still visible.
+ ','line_number':2050,'multiline':True]['text':'
+ * Scroll the screen one line down, but don't do it if it would move the
+ * cursor off the screen.
+ ','line_number':2071,'multiline':True]['text':' w_wrow needs to be valid','line_number':2091,'multiline':False]['text':'
+     * Compute the row number of the last row of the cursor line
+     * and make sure it doesn't go off the screen. Make sure the cursor
+     * doesn't go past 'scrolloff' lines from the screen end.
+     ','line_number':2093,'multiline':True]['text':' approximate w_botline','line_number':2133,'multiline':False]['text':'
+ * Scroll the screen one line up, but don't do it if it would move the cursor
+ * off the screen.
+ ','line_number':2138,'multiline':True]['text':' w_wrow needs to be valid','line_number':2154,'multiline':False]['text':'
+     * Compute the row number of the first row of the cursor line
+     * and make sure it doesn't go off the screen. Make sure the cursor
+     * doesn't go before 'scrolloff' lines from the screen start.
+     ','line_number':2156,'multiline':True]['text':' approximate w_botline','line_number':2185,'multiline':False]['text':'
+ * Add one line above "lp->lnum".  This can be a filler line, a closed fold or
+ * a (wrapped) text line.  Uses and sets "lp->fill".
+ * Returns the height of the added line in "lp->height".
+ * Lines above the first one are incredibly high: MAXCOL.
+ ','line_number':2190,'multiline':True]['text':' when TRUE limit to window height','line_number':2199,'multiline':False]['text':' Add a filler line.','line_number':2204,'multiline':False]['text':' Add a closed fold','line_number':2220,'multiline':False]['text':'
+ * Add one line below "lp->lnum".  This can be a filler line, a closed fold or
+ * a (wrapped) text line.  Uses and sets "lp->fill".
+ * Returns the height of the added line in "lp->height".
+ * Lines below the last one are incredibly high.
+ ','line_number':2235,'multiline':True]['text':' Add a filler line.','line_number':2247,'multiline':False]['text':' Add a closed fold','line_number':2263,'multiline':False]['text':'
+ * Switch from including filler lines below lp->lnum to including filler
+ * lines above loff.lnum + 1.  This keeps pointing to the same line.
+ * When there are no filler lines nothing changes.
+ ','line_number':2272,'multiline':True]['text':'
+ * Switch from including filler lines above lp->lnum to including filler
+ * lines below loff.lnum - 1.  This keeps pointing to the same line.
+ * When there are no filler lines nothing changes.
+ ','line_number':2287,'multiline':True]['text':'
+ * Recompute topline to put the cursor at the top of the window.
+ * Scroll at least "min_scroll" lines.
+ * If "always" is TRUE, always set topline (for "zt").
+ ','line_number':2303,'multiline':True]['text':' just above displayed lines','line_number':2315,'multiline':False]['text':' just below displayed lines','line_number':2316,'multiline':False]['text':'
+     * Decrease topline until:
+     * - it has become 1
+     * - (part of) the cursor line is moved off the screen or
+     * - moved at least 'scrolljump' lines and
+     * - at least 'scrolloff' lines above and below the cursor
+     ','line_number':2328,'multiline':True]['text':' includes filler lines above','line_number':2336,'multiline':False]['text':' "used" already contains the number of filler lines above, don't add it','line_number':2355,'multiline':False]['text':' again.','line_number':2356,'multiline':False]['text':' Hide filler lines above cursor line by adding them to "extra".','line_number':2357,'multiline':False]['text':'
+     * Check if the lines from "top" to "bot" fit in the window.  If they do,
+     * set new_topline and advance "top" and "bot" to include more lines.
+     ','line_number':2361,'multiline':True]['text':' count one logical line for a sequence of folded lines','line_number':2369,'multiline':False]['text':' If scrolling is needed, scroll at least 'sj' lines.','line_number':2377,'multiline':False]['text':' count one logical line for a sequence of folded lines','line_number':2387,'multiline':False]['text':'
+     * If we don't have enough space, put cursor in the middle.
+     * This makes sure we get the same position when using "k" and "j"
+     * in a small window.
+     ','line_number':2402,'multiline':True]['text':'
+	 * If "always" is FALSE, only adjust topline to a lower value, higher
+	 * value may happen with wrapping lines.
+	 ','line_number':2411,'multiline':True]['text':' TODO: if the line doesn't fit may optimize w_skipcol instead','line_number':2435,'multiline':False]['text':' of making it zero','line_number':2436,'multiline':False]['text':'
+ * Set w_empty_rows and w_filler_rows for window "wp", having used up "used"
+ * screen lines for text lines.
+ ','line_number':2451,'multiline':True]['text':' single line that doesn't fit','line_number':2462,'multiline':False]['text':'
+ * Recompute topline to put the cursor at the bottom of the window.
+ * When scrolling scroll at least "min_scroll" lines.
+ * If "set_topbot" is TRUE, set topline and botline first (for "zb").
+ * This is messy stuff!!!
+ ','line_number':2482,'multiline':True]['text':' Cursor Line Number','line_number':2507,'multiline':False]['text':' 'smoothscroll' and 'wrap' are set.  The above line is','line_number':2533,'multiline':False]['text':' too long to show in its entirety, so we show just a part','line_number':2534,'multiline':False]['text':' of it.','line_number':2535,'multiline':False]['text':' The lines of the cursor line itself are always used.','line_number':2576,'multiline':False]['text':' If the cursor is on or below botline, we will at least scroll by the','line_number':2584,'multiline':False]['text':' height of the cursor line, which is "used".  Correct for empty lines,','line_number':2585,'multiline':False]['text':' which are really part of botline.','line_number':2586,'multiline':False]['text':' 'smoothscroll' and 'wrap' are set.','line_number':2594,'multiline':False]['text':' Calculate how many screen lines the current top line of window','line_number':2595,'multiline':False]['text':' occupies. If it is occupying more than the entire window, we','line_number':2596,'multiline':False]['text':' need to scroll the additional clipped lines to scroll past the','line_number':2597,'multiline':False]['text':' top line before we can move on to the other lines.','line_number':2598,'multiline':False]['text':' similar formula is used in curs_columns()','line_number':2611,'multiline':False]['text':'
+     * Stop counting lines to scroll when
+     * - hitting start of the file
+     * - scrolled nothing or at least 'sj' lines
+     * - at least 'scrolloff' lines below the cursor
+     * - lines between botline and cursor have been counted
+     ','line_number':2626,'multiline':True]['text':' Stop when scrolled nothing or at least "min_scroll", found "extra"','line_number':2649,'multiline':False]['text':' context for 'scrolloff' and counted all lines below the window.','line_number':2650,'multiline':False]['text':' Add one line above','line_number':2662,'multiline':False]['text':' Count screen lines that are below the window.','line_number':2677,'multiline':False]['text':' Add one line below','line_number':2689,'multiline':False]['text':' Count screen lines that are below the window.','line_number':2705,'multiline':False]['text':' curwin->w_empty_rows is larger, no need to scroll','line_number':2718,'multiline':False]['text':' more than a screenfull, don't scroll but redraw','line_number':2721,'multiline':False]['text':' scroll minimal number of lines','line_number':2724,'multiline':False]['text':' below curwin->w_botline, don't scroll','line_number':2738,'multiline':False]['text':'
+     * Scroll up if the cursor is off the bottom of the screen a bit.
+     * Otherwise put it at 1/2 of the screen.
+     ','line_number':2742,'multiline':True]['text':' TODO','line_number':2751,'multiline':False]['text':'
+     * If topline didn't change we need to restore w_botline and w_empty_rows
+     * (we changed them).
+     * If topline did change, update_screen() will set botline.
+     ','line_number':2756,'multiline':True]['text':'
+ * Recompute topline to put the cursor halfway the window
+ * If "atend" is TRUE, also put it halfway at the end of the file.
+ ','line_number':2772,'multiline':True]['text':' if the width changed this needs to be updated first','line_number':2794,'multiline':False]['text':' 'smoothscroll' and 'wrap' are set','line_number':2814,'multiline':False]['text':' If using smoothscroll, we can precisely scroll to the','line_number':2826,'multiline':False]['text':' exact point where the cursor is halfway down the screen.','line_number':2827,'multiline':False]['text':' If not using smoothscroll, we have to iteratively find how many','line_number':2858,'multiline':False]['text':' lines to scroll down to roughly fit the cursor.','line_number':2859,'multiline':False]['text':' This may not be right in the middle if the lines'','line_number':2860,'multiline':False]['text':' physical height > 1 (e.g. 'wrap' is on).','line_number':2861,'multiline':False]['text':' Depending on "prefer_above" we add a line above or below first.','line_number':2863,'multiline':False]['text':' Loop twice to avoid duplicating code.','line_number':2864,'multiline':False]['text':' add a line below the cursor','line_number':2871,'multiline':False]['text':' count a "~" line','line_number':2885,'multiline':False]['text':' add a line above the cursor','line_number':2894,'multiline':False]['text':'
+ * Correct the cursor position so that it is in a part of the screen at least
+ * 'scrolloff' lines from the top and bottom, if possible.
+ * If not possible, put it at the same position as scroll_cursor_halfway().
+ * When called topline must be valid!
+ ','line_number':2944,'multiline':True]['text':' screen lines above topline','line_number':2953,'multiline':False]['text':' screen lines below botline','line_number':2955,'multiline':False]['text':' Cursor Line Number','line_number':2958,'multiline':False]['text':'
+     * How many lines we would like to have above/below the cursor depends on
+     * whether the first/last line of the file is on screen.
+     ','line_number':2962,'multiline':True]['text':'
+     * If there are sufficient file-lines above and below the cursor, we can
+     * return now.
+     ','line_number':2990,'multiline':True]['text':' 'smoothscroll' is active','line_number':3005,'multiline':False]['text':' The cursor line just fits in the window, don't scroll.','line_number':3008,'multiline':False]['text':' TODO: If the cursor line doesn't fit in the window then only adjust','line_number':3012,'multiline':False]['text':' w_skipcol.','line_number':3013,'multiline':False]['text':'
+     * Narrow down the area where the cursor can be put by taking lines from
+     * the top and the bottom until:
+     * - the desired context lines are found
+     * - the lines from the top is past the lines from the bottom
+     ','line_number':3016,'multiline':True]['text':' count filler lines as context','line_number':3025,'multiline':False]['text':' Count filler lines below this line as context.','line_number':3050,'multiline':False]['text':'
+ * Move screen "count" pages up ("dir" is BACKWARD) or down ("dir" is FORWARD)
+ * and update the screen.
+ *
+ * Return FAIL for failure, OK otherwise.
+ ','line_number':3081,'multiline':True]['text':' nothing to do','line_number':3096,'multiline':False]['text':'
+	 * It's an error to move a page up when the first line is already on
+	 * the screen.	It's an error to move a page down when the last line
+	 * is on the screen and the topline is 'scrolloff' lines from the
+	 * last line.
+	 ','line_number':3105,'multiline':True]['text':' Vi compatible scrolling','line_number':3133,'multiline':False]['text':' at end of file','line_number':3144,'multiline':False]['text':' For the overlap, start with the line just below the window','line_number':3153,'multiline':False]['text':' and go upwards.','line_number':3154,'multiline':False]['text':' dir == BACKWARDS','line_number':3171,'multiline':False]['text':' Include max number of filler lines','line_number':3176,'multiline':False]['text':' Vi compatible scrolling (sort of)','line_number':3183,'multiline':False]['text':' Find the line at the top of the window that is going to be the','line_number':3196,'multiline':False]['text':' line at the bottom of the window.  Make sure this results in','line_number':3197,'multiline':False]['text':' the same line as before doing CTRL-F.','line_number':3198,'multiline':False]['text':' Find the line just above the new topline to get the right line','line_number':3219,'multiline':False]['text':' at the bottom of the window.','line_number':3220,'multiline':False]['text':' at begin of file','line_number':3230,'multiline':False]['text':' Go two lines forward again.','line_number':3240,'multiline':False]['text':' We're at the wrong end of a fold now.','line_number':3250,'multiline':False]['text':' Always scroll at least one line.  Avoid getting stuck on','line_number':3254,'multiline':False]['text':' very long lines.','line_number':3255,'multiline':False]['text':' First try using the maximum number of filler lines.  If','line_number':3264,'multiline':False]['text':' that's not enough, backup one line.','line_number':3265,'multiline':False]['text':' Avoid the screen jumping up and down when 'scrolloff' is non-zero.','line_number':3307,'multiline':False]['text':' But make sure we scroll at least one line (happens with mix of long','line_number':3308,'multiline':False]['text':' wrapping lines and non-wrapping line).','line_number':3309,'multiline':False]['text':'
+ * Decide how much overlap to use for page-up or page-down scrolling.
+ * This is symmetric, so that doing both keeps the same lines displayed.
+ * Three lines are examined:
+ *
+ *  before CTRL-F	    after CTRL-F / before CTRL-B
+ *     etc.			l1
+ *  l1 last but one line	------------
+ *  l2 last text line		l2 top text line
+ *  -------------		l3 second text line
+ *  l3				   etc.
+ ','line_number':3332,'multiline':True]['text':' no overlap','line_number':3361,'multiline':False]['text':' no overlap','line_number':3371,'multiline':False]['text':' no overlap','line_number':3383,'multiline':False]['text':' 1 line overlap','line_number':3394,'multiline':False]['text':' 2 lines overlap','line_number':3396,'multiline':False]['text':'
+ * Scroll 'scroll' lines up or down.
+ ','line_number':3399,'multiline':True]['text':'
+	 * scroll the text up
+	 ','line_number':3424,'multiline':True]['text':'
+	     * Correct w_botline for changed w_topline.
+	     * Won't work when there are filler lines.
+	     ','line_number':3461,'multiline':True]['text':'
+	 * When hit bottom of the file: move cursor down.
+	 ','line_number':3487,'multiline':True]['text':'
+	 * scroll the text down
+	 ','line_number':3511,'multiline':True]['text':'
+	 * When hit top of the file: move cursor up.
+	 ','line_number':3548,'multiline':True]['text':' Move cursor to first line of closed fold.','line_number':3572,'multiline':False]['text':'
+     * loop through the cursorbound windows
+     ','line_number':3604,'multiline':True]['text':' skip original window and windows with 'nocursorbind'','line_number':3611,'multiline':False]['text':' Make sure the cursor is in a valid position.  Temporarily set','line_number':3626,'multiline':False]['text':' "restart_edit" to allow the cursor to be beyond the EOL.','line_number':3627,'multiline':False]['text':' Avoid a scroll here for the cursor position, 'scrollbind' is','line_number':3632,'multiline':False]['text':' more important.','line_number':3633,'multiline':False]['text':' Correct cursor for multi-byte character.','line_number':3638,'multiline':False]['text':' Only scroll when 'scrollbind' hasn't done this.','line_number':3643,'multiline':False]['text':'
+     * reset current-window
+     ','line_number':3650,'multiline':True]

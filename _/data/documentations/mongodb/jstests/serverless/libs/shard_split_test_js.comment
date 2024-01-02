@@ -1,0 +1,103 @@
+['text':'
+ * Connects to a replica set and runs write operation, returning the results.
+ * @param {rstArgs} replicaSetArgs for the replica set to connect to.
+ * @param {tenantIds} perform a write operation for each tenantId.
+ ','line_number':17,'multiline':True]['text':' TenantIds is an array of ObjectId which does not serialize correctly when passed through the','line_number':29,'multiline':False]['text':' Thread constructor. We pass tenantIds converted into a json form (stringfield) to this','line_number':30,'multiline':False]['text':' function and then use `eval()` to rebuild into an array of ObjectId.','line_number':31,'multiline':False]['text':' Push OK','line_number':47,'multiline':False]['text':' default to three nodes','line_number':56,'multiline':False]['text':' ensure recipient nodes are added as non-voting members','line_number':69,'multiline':False]['text':' reindex all members from 0','line_number':80,'multiline':False]['text':'*
+ * Convert arguments passed through the Thread interface and calls runShardSplitCommand.
+ ','line_number':92,'multiline':True]['text':' tenantIds were passed as a json instead of array<objectId>','line_number':108,'multiline':False]['text':'
+ *  Wait for state document garbage collection by polling for when the document has been removed
+ * from the 'shardSplitDonors' namespace, and all access blockers have been removed.
+ * @param {migrationId} id that was used for the commitShardSplit command.
+ * @param {tenantIds} tenant ids of the shard split.
+ ','line_number':118,'multiline':True]['text':' Note: assert.commandWorked() considers command responses with embedded','line_number':189,'multiline':False]['text':' writeErrors and WriteConcernErrors as a failure even if the command returned','line_number':190,'multiline':False]['text':' "ok: 1". And, admin commands(like, donorStartMigration)','line_number':191,'multiline':False]['text':' doesn't generate writeConcernErros or WriteErrors. So, it's safe to wrap up','line_number':192,'multiline':False]['text':' run() with assert.commandWorked() here. However, in few scenarios, like','line_number':193,'multiline':False]['text':' Mongo.prototype.recordRerouteDueToTenantMigration(), it's not safe to wrap up','line_number':194,'multiline':False]['text':' run() with commandWorked() as retrying on retryable writeConcernErrors can','line_number':195,'multiline':False]['text':' cause the retry attempt to fail with writeErrors.','line_number':196,'multiline':False]['text':' In some tests we expects the command to fail due to a network error. We want to','line_number':198,'multiline':False]['text':' catch the error OR the unhandled exception here and return the error to the','line_number':199,'multiline':False]['text':' caller to assert on the result. Otherwise if this is not a network exception','line_number':200,'multiline':False]['text':' it will be caught in the outter catch and either be retried or thrown.','line_number':201,'multiline':False]['text':' If res is defined, return true to exit assert.soon and return res to the caller.','line_number':213,'multiline':False]['text':' Otherwise rethrow e to propagate it to the caller.','line_number':214,'multiline':False]['text':'*
+ * Utility class to run shard split operations.
+ ','line_number':223,'multiline':True]['text':'*
+     * Starts a shard split synchronously.
+     ','line_number':236,'multiline':True]['text':'*
+     * Starts a shard split asynchronously and returns the Thread that runs it.
+     * @returns the Thread running the commitShardSplit command.
+     ','line_number':253,'multiline':True]['text':'*
+     * Forgets a shard split synchronously.
+     ','line_number':268,'multiline':True]['text':' retryableOnErrors ','line_number':280,'multiline':True]['text':'*
+     * Send an abortShardSplit command asynchronously and returns the Thread that runs it.
+     * @returns the Thread running the abortShardSplit command.
+     ','line_number':297,'multiline':True]['text':'*
+     * Aborts a shard split synchronously.
+     ','line_number':314,'multiline':True]['text':'*
+ * Utility class to create a ReplicaSetTest that provides functionnality to run a shard split
+ * operation.
+ ','line_number':326,'multiline':True]['text':'
+     * Removes and stops the recipient nodes and then stops the donor nodes.
+     * @param {shouldRestart} indicates whether stop() is being called with the intent to call
+     * start() with restart=true for the same node(s) n.
+     ','line_number':362,'multiline':True]['text':' If we validate, it will try to list all collections and the migrated collections will','line_number':369,'multiline':False]['text':' return a TenantMigrationCommitted error.','line_number':370,'multiline':False]['text':' signal ','line_number':372,'multiline':True]['text':' forRestart ','line_number':372,'multiline':True]['text':'
+     * Returns a ShardSplitOperation object to run a shard split.
+     * @param {tenantIds} tells which tenant ids to run a split for.
+     * @returns the created shard split operation object.
+     ','line_number':375,'multiline':True]['text':'
+     * Add recipient nodes to the current donor set.
+     * @param {numNodes} indicates the number of recipient nodes to be added.
+     ','line_number':389,'multiline':True]['text':'
+     * Add recipient nodes to the current donor set, and wait for them to become ready.
+     * @param {numNodes} indicates the number of recipient nodes to be added.
+     ','line_number':402,'multiline':True]['text':'
+     * Remove and stops the recipient nodes from the donor set.
+     ','line_number':411,'multiline':True]['text':'*
+     * Crafts a tenant database name.
+     * @param {tenantId} tenant ID to be used for the tenant database name
+     * @param {dbName} name of the database to be used for the tenant database name
+     * @returns crafted databased name using a tenantId and a database name.
+     ','line_number':426,'multiline':True]['text':'
+     * Takes an rstArgs produced by createArgs and remove the recipient nodes from it.
+     ','line_number':436,'multiline':True]['text':'
+     *  Wait for state document garbage collection by polling for when the document has been
+     * removed from the 'shardSplitDonors' namespace, and all access blockers have been removed.
+     * @param {migrationId} id that was used for the commitShardSplit command.
+     * @param {tenantIds} tenant ids of the shard split.
+     ','line_number':446,'multiline':True]['text':'*
+     * Remove recipient nodes from the donor.nodes of ShardSplitTest.
+     ','line_number':456,'multiline':True]['text':'*
+     * Remove the recipient nodes from the donor's config memberset and calls replSetReconfig on
+     * the updated local config. It does not need to be called after a successfull split as the
+     * service reconfig itself in that case.
+     ','line_number':466,'multiline':True]['text':' remove recipient nodes and config.','line_number':481,'multiline':False]['text':'
+     * Look up tenant access blockers for the given tenant ids and will check, based upon the
+     * expected state the access blockers are expected to be, that the different fields are
+     * properly set such as `blockOpTime`, `abortOpTime` or `commitOpTime`.
+     * @param {migrationId} the current shard split id.
+     * @param {tenantIds} tenant ids of the shard split.
+     * @param {expectedState} expected state the tenant access blocker to be in.
+     ','line_number':489,'multiline':True]['text':'*
+     * After calling the forgetShardSplit command, wait for the tenant access blockers to be
+     * removed then remove and stop the recipient nodes from the donor set.
+     * @param {migrationId} migration id of the committed shard split operation.
+     * @param {tenantIds}  tenant IDs that were used for the split operation.
+     ','line_number':526,'multiline':True]['text':'*
+     * After calling the forgetShardSplit command, wait for the tenant access blockers to be
+     * removed then remove and stop the recipient nodes from the donor set and test and finally
+     * apply the new config once the split has been cleaned up.
+     * @param {migrationId} migration id of the committed shard split operation.
+     * @param {tenantIds}  tenant IDs that were used for the split operation.
+     ','line_number':537,'multiline':True]['text':'
+     * Lookup and return the tenant migration access blocker on a node for the given tenant.
+     * @param {donorNode} donor node on which the request will be sent.
+     * @param {tenantId} tenant id (ObjectId) to lookup for tenant access blockers.
+     ','line_number':550,'multiline':True]['text':'*
+     * Returns the number of reads on the given node that were blocked due to shard split
+     * for the given tenant.
+     ','line_number':571,'multiline':True]['text':'*
+     * Returns the number of writes on the given donor node that were blocked due to shard split
+     * for the given tenant.
+     ','line_number':583,'multiline':True]['text':'*
+     * Asserts that the TenantMigrationAccessBlocker for the given tenant on the given node has
+     * the expected statistics.
+     ','line_number':595,'multiline':True]['text':'*
+     * Get the current donor primary by ignoring all the recipient nodes from the current donor
+     * set.
+     ','line_number':622,'multiline':True]['text':'*
+     * @returns A new ReplSetTest fixture representing the recipient set.
+     ','line_number':633,'multiline':True]['text':'*
+     * @returns An array of recipient nodes.
+     ','line_number':643,'multiline':True]['text':'*
+     * @returns An array of donor nodes.
+     ','line_number':650,'multiline':True]['text':' If transitioning to "blocking", prove that we wrote that fact at the blockOpTime.','line_number':679,'multiline':False]

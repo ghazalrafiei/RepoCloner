@@ -1,0 +1,28 @@
+['text':'
+This is an optimization that reduces the number of store/load/move nodes needed
+by recognizing that parts of the graph are simple trees like a*x + b*y. When
+this happens it is possible to work directly off of the stack by emitting the
+tree in a depth-first left-to-right manner:
+  load a
+  load x
+  mul # stack now is a*x
+  load b
+  load y
+  mul # stack now is a*x, b*y
+  add
+
+can_emit_inline_[node] == true means that this node participates as a non-root
+member of one of these trees. The code emitter will not emit this node when
+it is encountered in the node. Instead the node is emitted in a depth first
+traversal from where it is used in a tree.
+
+To participate in a tree a node must have a single use (otherwise it is not
+tree-like) and output a single value (for simplicity.) If our IR was functional,
+these would be the only constraints. However, many nodes have side effects, so
+we must ensure that emitting the nodes in depth first order from the tree's root
+_does not reorder the emission of the nodes_. To ensure this, we work backward
+from the root of a potential tree, visiting its inputs in reverse depth first
+order, while scanning the node list backward (with the block_point node). When
+these traversal line up we know it is safe to emit the tree in this way. We
+ignore constant nodes, which do not have side effects.
+','line_number':8,'multiline':True]['text':' without this a BailOut may float downstream past some later','line_number':42,'multiline':False]['text':' BailOut','line_number':43,'multiline':False]['text':' and receive a higher jf_index. Then a GUARD instruction','line_number':44,'multiline':False]['text':' we generated for the floated BailOut will get popped up from the','line_number':45,'multiline':False]['text':' instruction stack','line_number':46,'multiline':False]['text':' by the later BailOut in createBailoutBlock and its jf_index','line_number':47,'multiline':False]['text':' will become invalid.','line_number':48,'multiline':False]['text':' this node is a candidate for inline, if our reverse scan of the','line_number':66,'multiline':False]['text':' node list lines up with the use of v, we know it will be emitted in','line_number':67,'multiline':False]['text':' tree order, and we can inlining. Scan continues for further nodes.','line_number':68,'multiline':False]['text':' since we inlined this node, we may be able to recursively inline','line_number':70,'multiline':False]['text':' its inputs, so we continue scanning it','line_number':71,'multiline':False]['text':' if it does not line up, we can't inline 'v', and will just generate','line_number':75,'multiline':False]['text':' a load/move for it. However, other inputs may still appear in tree','line_number':76,'multiline':False]['text':' order so we continue the scan of the inputs.','line_number':77,'multiline':False]['text':' don't bother to scan nodes we have already determined to be inline','line_number':82,'multiline':False]['text':' namespace torch::jit::interpreter','line_number':106,'multiline':False]

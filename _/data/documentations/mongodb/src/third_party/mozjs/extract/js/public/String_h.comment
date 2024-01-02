@@ -1,0 +1,144 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':' JavaScript string operations. ','line_number':7,'multiline':True]['text':' JS::shadow::String','line_number':12,'multiline':False]['text':' MOZ_ASSERT','line_number':14,'multiline':False]['text':' MOZ_ALWAYS_INLINE','line_number':15,'multiline':False]['text':' MOZ_LIKELY','line_number':16,'multiline':False]['text':' mozilla::Maybe','line_number':17,'multiline':False]['text':' mozilla::Range','line_number':18,'multiline':False]['text':' mozilla::Span','line_number':19,'multiline':False]['text':' mozilla::Tuple','line_number':20,'multiline':False]['text':' std::copy_n','line_number':22,'multiline':False]['text':' size_t','line_number':23,'multiline':False]['text':' uint32_t, uint64_t, INT32_MAX','line_number':24,'multiline':False]['text':' JS_PUBLIC_API','line_number':26,'multiline':False]['text':' JS::UTF8Chars, JS::ConstUTF8CharsZ','line_number':28,'multiline':False]['text':' jsid, JSID_IS_STRING, JSID_TO_STRING','line_number':29,'multiline':False]['text':' JS::Handle','line_number':30,'multiline':False]['text':' JS::Latin1Char','line_number':31,'multiline':False]['text':' JS::UniquePtr','line_number':32,'multiline':False]['text':' JS::FreePolicy, JS::UniqueTwoByteChars','line_number':33,'multiline':False]['text':' JS::Value','line_number':34,'multiline':False]['text':' namespace JS','line_number':45,'multiline':False]['text':' Don't want to export data, so provide accessors for non-inline Values.','line_number':49,'multiline':False]['text':'
+ * String creation.
+ *
+ * NB: JS_NewUCString takes ownership of bytes on success, avoiding a copy;
+ * but on error (signified by null return), it leaves chars owned by the
+ * caller. So the caller must free bytes in the error case, if it has no use
+ * for them. In contrast, all the JS_New*StringCopy* functions do not take
+ * ownership of the character memory passed to them -- they copy it.
+ ','line_number':52,'multiline':True]['text':' Same as above, but when the length of asciiBytes (excluding the','line_number':125,'multiline':False]['text':' trailing null, if any) is known.','line_number':126,'multiline':False]['text':'
+ * Extracting string characters and length.
+ *
+ * While getting the length of a string is infallible, getting the chars can
+ * fail. As indicated by the lack of a JSContext parameter, there are two
+ * special cases where getting the chars is infallible:
+ *
+ * The first case is for strings that have been atomized, e.g. directly by
+ * JS_AtomizeAndPinString or implicitly because it is stored in a jsid.
+ *
+ * The second case is "linear" strings that have been explicitly prepared in a
+ * fallible context by JS_EnsureLinearString. To catch errors, a separate opaque
+ * JSLinearString type is returned by JS_EnsureLinearString and expected by
+ * JS_Get{Latin1,TwoByte}StringCharsAndLength. Note, though, that this is purely
+ * a syntactic distinction: the input and output of JS_EnsureLinearString are
+ * the same actual GC-thing. If a JSString is known to be linear,
+ * JS_ASSERT_STRING_IS_LINEAR can be used to make a debug-checked cast. Example:
+ *
+ *   // In a fallible context.
+ *   JSLinearString* lstr = JS_EnsureLinearString(cx, str);
+ *   if (!lstr) {
+ *     return false;
+ *   }
+ *   MOZ_ASSERT(lstr == JS_ASSERT_STRING_IS_LINEAR(str));
+ *
+ *   // In an infallible context, for the same 'str'.
+ *   AutoCheckCannotGC nogc;
+ *   const char16_t* chars = JS::GetTwoByteLinearStringChars(nogc, lstr)
+ *   MOZ_ASSERT(chars);
+ *
+ * Note: JS strings (including linear strings and atoms) are not
+ * null-terminated!
+ *
+ * Additionally, string characters are stored as either Latin1Char (8-bit)
+ * or char16_t (16-bit). Clients can use JS::StringHasLatin1Chars and can then
+ * call either the Latin1* or TwoByte* functions. Some functions like
+ * JS_CopyStringChars and JS_GetStringCharAt accept both Latin1 and TwoByte
+ * strings.
+ ','line_number':143,'multiline':True]['text':'*
+ * Copies the string's characters to a null-terminated char16_t buffer.
+ *
+ * Returns nullptr on OOM.
+ ','line_number':205,'multiline':True]['text':'
+ * Additional APIs that avoid fallibility when given a linear string.
+ ','line_number':232,'multiline':True]['text':'*
+ * Create a dependent string, i.e., a string that owns no character storage,
+ * but that refers to a slice of another string's chars.  Dependent strings
+ * are mutable by definition, so the thread safety comments above apply.
+ ','line_number':253,'multiline':True]['text':'*
+ * Concatenate two strings, possibly resulting in a rope.
+ * See above for thread safety comments.
+ ','line_number':263,'multiline':True]['text':'*
+ * For JS_DecodeBytes, set *dstlenp to the size of the destination buffer before
+ * the call; on return, *dstlenp contains the number of characters actually
+ * stored. To determine the necessary destination buffer size, make a sizing
+ * call that passes nullptr for dst.
+ *
+ * On errors, the functions report the error. In that case, *dstlenp contains
+ * the number of characters or bytes transferred so far.  If cx is nullptr, no
+ * error is reported on failure, and the functions simply return false.
+ *
+ * NB: This function does not store an additional zero byte or char16_t after
+ * the transcoded string.
+ ','line_number':271,'multiline':True]['text':'*
+ * Get number of bytes in the string encoding (without accounting for a
+ * terminating zero bytes. The function returns (size_t) -1 if the string
+ * can not be encoded into bytes and reports an error using cx accordingly.
+ ','line_number':287,'multiline':True]['text':'*
+ * Encode string into a buffer. The function does not stores an additional
+ * zero byte. The function returns (size_t) -1 if the string can not be
+ * encoded into bytes with no error reported. Otherwise it returns the number
+ * of bytes that are necessary to encode the string. If that exceeds the
+ * length parameter, the string will be cut and only length bytes will be
+ * written into the buffer.
+ ','line_number':294,'multiline':True]['text':'*
+ * Encode as many scalar values of the string as UTF-8 as can fit
+ * into the caller-provided buffer replacing unpaired surrogates
+ * with the REPLACEMENT CHARACTER.
+ *
+ * If JS::StringHasLatin1Chars(str) returns true, the function
+ * is guaranteed to convert the entire string if
+ * buffer.Length() >= 2 * JS_GetStringLength(str). Otherwise,
+ * the function is guaranteed to convert the entire string if
+ * buffer.Length() >= 3 * JS_GetStringLength(str).
+ *
+ * This function does not alter the representation of |str| or
+ * any |JSString*| substring that is a constituent part of it.
+ * Returns mozilla::Nothing() on OOM, without reporting an error;
+ * some data may have been written to |buffer| when this happens.
+ *
+ * If there's no OOM, returns the number of code units read and
+ * the number of code units written.
+ *
+ * The semantics of this method match the semantics of
+ * TextEncoder.encodeInto().
+ *
+ * The function does not store an additional zero byte.
+ ','line_number':307,'multiline':True]['text':'*
+ * Maximum length of a JS string. This is chosen so that the number of bytes
+ * allocated for a null-terminated TwoByte string still fits in int32_t.
+ ','line_number':337,'multiline':True]['text':'* Compute the length of a string. ','line_number':347,'multiline':True]['text':'* Compute the length of a linear string. ','line_number':352,'multiline':True]['text':'* Return true iff the given linear string uses Latin-1 storage. ','line_number':357,'multiline':True]['text':'* Return true iff the given string uses Latin-1 storage. ','line_number':362,'multiline':True]['text':'*
+ * Given a linear string known to use Latin-1 storage, return a pointer to that
+ * storage.  This pointer remains valid only as long as no GC occurs.
+ ','line_number':367,'multiline':True]['text':'*
+ * Given a linear string known to use two-byte storage, return a pointer to that
+ * storage.  This pointer remains valid only as long as no GC occurs.
+ ','line_number':376,'multiline':True]['text':'*
+ * Given an in-range index into the provided string, return the character at
+ * that index.
+ ','line_number':385,'multiline':True]['text':'*
+ * Convert an atom to a linear string.  All atoms are linear, so this
+ * operation is infallible.
+ ','line_number':398,'multiline':True]['text':'*
+ * If the provided string uses externally-managed storage, return true and set
+ * |*callbacks| to the external-string callbacks used to create it and |*chars|
+ * to a pointer to its two-byte storage.  (These pointers remain valid as long
+ * as the provided string is kept alive.)
+ ','line_number':406,'multiline':True]['text':' namespace detail','line_number':431,'multiline':False]['text':'* Convert a string to a linear string. ','line_number':433,'multiline':True]['text':'* Copy characters in |s[start..start + len]| to |dest[0..len]|. ','line_number':443,'multiline':True]['text':'*
+ * Copy characters in |s[start..start + len]| to |dest[0..len]|, lossily
+ * truncating 16-bit values to |char| if necessary.
+ ','line_number':465,'multiline':True]['text':'*
+ * Copy characters in |s[start..start + len]| to |dest[0..len]|.
+ *
+ * This function is fallible.  If you already have a linear string, use the
+ * infallible |JS::CopyLinearStringChars| above instead.
+ ','line_number':493,'multiline':True]['text':'*
+ * Copy characters in |s[start..start + len]| to |dest[0..len]|, lossily
+ * truncating 16-bit values to |char| if necessary.
+ *
+ * This function is fallible.  If you already have a linear string, use the
+ * infallible |JS::LossyCopyLinearStringChars| above instead.
+ ','line_number':511,'multiline':True]['text':' namespace JS','line_number':530,'multiline':False]['text':'* DO NOT USE, only present for Rust bindings as a temporary hack ','line_number':532,'multiline':True]['text':' js_String_h','line_number':536,'multiline':False]

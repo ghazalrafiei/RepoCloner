@@ -1,0 +1,114 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':' namespace mozilla::intl','line_number':25,'multiline':False]['text':'*
+ * This deleter class exists so that mozilla::intl::DateTimePatternGenerator
+ * can be a forward declaration, but still be used inside of a UniquePtr.
+ ','line_number':33,'multiline':True]['text':'*
+ * Stores Intl data which can be shared across compartments (but not contexts).
+ *
+ * Used for data which is expensive when computed repeatedly or is not
+ * available through ICU.
+ ','line_number':42,'multiline':True]['text':'*
+   * Information tracking the set of the supported time zone names, derived
+   * from the IANA time zone database <https://www.iana.org/time-zones>.
+   *
+   * There are two kinds of IANA time zone names: Zone and Link (denoted as
+   * such in database source files). Zone names are the canonical, preferred
+   * name for a time zone, e.g. Asia/Kolkata. Link names simply refer to
+   * target Zone names for their meaning, e.g. Asia/Calcutta targets
+   * Asia/Kolkata. That a name is a Link doesn't *necessarily* reflect a
+   * sense of deprecation: some Link names also exist partly for convenience,
+   * e.g. UTC and GMT as Link names targeting the Zone name Etc/UTC.
+   *
+   * Two data sources determine the time zone names we support: those ICU
+   * supports and IANA's zone information.
+   *
+   * Unfortunately the names ICU and IANA support, and their Link
+   * relationships from name to target, aren't identical, so we can't simply
+   * implicitly trust ICU's name handling. We must perform various
+   * preprocessing of user-provided zone names and post-processing of
+   * ICU-provided zone names to implement ECMA-402's IANA-consistent behavior.
+   *
+   * Also see <https://ssl.icu-project.org/trac/ticket/12044> and
+   * <http://unicode.org/cldr/trac/ticket/9892>.
+   ','line_number':75,'multiline':True]['text':'*
+   * As a threshold matter, available time zones are those time zones ICU
+   * supports, via ucal_openTimeZones. But ICU supports additional non-IANA
+   * time zones described in intl/icu/source/tools/tzcode/icuzones (listed in
+   * IntlTimeZoneData.cpp's |legacyICUTimeZones|) for its own backwards
+   * compatibility purposes. This set consists of ICU's supported time zones,
+   * minus all backwards-compatibility time zones.
+   ','line_number':116,'multiline':True]['text':'*
+   * IANA treats some time zone names as Zones, that ICU instead treats as
+   * Links. For example, IANA considers "America/Indiana/Indianapolis" to be
+   * a Zone and "America/Fort_Wayne" a Link that targets it, but ICU
+   * considers the former a Link that targets "America/Indianapolis" (which
+   * IANA treats as a Link).
+   *
+   * ECMA-402 requires that we respect IANA data, so if we're asked to
+   * canonicalize a time zone name in this set, we must *not* return ICU's
+   * canonicalization.
+   ','line_number':126,'multiline':True]['text':'*
+   * IANA treats some time zone names as Links to one target, that ICU
+   * instead treats as either Zones, or Links to different targets. An
+   * example of the former is "Asia/Calcutta, which IANA assigns the target
+   * "Asia/Kolkata" but ICU considers its own Zone. An example of the latter
+   * is "America/Virgin", which IANA assigns the target
+   * "America/Port_of_Spain" but ICU assigns the target "America/St_Thomas".
+   *
+   * ECMA-402 requires that we respect IANA data, so if we're asked to
+   * canonicalize a time zone name that's a key in this map, we *must* return
+   * the corresponding value and *must not* return ICU's canonicalization.
+   ','line_number':139,'multiline':True]['text':'*
+   * Precomputes the available time zone names, because it's too expensive to
+   * call ucal_openTimeZones() repeatedly.
+   ','line_number':155,'multiline':True]['text':'*
+   * Returns the validated time zone name in |result|. If the input time zone
+   * isn't a valid IANA time zone name, |result| remains unchanged.
+   ','line_number':162,'multiline':True]['text':'*
+   * Returns the canonical time zone name in |result|. If no canonical name
+   * was found, |result| remains unchanged.
+   *
+   * This method only handles time zones which are canonicalized differently
+   * by ICU when compared to IANA.
+   ','line_number':169,'multiline':True]['text':' Set of supported locales for all Intl service constructors except Collator,','line_number':195,'multiline':False]['text':' which uses its own set.','line_number':196,'multiline':False]['text':'','line_number':197,'multiline':False]['text':' UDateFormat:','line_number':198,'multiline':False]['text':' udat_[count,get]Available() return the same results as their','line_number':199,'multiline':False]['text':' uloc_[count,get]Available() counterparts.','line_number':200,'multiline':False]['text':'','line_number':201,'multiline':False]['text':' UNumberFormatter:','line_number':202,'multiline':False]['text':' unum_[count,get]Available() return the same results as their','line_number':203,'multiline':False]['text':' uloc_[count,get]Available() counterparts.','line_number':204,'multiline':False]['text':'','line_number':205,'multiline':False]['text':' UListFormatter, UPluralRules, and URelativeDateTimeFormatter:','line_number':206,'multiline':False]['text':' We're going to use ULocale availableLocales as per ICU recommendation:','line_number':207,'multiline':False]['text':' https://unicode-org.atlassian.net/browse/ICU-12756','line_number':208,'multiline':False]['text':' ucol_[count,get]Available() return different results compared to','line_number':211,'multiline':False]['text':' uloc_[count,get]Available(), we can't use |supportedLocales| here.','line_number':212,'multiline':False]['text':' CountAvailable and GetAvailable describe the signatures used for ICU API','line_number':217,'multiline':False]['text':' to determine available locales for various functionality.','line_number':218,'multiline':False]['text':'*
+   * Precomputes the available locales sets.
+   ','line_number':226,'multiline':True]['text':'*
+   * Sets |supported| to true if |locale| is supported by the requested Intl
+   * service constructor. Otherwise sets |supported| to false.
+   ','line_number':242,'multiline':True]['text':'*
+   * Returns all available locales for |kind|.
+   ','line_number':250,'multiline':True]['text':'*
+   * The case first parameter (BCP47 key "kf") allows to switch the order of
+   * upper- and lower-case characters. ICU doesn't directly provide an API
+   * to query the default case first value of a given locale, but instead
+   * requires to instantiate a collator object and then query the case first
+   * attribute (UCOL_CASE_FIRST).
+   * To avoid instantiating an additional collator object whenever we need
+   * to retrieve the default case first value of a specific locale, we
+   * compute the default case first value for every supported locale only
+   * once and then keep a list of all locales which don't use the default
+   * case first setting.
+   * There is almost no difference between lower-case first and when case
+   * first is disabled (UCOL_LOWER_FIRST resp. UCOL_OFF), so we only need to
+   * track locales which use upper-case first as their default setting.
+   *
+   * Instantiating collator objects for each available locale is slow
+   * (bug 1527879), therefore we're hardcoding the two locales using upper-case
+   * first ("da" (Danish) and "mt" (Maltese)) and only assert in debug-mode
+   * these two locales match the upper-case first locales returned by ICU. A
+   * system-ICU may support a different set of locales, therefore we're always
+   * calling into ICU to find the upper-case first locales in that case.
+   ','line_number':256,'multiline':True]['text':'*
+   * Precomputes the available locales which use upper-case first sorting.
+   ','line_number':284,'multiline':True]['text':'*
+   * Sets |isUpperFirst| to true if |locale| sorts upper-case characters
+   * before lower-case characters.
+   ','line_number':291,'multiline':True]['text':'*
+   * Get a non-owned cached instance of the DateTimePatternGenerator, which is
+   * expensive to instantiate.
+   *
+   * See: https://bugzilla.mozilla.org/show_bug.cgi?id=1549578
+   ','line_number':307,'multiline':True]['text':' namespace intl','line_number':324,'multiline':False]['text':' namespace js','line_number':326,'multiline':False]['text':' builtin_intl_SharedIntlData_h ','line_number':328,'multiline':True]

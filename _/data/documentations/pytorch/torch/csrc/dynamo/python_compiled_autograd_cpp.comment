@@ -1,0 +1,42 @@
+['text':'
+[Note: Compiled Autograd]
+
+Compiled autograd replaces the standard autograd engine by converting
+the autograd graph to an FX graph that can be torch.compiled. It caches
+this conversion using a shadow graph. We compare the new graph to the
+shadow graph by walking the two graphs simultaneously and computing a
+CacheKey for each original node to find the next edge in the shadow graph.
+Two different graphs might have a shared common prefix in the shadow
+graph, but then diverge at the first difference. Tensors, SavedVariables,
+and SymInt found stored on the nodes in the autograd graph are lifted to
+become inputs to the graph. All other properties (ints, floats, types,
+etc.) are specialized using the CacheKey and will result in landing on
+a different cache node in the shadow graph if some property differs.
+
+To interact with the (hundreds) of different autograd::Node types,
+we use a visitor pattern that walks each Node structure recursively.
+
+- The first pass, compiled_args/collect, extracts all the inputs to the
+graph and builds a CacheKey for us to specialize on.  On a cache hit,
+we stop here and this is the only pass.
+
+- On a cache miss, a second pass kicks in to extract the FX graph using
+apply_with_saved, which uses another visitor pattern.  The before()
+visitor swaps out all the Tensors, SavedVariables, and SymInt for
+fake/symbolic versions to allow tracing.  We then run the standard apply()
+method, and after() restores things to how we found them.
+
+When we see tensor hooks, we record them directly in the output graph
+without tracing into them.  We do this to avoid executing unsafe code
+at trace time.
+
+Notes:
+  - We require hooks to not change shapes of tensors.
+  - We require non-hook autograd nodes to be tracable.
+','line_number':12,'multiline':True]['text':' inplace, consumes the input hooks','line_number':61,'multiline':False]['text':' see https://github.com/pytorch/pytorch/pull/34845','line_number':71,'multiline':False]['text':' A node in the shadow graph, we follow next edges until we reach the end of','line_number':85,'multiline':False]['text':' the graph','line_number':86,'multiline':False]['text':' caller's key is in temporary memory, must copy it','line_number':95,'multiline':False]['text':' leak on shutdown','line_number':118,'multiline':False]['text':'
+    We start off by assuming everything is static, then we mark things
+    as dynamic when we see them change.  This function:
+      1) Checks for a cache hit
+      2) Updates expected_sizes to track what is dynamic
+      3) Populates call.dyn_size_inputs by filtering call.all_size_inputs
+    ','line_number':127,'multiline':True]['text':' we missed cache because static size inputs didn't match; force','line_number':161,'multiline':False]['text':' recompilation with the varying size input as dynamic','line_number':162,'multiline':False]['text':' do nothing, do not attempt to close','line_number':291,'multiline':False]['text':' update cache and gather args into `compiler_call`','line_number':337,'multiline':False]['text':' TODO(jansel): some dynamic sizes seem to be ints not symints','line_number':369,'multiline':False]['text':' cache miss, need to capture FX graph','line_number':371,'multiline':False]['text':' TODO(jansel): consider adding some of this stuff:','line_number':380,'multiline':False]['text':' guard(local_graph_task); NodeGuard ndguard(task.fn_); const auto','line_number':381,'multiline':False]['text':' opt_parent_stream = (*func).stream(c10::DeviceType::CUDA);','line_number':382,'multiline':False]['text':' c10::OptionalStreamGuard parent_stream_guard{opt_parent_stream};','line_number':383,'multiline':False]['text':' CheckpointValidGuard cpvguard(graph_task);','line_number':384,'multiline':False]['text':' at::getStepCallbacksUnlessEmpty(at::RecordScope::BACKWARD_FUNCTION);','line_number':385,'multiline':False]['text':' if (C10_UNLIKELY(step_callbacks.has_value())) { ... }','line_number':386,'multiline':False]['text':' End cache miss region','line_number':465,'multiline':False]['text':' TODO(jansel): we should release all the variables and then use a','line_number':467,'multiline':False]['text':'               boxed calling convention so activation memory can be freed','line_number':468,'multiline':False]['text':' TODO(jansel): clear grads we will overwrite below','line_number':469,'multiline':False]['text':' disable','line_number':494,'multiline':False]['text':' decref not needed due to `prior`','line_number':495,'multiline':False]['text':' enable','line_number':497,'multiline':False]['text':' namespace torch::dynamo::autograd','line_number':515,'multiline':False]

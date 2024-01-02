@@ -1,0 +1,80 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':' JS::shadow::String','line_number':17,'multiline':False]['text':' JS::shadow::Symbol','line_number':18,'multiline':False]['text':' JS::shadow::Zone','line_number':19,'multiline':False]['text':' These values are private to the JS engine. ','line_number':23,'multiline':True]['text':' Expected page size, so we could initialze ArenasPerPage at compile-time.','line_number':47,'multiline':False]['text':' The actual system page size should be queried by SystemPageSize().','line_number':48,'multiline':False]['text':'
+ * The mark bitmap has one bit per each possible cell start position. This
+ * wastes some space for larger GC things but allows us to avoid division by the
+ * cell's size when accessing the bitmap.
+ ','line_number':67,'multiline':True]['text':' The base class for all GC chunks, either in the nursery or in the tenured','line_number':76,'multiline':False]['text':' heap memory. This structure is locatable from any GC pointer by aligning to','line_number':77,'multiline':False]['text':' the chunk size.','line_number':78,'multiline':False]['text':' The store buffer for pointers from tenured things to things in this','line_number':86,'multiline':False]['text':' chunk. Will be non-null if and only if this is a nursery chunk.','line_number':87,'multiline':False]['text':' Provide quick access to the runtime from absolutely anywhere.','line_number':90,'multiline':False]['text':' Information about tenured heap chunks.','line_number':94,'multiline':False]['text':' List of free committed arenas, linked together with arena.next. ','line_number':102,'multiline':True]['text':'
+   * Decommitted pages are tracked by a bitmap in the TenuredChunkBase. We use
+   * this offset to start our search iteration close to a decommitted arena that
+   * we can allocate.
+   ','line_number':105,'multiline':True]['text':' Number of free arenas, either committed or decommitted. ','line_number':112,'multiline':True]['text':' Number of free, committed arenas. ','line_number':115,'multiline':True]['text':'
+ * Calculating ArenasPerChunk:
+ *
+ * To figure out how many Arenas will fit in a chunk we need to know how much
+ * extra space is available after we allocate the header data. This is a problem
+ * because the header size depends on the number of arenas in the chunk.
+ *
+ * The two dependent fields are bitmap and decommittedPages. bitmap needs
+ * ArenaBitmapBytes bytes per arena and decommittedPages needs one bit per
+ * page.
+ *
+ * We can calculate an approximate value by dividing the number of bits of free
+ * space in the chunk by the number of bits needed per arena. This is an
+ * approximation because it doesn't take account of the fact that the variable
+ * sized fields must be rounded up to a whole number of words, or any padding
+ * the compiler adds between fields.
+ *
+ * Fortunately, for the chunk and arena size parameters we use this
+ * approximation turns out to be correct. If it were not we might need to adjust
+ * the arena count down by one to allow more space for the padding.
+ ','line_number':119,'multiline':True]['text':' Define a macro for the expected number of arenas so its value appears in the','line_number':162,'multiline':False]['text':' error message if the assertion fails.','line_number':163,'multiline':False]['text':' Mark bitmaps are atomic because they can be written by gray unmarking on the','line_number':173,'multiline':False]['text':' main thread while read by sweeping on a background thread. The former does','line_number':174,'multiline':False]['text':' not affect the result of the latter.','line_number':175,'multiline':False]['text':'
+ * Live objects are marked black or gray. Everything reachable from a JS root is
+ * marked black. Objects marked gray are eligible for cycle collection.
+ *
+ *    BlackBit:     GrayOrBlackBit:  Color:
+ *       0               0           white
+ *       0               1           gray
+ *       1               0           black
+ *       1               1           black
+ ','line_number':178,'multiline':True]['text':' Mark colors. Order is important here: the greater value the 'more marked' a','line_number':190,'multiline':False]['text':' cell is.','line_number':191,'multiline':False]['text':' Mark bitmap for a tenured heap chunk.','line_number':194,'multiline':False]['text':' The following are not exported and are defined in gc/Heap.h:','line_number':202,'multiline':False]['text':' Decommit bitmap for a heap chunk.','line_number':219,'multiline':False]['text':' Base class containing data members for a tenured heap chunk.','line_number':222,'multiline':False]['text':'
+ * We sometimes use an index to refer to a cell in an arena. The index for a
+ * cell is found by dividing by the cell alignment so not all indices refer to
+ * valid cells.
+ ','line_number':233,'multiline':True]['text':' Hardcoded offsets into Arena class.','line_number':254,'multiline':False]['text':' The first word of a GC thing has certain requirements from the GC and is used','line_number':259,'multiline':False]['text':' to store flags in the low bits.','line_number':260,'multiline':False]['text':' The first word can be used to store JSClass pointers for some thing kinds, so','line_number':263,'multiline':False]['text':' these must be suitably aligned.','line_number':264,'multiline':False]['text':' When downcasting, ensure we are actually the right type. ','line_number':268,'multiline':True]['text':' namespace gc ','line_number':278,'multiline':True]['text':' namespace js ','line_number':279,'multiline':True]['text':' doing nothing with the GC heap','line_number':284,'multiline':False]['text':' tracing the GC heap without collecting, e.g.','line_number':285,'multiline':False]['text':' IterateCompartments()','line_number':286,'multiline':False]['text':' doing a GC of the major heap','line_number':287,'multiline':False]['text':' doing a GC of the minor heap (nursery)','line_number':288,'multiline':False]['text':' in the "Unlink" phase of cycle collection','line_number':289,'multiline':False]['text':'
+ * This list enumerates the different types of conceptual stacks we have in
+ * SpiderMonkey. In reality, they all share the C stack, but we allow different
+ * stack limits depending on the type of code running.
+ ','line_number':323,'multiline':True]['text':' C++, such as the GC, running on behalf of the VM.','line_number':329,'multiline':False]['text':' Script running with trusted principals.','line_number':330,'multiline':False]['text':' Script running with untrusted principals.','line_number':331,'multiline':False]['text':'
+ * Default maximum size for the generational nursery in bytes. This is the
+ * initial value. In the browser this configured by the
+ * javascript.options.mem.nursery.max_kb pref.
+ ','line_number':335,'multiline':True]['text':' Default maximum heap size in bytes to pass to JS_NewContext(). ','line_number':342,'multiline':True]['text':'*
+ * A GC pointer, tagged with the trace kind.
+ *
+ * In general, a GC pointer should be stored with an exact type. This class
+ * is for use when that is not possible because a single pointer must point
+ * to several kinds of GC thing.
+ ','line_number':345,'multiline':True]['text':' Construction from a void* and trace kind.','line_number':356,'multiline':False]['text':' Automatically construct a null GCCellPtr from nullptr.','line_number':360,'multiline':False]['text':' Construction from an explicit type.','line_number':364,'multiline':False]['text':' Allow GCCellPtr to be used in a boolean context.','line_number':382,'multiline':False]['text':' Simplify checks to the kind.','line_number':388,'multiline':False]['text':' Conversions to more specific types must match the kind. Access to','line_number':394,'multiline':False]['text':' further refined types is not allowed directly from a GCCellPtr.','line_number':395,'multiline':False]['text':' We can't use static_cast here, because the fact that JSObject','line_number':399,'multiline':False]['text':' inherits from js::gc::Cell is not part of the public API.','line_number':400,'multiline':False]['text':' Return a pointer to the cell this |GCCellPtr| refers to, or |nullptr|.','line_number':404,'multiline':False]['text':' (It would be more symmetrical with |to| for this to return a |Cell&|, but','line_number':405,'multiline':False]['text':' the result can be |nullptr|, and null references are undefined behavior.)','line_number':406,'multiline':False]['text':' The CC's trace logger needs an identity that is XPIDL serializable.','line_number':411,'multiline':False]['text':' Inline mark bitmap access requires direct pointer arithmetic.','line_number':415,'multiline':False]['text':' Store trace in the bottom bits of pointer for common kinds.','line_number':438,'multiline':False]['text':' Unwraps the given GCCellPtr, calls the functor |f| with a template argument','line_number':451,'multiline':False]['text':' of the actual type of the pointer, and returns the result.','line_number':452,'multiline':False]['text':' Unwraps the given GCCellPtr and calls the functor |f| with a template','line_number':466,'multiline':False]['text':' argument of the actual type of the pointer. Doesn't return anything.','line_number':467,'multiline':False]['text':' This function doesn't do anything but is supplied for symmetry with other','line_number':470,'multiline':False]['text':' MapGCThingTyped/ApplyGCThingTyped implementations that have to wrap the','line_number':471,'multiline':False]['text':' functor to return a dummy value that is ignored.','line_number':472,'multiline':False]['text':' namespace JS ','line_number':476,'multiline':True]['text':' These are defined in the toplevel namespace instead of within JS so that','line_number':478,'multiline':False]['text':' they won't shadow other operator== overloads (see bug 1456512.)','line_number':479,'multiline':False]['text':' static ','line_number':492,'multiline':True]['text':' Note: the JIT pre-barrier trampolines inline this code. Update','line_number':497,'multiline':False]['text':' MacroAssembler::emitPreBarrierFastPath code too when making changes here!','line_number':498,'multiline':False]['text':' Return true if GrayOrBlackBit is set and BlackBit is not set.','line_number':530,'multiline':False]['text':' namespace detail ','line_number':570,'multiline':True]['text':' Allow use before the compiler knows the derivation of JSObject, JSString, and','line_number':585,'multiline':False]['text':' JS::BigInt.','line_number':586,'multiline':False]['text':' namespace gc ','line_number':618,'multiline':True]['text':' namespace js ','line_number':619,'multiline':True]['text':'
+ * Returns true when writes to GC thing pointers (and reads from weak pointers)
+ * must call an incremental barrier. This is generally only true when running
+ * mutator code in-between GC slices. At other times, the barrier may be elided
+ * for performance.
+ ','line_number':665,'multiline':True]['text':'
+ * Notify the GC that a reference to a JSObject is about to be overwritten.
+ * This method must be called if IsIncrementalBarrierNeeded.
+ ','line_number':673,'multiline':True]['text':'
+ * Notify the GC that a reference to a tenured GC cell is about to be
+ * overwritten. This method must be called if IsIncrementalBarrierNeeded.
+ ','line_number':679,'multiline':True]['text':'*
+ * Unsets the gray bit for anything reachable from |thing|. |kind| should not be
+ * JS::TraceKind::Shape. |thing| should be non-null. The return value indicates
+ * if anything was unmarked.
+ ','line_number':685,'multiline':True]['text':' namespace JS','line_number':692,'multiline':False]['text':' TODO: I'd like to assert !RuntimeHeapIsBusy() here but this gets','line_number':700,'multiline':False]['text':' called while we are tracing the heap, e.g. during memory reporting','line_number':701,'multiline':False]['text':' (see bug 1313318).','line_number':702,'multiline':False]['text':' GC things residing in the nursery cannot be gray: they have no mark bits.','line_number':705,'multiline':False]['text':' All live objects in the nursery are moved to tenured at the beginning of','line_number':706,'multiline':False]['text':' each GC slice, so the gray marker never sees nursery things.','line_number':707,'multiline':False]['text':' There's nothing to do for permanent GC things that might be owned by','line_number':714,'multiline':False]['text':' another runtime.','line_number':715,'multiline':False]['text':' This function does not handle updating nursery pointers. Raw JSObject','line_number':734,'multiline':False]['text':' pointers should be updated separately or replaced with','line_number':735,'multiline':False]['text':' JS::Heap<JSObject*> which handles this automatically.','line_number':736,'multiline':False]['text':' namespace gc','line_number':751,'multiline':False]['text':' namespace js','line_number':752,'multiline':False]['text':'
+ * This should be called when an object that is marked gray is exposed to the JS
+ * engine (by handing it to running JS code or writing it into live JS
+ * data). During incremental GC, since the gray bits haven't been computed yet,
+ * we conservatively mark the object black.
+ ','line_number':756,'multiline':True]['text':' namespace JS ','line_number':768,'multiline':True]['text':' js_HeapAPI_h ','line_number':770,'multiline':True]

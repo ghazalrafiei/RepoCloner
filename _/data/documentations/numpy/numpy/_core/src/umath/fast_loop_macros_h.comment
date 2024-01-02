@@ -1,0 +1,73 @@
+['text':'*
+ * Macros to help build fast ufunc inner loops.
+ *
+ * These expect to have access to the arguments of a typical ufunc loop,
+ *
+ *     char **args
+ *     npy_intp const *dimensions
+ *     npy_intp const *steps
+ ','line_number':1,'multiline':True]['text':'
+ * largest simd vector size in bytes numpy supports
+ * it is currently a extremely large value as it is only used for memory
+ * overlap checks
+ ','line_number':17,'multiline':True]['text':' Enough for compiler unroll','line_number':23,'multiline':False]['text':'
+ * MAX_STEP_SIZE is used to determine if we need to use SIMD version of the ufunc.
+ * Very large step size can be as slow as processing it using scalar. The
+ * value of 2097152 ( = 2MB) was chosen using 2 considerations:
+ * 1) Typical linux kernel page size is 4Kb, but sometimes it could also be 2MB
+ *    which is == 2097152 Bytes. For a step size as large as this, surely all
+ *    the loads/stores of gather/scatter instructions falls on 16 different pages
+ *    which one would think would slow down gather/scatter instructions.
+ * 2) It additionally satisfies MAX_STEP_SIZE*16/esize < NPY_MAX_INT32 which
+ *    allows us to use i32 version of gather/scatter (as opposed to the i64 version)
+ *    without problems (step larger than NPY_MAX_INT32*esize/16 would require use of
+ *    i64gather/scatter). esize = element size = 4/8 bytes for float/double.
+ ','line_number':28,'multiline':True]['text':'*
+ * Simple unoptimized loop macros that iterate over the ufunc arguments in
+ * parallel.
+ * @{
+ ','line_number':49,'multiline':True]['text':'* (<ignored>) -> (op1) ','line_number':55,'multiline':True]['text':'* (ip1) -> (op1) ','line_number':63,'multiline':True]['text':'* (ip1) -> (op1, op2) ','line_number':71,'multiline':True]['text':'* (ip1, ip2) -> (op1) ','line_number':88,'multiline':True]['text':'* (ip1, ip2) -> (op1, op2) ','line_number':93,'multiline':True]['text':'* (ip1, ip2, ip3) -> (op1) ','line_number':101,'multiline':True]['text':'* @} ','line_number':109,'multiline':True]['text':' unary loop input and output contiguous ','line_number':111,'multiline':True]['text':'
+ * Make sure dimensions is non-zero with an assert, to allow subsequent code
+ * to ignore problems of accessing invalid memory
+ ','line_number':117,'multiline':True]['text':' input contiguous (for binary reduces only) ','line_number':127,'multiline':True]['text':' binary loop input and output contiguous ','line_number':131,'multiline':True]['text':' binary loop input and output contiguous with first scalar ','line_number':136,'multiline':True]['text':' binary loop input and output contiguous with second scalar ','line_number':141,'multiline':True]['text':'
+ * loop with contiguous specialization
+ * op should be the code working on `tin in` and
+ * storing the result in `tout *out`
+ * combine with NPY_GCC_OPT_3 to allow autovectorization
+ * should only be used where its worthwhile to avoid code bloat
+ ','line_number':146,'multiline':True]['text':' condition allows compiler to optimize the generic macro ','line_number':162,'multiline':True]['text':'
+ * loop with contiguous specialization
+ * op should be the code working on `tin in1`, `tin in2` and
+ * storing the result in `tout *out`
+ * combine with NPY_GCC_OPT_3 to allow autovectorization
+ * should only be used where its worthwhile to avoid code bloat
+ ','line_number':177,'multiline':True]['text':'
+ * unfortunately gcc 6/7 regressed and we need to give it additional hints to
+ * vectorize inplace operations (PR80198)
+ * must only be used after op1 == ip1 or ip2 has been checked
+ * TODO: using ivdep might allow other compilers to vectorize too
+ ','line_number':192,'multiline':True]['text':' PR80198 again, scalar works without the pragma ','line_number':221,'multiline':True]['text':' condition allows compiler to optimize the generic macro ','line_number':232,'multiline':True]['text':'
+ * op should be the code working on `TYPE in2` and
+ * reading/storing the result in `TYPE *io1`
+ ','line_number':280,'multiline':True]['text':' condition allows compiler to optimize the generic macro ','line_number':291,'multiline':True]['text':'
+ * stride is equal to element size and input and destination are equal or
+ * don't overlap within one register. The check of the steps against
+ * esize also quarantees that steps are >= 0.
+ ','line_number':315,'multiline':True]['text':'
+ * Avoid using SIMD for very large step sizes for several reasons:
+ * 1) Supporting large step sizes requires use of i64gather/scatter_ps instructions,
+ *    in which case we need two i64gather instructions and an additional vinsertf32x8
+ *    instruction to load a single zmm register (since one i64gather instruction
+ *    loads into a ymm register). This is not ideal for performance.
+ * 2) Gather and scatter instructions can be slow when the loads/stores
+ *    cross page boundaries.
+ *
+ * We instead rely on i32gather/scatter_ps instructions which use a 32-bit index
+ * element. The index needs to be < INT_MAX to avoid overflow. MAX_STEP_SIZE
+ * ensures this. The condition also requires that the input and output arrays
+ * should have no overlap in memory.
+ ','line_number':326,'multiline':True]['text':'
+ * 1) Output should be contiguous, can handle strided input data
+ * 2) Input step should be smaller than MAX_STEP_SIZE for performance
+ * 3) Input and output arrays should have no overlap in memory
+ ','line_number':354,'multiline':True]['text':' align var to alignment ','line_number':394,'multiline':True]['text':' _NPY_UMATH_FAST_LOOP_MACROS_H_ ','line_number':408,'multiline':True]

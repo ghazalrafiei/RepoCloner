@@ -1,0 +1,54 @@
+['text':'*
+ * @brief A convenient base class for C2 operators with DNNLOWP engine.
+ *        DNNLOWP ops give flexibility on the type of input/output blobs.
+ *        For example, some inputs can be the usual fp32 tensor and they will be
+ *        quantized before doing actual computation.
+ *        Otherwise, the inputs should be pre-quantized Int8TensorCPU.
+ *        A few constraints: when the weight is pre-quantized if and only if the
+ *        bias is also pre-quantized.
+ *
+ *        static quantization vs. dynamic quantization
+ *        When Y_scale and Y_zero_point (optional with default = 0) arg is set,
+ *        and dequantize_output is false, we do static quantization, meaning
+ *        we're using the same pre-computed scale and zero_point for the output
+ *        activation tensor.
+ *        Otherwise, we do dynamic quantization by looking at the min/max of
+ *        output activation tensor for each batch.
+ *        Y_scale and Y_zero_point arguments are used for static quantization.
+ *        scale and zero_point of Int8TensorCPU is used for carrying
+ *        quantization information across operators both in static and dynamic
+ *        quantization. This means scale and zero_point of Int8TensorCPU is
+ *        valid only for the current batch and will be reset in the next batch
+ *        when dynamic quantization is used.
+ *
+ *        C2 operators with DNNLOWP engine have the following arguments:
+ *        - dequantize_output (default=false): when true, output is dequantized
+ *          as fp32. Useful when we're only quantizing individual operators
+ *          rather than doing end-to-end quantization. Conv operators don't
+            support dequantize_output option as an exception because doing so
+            complicate the implementation significantly and having a separate
+            Dequantize operator doesn't add much overhead because Conv ops are
+            usually used in deep networks where regions of quantization are
+            long chains.
+ *        - followed_by (default=null): can be relu, sigmoid, or tanh. When
+ *          specified, the current operator is only followed by relu, sigmoid,
+ *          or tanh, and this fact can be used for more accurate output
+ *          quantization.
+ *        - measure_quantization_error (default=false): when true, L2 error
+ *          with respect to the baseline C2 operator in fp32 is reported.
+ *          WARNING: turning this option will make performance very slow and
+ *          this option is intended for debugging accuracy issues.
+ *
+ *        For the following quantization method related options, please refer
+ *        to caffe2/quantization/server/dnnlowp.cc for more details.
+ *
+ *        - activation_quantization_precision (default=8)
+ *        - weight_quantization_precision (default=8)
+ *        - requantization_multiplier_precision (default=32)
+ *        - eltwise_quantization_precision (default=16)
+ *        - force_scale_power_of_two (default=0)
+ *        - preserve_activation_sparsity (default=0)
+ *        - preserve_weight_sparsity (default=0)
+ *        - activation_quantization_kind (default=min_max)
+ *        - weight_quantization_kind (default=min_max)
+ ','line_number':22,'multiline':True]['text':' If dequantize_output_ is true and relu is not fused,','line_number':159,'multiline':False]['text':' dnnlowp op won't clip negative values. Do it here.','line_number':160,'multiline':False]['text':' Ideally, this should be done in constructor but any modification of','line_number':203,'multiline':False]['text':' arguments in ParseDNNLowPOperatorArguments will be ignored if we call','line_number':204,'multiline':False]['text':' this from constructor.','line_number':205,'multiline':False]['text':' Make sure all derived classes call this "early enough" so that they','line_number':206,'multiline':False]['text':' use correct parameters.','line_number':207,'multiline':False]['text':' To measure quantization error, run ref fp32 impl.','line_number':232,'multiline':False]['text':' This doesn't really belong here but we need to run the reference fp32','line_number':233,'multiline':False]['text':' implementation before quantized computation of some inplace operators','line_number':234,'multiline':False]['text':' will overwrite their inputs.','line_number':235,'multiline':False]['text':' TODO: this is only needed when dequantize_output_ == false but leave','line_number':240,'multiline':False]['text':' as it is now because some code relies on out_qparams_ initialized even','line_number':241,'multiline':False]['text':' though it never actually uses it.','line_number':242,'multiline':False]['text':' Buffer to store quantized output temporarily','line_number':270,'multiline':False]['text':' when we output dequantized values.','line_number':271,'multiline':False]['text':' using override ','line_number':279,'multiline':True]['text':' using override ','line_number':280,'multiline':True]['text':' using override ','line_number':281,'multiline':True]['text':' using override ','line_number':282,'multiline':True]['text':' using override ','line_number':283,'multiline':True]['text':' using override ','line_number':284,'multiline':True]['text':' using override ','line_number':285,'multiline':True]['text':' using override ','line_number':286,'multiline':True]['text':' using override ','line_number':287,'multiline':True]['text':' using override ','line_number':288,'multiline':True]['text':' using override ','line_number':289,'multiline':True]['text':' using override ','line_number':290,'multiline':True]['text':' using override ','line_number':291,'multiline':True]['text':' using override ','line_number':292,'multiline':True]['text':' namespace caffe2','line_number':318,'multiline':False]

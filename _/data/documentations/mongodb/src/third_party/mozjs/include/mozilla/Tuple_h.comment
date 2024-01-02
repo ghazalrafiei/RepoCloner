@@ -1,0 +1,128 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]['text':' A variadic tuple class. ','line_number':7,'multiline':True]['text':'
+ * A helper class that allows passing around multiple variadic argument lists
+ * by grouping them.
+ ','line_number':24,'multiline':True]['text':'
+ * CheckConvertibility checks whether each type in a source pack of types
+ * is convertible to the corresponding type in a target pack of types.
+ *
+ * It is intended to be invoked like this:
+ *   CheckConvertibility<Group<SourceTypes...>, Group<TargetTypes...>>
+ * 'Group' is used to separate types in the two packs (otherwise if we just
+ * wrote 'CheckConvertibility<SourceTypes..., TargetTypes...', it couldn't
+ * know where the first pack ends and the second begins).
+ *
+ * Note that we need to check explicitly that the two packs are of the same
+ * size, because attempting to simultaneously expand two parameter packs
+ * is an error (and it would be a hard error, because it wouldn't be in the
+ * immediate context of the caller).
+ ','line_number':31,'multiline':True]['text':'
+ * Helper type for Tie(args...) to allow ignoring specific elements
+ * during Tie unpacking.  Supports assignment from any type.
+ *
+ * Not for direct usage; instead, use mozilla::Ignore in calls to Tie.
+ ','line_number':70,'multiline':True]['text':'
+ * TupleImpl is a helper class used to implement mozilla::Tuple.
+ * It represents one node in a recursive inheritance hierarchy.
+ * 'Index' is the 0-based index of the tuple element stored in this node;
+ * 'Elements...' are the types of the elements stored in this node and its
+ * base classes.
+ *
+ * Example:
+ *   Tuple<int, float, char> inherits from
+ *   TupleImpl<0, int, float, char>, which stores the 'int' and inherits from
+ *   TupleImpl<1, float, char>, which stores the 'float' and inherits from
+ *   TupleImpl<2, char>, which stores the 'char' and inherits from
+ *   TupleImpl<3>, which stores nothing and terminates the recursion.
+ *
+ * The purpose of the 'Index' parameter is to allow efficient index-based
+ * access to a tuple element: given a tuple, and an index 'I' that we wish to
+ * access, we can cast the tuple to the base which stores the I'th element
+ * by performing template argument deduction against 'TupleImpl<I, E...>',
+ * where 'I' is specified explicitly and 'E...' is deduced (this is what the
+ * non-member 'Get<N>(t)' function does).
+ *
+ * This implementation strategy is borrowed from libstdc++'s std::tuple
+ * implementation.
+ ','line_number':83,'multiline':True]['text':'
+ * The base case of the inheritance recursion (and also the implementation
+ * of an empty tuple).
+ ','line_number':110,'multiline':True]['text':'
+ * One node of the recursive inheritance hierarchy. It stores the element at
+ * index 'Index' of a tuple, of type 'HeadT', and inherits from the nodes
+ * that store the remaining elements, of types 'TailT...'.
+ ','line_number':122,'multiline':True]['text':' Accessors for the head and the tail.','line_number':132,'multiline':False]['text':' These are static, because the intended usage is for the caller to,','line_number':133,'multiline':False]['text':' given a tuple, obtain the type B of the base class which stores the','line_number':134,'multiline':False]['text':' element of interest, and then call B::Head(tuple) to access it.','line_number':135,'multiline':False]['text':' (Tail() is mostly for internal use, but is exposed for consistency.)','line_number':136,'multiline':False]['text':' Construct from const references to the elements.','line_number':144,'multiline':False]['text':' Construct from objects that are convertible to the elements.','line_number':148,'multiline':False]['text':' This constructor is enabled only when the argument types are actually','line_number':149,'multiline':False]['text':' convertible to the element types, otherwise it could become a better','line_number':150,'multiline':False]['text':' match for certain invocations than the copy constructor.','line_number':151,'multiline':False]['text':' Copy and move constructors.','line_number':160,'multiline':False]['text':' We'd like to use '= default' to implement these, but MSVC 2013's support','line_number':161,'multiline':False]['text':' for '= default' is incomplete and this doesn't work.','line_number':162,'multiline':False]['text':' Assign from a tuple whose elements are convertible to the elements','line_number':169,'multiline':False]['text':' of this tuple.','line_number':170,'multiline':False]['text':' Copy and move assignment operators.','line_number':190,'multiline':False]['text':' The element stored at this index in the tuple.','line_number':224,'multiline':False]['text':' namespace detail','line_number':227,'multiline':False]['text':'*
+ * Tuple is a class that stores zero or more objects, whose types are specified
+ * as template parameters. It can be thought of as a generalization of
+ * std::pair, (which can be thought of as a 2-tuple).
+ *
+ * Tuple allows index-based access to its elements (with the index having to be
+ * known at compile time) via the non-member function 'Get<N>(tuple)'.
+ ','line_number':229,'multiline':True]['text':' The constructors and assignment operators here are simple wrappers','line_number':242,'multiline':False]['text':' around those in TupleImpl.','line_number':243,'multiline':False]['text':' Here, we can't just use 'typename... OtherElements' because MSVC will give','line_number':247,'multiline':False]['text':' a warning "C4520: multiple default constructors specified" (even if no one','line_number':248,'multiline':False]['text':' actually instantiates the constructor with an empty parameter pack -','line_number':249,'multiline':False]['text':' that's probably a bug) and we compile with warnings-as-errors.','line_number':250,'multiline':False]['text':'*
+ * Specialization of Tuple for two elements.
+ * This is created to support construction and assignment from a CompactPair or
+ * std::pair.
+ ','line_number':288,'multiline':True]['text':' The constructors and assignment operators here are simple wrappers','line_number':298,'multiline':False]['text':' around those in TupleImpl.','line_number':299,'multiline':False]['text':'*
+ * Specialization of Tuple for zero arguments.
+ * This is necessary because if the primary template were instantiated with
+ * an empty parameter pack, the 'Tuple(Elements...)' constructors would
+ * become illegal overloads of the default constructor.
+ ','line_number':364,'multiline':True]['text':'
+ * Helper functions for implementing Get<N>(tuple).
+ * These functions take a TupleImpl<Index, Elements...>, with Index being
+ * explicitly specified, and Elements being deduced. By passing a Tuple
+ * object as argument, template argument deduction will do its magic and
+ * cast the tuple to the base class which stores the element at Index.
+ ','line_number':375,'multiline':True]['text':' Const reference version.','line_number':383,'multiline':False]['text':' Non-const reference version.','line_number':390,'multiline':False]['text':' namespace detail','line_number':397,'multiline':False]['text':'*
+ * Index-based access to an element of a tuple.
+ * The syntax is Get<Index>(tuple). The index is zero-based.
+ *
+ * Example:
+ *
+ * Tuple<int, float, char> t;
+ * ...
+ * float f = Get<1>(t);
+ ','line_number':399,'multiline':True]['text':' Non-const reference version.','line_number':410,'multiline':False]['text':' Const reference version.','line_number':417,'multiline':False]['text':' Rvalue reference version.','line_number':424,'multiline':False]['text':' We need a 'mozilla::' qualification here to avoid','line_number':428,'multiline':False]['text':' name lookup only finding the current function.','line_number':429,'multiline':False]['text':'*
+ * Helpers which call a function for each member of the tuple in turn. This will
+ * typically be used with a lambda function with an `auto&` argument:
+ *
+ *   Tuple<Foo*, Bar*, SmartPtr<Baz>> tuple{a, b, c};
+ *
+ *   ForEach(tuple, [](auto& aElem) {
+ *     aElem = nullptr;
+ *   });
+ ','line_number':433,'multiline':True]['text':'*
+ * A convenience function for constructing a tuple out of a sequence of
+ * values without specifying the type of the tuple.
+ * The type of the tuple is deduced from the types of its elements.
+ *
+ * Example:
+ *
+ * auto tuple = MakeTuple(42, 0.5f, 'c');  // has type Tuple<int, float, char>
+ ','line_number':465,'multiline':True]['text':'*
+ * A helper placholder to allow ignoring specific elements during Tie unpacking.
+ * Can be used with any type and any number of elements in a call to Tie.
+ *
+ * Usage of Ignore with Tie is equivalent to using std::ignore with
+ * std::tie.
+ *
+ * Example:
+ *
+ * int i;
+ * float f;
+ * char c;
+ * Tie(i, Ignore, f, c, Ignore) = FunctionThatReturnsATuple();
+ ','line_number':479,'multiline':True]['text':'*
+ * A convenience function for constructing a tuple of references to a
+ * sequence of variables. Since assignments to the elements of the tuple
+ * "go through" to the referenced variables, this can be used to "unpack"
+ * a tuple into individual variables.
+ *
+ * Example:
+ *
+ * int i;
+ * float f;
+ * char c;
+ * Tie(i, f, c) = FunctionThatReturnsATuple();
+ ','line_number':495,'multiline':True]['text':' namespace mozilla','line_number':513,'multiline':False]['text':' mozilla_Tuple_h ','line_number':515,'multiline':True]

@@ -1,0 +1,82 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':'*
+ * [SMDOC] ExclusiveData API
+ *
+ * A mutual exclusion lock class.
+ *
+ * `ExclusiveData` provides an RAII guard to automatically lock and unlock when
+ * accessing the protected inner value.
+ *
+ * Unlike the STL's `std::mutex`, the protected value is internal to this
+ * class. This is a huge win: one no longer has to rely on documentation to
+ * explain the relationship between a lock and its protected data, and the type
+ * system can enforce[0] it.
+ *
+ * For example, suppose we have a counter class:
+ *
+ *     class Counter
+ *     {
+ *         int32_t i;
+ *
+ *       public:
+ *         void inc(int32_t n) { i += n; }
+ *     };
+ *
+ * If we share a counter across threads with `std::mutex`, we rely solely on
+ * comments to document the relationship between the lock and its data, like
+ * this:
+ *
+ *     class SharedCounter
+ *     {
+ *         // Remember to acquire `counter_lock` when accessing `counter`,
+ *         // pretty please!
+ *         Counter counter;
+ *         std::mutex counter_lock;
+ *
+ *       public:
+ *         void inc(size_t n) {
+ *             // Whoops, forgot to acquire the lock! Off to the races!
+ *             counter.inc(n);
+ *         }
+ *     };
+ *
+ * In contrast, `ExclusiveData` wraps the protected value, enabling the type
+ * system to enforce that we acquire the lock before accessing the value:
+ *
+ *     class SharedCounter
+ *     {
+ *         ExclusiveData<Counter> counter;
+ *
+ *       public:
+ *         void inc(size_t n) {
+ *             auto guard = counter.lock();
+ *             guard->inc(n);
+ *         }
+ *     };
+ *
+ * The API design is based on Rust's `std::sync::Mutex<T>` type.
+ *
+ * [0]: Of course, we don't have a borrow checker in C++, so the type system
+ *      cannot guarantee that you don't stash references received from
+ *      `ExclusiveData<T>::Guard` somewhere such that the reference outlives the
+ *      guard's lifetime and therefore becomes invalid. To help avoid this last
+ *      foot-gun, prefer using the guard directly! Do not store raw references
+ *      to the protected value in other structures!
+ ','line_number':20,'multiline':True]['text':'*
+   * Create a new `ExclusiveData`, with perfect forwarding of the protected
+   * value.
+   ','line_number':97,'multiline':True]['text':'*
+   * Create a new `ExclusiveData`, constructing the protected value in place.
+   ','line_number':105,'multiline':True]['text':'*
+   * An RAII class that provides exclusive access to a `ExclusiveData<T>`'s
+   * protected inner `T` value.
+   *
+   * Note that this is intentionally marked MOZ_STACK_CLASS instead of
+   * MOZ_RAII_CLASS, as the latter disallows moves and returning by value, but
+   * Guard utilizes both.
+   ','line_number':123,'multiline':True]['text':'*
+   * Access the protected inner `T` value for exclusive reading and writing.
+   ','line_number':173,'multiline':True]['text':' namespace js','line_number':223,'multiline':False]['text':' threading_ExclusiveData_h','line_number':225,'multiline':False]

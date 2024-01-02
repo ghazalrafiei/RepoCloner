@@ -1,0 +1,51 @@
+['text':' inffast.c -- fast decoding
+ * Copyright (C) 1995-2017 Mark Adler
+ * For conditions of distribution and use, see copyright notice in zlib.h
+ ','line_number':1,'multiline':True]['text':'
+   Decode literal, length, and distance codes and write out the resulting
+   literal and match bytes until either not enough input or output is
+   available, an end-of-block is encountered, or a data error is encountered.
+   When large enough input and output buffers are supplied to inflate(), for
+   example, a 16K input buffer and a 64K output buffer, more than 95% of the
+   inflate execution time is spent in this routine.
+
+   Entry assumptions:
+
+        state->mode == LEN
+        strm->avail_in >= 6
+        strm->avail_out >= 258
+        start >= strm->avail_out
+        state->bits < 8
+
+   On return, state->mode is one of:
+
+        LEN -- ran out of enough output space or enough available input
+        TYPE -- reached end of block code, inflate() to interpret next block
+        BAD -- error in block data
+
+   Notes:
+
+    - The maximum input bits used by a length/distance pair is 15 bits for the
+      length code, 5 bits for the length extra, 15 bits for the distance code,
+      and 13 bits for the distance extra.  This totals 48 bits, or six bytes.
+      Therefore if strm->avail_in >= 6, then there is enough input to avoid
+      checking for available input while decoding.
+
+    - The maximum bytes that a single length/distance pair can output is 258
+      bytes, which is the maximum length that can be coded.  inflate_fast()
+      requires strm->avail_out >= 258 for each loop to avoid checking for
+      output space.
+ ','line_number':15,'multiline':True]['text':' local strm->next_in ','line_number':52,'multiline':True]['text':' have enough input while in < last ','line_number':53,'multiline':True]['text':' local strm->next_out ','line_number':54,'multiline':True]['text':' inflate()'s initial strm->next_out ','line_number':55,'multiline':True]['text':' while out < end, enough space available ','line_number':56,'multiline':True]['text':' maximum distance from zlib header ','line_number':58,'multiline':True]['text':' window size or zero if not using window ','line_number':60,'multiline':True]['text':' valid bytes in the window ','line_number':61,'multiline':True]['text':' window write index ','line_number':62,'multiline':True]['text':' allocated sliding window, if wsize != 0 ','line_number':63,'multiline':True]['text':' local strm->hold ','line_number':64,'multiline':True]['text':' local strm->bits ','line_number':65,'multiline':True]['text':' local strm->lencode ','line_number':66,'multiline':True]['text':' local strm->distcode ','line_number':67,'multiline':True]['text':' mask for first level of length codes ','line_number':68,'multiline':True]['text':' mask for first level of distance codes ','line_number':69,'multiline':True]['text':' retrieved table entry ','line_number':70,'multiline':True]['text':' code bits, operation, extra bits, or ','line_number':71,'multiline':True]['text':'  window position, window bytes to copy ','line_number':72,'multiline':True]['text':' match length, unused bytes ','line_number':73,'multiline':True]['text':' match distance ','line_number':74,'multiline':True]['text':' where to copy match from ','line_number':75,'multiline':True]['text':' copy state to local variables ','line_number':77,'multiline':True]['text':' decode literals and length/distances until end-of-block or not enough
+       input data or output space ','line_number':98,'multiline':True]['text':' literal ','line_number':113,'multiline':True]['text':' length base ','line_number':119,'multiline':True]['text':' number of extra bits ','line_number':121,'multiline':True]['text':' distance base ','line_number':144,'multiline':True]['text':' number of extra bits ','line_number':146,'multiline':True]['text':' max distance in output ','line_number':166,'multiline':True]['text':' see if copy from window ','line_number':167,'multiline':True]['text':' distance back in window ','line_number':168,'multiline':True]['text':' very common case ','line_number':197,'multiline':True]['text':' some from window ','line_number':199,'multiline':True]['text':' rest from output ','line_number':204,'multiline':True]['text':' wrap around window ','line_number':207,'multiline':True]['text':' some from end of window ','line_number':210,'multiline':True]['text':' some from start of window ','line_number':216,'multiline':True]['text':' rest from output ','line_number':222,'multiline':True]['text':' contiguous in window ','line_number':226,'multiline':True]['text':' some from window ','line_number':228,'multiline':True]['text':' rest from output ','line_number':233,'multiline':True]['text':' copy direct from output ','line_number':249,'multiline':True]['text':' minimum length is three ','line_number':250,'multiline':True]['text':' 2nd level distance code ','line_number':263,'multiline':True]['text':' 2nd level length code ','line_number':273,'multiline':True]['text':' end-of-block ','line_number':277,'multiline':True]['text':' return unused bytes (on entry, bits < 8, so in won't go too far back) ','line_number':289,'multiline':True]['text':' update state and return ','line_number':295,'multiline':True]['text':'
+   inflate_fast() speedups that turned out slower (on a PowerPC G3 750CXe):
+   - Using bit fields for code structure
+   - Different op definition to avoid & for extra bits (do & for table bits)
+   - Three separate decoding do-loops for direct, window, and wnext == 0
+   - Special case for distance > 1 copies to do overlapped load and store copy
+   - Explicit branch predictions (based on measured branch probabilities)
+   - Deferring match copy and interspersed it with decoding subsequent codes
+   - Swapping literal/length else
+   - Swapping window/direct else
+   - Larger unrolled copy loops (three is about right)
+   - Moving len -= 3 statement into middle of loop
+ ','line_number':306,'multiline':True]['text':' !ASMINF ','line_number':320,'multiline':True]

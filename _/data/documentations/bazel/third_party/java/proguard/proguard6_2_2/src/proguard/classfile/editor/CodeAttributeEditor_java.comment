@@ -1,0 +1,237 @@
+['text':'
+ * ProGuard -- shrinking, optimization, obfuscation, and preverification
+ *             of Java bytecode.
+ *
+ * Copyright (c) 2002-2019 Guardsquare NV
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ ','line_number':1,'multiline':True]['text':'*
+ * This AttributeVisitor accumulates specified changes to code, and then applies
+ * these accumulated changes to the code attributes that it visits.
+ *
+ * The class also supports labels ({@link #label()}) and exception handlers
+ * ({@link #catch_(int,int,int)}) in replacement sequences. They provide
+ * local branch offsets inside the replacement sequences
+ * ({@link Label#offset()}). For example, creating a replacement sequence
+ * with the help of {@link InstructionSequenceBuilder}:
+ * <code>
+ *     final CodeAttributeEditor.Label TRY_START = codeAttributeEditor.label();
+ *     final CodeAttributeEditor.Label TRY_END   = codeAttributeEditor.label();
+ *     final CodeAttributeEditor.Label CATCH_END = codeAttributeEditor.label();
+ *
+ *     final CodeAttributeEditor.Label CATCH_EXCEPTION =
+ *         codeAttributeEditor.catch_(TRY_START.offset(),
+ *                                    TRY_END.offset(),
+ *                                    constantPoolEditor.addClassConstant("java/lang/Exception", null));
+ *
+ *     Instructions[] replacementInstructions = builder
+ *         .label(TRY_START)
+ *         ......
+ *         .label(TRY_END)
+ *         .goto_(CATCH_END.offset())
+ *         .catch_(CATCH_EXCEPTION)
+ *         ......
+ *         .athrow()
+ *         .label(CATCH_END)
+ *         ......
+ *         .instructions();
+ * </code>
+ *
+ * @author Eric Lafortune
+ ','line_number':39,'multiline':True]['text':'*','line_number':87,'multiline':False]['text':'/
+    public  static       boolean DEBUG = System.getProperty("cae") != null;
+    //','line_number':89,'multiline':True]['text':'private','line_number':105,'multiline':True]['text':'private','line_number':106,'multiline':True]['text':'private','line_number':107,'multiline':True]['text':'private','line_number':108,'multiline':True]['text':'private','line_number':109,'multiline':True]['text':'*
+     * Creates a new CodeAttributeEditor that automatically updates frame
+     * sizes and shrinks instructions.
+     ','line_number':123,'multiline':True]['text':'*
+     * Creates a new CodeAttributeEditor.
+     * @param updateFrameSizes   specifies whether frame sizes of edited code
+     *                           should be updated.
+     * @param shrinkInstructions specifies whether added instructions should
+     *                           automatically be shrunk before being written.
+     ','line_number':133,'multiline':True]['text':'*
+     * Resets the accumulated code changes for a given anticipated maximum
+     * code length. If necessary, the size may still be extended while
+     * editing the code, with {@link #extend(int)}.
+     * @param codeLength the length of the code that will be edited next.
+     ','line_number':148,'multiline':True]['text':' Try to reuse the previous arrays.','line_number':158,'multiline':False]['text':'*
+     * Extends the size of the accumulated code changes.
+     * @param codeLength the length of the code that will be edited next.
+     ','line_number':183,'multiline':True]['text':' Try to reuse the previous arrays.','line_number':189,'multiline':False]['text':'*
+     * Remembers to place the given instruction right before the instruction
+     * at the given offset. Any branches to the existing instruction will
+     * land after the new instruction. Similarly, any try blocks that start at
+     * the existing instruction will not include the new instruction. However,
+     * any try blocks that end right before the existing instruction wil now
+     * include the new instruction.
+     * @param instructionOffset the offset of the instruction.
+     * @param instruction       the new instruction.
+     ','line_number':211,'multiline':True]['text':'*
+     * Remembers to place the given instruction right before the instruction
+     * at the given offset. Any branches to the existing instruction will
+     * also go to the new instruction. Similarly, any try blocks that include
+     * the existing instruction will also include the new instruction.
+     * @param instructionOffset the offset of the instruction.
+     * @param instruction       the new instruction.
+     ','line_number':238,'multiline':True]['text':'*
+     * Remembers to place the given instructions right before the instruction
+     * at the given offset. Any branches to the existing instruction will
+     * land after the new instructions. Similarly, any try blocks that start at
+     * the existing instruction will not include the new instructions. However,
+     * any try blocks that end right before the existing instruction wil now
+     * include the new instructions.
+     * @param instructionOffset the offset of the instruction.
+     * @param instructions      the new instructions.
+     ','line_number':263,'multiline':True]['text':'*
+     * Remembers to place the given instructions right before the instruction
+     * at the given offset. Any branches to the existing instruction will
+     * also go to the new instructions. Similarly, any try blocks that include
+     * the existing instruction will also include the new instructions.
+     * @param instructionOffset the offset of the instruction.
+     * @param instructions      the new instructions.
+     ','line_number':293,'multiline':True]['text':'*
+     * Remembers to replace the instruction at the given offset by the given
+     * instruction.
+     * @param instructionOffset the offset of the instruction to be replaced.
+     * @param instruction       the new instruction.
+     ','line_number':321,'multiline':True]['text':'*
+     * Remembers to replace the instruction at the given offset by the given
+     * instructions.
+     * @param instructionOffset the offset of the instruction to be replaced.
+     * @param instructions      the new instructions.
+     ','line_number':343,'multiline':True]['text':'*
+     * Remembers to place the given instruction right after the instruction
+     * at the given offset.
+     * @param instructionOffset the offset of the instruction.
+     * @param instruction       the new instruction.
+     ','line_number':368,'multiline':True]['text':'*
+     * Remembers to place the given instructions right after the instruction
+     * at the given offset.
+     * @param instructionOffset the offset of the instruction.
+     * @param instructions      the new instructions.
+     ','line_number':391,'multiline':True]['text':'*
+     * Remembers to delete the instruction at the given offset.
+     * @param instructionOffset the offset of the instruction to be deleted.
+     ','line_number':417,'multiline':True]['text':'*
+     * Remembers not to delete the instruction at the given offset.
+     * @param instructionOffset the offset of the instruction not to be deleted.
+     ','line_number':436,'multiline':True]['text':'*
+     * Clears all modifications of the instruction at the given offset.
+     * @param instructionOffset the offset of the instruction to be deleted.
+     ','line_number':452,'multiline':True]['text':'*
+     * Returns whether the code has been modified in any way.
+     ','line_number':472,'multiline':True]['text':'*
+     * Returns whether the instruction at the given offset has been modified
+     * in any way.
+     ','line_number':481,'multiline':True]['text':' Implementations for AttributeVisitor.','line_number':495,'multiline':False]['text':'        DEBUG =','line_number':502,'multiline':False]['text':'            clazz.getName().equals("abc/Def") &&','line_number':503,'multiline':False]['text':'            method.getName(clazz).equals("abc");','line_number':504,'multiline':False]['text':' TODO: Remove this when the code has stabilized.','line_number':506,'multiline':False]['text':' Catch any unexpected exceptions from the actual visiting method.','line_number':507,'multiline':False]['text':' Process the code.','line_number':510,'multiline':False]['text':' Do we have to update the code?','line_number':527,'multiline':False]['text':' Can we perform a faster simple replacement of instructions?','line_number':535,'multiline':False]['text':' Simply overwrite the instructions.','line_number':543,'multiline':False]['text':' Move and remap the instructions.','line_number':553,'multiline':False]['text':' Update the exception table.','line_number':557,'multiline':False]['text':' Remove exceptions with empty code blocks.','line_number':560,'multiline':False]['text':' Update the line number table and the local variable tables.','line_number':565,'multiline':False]['text':' Make sure instructions are widened if necessary.','line_number':569,'multiline':False]['text':' Update the maximum stack size and local variable frame size.','line_number':573,'multiline':False]['text':' Update all stack map entries.','line_number':584,'multiline':False]['text':' Update all stack map table entries.','line_number':592,'multiline':False]['text':' Update all line number table entries.','line_number':600,'multiline':False]['text':' Remove line numbers with empty code blocks.','line_number':603,'multiline':False]['text':'        lineNumberTableAttribute.u2lineNumberTableLength =','line_number':604,'multiline':False]['text':'           removeEmptyLineNumbers(lineNumberTableAttribute.lineNumberTable,','line_number':605,'multiline':False]['text':'                                  lineNumberTableAttribute.u2lineNumberTableLength,','line_number':606,'multiline':False]['text':'                                  codeAttribute.u4codeLength);','line_number':607,'multiline':False]['text':' Update all local variable table entries.','line_number':613,'multiline':False]['text':' Update all local variable table entries.','line_number':620,'multiline':False]['text':'*
+     * Checks if it is possible to modifies the given code without having to
+     * update any offsets.
+     * @param codeAttribute the code to be changed.
+     * @return the new code length.
+     ','line_number':631,'multiline':True]['text':' Go over all replacement instructions.','line_number':647,'multiline':False]['text':' Check if the replacement instruction, if any, has a different','line_number':650,'multiline':False]['text':' length than the original instruction.','line_number':651,'multiline':False]['text':'*
+     * Modifies the given code without updating any offsets.
+     * @param codeAttribute the code to be changed.
+     ','line_number':665,'multiline':True]['text':' Go over all replacement instructions.','line_number':673,'multiline':False]['text':' Overwrite the original instruction with the replacement','line_number':676,'multiline':False]['text':' instruction if any.','line_number':677,'multiline':False]['text':'*
+     * Modifies the given code based on the previously specified changes.
+     * @param clazz         the class file of the code to be changed.
+     * @param method        the method of the code to be changed.
+     * @param codeAttribute the code to be changed.
+     * @return the new code length.
+     ','line_number':692,'multiline':True]['text':' Make sure there is a sufficiently large instruction offset map.','line_number':706,'multiline':False]['text':' Fill out the instruction offset map.','line_number':712,'multiline':False]['text':' Create a new code array if necessary.','line_number':716,'multiline':False]['text':' Prepare for possible widening of instructions.','line_number':722,'multiline':False]['text':' Move the instructions into the new code array.','line_number':725,'multiline':False]['text':' We can return the new length.','line_number':732,'multiline':False]['text':'*
+     * Fills out the instruction offset map for the given code block.
+     * @param oldCode   the instructions to be moved.
+     * @param oldLength the code length.
+     * @return the new code length.
+     ','line_number':737,'multiline':True]['text':' Start mapping instructions at the beginning.','line_number':745,'multiline':False]['text':' Get the next instruction.','line_number':752,'multiline':False]['text':' Compute the mapping of the instruction.','line_number':755,'multiline':False]['text':' Also add an entry for the first offset after the code.','line_number':767,'multiline':False]['text':'*
+     * Fills out the instruction offset map for the given instruction.
+     * @param oldOffset   the instruction's old offset.
+     * @param instruction the instruction to be moved.
+     ','line_number':774,'multiline':True]['text':' Account for the pre-offset-inserted instruction, if any.','line_number':782,'multiline':False]['text':' Account for the pre-inserted instruction, if any.','line_number':791,'multiline':False]['text':' Account for the replacement instruction, or for the current','line_number':798,'multiline':False]['text':' instruction, if it shouldn't be  deleted.','line_number':799,'multiline':False]['text':' Note that the instruction's length may change at its new offset,','line_number':807,'multiline':False]['text':' e.g. if it is a switch instruction.','line_number':808,'multiline':False]['text':' Account for the post-inserted instruction, if any.','line_number':812,'multiline':False]['text':'*
+     * Moves the given code block to the new offsets.
+     * @param clazz         the class file of the code to be changed.
+     * @param method        the method of the code to be changed.
+     * @param codeAttribute the code to be changed.
+     * @param oldCode       the original code to be moved.
+     * @param oldLength     the original code length.
+     ','line_number':821,'multiline':True]['text':' Start writing instructions at the beginning.','line_number':835,'multiline':False]['text':' Get the next instruction.','line_number':841,'multiline':False]['text':' Move the instruction to its new offset.','line_number':844,'multiline':False]['text':'*
+     * Moves the given instruction to its new offset.
+     * @param clazz         the class file of the code to be changed.
+     * @param method        the method of the code to be changed.
+     * @param codeAttribute the code to be changed.
+     * @param oldOffset     the original instruction offset.
+     * @param instruction   the original instruction.
+     ','line_number':857,'multiline':True]['text':' Update and insert the pre-inserted instruction, if any.','line_number':871,'multiline':False]['text':' Update the instruction.','line_number':880,'multiline':False]['text':' Update and insert the pre-inserted instruction, if any.','line_number':884,'multiline':False]['text':' Update the instruction.','line_number':893,'multiline':False]['text':' Update and insert the replacement instruction, or the current','line_number':897,'multiline':False]['text':' instruction, if it shouldn't be deleted.','line_number':898,'multiline':False]['text':' Update the instruction.','line_number':907,'multiline':False]['text':' Update the instruction.','line_number':917,'multiline':False]['text':' Update and insert the post-inserted instruction, if any.','line_number':921,'multiline':False]['text':' Update the instruction.','line_number':930,'multiline':False]['text':' Implementations for InstructionVisitor.','line_number':936,'multiline':False]['text':' Write out the instruction.','line_number':940,'multiline':False]['text':' Write out the instruction.','line_number':953,'multiline':False]['text':' Write out the instruction.','line_number':966,'multiline':False]['text':' Update the branch offset, relative to the precise new offset.','line_number':979,'multiline':False]['text':' Write out the instruction.','line_number':983,'multiline':False]['text':' Update the default jump offset, relative to the precise new offset.','line_number':996,'multiline':False]['text':' Update the jump offsets, relative to the precise new offset.','line_number':1000,'multiline':False]['text':' Write out the instruction.','line_number':1005,'multiline':False]['text':' Update the default jump offset, relative to the precise new offset.','line_number':1018,'multiline':False]['text':' Update the jump offsets, relative to the precise new offset.','line_number':1022,'multiline':False]['text':' Write out the instruction.','line_number':1027,'multiline':False]['text':' Implementations for ExceptionInfoVisitor.','line_number':1038,'multiline':False]['text':' Update the code offsets. Note that the instruction offset map also','line_number':1042,'multiline':False]['text':' has an entry for the first offset after the code, for u2endPC.','line_number':1043,'multiline':False]['text':' Implementations for StackMapFrameVisitor.','line_number':1050,'multiline':False]['text':' Update the stack map frame offset.','line_number':1054,'multiline':False]['text':' Compute the offset delta if the frame is part of a stack map frame','line_number':1059,'multiline':False]['text':' table (for JDK 6.0) instead of a stack map (for Java Micro Edition).','line_number':1060,'multiline':False]['text':' Update the stack map frame offset.','line_number':1074,'multiline':False]['text':' Update the verification type offset.','line_number':1077,'multiline':False]['text':' Update the stack map frame offset.','line_number':1084,'multiline':False]['text':' Update the verification type offsets.','line_number':1087,'multiline':False]['text':' Update the stack map frame offset.','line_number':1094,'multiline':False]['text':' Update the verification type offsets.','line_number':1097,'multiline':False]['text':' Implementations for VerificationTypeVisitor.','line_number':1103,'multiline':False]['text':' Update the offset of the 'new' instruction.','line_number':1110,'multiline':False]['text':' Implementations for LineNumberInfoVisitor.','line_number':1115,'multiline':False]['text':' Update the code offset.','line_number':1119,'multiline':False]['text':' Implementations for LocalVariableInfoVisitor.','line_number':1124,'multiline':False]['text':' Update the code offset and length.','line_number':1128,'multiline':False]['text':' Be careful to update the length first.','line_number':1129,'multiline':False]['text':' Implementations for LocalVariableTypeInfoVisitor.','line_number':1135,'multiline':False]['text':' Update the code offset and length.','line_number':1139,'multiline':False]['text':' Be careful to update the length first.','line_number':1140,'multiline':False]['text':' Implementations for TypeAnnotationVisitor.','line_number':1146,'multiline':False]['text':' Update all local variable targets.','line_number':1150,'multiline':False]['text':' Implementations for TargetInfoVisitor.','line_number':1155,'multiline':False]['text':' Update the offsets of the variables.','line_number':1162,'multiline':False]['text':' Update the offset.','line_number':1169,'multiline':False]['text':' Implementations for LocalVariableTargetElementVisitor.','line_number':1174,'multiline':False]['text':' Update the variable start offset and length.','line_number':1178,'multiline':False]['text':' Be careful to update the length first.','line_number':1179,'multiline':False]['text':' Small utility methods.','line_number':1185,'multiline':False]['text':'*
+     * Updates the given jump offsets for the instruction at the given offset,
+     * relative to the given new offset.
+     ','line_number':1187,'multiline':True]['text':'*
+     * Computes the new branch offset for the instruction at the given offset
+     * with the given branch offset, relative to the new instruction (block)
+     * offset.
+     ','line_number':1204,'multiline':True]['text':'*
+     * Computes the new branch offset for the instruction at the given offset
+     * with the given branch offset, relative to the given new offset.
+     ','line_number':1217,'multiline':True]['text':' Compute the old branch target.','line_number':1225,'multiline':False]['text':' Pass a label offset unchanged.','line_number':1226,'multiline':False]['text':'*
+     * Computes the new instruction offset for the instruction at the given
+     * offset.
+     ','line_number':1235,'multiline':True]['text':' Special case: is it actually a label?','line_number':1241,'multiline':False]['text':' Retrieve the new offset from the label.','line_number':1244,'multiline':False]['text':' Otherwise retrieve the new instruction offset.','line_number':1255,'multiline':False]['text':'*
+     * Returns the given list of exceptions, without the ones that have empty
+     * code blocks.
+     ','line_number':1266,'multiline':True]['text':' Overwrite all empty exceptions.','line_number':1273,'multiline':False]['text':'*
+     * Returns the given list of line numbers, without the ones that have empty
+     * code blocks or that exceed the code size.
+     ','line_number':1288,'multiline':True]['text':' Overwrite all empty line number entries.','line_number':1296,'multiline':False]['text':'*
+     * This pseudo-instruction is a composite of other instructions, for local
+     * use inside the editor class only.
+     ','line_number':1313,'multiline':True]['text':' Implementations for Instruction.','line_number':1329,'multiline':False]['text':' Implementations for Object.','line_number':1396,'multiline':False]['text':' For convenience, we also define two pseudo-instructions, to conveniently','line_number':1412,'multiline':False]['text':' mark local labels and create new exceptions handlers.','line_number':1413,'multiline':False]['text':'*
+     * Creates a new label that can be used as a pseudo-instruction to mark
+     * a local offset. Its offset can be used as a branch target in
+     * replacement instructions ({@link Label#offset()}).
+     ','line_number':1415,'multiline':True]['text':'*
+     * Creates a new label that can be used as a pseudo-instruction to mark
+     * a local offset. Its offset can be used as a branch target in
+     * replacement instructions ({@link Label#offset()}).
+     ','line_number':1426,'multiline':True]['text':' Remember the label, so we can retrieve its offset later on.','line_number':1435,'multiline':False]['text':'*
+     * Creates a new catch instance that can be used as a pseudo-instruction
+     * to mark the start of an exception handler. Its offset can be used as
+     * a branch target in replacement instructions ({@link Label#offset()}).
+     ','line_number':1442,'multiline':True]['text':'*
+     * Creates a new catch instance that can be used as a pseudo-instruction
+     * to mark the start of an exception handler. Its offset can be used as
+     * a branch target in replacement instructions ({@link Label#offset()}).
+     ','line_number':1458,'multiline':True]['text':' Remember the label, so we can retrieve its offset later on.','line_number':1470,'multiline':False]['text':'*
+     * Returns whether the given instruction offset actually represents a
+     * label (which contains the actual offset).
+     ','line_number':1477,'multiline':True]['text':'*
+     * Returns the label identifier that corrresponds to the given
+     * instruction offset.
+     ','line_number':1487,'multiline':True]['text':'*
+     * This pseudo-instruction represents a label that marks an instruction
+     * offset, for use in the context of the code attribute editor only.
+     ','line_number':1497,'multiline':True]['text':'*
+         * Creates a new Label.
+         * @param identifier an identifier that can be chosen freely.
+         ','line_number':1509,'multiline':True]['text':'*
+         * Returns the offset that can then be used as a branch target in
+         * other replacement instructions.
+         ','line_number':1519,'multiline':True]['text':' Implementations for Instruction.','line_number':1529,'multiline':False]['text':' Remember the offset, so we can retrieve it later on.','line_number':1556,'multiline':False]['text':' Implementations for Object.','line_number':1572,'multiline':False]['text':'*
+     * This pseudo-instruction represents an exception handler,
+     * for use in the context of the code attribute editor only.
+     ','line_number':1581,'multiline':True]['text':'*
+         * Creates a new Catch instance.
+         * @param identifier  an identifier that can be chosen freely.
+         * @param startOffset the start offset of the catch block.
+         * @param endOffset   the end offset of the catch block.
+         * @param catchType   the index of the catch type in the constant pool.
+         ','line_number':1593,'multiline':True]['text':' Implementations for Instruction.','line_number':1613,'multiline':False]['text':' Add the exception. Its offsets will still be updated later on,','line_number':1651,'multiline':False]['text':' like any other exception.','line_number':1652,'multiline':False]['text':' Implementations for Object.','line_number':1661,'multiline':False]

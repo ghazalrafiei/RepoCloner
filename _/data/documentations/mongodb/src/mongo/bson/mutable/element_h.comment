@@ -1,0 +1,209 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'* For an overview of mutable BSON, please see the file document.h in this directory. ','line_number':55,'multiline':True]['text':'* Element represents a BSON value or object in a mutable BSON Document. The lifetime of
+ *  an Element is a subset of the Document to which it belongs. Much like a BSONElement, an
+ *  Element has a type, a field name, and (usually) a value. An Element may be used to read
+ *  or modify the value (including changing its type), to navigate to related Elements in
+ *  the Document tree, or for a number of topological changes to the Document
+ *  structure. Element also offers the ability to compare its value to that of other
+ *  Elements, and to serialize its value to a BSONObjBuilder or BSONArrayBuilder.
+ *
+ *  Elements have reference or iterator like semantics, and are very lightweight. You
+ *  should not worry about the cost of passing an Element by value, copying an Element, or
+ *  similar operations. Such operations do not mean that the logical element in the
+ *  underlying Document is duplicated. Only the reference is duplicated.
+ *
+ *  The API for Element is broken into several sections:
+ *
+ *  - Topology mutation: These methods are to either add other Elements to the Document
+ *    tree as siblings or children (when applicable) of the current Element, to remove the
+ *    Element from the tree, or to remove children of the Element (when applicable).
+ *
+ *  - Navigation: These methods are used to navigate the Document tree by returning other
+ *    Elements in specified relationships to the current Element. In this regard, Elements
+ *    act much like STL iterators that walk over the Document tree. One important
+ *    difference is that Elements are never invalidated, even when 'remove' is called. If
+ *    you have two Elements that alias the same element in the Document tree, modifications
+ *    through one Element will be visible via the other.
+ *
+ *  - Value access: These methods provide access to the value in the Document tree that the
+ *    current Element represents. All leaf (a.k.a. 'primitive', or non-Object and
+ *    non-Array) like Elements will always be able to provide a value. However, there are
+ *    cases where non-leaf Elements (representing Objects or Arrays) cannot provide a
+ *    value. Therefore, you must always call 'hasValue' to determine if the value is
+ *    available before calling 'getValue'. Similarly, you must determine the type of the
+ *    Element by calling getType() and only call the matching typed getValue.
+ *
+ *  - Comparison: It is possible to compare one Element with another to determine ordering
+ *    or equality as defined by woCompare. Similarly, it is possible to directly compare an
+ *    Element with a BSONElement. It is legal to compare two Elements which belong to
+ *    different Documents.
+ *
+ *  - Serialization: Elements may be serialized to BSONObjBuilder or to BSONArrayBuilder
+ *    objects when appropriate. One detail to consider is that writeTo for the root Element
+ *    behaves differently than the others: it does not start a new subobj scope in the
+ *    builder, so all of its children will be added at the current level to the
+ *    builder. The provided builder does not have its 'done' method called automatically.
+ *
+ *  - Value mutation: You may freely modify the value of an Element, including
+ *    modifications that change the type of the Element and setting the value of the
+ *    Element to the value of another BSONObj. You may also set the value from a SafeNum or
+ *    from a BSONElement.
+ *
+ *  - Accessors: These provide access to various properties of the Element, like the
+ *    Document to which the Element belongs, the BSON type and field name of the Element,
+ *    etc. One critical accessor is 'ok'. When using the topology API to navigate a
+ *    document, it is possible to request an Element which does not exist, like the parent
+ *    of the root element, or the left child of an integer, or the right sibling of the
+ *    last element in an array. In these cases, the topology API will return an Element for
+ *    which the 'ok' accessor will return 'false', which is roughly analagous to an 'end'
+ *    valued STL iterator. It is illegal to call any method (other than 'ok') on a non-OK
+ *    Element.
+ *
+ *  - Streaming API: As a convenience for when you are building Documents from scratch, an
+ *    API is provided that combines the effects of calling makeElement on the Document with
+ *    calling pushBack on the current Element. The effect is to create the element and make
+ *    it the new rightmost child of this Element. Use of this API is discouraged and it may
+ *    be removed.
+ ','line_number':60,'multiline':True]['text':' Some special RepIdx values. These are really implementation details, but they are','line_number':131,'multiline':False]['text':' here so that we can inline Element::OK, which gets called very frequently, and they','line_number':132,'multiline':False]['text':' need to be public so some free functions in document.cpp can use them. You must not','line_number':133,'multiline':False]['text':' use these values explicitly.','line_number':134,'multiline':False]['text':' Used to signal an invalid Element.','line_number':136,'multiline':False]['text':' A rep that points to an unexamined entity','line_number':139,'multiline':False]['text':' This is the highest valid rep that does not overlap flag values.','line_number':142,'multiline':False]['text':'','line_number':145,'multiline':False]['text':' Topology mutation API. Element arguments must belong to the same Document.','line_number':146,'multiline':False]['text':'','line_number':147,'multiline':False]['text':'* Add the provided Element to the left of this Element. The added Element must be
+     *  'ok', and this Element must have a parent.
+     ','line_number':149,'multiline':True]['text':'* Add the provided Element to the right of this Element. The added Element must be
+     *  'ok', and this Element must have a parent.
+     ','line_number':154,'multiline':True]['text':'* 'Remove' this Element by detaching it from its parent and siblings. The Element
+     *  continues to exist and may be manipulated, but cannot be re-obtained by navigating
+     *  from the root.
+     ','line_number':159,'multiline':True]['text':'* If this Element is empty, add 'e' as the first child. Otherwise, add 'e' as the new
+     *  left child.
+     ','line_number':165,'multiline':True]['text':'* If this Element is empty, add 'e' as the first child. Otherwise, add 'e' as the new
+     *  right child.
+     ','line_number':170,'multiline':True]['text':'* Remove the leftmost child Element if it exists, otherwise return an error. ','line_number':175,'multiline':True]['text':'* Remove the rightmost child Element if it exists, otherwise return an error. ','line_number':178,'multiline':True]['text':'* Rename this Element to the provided name. ','line_number':181,'multiline':True]['text':'','line_number':185,'multiline':False]['text':' Navigation API.','line_number':186,'multiline':False]['text':'','line_number':187,'multiline':False]['text':'* Returns either this Element's left child, or a non-ok Element if no left child
+     *  exists.
+     ','line_number':189,'multiline':True]['text':'* Returns either this Element's right child, or a non-ok Element if no right child
+     *  exists. Note that obtaining the right child may require realizing all immediate
+     *  child nodes of a document that is being consumed lazily.
+     ','line_number':194,'multiline':True]['text':'* Returns true if this element has children. Always returns false if this Element is
+     *  not an Object or Array.
+     ','line_number':200,'multiline':True]['text':'* Returns either this Element's sibling 'distance' elements to the left, or a non-ok
+     *  Element if no such left sibling exists.
+     ','line_number':205,'multiline':True]['text':'* Returns either this Element's sibling 'distance' Elements to the right, or a non-ok
+     *  Element if no such right sibling exists.
+     ','line_number':210,'multiline':True]['text':'* Returns this Element's parent, or a non-ok Element if this Element has no parent
+     *  (is a root).
+     ','line_number':215,'multiline':True]['text':'* Returns the nth child, if any, of this Element. If no such element exists, a non-ok
+     *  Element is returned. This is not a constant time operation. This method is also
+     *  available as operator[] taking a size_t for convenience.
+     ','line_number':220,'multiline':True]['text':'* Returns the first child, if any, of this Element named 'name'. If no such Element
+     *  exists, a non-ok Element is returned. This is not a constant time operation. It is illegal
+     *  to call this on an Array. This method is also available as operator[] taking a StringData
+     *  for convenience.
+     ','line_number':227,'multiline':True]['text':'* Returns the first element found named 'name', starting the search at the current
+     *  Element, and walking right. If no such Element exists, a non-ok Element is
+     *  returned. This is not a constant time operation. This implementation is used in the
+     *  specialized implementation of findElement<ElementType, FieldNameEquals>.
+     ','line_number':235,'multiline':True]['text':'','line_number':242,'multiline':False]['text':' Counting API.','line_number':243,'multiline':False]['text':'','line_number':244,'multiline':False]['text':'* Returns the number of valid siblings to the left of this Element. ','line_number':246,'multiline':True]['text':'* Returns the number of valid siblings to the right of this Element. ','line_number':249,'multiline':True]['text':'* Return the number of children of this Element. ','line_number':252,'multiline':True]['text':'','line_number':255,'multiline':False]['text':' Value access API.','line_number':256,'multiline':False]['text':'','line_number':257,'multiline':False]['text':' We only provide accessors for BSONElement and for simple types. For more complex','line_number':258,'multiline':False]['text':' types like regex you should obtain the BSONElement and use that API to extract the','line_number':259,'multiline':False]['text':' components.','line_number':260,'multiline':False]['text':'','line_number':261,'multiline':False]['text':' Note that the getValueX methods are *unchecked* in release builds: You are','line_number':262,'multiline':False]['text':' responsible for calling hasValue() to ensure that this element has a value','line_number':263,'multiline':False]['text':' representation, and for calling getType to ensure that the Element is of the proper','line_number':264,'multiline':False]['text':' type.','line_number':265,'multiline':False]['text':'','line_number':266,'multiline':False]['text':' As usual, methods here are in bsonspec type order, please keep them that way.','line_number':267,'multiline':False]['text':'','line_number':268,'multiline':False]['text':'* Returns true if 'getValue' can return a valid BSONElement from which a value may be
+     *  extracted. See the notes for 'getValue' to understand the conditions under which an
+     *  Element can provide a BSONElement.
+     ','line_number':270,'multiline':True]['text':'* Returns true if this element is a numeric type (e.g. NumberLong). Currently, the
+     *  only numeric BSON types are NumberLong, NumberInt, NumberDouble, and NumberDecimal.
+     ','line_number':276,'multiline':True]['text':'* Returns true if this element is one of the integral numeric types (e.g. NumberLong
+     *  or NumberInt).
+     ','line_number':281,'multiline':True]['text':'* Get the value of this element if available. Note that not all elements have a
+     *  representation as a BSONElement. For elements that do have a representation, this
+     *  will return it. For elements that do not this method returns an eoo
+     *  BSONElement. All 'value-ish' Elements will have a BSONElement
+     *  representation. 'Tree-ish' Elements may or may not have a BSONElement
+     *  representation. Mutations may cause elements to change whether or not they have a
+     *  value and may invalidate previously returned values.
+     *
+     *  Please note that a const BSONElement allows retrieval of a non-const
+     *  BSONObj. However, the contents of the BSONElement returned here must be treated as
+     *  const.
+     ','line_number':286,'multiline':True]['text':'* Get the value from a double valued Element. ','line_number':300,'multiline':True]['text':'* Get the value from a std::string valued Element. ','line_number':303,'multiline':True]['text':'* Get the value from an object valued Element. Note that this may not always be
+     *  possible!
+     ','line_number':306,'multiline':True]['text':'* Get the value from an object valued Element. Note that this may not always be
+     *  possible!
+     ','line_number':311,'multiline':True]['text':'* Returns true if this Element is the undefined type. ','line_number':316,'multiline':True]['text':'* Get the value from an OID valued Element. ','line_number':319,'multiline':True]['text':'* Get the value from a bool valued Element. ','line_number':322,'multiline':True]['text':'* Get the value from a date valued Element. ','line_number':325,'multiline':True]['text':'* Returns true if this Element is the null type. ','line_number':328,'multiline':True]['text':'* Get the value from a symbol valued Element. ','line_number':331,'multiline':True]['text':'* Get the value from an int valued Element. ','line_number':334,'multiline':True]['text':'* Get the value from a timestamp valued Element. ','line_number':337,'multiline':True]['text':'* Get the value from a long valued Element. ','line_number':340,'multiline':True]['text':'* Get the value from a decimal valued Element. ','line_number':343,'multiline':True]['text':'* Returns true if this Element is the min key type. ','line_number':346,'multiline':True]['text':'* Returns true if this Element is the max key type. ','line_number':349,'multiline':True]['text':'* Returns the numeric value as a SafeNum ','line_number':352,'multiline':True]['text':'','line_number':356,'multiline':False]['text':' Comparision API.','line_number':357,'multiline':False]['text':'','line_number':358,'multiline':False]['text':'* Compare this Element with Element 'other'. The two Elements may belong to different
+     *  Documents. You should not call this on the root Element of the Document because the
+     *  root Element does not have a field name. Use compareWithBSONObj to handle that
+     *  case.
+     *
+     *   Returns -1 if this < other according to BSONElement::woCompare
+     *   Returns 0 if this == other either tautologically, or according to woCompare.
+     *   Returns 1 if this > other according to BSONElement::woCompare
+     ','line_number':360,'multiline':True]['text':'* Compare this Element with BSONElement 'other'. You should not call this on the root
+     *  Element of the Document because the root Element does not have a field name. Use
+     *  compareWithBSONObj to handle that case.
+     *
+     *   Returns -1 if this < other according to BSONElement::woCompare
+     *   Returns 0 if this == other either tautologically, or according to woCompare.
+     *   Returns 1 if this > other according to BSONElement::woCompare
+     ','line_number':373,'multiline':True]['text':'* Compare this Element, which must be an Object or an Array, with 'other'.
+     *
+     *   Returns -1 if this object < other according to BSONElement::woCompare
+     *   Returns 0 if this object == other either tautologically, or according to woCompare.
+     *   Returns 1 if this object > other according to BSONElement::woCompare
+     ','line_number':385,'multiline':True]['text':'','line_number':396,'multiline':False]['text':' Serialization API.','line_number':397,'multiline':False]['text':'','line_number':398,'multiline':False]['text':'*
+     * Writes this Element to the provided object builder. Note that if this element is not a root,
+     * then it gets wrapped inside an object.
+     ','line_number':400,'multiline':True]['text':'*
+     * Writes all the children of the current Element to the provided object builder. This Element
+     * must be of type mongo::Object.
+     ','line_number':406,'multiline':True]['text':'*
+     * Write this Element to the provided array builder. This Element must be of type
+     * mongo::Array.
+     ','line_number':412,'multiline':True]['text':'','line_number':419,'multiline':False]['text':' Value mutation API. Please note that the types are ordered according to bsonspec.org','line_number':420,'multiline':False]['text':' ordering. Please keep them that way.','line_number':421,'multiline':False]['text':'','line_number':422,'multiline':False]['text':'* Set the value of this Element to the given double. ','line_number':424,'multiline':True]['text':'* Set the value of this Element to the given string. ','line_number':427,'multiline':True]['text':'* Set the value of this Element to the given object. The data in 'value' is
+     *  copied.
+     ','line_number':430,'multiline':True]['text':'* Set the value of this Element to the given object. The data in 'value' is
+     *  copied.
+     ','line_number':435,'multiline':True]['text':'* Set the value of this Element to the given binary data. ','line_number':440,'multiline':True]['text':'* Set the value of this Element to Undefined. ','line_number':443,'multiline':True]['text':'* Set the value of this Element to the given OID. ','line_number':446,'multiline':True]['text':'* Set the value of this Element to the given boolean. ','line_number':449,'multiline':True]['text':'* Set the value of this Element to the given date. ','line_number':452,'multiline':True]['text':'* Set the value of this Element to Null. ','line_number':455,'multiline':True]['text':'* Set the value of this Element to the given regex parameters. ','line_number':458,'multiline':True]['text':'* Set the value of this Element to the given db ref parameters. ','line_number':461,'multiline':True]['text':'* Set the value of this Element to the given code data. ','line_number':464,'multiline':True]['text':'* Set the value of this Element to the given symbol. ','line_number':467,'multiline':True]['text':'* Set the value of this Element to the given code and scope data. ','line_number':470,'multiline':True]['text':'* Set the value of this Element to the given integer. ','line_number':473,'multiline':True]['text':'* Set the value of this Element to the given timestamp. ','line_number':476,'multiline':True]['text':'* Set the value of this Element to the given long integer ','line_number':479,'multiline':True]['text':'* Set the value of this Element to the given decimal. ','line_number':482,'multiline':True]['text':'* Set the value of this Element to MinKey. ','line_number':485,'multiline':True]['text':'* Set the value of this Element to MaxKey. ','line_number':488,'multiline':True]['text':'','line_number':492,'multiline':False]['text':' Value mutation API from variant types.','line_number':493,'multiline':False]['text':'','line_number':494,'multiline':False]['text':'* Set the value of this element to equal the value of the provided BSONElement
+     *  'value'. The name of this Element is not modified.
+     *
+     *  The contents of value are copied.
+     ','line_number':496,'multiline':True]['text':'* Set the value of this Element to a numeric type appropriate to hold the given
+     *  SafeNum value.
+     ','line_number':503,'multiline':True]['text':'* Set the value of this Element to the value from another Element.
+     *
+     * The name of this Element is not modified.
+     ','line_number':508,'multiline':True]['text':'','line_number':515,'multiline':False]['text':' Accessors','line_number':516,'multiline':False]['text':'','line_number':517,'multiline':False]['text':'* Returns true if this Element represents a valid part of the Document. ','line_number':519,'multiline':True]['text':'* Returns the Document to which this Element belongs. ','line_number':522,'multiline':True]['text':'* Returns the Document to which this Element belongs. ','line_number':525,'multiline':True]['text':'* Returns the BSONType of this Element. ','line_number':528,'multiline':True]['text':'* Returns true if this Element is of the specified type ','line_number':531,'multiline':True]['text':'* Returns the field name of this Element. Note that the value returned here is not
+     *  stable across mutations, since the storage for fieldNames may be reallocated. If
+     *  you need a stable version of the fieldName, you must call toString on the returned
+     *  StringData.
+     ','line_number':534,'multiline':True]['text':'* Returns the opaque ID for this element. This is unlikely to be useful to a caller
+     *  and is mostly for testing.
+     ','line_number':541,'multiline':True]['text':'','line_number':547,'multiline':False]['text':' Stream API - BSONObjBuilder like API, but methods return a Status.  These are','line_number':548,'multiline':False]['text':' strictly a convenience API. You don't need to use them if you would rather be more','line_number':549,'multiline':False]['text':' explicit.','line_number':550,'multiline':False]['text':'','line_number':551,'multiline':False]['text':'* Append the provided double value as a new field with the provided name. ','line_number':553,'multiline':True]['text':'* Append the provided std::string value as a new field with the provided name. ','line_number':556,'multiline':True]['text':'* Append the provided object as a new field with the provided name. The data in
+     *  'value' is copied.
+     ','line_number':559,'multiline':True]['text':'* Append the provided array object as a new field with the provided name. The data in
+     *  value is copied.
+     ','line_number':564,'multiline':True]['text':'* Append the provided binary data as a new field with the provided name. ','line_number':569,'multiline':True]['text':'* Append an undefined value as a new field with the provided name. ','line_number':575,'multiline':True]['text':'* Append the provided OID as a new field with the provided name. ','line_number':578,'multiline':True]['text':'* Append the provided bool as a new field with the provided name. ','line_number':581,'multiline':True]['text':'* Append the provided date as a new field with the provided name. ','line_number':584,'multiline':True]['text':'* Append a null as a new field with the provided name. ','line_number':587,'multiline':True]['text':'* Append the provided regex data as a new field with the provided name. ','line_number':590,'multiline':True]['text':'* Append the provided DBRef data as a new field with the provided name. ','line_number':593,'multiline':True]['text':'* Append the provided code data as a new field with the iven name. ','line_number':596,'multiline':True]['text':'* Append the provided symbol data as a new field with the provided name. ','line_number':599,'multiline':True]['text':'* Append the provided code and scope data as a new field with the provided name. ','line_number':602,'multiline':True]['text':'* Append the provided integer as a new field with the provided name. ','line_number':605,'multiline':True]['text':'* Append the provided timestamp as a new field with the provided name. ','line_number':608,'multiline':True]['text':'* Append the provided long integer as a new field with the provided name. ','line_number':611,'multiline':True]['text':'* Append the provided decimal as a new field with the provided name. ','line_number':614,'multiline':True]['text':'* Append a max key as a new field with the provided name. ','line_number':617,'multiline':True]['text':'* Append a min key as a new field with the provided name. ','line_number':620,'multiline':True]['text':'* Append the given BSONElement. The data in 'value' is copied. ','line_number':623,'multiline':True]['text':'* Append the provided number as field of the appropriate numeric type with the
+     *  provided name.
+     ','line_number':626,'multiline':True]['text':'* Convert this element to its JSON representation if ok(),
+     *  otherwise return !ok() message ','line_number':631,'multiline':True]['text':'* Element comparison support. Comparison is like STL iterator comparision: equal Elements
+ *  refer to the same underlying data. The equality does *not* mean that the underlying
+ *  values are equivalent. Use the Element::compareWith methods to compare the represented
+ *  data.
+ ','line_number':653,'multiline':True]['text':'* Returns true if l and r refer to the same data, false otherwise. ','line_number':659,'multiline':True]['text':'* Returns false if l and r refer to the same data, true otherwise. ','line_number':662,'multiline':True]['text':' namespace mutablebson','line_number':787,'multiline':False]['text':' namespace mongo','line_number':788,'multiline':False]

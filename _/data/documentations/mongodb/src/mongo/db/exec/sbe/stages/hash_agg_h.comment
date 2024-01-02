@@ -1,0 +1,97 @@
+['text':'*
+ *    Copyright (C) 2019-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * Performs a hash-based aggregation. Appears as the "group" stage in debug output. Groups the input
+ * based on the provided vector of group-by slots, 'gbs'. The 'aggs' parameter is a map from
+ * 'SlotId' to a pair of expressions, where the first expression is an optional initializer,
+ * and the second expression aggregates the incoming rows. This defines a set of output slots whose
+ * values will be computed based on the corresponding aggregate expressions. Each distinct grouping
+ * will produce a single output, consisting of the values of the group-by keys and the results of
+ * the aggregate functions.
+ *
+ * Since the data must be buffered in a hash table, this is a "binding reflector". This means slots
+ * from the 'input' tree are not visible higher in tree. Stages higher in the tree can only see the
+ * slots holding the group-by keys as well as those holding the corresponding aggregate values.
+ *
+ * The optional 'seekKeys', if provided, limit the results returned from the hash table only to
+ * those equal to seekKeys.
+ *
+ * The 'optimizedClose' flag controls whether we can close the child subtree right after building
+ * the hash table. If true it means that we do not expect the subtree to be reopened.
+ *
+ * The optional 'collatorSlot', if provided, changes the definition of string equality used when
+ * determining whether two group-by keys are equal. For instance, the plan may require us to do a
+ * case-insensitive group on a string field.
+ *
+ * The 'allowDiskUse' flag controls whether this stage can spill. If false and the memory budget is
+ * exhausted, this stage throws a query-fatal error with code
+ * 'QueryExceededMemoryLimitNoDiskUseAllowed'. If true, then spilling is possible and the caller
+ * must provide a vector of 'mergingExprs'. This is a vector of (slot, expression) pairs which is
+ * symmetrical with 'aggs'. The slots are only visible internally and are used to store partial
+ * aggregate values that have been recovered from the spill table. Each of the expressions is an agg
+ * function which merges the partial aggregate value from this slot into the final aggregate value.
+ * In the debug string output, the internal slots used to house the partial aggregates are printed
+ * as a list of "spillSlots" and the expressions are printed as a parallel list of "mergingExprs".
+ *
+ * If 'forcedIncreasedSpilling' is true, then this stage will spill frequently even if the memory
+ * limit is not reached. This is intended to be used in test contexts to exercise the otherwise
+ * infrequently used spilling logic.
+ *
+ * Debug string representation:
+ *
+ *  group [<group by slots>] [slot_1 = expr_1, ..., slot_n = expr_n] [<seek slots>]?
+ *      spillSlots[slot_1, ..., slot_n] mergingExprs[expr_1, ..., expr_n] reopen? collatorSlot?
+ *  childStage
+ ','line_number':64,'multiline':True]['text':'*
+     * We check amount of used memory every T processed incoming records, where T is calculated
+     * based on the estimated used memory and its recent growth. When the memory limit is exceeded,
+     * 'checkMemoryUsageAndSpillIfNecessary()' will create '_recordStore' (if it hasn't already been
+     * created) and spill the contents of the hash table into this record store.
+     ','line_number':156,'multiline':True]['text':' The check frequency upper bound, which start at 'atMost' and exponentially backs off','line_number':179,'multiline':False]['text':' to 'atLeast' as more data is accumulated. If 'atLeast' is less than 'atMost', the memory','line_number':180,'multiline':False]['text':' checks will be done every 'atLeast' incoming records.','line_number':181,'multiline':False]['text':' The number of incoming records to process before the next memory checkpoint.','line_number':184,'multiline':False]['text':' The counter of the incoming records between memory checkpoints.','line_number':187,'multiline':False]['text':'*
+     * Inserts a key and value pair to the '_recordStore'. They key is serialized to a
+     * 'key_string::Value' which becomes the 'RecordId'. This makes the keys memcmp-able and ensures
+     * that the record store ends up sorted by the group-by keys.
+     *
+     * Note that the 'typeBits' are needed to reconstruct the spilled 'key' to a 'MaterializedRow',
+     * but are not necessary for comparison purposes. Therefore, we carry the type bits separately
+     * from the record id, instead appending them to the end of the serialized 'val' buffer.
+     ','line_number':193,'multiline':True]['text':'*
+     * Given a 'record' from the record store, decodes it into a pair of materialized rows (one for
+     * the group-by keys and another for the agg values).
+     *
+     * The given 'keyBuffer' is cleared, and then used to hold data (e.g. long strings and other
+     * values that can't be inlined) obtained by decoding the 'RecordId' keystring to a
+     * 'MaterializedRow'. The values in the resulting 'MaterializedRow' may be pointers into
+     * 'keyBuffer', so it is important that 'keyBuffer' outlive the row.
+     *
+     * This method is used when there is no collator.
+     ','line_number':207,'multiline':True]['text':'*
+     * Given a 'record' from the record store and a 'collator', decodes it into a pair of
+     * materialized rows (one for the group-by key and another one for the agg value).
+     * Both the group-by key and the agg value are read from the data part of the record.
+     ','line_number':220,'multiline':True]['text':' When this operator does not expect to be reopened (almost always) then it can close the child','line_number':236,'multiline':False]['text':' early.','line_number':237,'multiline':False]['text':' Expressions used to merge partial aggregates that have been spilled to disk and their','line_number':240,'multiline':False]['text':' corresponding input slots. For example, imagine that this list contains a pair (s12,','line_number':241,'multiline':False]['text':' sum(s12)). This means that the partial aggregate values will be read into slot s12 after','line_number':242,'multiline':False]['text':' being recovered from the spill table and can be merged using the 'sum()' agg function.','line_number':243,'multiline':False]['text':'','line_number':244,'multiline':False]['text':' When disk use is allowed, this vector must have the same length as '_aggs'.','line_number':245,'multiline':False]['text':' When true, we spill frequently without reaching the memory limit. This allows us to exercise','line_number':248,'multiline':False]['text':' the spilling logic more often in test contexts.','line_number':249,'multiline':False]['text':' Accessors used to obtain the values of the group by slots when reading the input from the','line_number':254,'multiline':False]['text':' child.','line_number':255,'multiline':False]['text':' This buffer stores values for '_outKeyRowRecordStore'; values in the '_outKeyRowRecordStore'','line_number':258,'multiline':False]['text':' can be pointers that point to data in this buffer.','line_number':259,'multiline':False]['text':' Accessors for the key slots provided as output by this stage. The keys can either come from','line_number':261,'multiline':False]['text':' the hash table or recovered from a temporary record store. We use a 'SwitchAccessor' to','line_number':262,'multiline':False]['text':' switch between these two cases.','line_number':263,'multiline':False]['text':' Row of key values to output used when recovering spilled data from the record store.','line_number':265,'multiline':False]['text':' Accessors for the output aggregate results. The aggregates can either come from the hash','line_number':270,'multiline':False]['text':' table or can be computed after merging partial aggregates spilled to a record store. We use a','line_number':271,'multiline':False]['text':' 'SwitchAccessor' to switch between these two cases.','line_number':272,'multiline':False]['text':' Row of agg values to output used when recovering spilled data from the record store.','line_number':274,'multiline':False]['text':' Bytecodes for the aggregate functions. The first code fragment is the aggregator initializer.','line_number':282,'multiline':False]['text':' The second code fragment aggregates incoming rows into the hash table.','line_number':283,'multiline':False]['text':' Bytecode for the merging expressions, executed if partial aggregates are spilled to a record','line_number':286,'multiline':False]['text':' store and need to be subsequently combined.','line_number':287,'multiline':False]['text':' Only set if collator slot provided on construction.','line_number':290,'multiline':False]['text':' Function object which can be used to check whether two materialized rows of key values are','line_number':293,'multiline':False]['text':' equal. This comparison is collation-aware if the query has a non-simple collation.','line_number':294,'multiline':False]['text':' Memory tracking and spilling to disk.','line_number':305,'multiline':False]['text':' A record store which is instantiated and written to in the case of spilling.','line_number':309,'multiline':False]['text':' A monotically increasing counter used to ensure uniqueness of 'RecordId' values. When','line_number':313,'multiline':False]['text':' spilling, the key is encoding into the 'RecordId' of the '_recordStore'. Record ids must be','line_number':314,'multiline':False]['text':' unique by definition, but we might end up spilling multiple partial aggregates for the same','line_number':315,'multiline':False]['text':' key. We ensure uniqueness by appending a unique integer to the end of this key, which is','line_number':316,'multiline':False]['text':' simply ignored during deserialization.','line_number':317,'multiline':False]['text':' Partial aggregates that have been spilled are read into '_spilledAggRow' and read using','line_number':320,'multiline':False]['text':' '_spilledAggsAccessors' so that they can be merged to compute the final aggregate value.','line_number':321,'multiline':False]['text':' Buffer to hold data for the deserialized key values from '_stashedNextRow'.','line_number':326,'multiline':False]['text':' Place to stash the next keys and values during the streaming phase. The record store cursor','line_number':328,'multiline':False]['text':' doesn't offer a "peek" API, so we need to hold onto the next row between getNext() calls when','line_number':329,'multiline':False]['text':' the key value advances.','line_number':330,'multiline':False]['text':' If provided, used during a trial run to accumulate certain execution stats. Once the trial','line_number':335,'multiline':False]['text':' run is complete, this pointer is reset to nullptr.','line_number':336,'multiline':False]['text':' namespace sbe','line_number':339,'multiline':False]['text':' namespace mongo','line_number':340,'multiline':False]

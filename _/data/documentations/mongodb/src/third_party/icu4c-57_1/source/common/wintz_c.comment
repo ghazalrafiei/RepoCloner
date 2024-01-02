@@ -1,0 +1,91 @@
+['text':'
+********************************************************************************
+*   Copyright (C) 2005-2015, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+********************************************************************************
+*
+* File WINTZ.CPP
+*
+********************************************************************************
+','line_number':1,'multiline':True]['text':' The layout of the Tzi value in the registry ','line_number':33,'multiline':True]['text':'*
+ * Various registry keys and key fragments.
+ ','line_number':43,'multiline':True]['text':' static const char STANDARD_NAME_REGKEY[] = "StandardName"; Currently unused constant ','line_number':47,'multiline':True]['text':'*
+ * HKLM subkeys used to probe for the flavor of Windows.  Note that we
+ * specifically check for the "GMT" zone subkey; this is present on
+ * NT, but on XP has become "GMT Standard Time".  We need to
+ * discriminate between these cases.
+ ','line_number':52,'multiline':True]['text':' WIN_9X_ME_TYPE ','line_number':59,'multiline':True]['text':' WIN_NT_TYPE ','line_number':62,'multiline':True]['text':' otherwise: WIN_2K_XP_TYPE ','line_number':65,'multiline':True]['text':'*
+ * The time zone root subkeys (under HKLM) for different flavors of
+ * Windows.
+ ','line_number':68,'multiline':True]['text':' WIN_9X_ME_TYPE ','line_number':73,'multiline':True]['text':' WIN_NT_TYPE | WIN_2K_XP_TYPE ','line_number':76,'multiline':True]['text':'*
+ * Flavor of Windows, from our perspective.  Not a real OS version,
+ * but rather the flavor of the layout of the time zone information in
+ * the registry.
+ ','line_number':80,'multiline':True]['text':' Detect the version of windows by trying to open a sequence of
+        probe keys.  We don't use the OS version API because what we
+        really want to know is how the registry is laid out.
+        Specifically, is it 9x/Me or not, and is it "GMT" or "GMT
+        Standard Time". ','line_number':99,'multiline':True]['text':' +1 to bring it inline with the enum ','line_number':117,'multiline':True]['text':' TODO: why 96?? ','line_number':122,'multiline':True]['text':' This isn't thread safe, but it's good enough because the result should be constant per system. ','line_number':126,'multiline':True]['text':' Remove " Standard Time" ','line_number':136,'multiline':True]['text':'
+  This code attempts to detect the Windows time zone, as set in the
+  Windows Date and Time control panel.  It attempts to work on
+  multiple flavors of Windows (9x, Me, NT, 2000, XP) and on localized
+  installs.  It works by directly interrogating the registry and
+  comparing the data there with the data returned by the
+  GetTimeZoneInformation API, along with some other strategies.  The
+  registry contains time zone data under one of two keys (depending on
+  the flavor of Windows):
+
+    HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Time Zones\
+    HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Time Zones\
+
+  Under this key are several subkeys, one for each time zone.  These
+  subkeys are named "Pacific" on Win9x/Me and "Pacific Standard Time"
+  on WinNT/2k/XP.  There are some other wrinkles; see the code for
+  details.  The subkey name is NOT LOCALIZED, allowing us to support
+  localized installs.
+
+  Under the subkey are data values.  We care about:
+
+    Std   Standard time display name, localized
+    TZI   Binary block of data
+
+  The TZI data is of particular interest.  It contains the offset, two
+  more offsets for standard and daylight time, and the start and end
+  rules.  This is the same data returned by the GetTimeZoneInformation
+  API.  The API may modify the data on the way out, so we have to be
+  careful, but essentially we do a binary comparison against the TZI
+  blocks of various registry keys.  When we find a match, we know what
+  time zone Windows is set to.  Since the registry key is not
+  localized, we can then translate the key through a simple table
+  lookup into the corresponding ICU time zone.
+
+  This strategy doesn't always work because there are zones which
+  share an offset and rules, so more than one TZI block will match.
+  For example, both Tokyo and Seoul are at GMT+9 with no DST rules;
+  their TZI blocks are identical.  For these cases, we fall back to a
+  name lookup.  We attempt to match the display name as stored in the
+  registry for the current zone to the display name stored in the
+  registry for various Windows zones.  By comparing the registry data
+  directly we avoid conversion complications.
+
+  Author: Alan Liu
+  Since: ICU 2.6
+  Based on original code by Carl Brown <cbrown@xnetinc.com>
+','line_number':220,'multiline':True]['text':'*
+ * Main Windows time zone detection function.  Returns the Windows
+ * time zone, translated to an ICU time zone, or NULL upon failure.
+ ','line_number':268,'multiline':True]['text':' 2 letter iso code in UTF-16','line_number':283,'multiline':True]['text':' 2 letter iso code in ansi ','line_number':284,'multiline':True]['text':' Obtain TIME_ZONE_INFORMATION from the API, and then convert it
+       to TZI.  We could also interrogate the registry directly; we do
+       this below if needed. ','line_number':295,'multiline':True]['text':' Convert the wchar_t* standard name to char* ','line_number':308,'multiline':True]['text':'
+        Windows Vista+ provides us with a "TimeZoneKeyName" that is not localized
+        and can be used to directly map a name in our bundle. Try to use that first
+        if we're on Vista or higher
+    ','line_number':321,'multiline':True]['text':' actually includes Windows Server 2008 as well, but don't worry about it ','line_number':329,'multiline':True]['text':' fallback to default "001" and reset status ','line_number':341,'multiline':True]['text':' safe to assume 'char' is ASCII compatible on windows ','line_number':349,'multiline':True]['text':' Note: We get the winid not from static tables but from resource bundle. ','line_number':361,'multiline':True]['text':' Windows alters the DaylightBias in some situations.
+                   Using the bias and the rules suffices, so overwrite
+                   these unreliable fields. ','line_number':373,'multiline':True]['text':' fallback to default "001" and reset status ','line_number':385,'multiline':True]['text':' Get the standard name from the registry key to compare with
+                           the one from Windows API call. ','line_number':391,'multiline':True]['text':' tmpid buffer holds the ICU timezone ID corresponding to the timezone ID from Windows.
+                         * If none is found, tmpid buffer will contain a fallback ID (i.e. the time zone ID matching
+                         * the current time zone information)
+                         ','line_number':401,'multiline':True]['text':' if icuTZ has more than one city, take only the first (i.e. terminate icuTZ at first space) ','line_number':406,'multiline':True]['text':' safe to assume 'char' is ASCII compatible on windows ','line_number':409,'multiline':True]['text':'
+     * Copy the timezone ID to icuid to be returned.
+     ','line_number':423,'multiline':True]['text':' U_PLATFORM_HAS_WIN32_API ','line_number':439,'multiline':True]

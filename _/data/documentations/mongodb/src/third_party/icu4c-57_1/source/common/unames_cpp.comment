@@ -1,0 +1,171 @@
+['text':'
+******************************************************************************
+*
+*   Copyright (C) 1999-2014, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+******************************************************************************
+*   file name:  unames.c
+*   encoding:   US-ASCII
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 1999oct04
+*   created by: Markus W. Scherer
+','line_number':1,'multiline':True]['text':' prototypes ------------------------------------------------------------- ','line_number':34,'multiline':True]['text':'
+ * This struct was replaced by explicitly accessing equivalent
+ * fields from triples of uint16_t.
+ * The Group struct was padded to 8 bytes on compilers for early ARM CPUs,
+ * which broke the assumption that sizeof(Group)==6 and that the ++ operator
+ * would advance by 6 bytes (3 uint16_t).
+ *
+ * We can't just change the data structure because it's loaded from a data file,
+ * and we don't want to make it less compact, so we changed the access code.
+ *
+ * For details see ICU tickets 6331 and 6008.
+typedef struct {
+    uint16_t groupMSB,
+             offsetHigh, offsetLow; / * avoid padding * /
+} Group;
+ ','line_number':43,'multiline':True]['text':'
+ * Get the 32-bit group offset.
+ * @param group (const uint16_t *) pointer to a Group triple of uint16_t
+ * @return group offset (int32_t)
+ ','line_number':66,'multiline':True]['text':'
+ * Get the groups table from a UCharNames struct.
+ * The groups table consists of one uint16_t groupCount followed by
+ * groupCount groups. Each group is a triple of uint16_t, see GROUP_LENGTH
+ * and the comment for the old struct Group above.
+ *
+ * @param names (const UCharNames *) pointer to the UCharNames indexes
+ * @return (const uint16_t *) pointer to the groups table
+ ','line_number':86,'multiline':True]['text':'
+ * Maximum length of character names (regular & 1.0).
+ ','line_number':108,'multiline':True]['text':'
+ * Set of chars used in character names (regular & 1.0).
+ * Chars are platform-dependent (can be EBCDIC).
+ ','line_number':113,'multiline':True]['text':' implementation ----------------------------------------------------------- ','line_number':161,'multiline':True]['text':'context','line_number':178,'multiline':True]['text':'type','line_number':179,'multiline':True]['text':'name','line_number':179,'multiline':True]['text':' dataFormat="unam" ','line_number':185,'multiline':True]['text':'
+ * Important: expandName() and compareName() are almost the same -
+ * apply fixes to both.
+ *
+ * UnicodeData.txt uses ';' as a field separator, so no
+ * field can contain ';' as part of its contents.
+ * In unames.dat, it is marked as token[';']==-1 only if the
+ * semicolon is used in the data file - which is iff we
+ * have Unicode 1.0 names or ISO comments or aliases.
+ * So, it will be token[';']==-1 if we store U1.0 names/ISO comments/aliases
+ * although we know that it will never be part of a name.
+ ','line_number':223,'multiline':True]['text':'
+         * skip the modern name if it is not requested _and_
+         * if the semicolon byte value is a character, not a token number
+         ','line_number':245,'multiline':True]['text':'
+             * the semicolon byte value is a token number, therefore
+             * only modern names are stored in unames.dat and there is no
+             * such requested alternate name here
+             ','line_number':260,'multiline':True]['text':' write each letter directly, and write a token word per token ','line_number':269,'multiline':True]['text':' implicit letter ','line_number':276,'multiline':True]['text':' finished ','line_number':279,'multiline':True]['text':' this is a lead byte for a double-byte token ','line_number':285,'multiline':True]['text':' explicit letter ','line_number':291,'multiline':True]['text':' stop, but skip the semicolon if we are seeking
+                       extended names and there was no 2.0 name but there
+                       is a 1.0 name. ','line_number':294,'multiline':True]['text':' finished ','line_number':302,'multiline':True]['text':' write token word ','line_number':306,'multiline':True]['text':' zero-terminate ','line_number':315,'multiline':True]['text':'
+ * compareName() is almost the same as expandName() except that it compares
+ * the currently expanded name to an input name.
+ * It returns the match/no match result as soon as possible.
+ ','line_number':323,'multiline':True]['text':'
+         * skip the modern name if it is not requested _and_
+         * if the semicolon byte value is a character, not a token number
+         ','line_number':339,'multiline':True]['text':'
+             * the semicolon byte value is a token number, therefore
+             * only modern names are stored in unames.dat and there is no
+             * such requested alternate name here
+             ','line_number':354,'multiline':True]['text':' compare each letter directly, and compare a token word per token ','line_number':363,'multiline':True]['text':' implicit letter ','line_number':370,'multiline':True]['text':' finished ','line_number':375,'multiline':True]['text':' this is a lead byte for a double-byte token ','line_number':381,'multiline':True]['text':' explicit letter ','line_number':387,'multiline':True]['text':' stop, but skip the semicolon if we are seeking
+                       extended names and there was no 2.0 name but there
+                       is a 1.0 name. ','line_number':392,'multiline':True]['text':' finished ','line_number':400,'multiline':True]['text':' write token word ','line_number':404,'multiline':True]['text':' complete match? ','line_number':415,'multiline':True]['text':' Return unknown if the table of names above is not up to
+       date. ','line_number':436,'multiline':True]['text':'
+ * getGroup() does a binary search for the group that contains the
+ * Unicode code point "code".
+ * The return value is always a valid Group* that may contain "code"
+ * or else is the highest group before "code".
+ * If the lowest group is after "code", then that one is returned.
+ ','line_number':473,'multiline':True]['text':' binary search for the group of names that contains the one for code ','line_number':488,'multiline':True]['text':' return this regardless of whether it is an exact match ','line_number':498,'multiline':True]['text':'
+ * expandGroupLengths() reads a block of compressed lengths of 32 strings and
+ * expands them into offsets and lengths for each string.
+ * Lengths are stored with a variable-width encoding in consecutive nibbles:
+ * If a nibble<0xc, then it is the length itself (0=empty string).
+ * If a nibble>=0xc, then it forms a length value with the following nibble.
+ * Calculation see below.
+ * The offsets and lengths arrays must be at least 33 (one more) long because
+ * there is no check here at the end if the last nibble is still used.
+ ','line_number':502,'multiline':True]['text':' read the lengths of the 32 strings in this group and get each string's offset ','line_number':515,'multiline':True]['text':' all 32 lengths must be read to get the offset of the first group string ','line_number':519,'multiline':True]['text':' read even nibble - MSBs of lengthByte ','line_number':523,'multiline':True]['text':' double-nibble length spread across two bytes ','line_number':525,'multiline':True]['text':' &0xf0 ','line_number':528,'multiline':True]['text':' double-nibble length spread across this one byte ','line_number':529,'multiline':True]['text':' single-nibble length in MSBs ','line_number':532,'multiline':True]['text':' read odd nibble - LSBs of lengthByte ','line_number':543,'multiline':True]['text':' this nibble was not consumed for a double-nibble length above ','line_number':545,'multiline':True]['text':' single-nibble length in LSBs ','line_number':548,'multiline':True]['text':' prevent double-nibble detection in the next iteration ','line_number':556,'multiline':True]['text':' now, s is at the first group string ','line_number':560,'multiline':True]['text':' group not found ','line_number':583,'multiline':True]['text':' zero-terminate ','line_number':584,'multiline':True]['text':'
+ * enumGroupNames() enumerates all the names in a 32-group
+ * and either calls the enumerator function or finds a given input name.
+ ','line_number':592,'multiline':True]['text':' here, we assume that the buffer is large enough ','line_number':614,'multiline':True]['text':'
+ * enumExtNames enumerate extended names.
+ * It only needs to do it if it is called with a real function and not
+ * with the dummy DO_FIND_NAME, because u_charFromName() does a check
+ * for extended names by itself.
+ ','line_number':635,'multiline':True]['text':' here, we assume that the buffer is large enough ','line_number':651,'multiline':True]['text':' find the group that contains start, or the highest before it ','line_number':675,'multiline':True]['text':' enumerate synthetic names between start and the group start ','line_number':679,'multiline':True]['text':' if start and limit-1 are in the same group, then enumerate only in that one ','line_number':692,'multiline':True]['text':' enumerate characters in the partial start group ','line_number':701,'multiline':True]['text':' continue with the next group ','line_number':708,'multiline':True]['text':' make sure that we start enumerating with the first group after start ','line_number':711,'multiline':True]['text':' enumerate entire groups between the start- and end-groups ','line_number':725,'multiline':True]['text':' enumerate within the end group (group[GROUP_MSB]==endGroupMSB) ','line_number':745,'multiline':True]['text':' we have not found a group, which means everything is made of
+       extended names. ','line_number':758,'multiline':True]['text':' suffix elements ','line_number':772,'multiline':True]['text':' output fields from here ','line_number':774,'multiline':True]['text':' write elements according to the factors ','line_number':780,'multiline':True]['text':'
+     * the factorized elements are determined by modulo arithmetic
+     * with the factors of this algorithm
+     *
+     * note that for fewer operations, count is decremented here
+     ','line_number':782,'multiline':True]['text':'
+     * we don't need to calculate the last modulus because start<=code<=end
+     * guarantees here that code<=factors[0]
+     ','line_number':794,'multiline':True]['text':' write each element ','line_number':800,'multiline':True]['text':' skip indexes[i] strings ','line_number':806,'multiline':True]['text':' write element ','line_number':816,'multiline':True]['text':' we do not need to perform the rest of this loop for i==count - break here ','line_number':821,'multiline':True]['text':' skip the rest of the strings for this factors[i] ','line_number':826,'multiline':True]['text':' zero-terminate ','line_number':836,'multiline':True]['text':'
+ * Important:
+ * Parts of findAlgName() are almost the same as some of getAlgName().
+ * Fixes must be applied to both.
+ ','line_number':844,'multiline':True]['text':' Only the normative character name can be algorithmic. ','line_number':854,'multiline':True]['text':' zero-terminate ','line_number':856,'multiline':True]['text':' name = prefix hex-digits ','line_number':865,'multiline':True]['text':' copy prefix ','line_number':871,'multiline':True]['text':' write hexadecimal code point value ','line_number':876,'multiline':True]['text':' zero-terminate ','line_number':879,'multiline':True]['text':' name = prefix factorized-elements ','line_number':901,'multiline':True]['text':' copy prefix ','line_number':908,'multiline':True]['text':' undefined type ','line_number':918,'multiline':True]['text':' zero-terminate ','line_number':919,'multiline':True]['text':'
+ * Important: enumAlgNames() and findAlgName() are almost the same.
+ * Any fix must be applied to both.
+ ','line_number':929,'multiline':True]['text':' get the full name of the start character ','line_number':950,'multiline':True]['text':' call the enumerator function with this first character ','line_number':956,'multiline':True]['text':' go to the end of the name; all these names have the same length ','line_number':961,'multiline':True]['text':' enumerate the rest of the names ','line_number':967,'multiline':True]['text':' increment the hexadecimal number on a character-basis ','line_number':969,'multiline':True]['text':' name = prefix factorized-elements ','line_number':1001,'multiline':True]['text':' copy prefix ','line_number':1003,'multiline':True]['text':' append the suffix of the start character ','line_number':1011,'multiline':True]['text':' call the enumerator function with this first character ','line_number':1017,'multiline':True]['text':' enumerate the rest of the names ','line_number':1022,'multiline':True]['text':' increment the indexes in lexical order bound by the factors ','line_number':1024,'multiline':True]['text':' skip one index and its element string ','line_number':1029,'multiline':True]['text':' reset this index to 0 and its element string to the first one ','line_number':1037,'multiline':True]['text':' to make matters a little easier, just append all elements to the suffix ','line_number':1043,'multiline':True]['text':' zero-terminate ','line_number':1053,'multiline':True]['text':' undefined type ','line_number':1063,'multiline':True]['text':'
+ * findAlgName() is almost the same as enumAlgNames() except that it
+ * returns the code point for a name if it fits into the range.
+ * It returns 0xffff otherwise.
+ ','line_number':1070,'multiline':True]['text':' name = prefix hex-digits ','line_number':1085,'multiline':True]['text':' compare prefix ','line_number':1091,'multiline':True]['text':' read hexadecimal code point value ','line_number':1098,'multiline':True]['text':' does it fit into the range? ','line_number':1112,'multiline':True]['text':' name = prefix factorized-elements ','line_number':1130,'multiline':True]['text':' compare prefix ','line_number':1132,'multiline':True]['text':' initialize the suffix elements for enumeration; indexes should all be set to 0 ','line_number':1142,'multiline':True]['text':' compare the first suffix ','line_number':1146,'multiline':True]['text':' enumerate and compare the rest of the suffixes ','line_number':1151,'multiline':True]['text':' increment the indexes in lexical order bound by the factors ','line_number':1153,'multiline':True]['text':' skip one index and its element string ','line_number':1158,'multiline':True]['text':' reset this index to 0 and its element string to the first one ','line_number':1165,'multiline':True]['text':' to make matters a little easier, just compare all elements of the suffix ','line_number':1171,'multiline':True]['text':' does not match ','line_number':1177,'multiline':True]['text':' undefined type ','line_number':1189,'multiline':True]['text':' sets of name characters, maximum name lengths ---------------------------- ','line_number':1196,'multiline':True]['text':' enumerate algorithmic ranges ','line_number':1220,'multiline':True]['text':' name = prefix + (range->variant times) hex-digits ','line_number':1227,'multiline':True]['text':' prefix ','line_number':1228,'multiline':True]['text':' name = prefix factorized-elements ','line_number':1235,'multiline':True]['text':' prefix length ','line_number':1240,'multiline':True]['text':' start of factor suffixes ','line_number':1243,'multiline':True]['text':' get the set and maximum factor suffix length for each factor ','line_number':1245,'multiline':True]['text':' unknown type ','line_number':1264,'multiline':True]['text':'
+         * for each category, count the length of the category name
+         * plus 9=
+         * 2 for <>
+         * 1 for -
+         * 6 for most hex digits per code point
+         ','line_number':1279,'multiline':True]['text':' implicit letter ','line_number':1304,'multiline':True]['text':' this is a lead byte for a double-byte token ','line_number':1310,'multiline':True]['text':' explicit letter ','line_number':1315,'multiline':True]['text':' count token word ','line_number':1319,'multiline':True]['text':' use cached token length ','line_number':1321,'multiline':True]['text':' enumerate all groups ','line_number':1362,'multiline':True]['text':' enumerate all lines in each group ','line_number':1367,'multiline':True]['text':' read regular name ','line_number':1377,'multiline':True]['text':' read Unicode 1.0 name ','line_number':1386,'multiline':True]['text':' read ISO comment ','line_number':1395,'multiline':True]['text':'length=calcNameSetLength(tokens, tokenCount, tokenStrings, tokenLengths, gISOCommentSet, &line, lineLimit);','line_number':1396,'multiline':True]['text':' set gMax... - name length last for threading ','line_number':1407,'multiline':True]['text':' set hex digits, used in various names, and <>-, used in extended names ','line_number':1424,'multiline':True]['text':' set sets and lengths from algorithmic names ','line_number':1429,'multiline':True]['text':' set sets and lengths from extended names ','line_number':1432,'multiline':True]['text':' set sets and lengths from group names, set global maximum values ','line_number':1435,'multiline':True]['text':' public API --------------------------------------------------------------- ','line_number':1443,'multiline':True]['text':' check the argument values ','line_number':1456,'multiline':True]['text':' try algorithmic names first ','line_number':1472,'multiline':True]['text':' extended character name ','line_number':1489,'multiline':True]['text':' normal character name ','line_number':1493,'multiline':True]['text':'c','line_number':1502,'multiline':True]['text':' check the argument values ','line_number':1505,'multiline':True]['text':' Undefined, but use this for backwards compatibility. ','line_number':1527,'multiline':True]['text':' construct the uppercase and lowercase of the name first ','line_number':1542,'multiline':True]['text':' name too long, there is no such character ','line_number':1553,'multiline':True]['text':' i==strlen(name)==strlen(lower)==strlen(upper)','line_number':1557,'multiline':False]['text':' try extended names first ','line_number':1559,'multiline':True]['text':' Parse a string like "<category-HHHH>" where HHHH is a hex code point.','line_number':1562,'multiline':False]['text':' Now validate the category name.
+                       We could use a binary search, or a trie, if
+                       we really wanted to. ','line_number':1582,'multiline':True]['text':' try algorithmic names now ','line_number':1603,'multiline':True]['text':' normal character name ','line_number':1615,'multiline':True]['text':' interleave the data-driven ones with the algorithmic ones ','line_number':1655,'multiline':True]['text':' iterate over all algorithmic ranges; assume that they are in ascending order ','line_number':1656,'multiline':True]['text':' enumerate the character names before the current algorithmic range ','line_number':1661,'multiline':True]['text':' here: start<limit ','line_number':1662,'multiline':True]['text':' enumerate the character names in the current algorithmic range ','line_number':1673,'multiline':True]['text':' here: algRange->start<=start<limit ','line_number':1674,'multiline':True]['text':' continue to the next algorithmic range (here: start<limit) ','line_number':1685,'multiline':True]['text':' enumerate the character names after the last algorithmic range ','line_number':1689,'multiline':True]['text':'*
+ * Converts the char set cset into a Unicode set uset.
+ * @param cset Set of 256 bit flags corresponding to a set of chars.
+ * @param uset USet to receive characters. Existing contents are deleted.
+ ','line_number':1703,'multiline':True]['text':' build a char string with all chars that are used in character names ','line_number':1722,'multiline':True]['text':' convert the char string to a UChar string ','line_number':1730,'multiline':True]['text':' add each UChar to the USet ','line_number':1733,'multiline':True]['text':' non-invariant chars become (UChar)0 ','line_number':1735,'multiline':True]['text':'*
+ * Fills set with characters that are used in Unicode character names.
+ * @param set USet to receive characters.
+ ','line_number':1741,'multiline':True]['text':' data swapping ------------------------------------------------------------ ','line_number':1750,'multiline':True]['text':'
+ * The token table contains non-negative entries for token bytes,
+ * and -1 for bytes that represent themselves in the data file's charset.
+ * -2 entries are used for lead bytes.
+ *
+ * Direct bytes (-1 entries) must be translated from the input charset family
+ * to the output charset family.
+ * makeTokenMap() writes a permutation mapping for this.
+ * Use it once for single-/lead-byte tokens and once more for all trail byte
+ * tokens. (';' is an unused trail byte marked with -1.)
+ ','line_number':1752,'multiline':True]['text':' Same charset family: identity permutation ','line_number':1777,'multiline':True]['text':' set the direct bytes (byte 0 always maps to itself) ','line_number':1789,'multiline':True]['text':' convert the direct byte character ','line_number':1792,'multiline':True]['text':' enter the converted character into the map and mark it used ','line_number':1801,'multiline':True]['text':' set the mappings for the rest of the permutation ','line_number':1807,'multiline':True]['text':' set mappings that were not set for direct bytes ','line_number':1809,'multiline':True]['text':' set an output byte value that was not used as an output byte above ','line_number':1811,'multiline':True]['text':'
+         * leave mappings at tokenCount and above unset if tokenCount<256
+         * because they won't be used
+         ','line_number':1819,'multiline':True]['text':' udata_swapDataHeader checks the arguments ','line_number':1842,'multiline':True]['text':' check data format and format version ','line_number':1848,'multiline':True]['text':' dataFormat="unam" ','line_number':1851,'multiline':True]['text':' preflighting: iterate through algorithmic ranges ','line_number':1882,'multiline':True]['text':' swap data ','line_number':1892,'multiline':True]['text':' copy the data for inaccessible bytes ','line_number':1901,'multiline':True]['text':' the initial 4 offsets first ','line_number':1906,'multiline':True]['text':'
+         * now the tokens table
+         * it needs to be permutated along with the compressed name strings
+         ','line_number':1912,'multiline':True]['text':' read and swap the tokenCount ','line_number':1919,'multiline':True]['text':' read the first 512 tokens and make the token maps ','line_number':1925,'multiline':True]['text':' fill the rest of the tokens array if tokenCount<512 ','line_number':1935,'multiline':True]['text':'
+         * swap and permutate the tokens
+         * go through a temporary array to support in-place swapping
+         ','line_number':1943,'multiline':True]['text':' swap and permutate single-/lead-byte tokens ','line_number':1955,'multiline':True]['text':' swap and permutate trail-byte tokens ','line_number':1960,'multiline':True]['text':' copy the result into the output and free the temporary array ','line_number':1965,'multiline':True]['text':'
+         * swap the token strings but not a possible padding byte after
+         * the terminating NUL of the last string
+         ','line_number':1969,'multiline':True]['text':' swap the group table ','line_number':1980,'multiline':True]['text':'
+         * swap the group strings
+         * swap the string bytes but not the nibble-encoded string lengths
+         ','line_number':1985,'multiline':True]['text':' iterate through string groups until only a few padding bytes are left ','line_number':2002,'multiline':True]['text':' move past the length bytes ','line_number':2006,'multiline':True]['text':' total number of string bytes in this group ','line_number':2011,'multiline':True]['text':' swap the string bytes using map[] and trailMap[] ','line_number':2014,'multiline':True]['text':' token lead byte: swap the trail byte, too ','line_number':2021,'multiline':True]['text':' swap the algorithmic ranges ','line_number':2029,'multiline':True]['text':' swap prefix string ','line_number':2051,'multiline':True]['text':' swap factors and the prefix and factor strings ','line_number':2062,'multiline':True]['text':' swap the strings, up to the last terminating NUL ','line_number':2070,'multiline':True]['text':'
+ * Hey, Emacs, please set the following:
+ *
+ * Local Variables:
+ * indent-tabs-mode: nil
+ * End:
+ *
+ ','line_number':2092,'multiline':True]

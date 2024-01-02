@@ -1,0 +1,49 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]['text':' A thread-safe weak pointer ','line_number':7,'multiline':True]['text':'*
+ * Derive from SupportsThreadSafeWeakPtr to allow thread-safe weak pointers to
+ * an atomically refcounted derived class. These thread-safe weak pointers may
+ * be safely accessed and converted to strong pointers on multiple threads.
+ *
+ * Note that SupportsThreadSafeWeakPtr defines the same member functions as
+ * AtomicRefCounted, so you should not separately inherit from it.
+ *
+ * ThreadSafeWeakPtr and its implementation is distinct from the normal WeakPtr
+ * which is not thread-safe. The interface discipline and implementation details
+ * are different enough that these two implementations are separated for now for
+ * efficiency reasons. If you don't actually need to use weak pointers on
+ * multiple threads, you can just use WeakPtr instead.
+ *
+ * When deriving from SupportsThreadSafeWeakPtr, you should add
+ * MOZ_DECLARE_THREADSAFEWEAKREFERENCE_TYPENAME(ClassName) and
+ * MOZ_DECLARE_REFCOUNTED_TYPENAME(ClassName) to the public section of your
+ * class, where ClassName is the name of your class.
+ *
+ * Example usage:
+ *
+ *   class C : public SupportsThreadSafeWeakPtr<C>
+ *   {
+ *   public:
+ *     MOZ_DECLARE_THREADSAFEWEAKREFERENCE_TYPENAME(C)
+ *     MOZ_DECLARE_REFCOUNTED_TYPENAME(C)
+ *     void doStuff();
+ *   };
+ *
+ *   ThreadSafeWeakPtr<C> weak;
+ *   {
+ *     RefPtr<C> strong = new C;
+ *     if (strong) {
+ *       strong->doStuff();
+ *     }
+ *     // Make a new weak reference to the object from the strong reference.
+ *     weak = strong;
+ *   }
+ *   MOZ_ASSERT(!bool(weak), "Weak pointers are cleared after all "
+ *                           "strong references are released.");
+ *
+ *   // Convert the weak reference to a strong reference for usage.
+ *   RefPtr<C> other(weak);
+ *   if (other) {
+ *     other->doStuff();
+ *   }
+ ','line_number':9,'multiline':True]['text':' A shared weak reference that is used to track a SupportsThreadSafeWeakPtr','line_number':82,'multiline':False]['text':' object. This object owns the reference count for the tracked object, and can','line_number':83,'multiline':False]['text':' perform atomic refcount upgrades.','line_number':84,'multiline':False]['text':' The first time this is called mPtr is null, so don't','line_number':95,'multiline':False]['text':' invoke any methods on mPtr.','line_number':96,'multiline':False]['text':' Creates a new RefPtr to the tracked object.','line_number':107,'multiline':False]['text':' Increment our strong reference count only if it is nonzero, meaning that','line_number':109,'multiline':False]['text':' the object is still alive.','line_number':110,'multiline':False]['text':' Number of strong references to the underlying data structure.','line_number':121,'multiline':False]['text':'','line_number':122,'multiline':False]['text':' Other than the initial strong `AddRef` call incrementing this value to 1,','line_number':123,'multiline':False]['text':' which must occur before any weak references are taken, once this value','line_number':124,'multiline':False]['text':' reaches `0` again it cannot be changed.','line_number':125,'multiline':False]['text':' Raw pointer to the tracked object. It is never valid to read this value','line_number':128,'multiline':False]['text':' outside of `getRefPtr()`.','line_number':129,'multiline':False]['text':' namespace detail','line_number':133,'multiline':False]['text':' For usage documentation for SupportsThreadSafeWeakPtr, see the header-level','line_number':135,'multiline':False]['text':' documentation.','line_number':136,'multiline':False]['text':'','line_number':137,'multiline':False]['text':' To understand the layout of SupportsThreadSafeWeakPtr, consider the following','line_number':138,'multiline':False]['text':' simplified declaration:','line_number':139,'multiline':False]['text':'','line_number':140,'multiline':False]['text':' class MyType: SupportsThreadSafeWeakPtr { uint32_t mMyData; ... }','line_number':141,'multiline':False]['text':'','line_number':142,'multiline':False]['text':' Which will result in the following layout:','line_number':143,'multiline':False]['text':'','line_number':144,'multiline':False]['text':'   +--------------------+','line_number':145,'multiline':False]['text':'   | MyType             | <========================================+','line_number':146,'multiline':False]['text':'   +--------------------+                                          I','line_number':147,'multiline':False]['text':'   | RefPtr mWeakRef  o===========> +-------------------------+    I','line_number':148,'multiline':False]['text':'   | uint32_t mMyData   |           | ThreadSafeWeakReference |    I','line_number':149,'multiline':False]['text':'   +--------------------+           +-------------------------+    I','line_number':150,'multiline':False]['text':'                                    | RC mRefCount            |    I','line_number':151,'multiline':False]['text':'                                    | RC mStrongCount         |    I','line_number':152,'multiline':False]['text':'                                    | MyType* mPtr          o======+','line_number':153,'multiline':False]['text':'                                    +-------------------------+','line_number':154,'multiline':False]['text':'','line_number':155,'multiline':False]['text':' The mRefCount inherited from AtomicRefCounted<ThreadSafeWeakReference<T>> is','line_number':156,'multiline':False]['text':' the weak count. This means MyType implicitly holds a weak reference, so if','line_number':157,'multiline':False]['text':' the weak count ever hits 0, we know all strong *and* weak references are','line_number':158,'multiline':False]['text':' gone, and it's safe to free the ThreadSafeWeakReference. MyType's AddRef and','line_number':159,'multiline':False]['text':' Release implementations otherwise only manipulate mStrongCount.','line_number':160,'multiline':False]['text':'','line_number':161,'multiline':False]['text':' It's necessary to keep the counts in a separate allocation because we need','line_number':162,'multiline':False]['text':' to be able to delete MyType while weak references still exist. This ensures','line_number':163,'multiline':False]['text':' that weak references can still access all the state necessary to check if','line_number':164,'multiline':False]['text':' they can be upgraded (mStrongCount).','line_number':165,'multiline':False]['text':' The `this` pointer will not have subclasses initialized yet, but it will','line_number':171,'multiline':False]['text':' also not be read until a weak pointer is upgraded, which should be after','line_number':172,'multiline':False]['text':' this point.','line_number':173,'multiline':False]['text':' Compatibility with RefPtr','line_number':181,'multiline':False]['text':' Because we have atomically decremented the refcount above, only one','line_number':196,'multiline':False]['text':' thread can get a 0 count here. Thus, it is safe to access and destroy','line_number':197,'multiline':False]['text':' |this| here.','line_number':198,'multiline':False]['text':' No other thread can acquire a strong reference to |this| anymore','line_number':199,'multiline':False]['text':' through our weak pointer, as upgrading a weak pointer always uses','line_number':200,'multiline':False]['text':' |IncrementIfNonzero|, meaning the refcount can't leave a zero reference','line_number':201,'multiline':False]['text':' state.','line_number':202,'multiline':False]['text':' NOTE: We can't update our refcount to the marker `DEAD` value here, as','line_number':203,'multiline':False]['text':' it may still be read by mWeakRef.','line_number':204,'multiline':False]['text':' Compatibility with wtf::RefPtr','line_number':209,'multiline':False]['text':' A thread-safe variant of a weak pointer','line_number':225,'multiline':False]['text':' Be careful to use the weak reference type T in the','line_number':228,'multiline':False]['text':' SupportsThreadSafeWeakPtr<T> definition.','line_number':229,'multiline':False]['text':' Get the underlying shared weak reference to the object.','line_number':243,'multiline':False]['text':' Use the explicit `IsNull()` or `IsDead()` methods instead.','line_number':260,'multiline':False]['text':' Check if the ThreadSafeWeakPtr was created wrapping a null pointer.','line_number':263,'multiline':False]['text':' Check if the managed object is nullptr or has already been destroyed. Once','line_number':266,'multiline':False]['text':' IsDead returns true, this ThreadSafeWeakPtr can never be upgraded again','line_number':267,'multiline':False]['text':' (until it has been re-assigned), but a false return value does NOT imply','line_number':268,'multiline':False]['text':' that any future upgrade will be successful.','line_number':269,'multiline':False]['text':' Convert the weak pointer to a strong RefPtr.','line_number':292,'multiline':False]['text':' Gets a new strong reference of the proper type T to the tracked object.','line_number':296,'multiline':False]['text':' A shared weak reference to an object. Note that this may be null so as to','line_number':304,'multiline':False]['text':' save memory (at the slight cost of an extra null check) if no object is','line_number':305,'multiline':False]['text':' being tracked.','line_number':306,'multiline':False]['text':' namespace mozilla','line_number':310,'multiline':False]['text':' mozilla_ThreadSafeWeakPtr_h ','line_number':319,'multiline':True]

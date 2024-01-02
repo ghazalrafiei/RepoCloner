@@ -1,0 +1,126 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * Represents the two halves of a pipeline that will execute in a sharded cluster. 'shardsPipeline'
+ * will execute in parallel on each shard, and 'mergePipeline' will execute on the merge host -
+ * either one of the shards or a mongos.
+ ','line_number':65,'multiline':True]['text':' If set, the cursors from the shards are expected to be sorted according to this spec, and to','line_number':81,'multiline':False]['text':' have populated a "$sortKey" metadata field which can be used to compare the results.','line_number':82,'multiline':False]['text':' The exchange specification that will be sent to shards as part of the aggregate command.','line_number':87,'multiline':False]['text':' It will be used by producers to determine how to distribute documents to consumers.','line_number':88,'multiline':False]['text':' Shards that will run the consumer part of the exchange.','line_number':91,'multiline':False]['text':' True if this pipeline was split, and the second half of the pipeline needs to be run on','line_number':96,'multiline':False]['text':' the primary shard for the database.','line_number':97,'multiline':False]['text':' Populated if this *is not* an explain, this vector represents the cursors on the remote','line_number':100,'multiline':False]['text':' shards.','line_number':101,'multiline':False]['text':' Populated if this *is* an explain, this vector represents the results from each shard.','line_number':104,'multiline':False]['text':' The split version of the pipeline if more than one shard was targeted, otherwise','line_number':107,'multiline':False]['text':' boost::none.','line_number':108,'multiline':False]['text':' If the pipeline targeted a single shard, this is the pipeline to run on that shard.','line_number':111,'multiline':False]['text':' The command object to send to the targeted shards.','line_number':114,'multiline':False]['text':' How many exchange producers are running the shard part of splitPipeline.','line_number':117,'multiline':False]['text':' The exchange specification if the query can run with the exchange otherwise boost::none.','line_number':120,'multiline':False]['text':'*
+ * If the merging pipeline is eligible for an $exchange merge optimization, returns the information
+ * required to set that up.
+ ','line_number':124,'multiline':True]['text':'*
+ * Split the current Pipeline into a Pipeline for each shard, and a Pipeline that combines the
+ * results within a merging process. This call also performs optimizations with the aim of reducing
+ * computing time and network traffic when a pipeline has been split into two pieces.
+ *
+ * The 'mergePipeline' returned as part of the SplitPipeline here is not ready to execute until the
+ * 'shardsPipeline' has been sent to the shards and cursors have been established. Once cursors have
+ * been established, the merge pipeline can be made executable by calling 'addMergeCursorsSource()'
+ ','line_number':131,'multiline':True]['text':'*
+ * Used to indicate if a pipeline contains any data source requiring extra handling for targeting
+ * shards.
+ ','line_number':142,'multiline':True]['text':' Indicates a pipeline has a $changeStream stage.','line_number':148,'multiline':False]['text':' Indicates the desugared pipeline starts with a $queue stage.','line_number':149,'multiline':False]['text':'*
+ * Targets shards for the pipeline and returns a struct with the remote cursors or results, and the
+ * pipeline that will need to be executed to merge the results from the remotes. If a stale shard
+ * version is encountered, refreshes the routing table and tries again. If the command is eligible
+ * for sampling, attaches a unique sample id to the request for one of the targeted shards if the
+ * collection has query sampling enabled and the rate-limited sampler successfully generates a
+ * sample id for it.
+ *
+ * Although the 'pipeline' has an 'ExpressionContext' which indicates whether this operation is an
+ * explain (and if it is an explain what the verbosity is), the caller must explicitly indicate
+ * whether it wishes to dispatch a regular aggregate command or an explain command using the
+ * explicit 'explain' parameter. The reason for this is that in some contexts, the caller wishes to
+ * dispatch a regular agg command rather than an explain command even if the top-level operation is
+ * an explain. Consider the example of an explain that contains a stage like this:
+ *
+ *     {$unionWith: {coll: "innerShardedColl", pipeline: <sub-pipeline>}}
+ *
+ * The explain works by first executing the inner and outer subpipelines in order to gather runtime
+ * statistics. While dispatching the inner pipeline, we must dispatch it not as an explain but as a
+ * regular agg command so that the runtime stats are accurate.
+ ','line_number':152,'multiline':True]['text':'*
+ * Convenience method for callers that want to do 'partitionCursors', 'injectMetaCursors', and
+ * 'addMergeCursorsSource' in order.
+ ','line_number':202,'multiline':True]['text':'*
+ * Targets the shards with an aggregation command built from `ownedPipeline` and explain set to
+ * true. Returns a BSONObj of the form {"pipeline": {<pipelineExplainOutput>}}.
+ ','line_number':210,'multiline':True]['text':'*
+ * Appends the explain output of `dispatchResults` to `result`.
+ ','line_number':216,'multiline':True]['text':'*
+ * Returns the proper routing table to use for targeting shards: either a historical routing table
+ * based on the global read timestamp if there is an active transaction with snapshot level read
+ * concern or the latest routing table otherwise.
+ *
+ * Returns 'ShardNotFound' or 'NamespaceNotFound' if there are no shards in the cluster or if
+ * collection 'execNss' does not exist, respectively.
+ ','line_number':223,'multiline':True]['text':'*
+ * Returns true if an aggregation over 'nss' must run on all shards.
+ ','line_number':234,'multiline':True]['text':'*
+ * Retrieves the desired retry policy based on whether the default writeConcern is set on 'opCtx'.
+ ','line_number':239,'multiline':True]['text':'*
+ * Prepares the given pipeline for execution. This involves:
+ * (1) Determining if the pipeline needs to have a cursor source attached.
+ * (2) If a cursor source is needed, attaching one. This may involve a local or remote cursor,
+ * depending on whether or not the pipeline's expression context permits local reads and a local
+ * read could be used to serve the pipeline. (3) Splitting the pipeline if required, and dispatching
+ * half to the shards, leaving the merging half executing in this process after attaching a
+ * $mergeCursors.
+ *
+ * Will retry on network errors and also on StaleConfig errors to avoid restarting the entire
+ * operation. Returns `ownedPipeline`, but made-ready for execution.
+ ','line_number':244,'multiline':True]['text':'*
+ * For a sharded collection, establishes remote cursors on each shard that may have results, and
+ * creates a DocumentSourceMergeCursors stage to merge the remote cursors. Returns a pipeline
+ * beginning with that DocumentSourceMergeCursors stage. Note that one of the 'remote' cursors might
+ * be this node itself.
+ *
+ * Even if the ExpressionContext indicates that this operation is explain, this function still
+ * dispatches the pipeline as a non-explain, since it must open cursors on the remote nodes and
+ * merge them with a $mergeCursors. If the caller's intent is to dispatch an explain command, it
+ * must use a different helper.
+ *
+ * Use the AggregateCommandRequest alternative for 'targetRequest' to explicitly specify command
+ * options (e.g. read concern) to the shards when establishing remote cursors. Note that doing so
+ * incurs the cost of parsing the pipeline.
+ *
+ * Use the std::pair<AggregateCommandRequest, std::unique_ptr<Pipeline, PipelineDeleter>>
+ * alternative for 'targetRequest' to explicitly specify command options (e.g. read concern) to the
+ * shards when establishing remote cursors, and to pass a pipeline that has already been parsed.
+ * This is useful when the pipeline has already been parsed as it avoids the cost
+ * of parsing it again.
+ ','line_number':261,'multiline':True]['text':'*
+ * For a sharded or unsharded collection, establishes a remote cursor on only the specified shard,
+ * and creates a DocumentSourceMergeCursors stage to consume the remote cursor. Returns a pipeline
+ * beginning with that DocumentSourceMergeCursors stage.
+ *
+ * This function bypasses normal shard targeting for sharded and unsharded collections. It is
+ * especially useful for reading from unsharded collections such as config.transactions and
+ * local.oplog.rs that cannot be targeted by targetShardsAndAddMergeCursors().
+ *
+ * Note that the specified AggregateCommandRequest must not be for an explain command.
+ ','line_number':292,'multiline':True]['text':' namespace sharded_agg_helpers','line_number':308,'multiline':False]['text':' namespace mongo','line_number':309,'multiline':False]

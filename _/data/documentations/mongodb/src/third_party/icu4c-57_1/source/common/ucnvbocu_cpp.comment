@@ -1,0 +1,197 @@
+['text':'
+******************************************************************************
+*
+*   Copyright (C) 2002-2016, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+******************************************************************************
+*   file name:  ucnvbocu.cpp
+*   encoding:   US-ASCII
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 2002mar27
+*   created by: Markus W. Scherer
+*
+*   This is an implementation of the Binary Ordered Compression for Unicode,
+*   in its MIME-friendly form as defined in http://www.unicode.org/notes/tn6/
+','line_number':1,'multiline':True]['text':' BOCU-1 constants and macros ---------------------------------------------- ','line_number':32,'multiline':True]['text':'
+ * BOCU-1 encodes the code points of a Unicode string as
+ * a sequence of byte-encoded differences (slope detection),
+ * preserving lexical order.
+ *
+ * Optimize the difference-taking for runs of Unicode text within
+ * small scripts:
+ *
+ * Most small scripts are allocated within aligned 128-blocks of Unicode
+ * code points. Lexical order is preserved if the "previous code point" state
+ * is always moved into the middle of such a block.
+ *
+ * Additionally, "prev" is moved from anywhere in the Unihan and Hangul
+ * areas into the middle of those areas.
+ *
+ * C0 control codes and space are encoded with their US-ASCII bytes.
+ * "prev" is reset for C0 controls but not for space.
+ ','line_number':34,'multiline':True]['text':' initial value for "prev": middle of the ASCII range ','line_number':53,'multiline':True]['text':' bounding byte values for differences ','line_number':56,'multiline':True]['text':' number of lead bytes ','line_number':63,'multiline':True]['text':' adjust trail byte counts for the use of some C0 control byte values ','line_number':66,'multiline':True]['text':' number of trail bytes ','line_number':70,'multiline':True]['text':'
+ * number of positive and negative single-byte codes
+ * (counting 0==BOCU1_MIDDLE among the positive ones)
+ ','line_number':73,'multiline':True]['text':' number of lead bytes for positive and negative 2/3/4-byte sequences ','line_number':79,'multiline':True]['text':' The difference value range for single-byters. ','line_number':84,'multiline':True]['text':' The difference value range for double-byters. ','line_number':88,'multiline':True]['text':' The difference value range for 3-byters. ','line_number':92,'multiline':True]['text':' The lead byte start values. ','line_number':98,'multiline':True]['text':' ==BOCU1_MAX_LEAD ','line_number':102,'multiline':True]['text':' ==BOCU1_MIN+1 ','line_number':107,'multiline':True]['text':' The length of a byte sequence, according to the lead byte (!=BOCU1_RESET). ','line_number':109,'multiline':True]['text':' The length of a byte sequence, according to its packed form. ','line_number':115,'multiline':True]['text':'
+ * 12 commonly used C0 control codes (and space) are only used to encode
+ * themselves directly,
+ * which makes BOCU-1 MIME-usable and reasonably safe for
+ * ASCII-oriented software.
+ *
+ * These controls are
+ *  0   NUL
+ *
+ *  7   BEL
+ *  8   BS
+ *
+ *  9   TAB
+ *  a   LF
+ *  b   VT
+ *  c   FF
+ *  d   CR
+ *
+ *  e   SO
+ *  f   SI
+ *
+ * 1a   SUB
+ * 1b   ESC
+ *
+ * The other 20 C0 controls are also encoded directly (to preserve order)
+ * but are also used as trail bytes in difference encoding
+ * (for better compression).
+ ','line_number':119,'multiline':True]['text':'
+ * Byte value map for control codes,
+ * from external byte values 0x00..0x20
+ * to trail byte values 0..19 (0..0x13) as used in the difference calculation.
+ * External byte values that are illegal as trail bytes are mapped to -1.
+ ','line_number':149,'multiline':True]['text':'  0     1     2     3     4     5     6     7    ','line_number':157,'multiline':True]['text':'  8     9     a     b     c     d     e     f    ','line_number':160,'multiline':True]['text':'  10    11    12    13    14    15    16    17   ','line_number':163,'multiline':True]['text':'  18    19    1a    1b    1c    1d    1e    1f   ','line_number':166,'multiline':True]['text':'  20   ','line_number':169,'multiline':True]['text':'
+ * Byte value map for control codes,
+ * from trail byte values 0..19 (0..0x13) as used in the difference calculation
+ * to external byte values 0x00..0x20.
+ ','line_number':173,'multiline':True]['text':'  0     1     2     3     4     5     6     7    ','line_number':180,'multiline':True]['text':'  8     9     a     b     c     d     e     f    ','line_number':183,'multiline':True]['text':'  10    11    12    13   ','line_number':186,'multiline':True]['text':'*
+ * Integer division and modulo with negative numerators
+ * yields negative modulo results and quotients that are one more than
+ * what we need here.
+ * This macro adjust the results so that the modulo-value m is always >=0.
+ *
+ * For positive n, the if() condition is always FALSE.
+ *
+ * @param n Number to be split into quotient and rest.
+ *          Will be modified to contain the quotient.
+ * @param d Divisor.
+ * @param m Output variable for the rest (modulo result).
+ ','line_number':190,'multiline':True]['text':' Faster versions of packDiff() for single-byte-encoded diff values. ','line_number':212,'multiline':True]['text':'* Is a diff value encodable in a single byte? ','line_number':214,'multiline':True]['text':'* Encode a diff value in a single byte. ','line_number':217,'multiline':True]['text':'* Is a diff value encodable in two bytes? ','line_number':220,'multiline':True]['text':' BOCU-1 implementation functions ------------------------------------------ ','line_number':223,'multiline':True]['text':'*
+ * Compute the next "previous" value for differencing
+ * from the current code point.
+ *
+ * @param c current code point, 0x3040..0xd7a3 (rest handled by macro below)
+ * @return "previous code point" state value
+ ','line_number':227,'multiline':True]['text':' compute new prev ','line_number':236,'multiline':True]['text':' 0x3040<=c && ','line_number':237,'multiline':True]['text':' Hiragana is not 128-aligned ','line_number':238,'multiline':True]['text':' CJK Unihan ','line_number':241,'multiline':True]['text':' && c<=0xd7a3 ','line_number':243,'multiline':True]['text':' Korean Hangul ','line_number':244,'multiline':True]['text':' mostly small scripts ','line_number':247,'multiline':True]['text':'* Fast version of bocu1Prev() for most scripts. ','line_number':252,'multiline':True]['text':'
+ * The BOCU-1 converter uses the standard setup code in ucnv.c/ucnv_bld.c.
+ * The UConverter fields are used as follows:
+ *
+ * fromUnicodeStatus    encoder's prev (0 will be interpreted as BOCU1_ASCII_PREV)
+ *
+ * toUnicodeStatus      decoder's prev (0 will be interpreted as BOCU1_ASCII_PREV)
+ * mode                 decoder's incomplete (diff<<2)|count (ignored when toULength==0)
+ ','line_number':255,'multiline':True]['text':' BOCU-1-from-Unicode conversion functions --------------------------------- ','line_number':265,'multiline':True]['text':'*
+ * Encode a difference -0x10ffff..0x10ffff in 1..4 bytes
+ * and return a packed integer with them.
+ *
+ * The encoding favors small absolute differences with short encodings
+ * to compress runs of same-script characters.
+ *
+ * Optimized version with unrolled loops and fewer floating-point operations
+ * than the standard packDiff().
+ *
+ * @param diff difference value -0x10ffff..0x10ffff
+ * @return
+ *      0x010000zz for 1-byte sequence zz
+ *      0x0200yyzz for 2-byte sequence yy zz
+ *      0x03xxyyzz for 3-byte sequence xx yy zz
+ *      0xwwxxyyzz for 4-byte sequence ww xx yy zz (ww>0x03)
+ ','line_number':267,'multiline':True]['text':' assume we won't be called where diff==BOCU1_REACH_NEG_1=-64 ','line_number':288,'multiline':True]['text':' mostly positive differences, and single-byte negative ones ','line_number':290,'multiline':True]['text':' single-byte case handled in macros, see below ','line_number':291,'multiline':True]['text':' single byte ','line_number':293,'multiline':True]['text':' two bytes ','line_number':298,'multiline':True]['text':' three bytes ','line_number':308,'multiline':True]['text':' four bytes ','line_number':322,'multiline':True]['text':'
+             * We know that / and % would deliver quotient 0 and rest=diff.
+             * Avoid division and modulo for performance.
+             ','line_number':333,'multiline':True]['text':' two- to four-byte negative differences ','line_number':342,'multiline':True]['text':' two bytes ','line_number':344,'multiline':True]['text':' three bytes ','line_number':353,'multiline':True]['text':' four bytes ','line_number':365,'multiline':True]['text':'
+             * We know that NEGDIVMOD would deliver
+             * quotient -1 and rest=diff+BOCU1_TRAIL_COUNT.
+             * Avoid division and modulo for performance.
+             ','line_number':374,'multiline':True]['text':' set up the local pointers ','line_number':402,'multiline':True]['text':' get the converter state from UConverter ','line_number':410,'multiline':True]['text':' sourceIndex=-1 if the current character began in the previous buffer ','line_number':417,'multiline':True]['text':' conversion loop ','line_number':421,'multiline':True]['text':' fast loop for single-byte differences ','line_number':427,'multiline':True]['text':' use only one loop counter variable, targetCapacity, not also source ','line_number':428,'multiline':True]['text':' restore real values ','line_number':455,'multiline':True]['text':' wrong if offsets==NULL but does not matter ','line_number':457,'multiline':True]['text':' regular loop for all cases ','line_number':459,'multiline':True]['text':'
+                 * ISO C0 control & space:
+                 * Encode directly for MIME compatibility,
+                 * and reset state except for space, to not disrupt compression.
+                 ','line_number':466,'multiline':True]['text':' test the following code unit ','line_number':485,'multiline':True]['text':' no more input ','line_number':493,'multiline':True]['text':' negative lead surrogate as "incomplete" indicator to avoid c=0 everywhere else ','line_number':494,'multiline':True]['text':'
+             * all other Unicode code points c==U+0021..U+10ffff
+             * are encoded with the difference c-prev
+             *
+             * a new prev is computed from c,
+             * placed in the middle of a 0x80-block (for most small scripts) or
+             * in the middle of the Unihan and Hangul blocks
+             * to statistically minimize the following difference
+             ','line_number':499,'multiline':True]['text':' optimize 2-byte case ','line_number':519,'multiline':True]['text':' will be 2..4 ','line_number':539,'multiline':True]['text':' write the output character bytes from diff and length ','line_number':544,'multiline':True]['text':' from the first if in the loop we know that targetCapacity>0 ','line_number':545,'multiline':True]['text':' each branch falls through to the next one ','line_number':548,'multiline':True]['text':' case 1: handled above ','line_number':560,'multiline':True]['text':' will never occur ','line_number':565,'multiline':True]['text':'
+                     * We actually do this backwards here:
+                     * In order to save an intermediate variable, we output
+                     * first to the overflow buffer what does not fit into the
+                     * regular target.
+                     ','line_number':573,'multiline':True]['text':' we know that 1<=targetCapacity<length<=4 ','line_number':579,'multiline':True]['text':' each branch falls through to the next one ','line_number':583,'multiline':True]['text':' will never occur ','line_number':594,'multiline':True]['text':' now output what fits into the regular target ','line_number':599,'multiline':True]['text':' length was reduced by targetCapacity ','line_number':600,'multiline':True]['text':' each branch falls through to the next one ','line_number':602,'multiline':True]['text':' will never occur ','line_number':616,'multiline':True]['text':' target overflow ','line_number':620,'multiline':True]['text':' target is full ','line_number':627,'multiline':True]['text':' set the converter state back into UConverter ','line_number':633,'multiline':True]['text':' write back the updated pointers ','line_number':637,'multiline':True]['text':'
+ * Identical to _Bocu1FromUnicodeWithOffsets but without offset handling.
+ * If a change is made in the original function, then either
+ * change this function the same way or
+ * re-copy the original function and remove the variables
+ * offsets, sourceIndex, and nextSourceIndex.
+ ','line_number':643,'multiline':True]['text':' set up the local pointers ','line_number':660,'multiline':True]['text':' get the converter state from UConverter ','line_number':667,'multiline':True]['text':' conversion loop ','line_number':674,'multiline':True]['text':' fast loop for single-byte differences ','line_number':680,'multiline':True]['text':' use only one loop counter variable, targetCapacity, not also source ','line_number':681,'multiline':True]['text':' restore real values ','line_number':704,'multiline':True]['text':' regular loop for all cases ','line_number':707,'multiline':True]['text':'
+                 * ISO C0 control & space:
+                 * Encode directly for MIME compatibility,
+                 * and reset state except for space, to not disrupt compression.
+                 ','line_number':713,'multiline':True]['text':' test the following code unit ','line_number':729,'multiline':True]['text':' no more input ','line_number':736,'multiline':True]['text':' negative lead surrogate as "incomplete" indicator to avoid c=0 everywhere else ','line_number':737,'multiline':True]['text':'
+             * all other Unicode code points c==U+0021..U+10ffff
+             * are encoded with the difference c-prev
+             *
+             * a new prev is computed from c,
+             * placed in the middle of a 0x80-block (for most small scripts) or
+             * in the middle of the Unihan and Hangul blocks
+             * to statistically minimize the following difference
+             ','line_number':742,'multiline':True]['text':' optimize 2-byte case ','line_number':760,'multiline':True]['text':' will be 2..4 ','line_number':777,'multiline':True]['text':' write the output character bytes from diff and length ','line_number':782,'multiline':True]['text':' from the first if in the loop we know that targetCapacity>0 ','line_number':783,'multiline':True]['text':' each branch falls through to the next one ','line_number':786,'multiline':True]['text':' case 2: handled above ','line_number':792,'multiline':True]['text':' case 1: handled above ','line_number':794,'multiline':True]['text':' will never occur ','line_number':798,'multiline':True]['text':'
+                     * We actually do this backwards here:
+                     * In order to save an intermediate variable, we output
+                     * first to the overflow buffer what does not fit into the
+                     * regular target.
+                     ','line_number':805,'multiline':True]['text':' we know that 1<=targetCapacity<length<=4 ','line_number':811,'multiline':True]['text':' each branch falls through to the next one ','line_number':815,'multiline':True]['text':' will never occur ','line_number':826,'multiline':True]['text':' now output what fits into the regular target ','line_number':831,'multiline':True]['text':' length was reduced by targetCapacity ','line_number':832,'multiline':True]['text':' each branch falls through to the next one ','line_number':834,'multiline':True]['text':' will never occur ','line_number':845,'multiline':True]['text':' target overflow ','line_number':849,'multiline':True]['text':' target is full ','line_number':856,'multiline':True]['text':' set the converter state back into UConverter ','line_number':862,'multiline':True]['text':' write back the updated pointers ','line_number':866,'multiline':True]['text':' BOCU-1-to-Unicode conversion functions ----------------------------------- ','line_number':871,'multiline':True]['text':'*
+ * Function for BOCU-1 decoder; handles multi-byte lead bytes.
+ *
+ * @param b lead byte;
+ *          BOCU1_MIN<=b<BOCU1_START_NEG_2 or BOCU1_START_POS_2<=b<BOCU1_MAX_LEAD
+ * @return (diff<<2)|count
+ ','line_number':873,'multiline':True]['text':' positive difference ','line_number':885,'multiline':True]['text':' two bytes ','line_number':887,'multiline':True]['text':' three bytes ','line_number':891,'multiline':True]['text':' four bytes ','line_number':895,'multiline':True]['text':' negative difference ','line_number':900,'multiline':True]['text':' two bytes ','line_number':902,'multiline':True]['text':' three bytes ','line_number':906,'multiline':True]['text':' four bytes ','line_number':910,'multiline':True]['text':' return the state for decoding the trail byte(s) ','line_number':916,'multiline':True]['text':'*
+ * Function for BOCU-1 decoder; handles multi-byte trail bytes.
+ *
+ * @param count number of remaining trail bytes including this one
+ * @param b trail byte
+ * @return new delta for diff including b - <0 indicates an error
+ *
+ * @see decodeBocu1
+ ','line_number':920,'multiline':True]['text':' skip some C0 controls and make the trail byte range contiguous ','line_number':932,'multiline':True]['text':' b<0 for an illegal trail byte value will result in return<0 below ','line_number':934,'multiline':True]['text':' add trail byte into difference and decrement count ','line_number':943,'multiline':True]['text':' count==3 ','line_number':948,'multiline':True]['text':' set up the local pointers ','line_number':969,'multiline':True]['text':' get the converter state from UConverter ','line_number':977,'multiline':True]['text':' mode may be set to UCNV_SI by ucnv_bld.c but then toULength==0 ','line_number':982,'multiline':True]['text':' sourceIndex=-1 if the current character began in the previous buffer ','line_number':989,'multiline':True]['text':' conversion "loop" similar to _SCSUToUnicodeWithOffsets() ','line_number':993,'multiline':True]['text':' fast loop for single-byte differences ','line_number':999,'multiline':True]['text':' use count as the only loop counter variable ','line_number':1000,'multiline':True]['text':' wrong if offsets==NULL but does not matter ','line_number':1028,'multiline':True]['text':' decode a sequence of single and lead bytes ','line_number':1030,'multiline':True]['text':' target is full ','line_number':1033,'multiline':True]['text':' Write a code point directly from a single-byte difference. ','line_number':1041,'multiline':True]['text':'
+             * Direct-encoded C0 control code or space.
+             * Reset prev for C0 control codes but not for space.
+             ','line_number':1051,'multiline':True]['text':' Optimize two-byte case. ','line_number':1063,'multiline':True]['text':' trail byte ','line_number':1070,'multiline':True]['text':' only reset the state, no code point ','line_number':1081,'multiline':True]['text':'
+             * For multi-byte difference lead bytes, set the decoder state
+             * with the partial difference value from the lead byte and
+             * with the number of trail bytes.
+             ','line_number':1086,'multiline':True]['text':' trail byte in any position ','line_number':1105,'multiline':True]['text':' final trail byte, deliver a code point ','line_number':1114,'multiline':True]['text':' calculate the next prev and output c ','line_number':1126,'multiline':True]['text':' output surrogate pair ','line_number':1132,'multiline':True]['text':' target overflow ','line_number':1139,'multiline':True]['text':' set the converter state in UConverter to deal with the next character ','line_number':1152,'multiline':True]['text':' set the converter state back into UConverter ','line_number':1156,'multiline':True]['text':' write back the updated pointers ','line_number':1162,'multiline':True]['text':'
+ * Identical to _Bocu1ToUnicodeWithOffsets but without offset handling.
+ * If a change is made in the original function, then either
+ * change this function the same way or
+ * re-copy the original function and remove the variables
+ * offsets, sourceIndex, and nextSourceIndex.
+ ','line_number':1169,'multiline':True]['text':' set up the local pointers ','line_number':1189,'multiline':True]['text':' get the converter state from UConverter ','line_number':1196,'multiline':True]['text':' mode may be set to UCNV_SI by ucnv_bld.c but then toULength==0 ','line_number':1201,'multiline':True]['text':' conversion "loop" similar to _SCSUToUnicodeWithOffsets() ','line_number':1208,'multiline':True]['text':' fast loop for single-byte differences ','line_number':1214,'multiline':True]['text':' use count as the only loop counter variable ','line_number':1215,'multiline':True]['text':' decode a sequence of single and lead bytes ','line_number':1242,'multiline':True]['text':' target is full ','line_number':1245,'multiline':True]['text':' Write a code point directly from a single-byte difference. ','line_number':1252,'multiline':True]['text':'
+             * Direct-encoded C0 control code or space.
+             * Reset prev for C0 control codes but not for space.
+             ','line_number':1260,'multiline':True]['text':' Optimize two-byte case. ','line_number':1270,'multiline':True]['text':' trail byte ','line_number':1277,'multiline':True]['text':' only reset the state, no code point ','line_number':1287,'multiline':True]['text':'
+             * For multi-byte difference lead bytes, set the decoder state
+             * with the partial difference value from the lead byte and
+             * with the number of trail bytes.
+             ','line_number':1291,'multiline':True]['text':' trail byte in any position ','line_number':1309,'multiline':True]['text':' final trail byte, deliver a code point ','line_number':1318,'multiline':True]['text':' calculate the next prev and output c ','line_number':1330,'multiline':True]['text':' output surrogate pair ','line_number':1335,'multiline':True]['text':' target overflow ','line_number':1340,'multiline':True]['text':' set the converter state in UConverter to deal with the next character ','line_number':1351,'multiline':True]['text':' set the converter state back into UConverter ','line_number':1355,'multiline':True]['text':' write back the updated pointers ','line_number':1361,'multiline':True]['text':' miscellaneous ------------------------------------------------------------ ','line_number':1367,'multiline':True]['text':' CCSID for BOCU-1 ','line_number':1398,'multiline':True]['text':' one UChar generates at least 1 byte and at most 4 bytes ','line_number':1400,'multiline':True]['text':' BOCU-1 never needs to write a subchar ','line_number':1401,'multiline':True]['text':' reserved ','line_number':1405,'multiline':True]

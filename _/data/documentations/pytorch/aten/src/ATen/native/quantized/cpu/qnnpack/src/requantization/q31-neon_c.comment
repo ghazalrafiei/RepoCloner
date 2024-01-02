@@ -1,0 +1,49 @@
+['text':'
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree.
+ ','line_number':1,'multiline':True]['text':' Compute requantization parameters ','line_number':29,'multiline':True]['text':' Multiplier is in [0x40000000, 0x7FFFFF80] range ','line_number':32,'multiline':True]['text':' Shift is in [0, 31] range ','line_number':38,'multiline':True]['text':'
+     * Directly use VQRDMULH/SQRDMULH instruction for Q31 multiplication with
+     * rounding. Although these instruction saturate out-of-range outputs, we
+     * never hit this case in requantization.
+     ','line_number':57,'multiline':True]['text':'
+     * Shift the 32-bit product right with rounding.
+     * Rounding is performed towards closest integer, with midpoints rounded up
+     * (same as away from zero).
+     *
+     * We leverage the "right shift with rounding" instruction (VRSHL.S32 on ARM
+     * NEON, SRSHL in ARM64 Advanced SIMD) to do the shift. However, as this
+     * instruction rounds midpoints up, rather than away from zero, we adjust
+     * the input by subtracting 1 from negative values, but only if shift is
+     * non-zero.
+     ','line_number':67,'multiline':True]['text':'
+     * AArch32 version:
+     *   4x VQRDMULH.S32 Qd, Qm, Qn
+     *   4x VAND Qd, Qm, Dn
+     *   4x VSRA.S32 Qd, Qm, #31
+     *   4x VRSHL.S32 Qd, Qm, Qn
+     *   4x VQMOVN.S32 Dd, Qm
+     *   2x VADD.S16 Qd, Qm, Qn
+     *   2x VQMOVUN.S16 Dd, Qm
+     *   1x VMAX.U8 Qd, Qm, Qn
+     *   1x VMIN.U8 Qd, Qm, Qn
+     * ---------------------
+     * 26 instructions total
+     *
+     * AArch64 version:
+     *   4x SQRDMULH Vd.4S, Vn.4S, Vm.4S
+     *   4x AND Vd.16B, Vn.16B, Vm.16B
+     *   4x SSRA Vd.4S, Vn.4S, #31
+     *   4x SRSHL Vd.4S, Vn.4S, Vm.4S
+     *   2x SQXTN Vd.4H, Vn.4S
+     *   2x SQXTN2 Vd.8H, Vn.4S
+     *   2x ADD Vd.8H, Vn.8H, Vm.8H
+     *   1x SQXTUN Vd.8B, Vn.8H
+     *   1x SQXTUN2 Vd.16B, Vn.8H
+     *   1x UMIN Vd.16B, Vn.16B, Vm.16B
+     *   1x UMAX Vd.16B, Vn.16B, Vm.16B
+     * ---------------------
+     * 26 instructions total
+     ','line_number':111,'multiline':True]

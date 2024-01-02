@@ -1,0 +1,218 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * This is the uniform interface for storing indexes and supporting point queries as well as range
+ * queries. The actual implementation is up to the storage engine. All the storage engines must
+ * support an index key size up to the maximum document size.
+ ','line_number':50,'multiline':True]['text':'*
+     * Constructs a SortedDataInterface. The rsKeyFormat is the RecordId key format of the related
+     * RecordStore.
+     ','line_number':57,'multiline':True]['text':'','line_number':72,'multiline':False]['text':' Data changes','line_number':73,'multiline':False]['text':'','line_number':74,'multiline':False]['text':'*
+     * Return a bulk builder for 'this' index.
+     *
+     * Implementations can assume that 'this' index outlives its bulk
+     * builder.
+     *
+     * @param opCtx the transaction under which keys are added to 'this' index
+     * @param dupsAllowed true if duplicate keys are allowed, and false
+     *        otherwise
+     ','line_number':76,'multiline':True]['text':'*
+     * Inserts the given key into the index, which must have a RecordId appended to the end. Returns
+     * DuplicateKey if `dupsAllowed` is false and the key already exists in the index with a
+     * different RecordId. Returns OK if the key exists with the same RecordId.
+     *
+     * If `includeDuplicateRecordId` is kOn and DuplicateKey is returned, embeds the record id of
+     * the duplicate in the returned status.
+     ','line_number':89,'multiline':True]['text':'*
+     * Remove the entry from the index with the specified KeyString, which must have a RecordId
+     * appended to the end.
+     *
+     * @param opCtx the transaction under which the remove takes place
+     * @param dupsAllowed true to enforce strict checks to ensure we only delete a key with an exact
+     *        match, false otherwise
+     ','line_number':103,'multiline':True]['text':'*
+     * Retuns the RecordId of the first key whose prefix matches this KeyString.
+     *
+     * This will not accept a KeyString with a Discriminator other than kInclusive.
+     ','line_number':115,'multiline':True]['text':'*
+     * Return ErrorCodes::DuplicateKey if there is more than one occurence of 'KeyString' in this
+     * index, and Status::OK() otherwise. This call is only allowed on a unique index, and will
+     * invariant otherwise.
+     *
+     * @param opCtx the transaction under which this operation takes place
+     ','line_number':123,'multiline':True]['text':'*
+     * Attempt to reduce the storage space used by this index via compaction. Only called if the
+     * indexed record store supports compaction-in-place.  If the freeSpaceTargetMB is provided,
+     * compaction will only proceed if the free storage space available is greater than the provided
+     * value.
+     ','line_number':132,'multiline':True]['text':'','line_number':142,'multiline':False]['text':' Information about the tree','line_number':143,'multiline':False]['text':'','line_number':144,'multiline':False]['text':'*
+     * Validates the sorted data. If 'full' is false, only performs checks which do not traverse the
+     * data. If 'full' is true, additionally traverses the data and validates its internal
+     * structure.
+     ','line_number':146,'multiline':True]['text':'*
+     * Return the number of bytes consumed by 'this' index.
+     *
+     * @param opCtx the transaction under which this operation takes place
+     *
+     * @see IndexAccessMethod::getSpaceUsedBytes
+     ','line_number':158,'multiline':True]['text':'*
+     * The number of unused free bytes consumed by this index on disk.
+     ','line_number':167,'multiline':True]['text':'*
+     * Return true if 'this' index is empty, and false otherwise.
+     ','line_number':172,'multiline':True]['text':'*
+     * Prints any storage engine provided metadata for the index entry with key 'keyString'.
+     ','line_number':177,'multiline':True]['text':'*
+     * Return the number of entries in 'this' index.
+     ','line_number':183,'multiline':True]['text':'
+     * Return the KeyString version for 'this' index.
+     ','line_number':188,'multiline':True]['text':'
+     * Return the ordering for 'this' index.
+     ','line_number':195,'multiline':True]['text':'*
+     * Returns the format of the associated RecordStore's RecordId keys.
+     ','line_number':202,'multiline':True]['text':'*
+     * Navigates over the sorted data.
+     *
+     * A cursor is constructed with a direction flag with the following effects:
+     *      - The direction that next() moves.
+     *      - If a seek method hits an exact match on key, forward cursors will be positioned on
+     *        the first value for that key, reverse cursors on the last.
+     *      - If a seek method or restore does not hit an exact match, cursors will be
+     *        positioned on the closest position *after* the query in the direction of the
+     *        search.
+     *      - The end position is on the "far" side of the query. In a forward cursor that means
+     *        that it is the lowest value for the key if the end is exclusive or the first entry
+     *        past the key if the end is inclusive or there are no exact matches.
+     *
+     * A cursor is tied to a transaction, such as the OperationContext or a WriteUnitOfWork
+     * inside that context. Any cursor acquired inside a transaction is invalid outside
+     * of that transaction, instead use the save and restore methods to reestablish the cursor.
+     *
+     * Any method other than the save methods may throw WriteConflict exception. If that
+     * happens, the cursor may not be used again until it has been saved and successfully
+     * restored. If next() or restore() throw a WCE the cursor's position will be the same as
+     * before the call (strong exception guarantee). All other methods leave the cursor in a
+     * valid state but with an unspecified position (basic exception guarantee). All methods
+     * only provide the basic guarantee for exceptions other than WCE.
+     *
+     * Any returned unowned BSON is only valid until the next call to any method on this
+     * interface. The implementations must assume that passed-in unowned BSON is only valid for
+     * the duration of the call.
+     *
+     * Implementations may override any default implementation if they can provide a more
+     * efficient implementation.
+     ','line_number':217,'multiline':True]['text':'*
+         * Tells methods that return an IndexKeyEntry whether the caller is interested
+         * in including the key field.
+         ','line_number':251,'multiline':True]['text':'*
+         * Sets the position to stop scanning. An empty key unsets the end position.
+         *
+         * If next() hits this position, or a seek method attempts to seek past it they
+         * unposition the cursor and return boost::none.
+         *
+         * Setting the end position should be done before seeking since the current position, if
+         * any, isn't checked.
+         ','line_number':263,'multiline':True]['text':'*
+         * Moves forward and returns the new data or boost::none if there is no more data.
+         * If not positioned, returns boost::none.
+         ','line_number':274,'multiline':True]['text':'','line_number':282,'multiline':False]['text':' Seeking','line_number':283,'multiline':False]['text':'','line_number':284,'multiline':False]['text':'*
+         * Seeks to the provided keyString and returns the KeyStringEntry.
+         * The provided keyString has discriminator information encoded.
+         ','line_number':286,'multiline':True]['text':'*
+         * Seeks to the provided keyString and returns the IndexKeyEntry.
+         * The provided keyString has discriminator information encoded.
+         ','line_number':293,'multiline':True]['text':'*
+         * Seeks to the provided keyString and returns the RecordId of the matching key, or
+         * boost::none if one does not exist.
+         * The provided key must always have a kInclusive discriminator.
+         ','line_number':301,'multiline':True]['text':'','line_number':308,'multiline':False]['text':' Saving and restoring state','line_number':309,'multiline':False]['text':'','line_number':310,'multiline':False]['text':'*
+         * Prepares for state changes in underlying data in a way that allows the cursor's
+         * current position to be restored.
+         *
+         * It is safe to call save multiple times in a row.
+         * No other method (excluding destructor) may be called until successfully restored.
+         ','line_number':312,'multiline':True]['text':'*
+         * Prepares for state changes in underlying data without necessarily saving the current
+         * state.
+         *
+         * The cursor's position when restored is unspecified. Caller is expected to seek
+         * following the restore.
+         *
+         * It is safe to call saveUnpositioned multiple times in a row.
+         * No other method (excluding destructor) may be called until successfully restored.
+         ','line_number':321,'multiline':True]['text':'*
+         * Recovers from potential state changes in underlying data.
+         *
+         * If the former position no longer exists, a following call to next() will return the
+         * next closest position in the direction of the scan, if any.
+         *
+         * This handles restoring after either save() or saveUnpositioned().
+         ','line_number':335,'multiline':True]['text':'*
+         * Detaches from the OperationContext. Releases storage-engine resources, unless
+         * setSaveStorageCursorOnDetachFromOperationContext() has been set to true.
+         ','line_number':345,'multiline':True]['text':'*
+         * Reattaches to the OperationContext and reacquires any storage-engine state if necessary.
+         *
+         * It is only legal to call this in the "detached" state. On return, the cursor may still
+         * be a "saved" state if there was a prior call to save(). In this case, callers must still
+         * call restore() to use this object.
+         ','line_number':351,'multiline':True]['text':'*
+         * Toggles behavior on whether to give up the underlying storage cursor (and any record
+         * pointed to by it) on detachFromOperationContext(). This supports the query layer
+         * retaining valid and positioned cursors across commands.
+         ','line_number':360,'multiline':True]['text':'*
+         * Returns true if the record id can be extracted from the unique index key string.
+         *
+         * Unique indexes created prior to 4.2 may contain key strings that do not have
+         * an embedded record id. We will have to look up the record for this key in the index
+         * to obtain the record id.
+         *
+         * This is used primarily during validation to identify unique indexes with keys in the
+         * old format due to rolling upgrades.
+         ','line_number':367,'multiline':True]['text':'*
+     * Returns an unpositioned cursor over 'this' index.
+     *
+     * Implementations can assume that 'this' index outlives all cursors it produces.
+     ','line_number':385,'multiline':True]['text':'','line_number':393,'multiline':False]['text':' Index creation','line_number':394,'multiline':False]['text':'','line_number':395,'multiline':False]['text':'*
+     * Insert an entry into the index with the specified KeyString, without a RecordId
+     * appended to the end.
+     *
+     * This generates index entries consistent with index keys created in the server prior to 4.2.
+     *
+     * For testing only.
+     ','line_number':399,'multiline':True]['text':'*
+ * A version-hiding wrapper around the bulk builder for the Btree.
+ ','line_number':419,'multiline':True]['text':'*
+     * Adds 'keyString' to intermediate storage.
+     *
+     * 'keyString' must be > or >= the last key passed to this function (depends on _dupsAllowed).
+     * If this is violated an error Status (ErrorCodes::InternalError) will be returned.
+     *
+     * Some storage engines require callers to manage a WriteUnitOfWork to perform these inserts
+     * transactionally. Other storage engines do not perform inserts transactionally and will ignore
+     * any parent WriteUnitOfWork.
+     ','line_number':426,'multiline':True]['text':' namespace mongo','line_number':439,'multiline':False]

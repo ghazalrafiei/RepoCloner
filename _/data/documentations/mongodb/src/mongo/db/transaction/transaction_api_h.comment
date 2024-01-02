@@ -1,0 +1,201 @@
+['text':'*
+ *    Copyright (C) 2021-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':' namespace details','line_number':76,'multiline':False]['text':' Max number of retries allowed for a transaction operation. The API uses exponential backoffs','line_number':78,'multiline':False]['text':' capped at 1 second for transient error and commit network error retries, so this corresponds to','line_number':79,'multiline':False]['text':' roughly 2 minutes of sleeps in total between retries meant to loosely mirror the 2 minute timeout','line_number':80,'multiline':False]['text':' used by the driver's convenient transactions API:','line_number':81,'multiline':False]['text':' https://github.com/mongodb/specifications/blob/92d77a6d/source/transactions-convenient-api/transactions-convenient-api.rst','line_number':82,'multiline':False]['text':'*
+ * Encapsulates the command status and write concern error from a response to a commitTransaction
+ * command.
+ ','line_number':86,'multiline':True]['text':'*
+     * Returns an error status with additional context if any of the inner errors are non OK.
+     ','line_number':91,'multiline':True]['text':'*
+ * Interface for the “backend” of an internal transaction responsible for executing commands.
+ * Intended to be overriden and customized for different use cases.
+ ','line_number':109,'multiline':True]['text':'*
+     * Called by the transaction that owns this transaction client to install hooks for attaching
+     * transaction metadata to requests and parsing it from responses. Must be called before any
+     * commands have been sent and cannot be called more than once.
+     ','line_number':117,'multiline':True]['text':'*
+     * Runs the given command as part of the transaction that owns this transaction client.
+     ','line_number':124,'multiline':True]['text':'*
+     * Same as runCommand but will assert the command status is ok.
+     ','line_number':130,'multiline':True]['text':'*
+     * Helper method to run commands representable as a BatchedCommandRequest in the transaction
+     * client's transaction.
+     *
+     * The given stmtIds are included in the sent command. If the API's transaction was spawned on
+     * behalf of a retryable write, the statement ids must be unique for each write in the
+     * transaction as the underlying servers will save history for each id the same as for a
+     * retryable write. A write can opt out of this by sending a -1 statement id or an empty vector,
+     * which is ignored.
+     *
+     * If a sent statement id had already been seen for this transaction, the write with that id
+     * won't apply a second time and instead returns its response from its original execution. That
+     * write's id will be in the batch response's "retriedStmtIds" array field.
+     *
+     * Users of this API for transactions spawned on behalf of retryable writes likely should
+     * include a stmtId for each write that should not execute twice and should check the
+     * "retriedStmtIds" in the returned BatchedCommandResponse to detect when a write had already
+     * applied, and thus the retryable write that spawned this transaction has already committed.
+     * Note that only one "pre" or "post" image can be stored per transaction, so only one
+     * findAndModify per transaction may have a non -1 statement id.
+     *
+     ','line_number':137,'multiline':True]['text':'*
+     * Helper method to run BulkWriteCommandRequest in the transaction client's transaction.
+     ','line_number':164,'multiline':True]['text':'*
+     * Helper method that runs the given find in the transaction client's transaction and will
+     * iterate and exhaust the find's cursor, returning a vector with all matching documents.
+     ','line_number':171,'multiline':True]['text':'*
+     * Whether the implementation expects to work in the client transaction context. The API
+     * currently assumes the client transaction was always started in the server before the API is
+     * invoked, which is true for service entry point clients, but may not be true for all possible
+     * implementations.
+     ','line_number':179,'multiline':True]['text':'*
+     * Returns if the client is eligible to run cluster operations.
+     ','line_number':187,'multiline':True]['text':'*
+ * Encapsulates the logic for executing an internal transaction based on the state in the given
+ * OperationContext and automatically retrying on errors.
+ *
+ * TODO SERVER-65839: Make a version for async contexts that doesn't require an opCtx.
+ ','line_number':196,'multiline':True]['text':'*
+     * Returns a SyncTransactionWithRetries suitable for use within an existing operation. The
+     * session options from the given opCtx will be used to infer the transaction's options.
+     *
+     * Optionally accepts a custom TransactionClient and will default to a client that runs commands
+     * against the local service entry point.
+     *
+     * Will run all tasks synchronously on the caller's thread via the InlineExecutor. Will sleep
+     * between retries and schedule any necessary cleanup (e.g. abortTransaction commands) using the
+     * sleepAndCleanupExecutor.
+     ','line_number':207,'multiline':True]['text':'*
+     * Returns a bundle with the commit command status and write concern error, if any. Any error
+     * prior to receiving a response from commit (e.g. an interruption or a user assertion in the
+     * given callback) will result in a non-ok StatusWith. Note that abort errors are not returned
+     * because an abort will only happen implicitly when another error has occurred, and that
+     * original error is returned instead.
+     *
+     * Will yield resources on the given opCtx before running if a resourceYielder was provided in
+     * the constructor and unyield after running. Unyield will always be attempted if yield
+     * succeeded, but an error from unyield will not be returned if the transaction itself returned
+     * an error.
+     *
+     * TODO SERVER-65840: Allow returning any type.
+     ','line_number':223,'multiline':True]['text':'*
+     * Same as above except will throw if the commit result has a non-ok command status or a write
+     * concern error.
+     ','line_number':239,'multiline':True]['text':'*
+ * Contains implementation details for the above API. Classes in this namespace should not be used
+ * directly.
+ ','line_number':256,'multiline':True]['text':'*
+ * Customization point for behaviors different in the default SEPTransactionClient and the one for
+ * running distributed transactions.
+ ','line_number':262,'multiline':True]['text':'*
+     * Makes any necessary modifications to the given command, e.g. changing the name to the
+     * "cluster" version for the cluster behaviors.
+     ','line_number':270,'multiline':True]['text':'*
+     * Returns a future with the result of running the given request.
+     ','line_number':276,'multiline':True]['text':'*
+     * Returns if the client is eligible to run cluster operations.
+     ','line_number':282,'multiline':True]['text':'*
+ * Default behaviors that does not modify commands and runs them against the local process service
+ * entry point.
+ ','line_number':288,'multiline':True]['text':'*
+ * Default transaction client that runs given commands through the local process service entry
+ * point.
+ ','line_number':306,'multiline':True]['text':'*
+ * Encapsulates the logic for an internal transaction based on the state in the given
+ * OperationContext.
+ ','line_number':380,'multiline':True]['text':'*
+     * Constructs a Transaction with the given TransactionClient and extracts the session options
+     * and infers its execution context from the given OperationContext.
+     ','line_number':404,'multiline':True]['text':'*
+     * Sets the callback to be used by this transaction.
+     ','line_number':420,'multiline':True]['text':'*
+     * Runs the previously set callback with the TransactionClient owned by this transaction.
+     ','line_number':428,'multiline':True]['text':'*
+     * Used by the transaction runner to commit the transaction. Returns a future with a non-OK
+     * status if the commit failed to send, otherwise returns a future with a bundle with the
+     * command and write concern statuses.
+     ','line_number':433,'multiline':True]['text':'*
+     * Used by the transaction runner to abort the transaction. Returns a future with a non-OK
+     * status if there was an error sending the command, a non-ok command result, or a write concern
+     * error.
+     ','line_number':440,'multiline':True]['text':'*
+     * Handles the given transaction result based on where the transaction is in its lifecycle and
+     * its execution context, e.g. by updating its txnNumber, returning the next step for the
+     * transaction runner.
+     ','line_number':447,'multiline':True]['text':'*
+     * Returns an object with info about the internal transaction for diagnostics.
+     ','line_number':455,'multiline':True]['text':'*
+     * Attaches transaction metadata to the given command and updates internal transaction state.
+     ','line_number':460,'multiline':True]['text':'*
+     * Extracts relevant info, like TransientTransactionError labels, from the given command
+     * response.
+     ','line_number':465,'multiline':True]['text':'*
+     * Prepares the internal transaction state for a full transaction retry.
+     ','line_number':471,'multiline':True]['text':'*
+     * Prepares the internal transaction state for a retry of commit.
+     ','line_number':476,'multiline':True]['text':'*
+     * Prepares the transaction state to be cleaned up after a fatal error.
+     ','line_number':481,'multiline':True]['text':'*
+     * True if the transaction must be cleaned up, which implies it cannot be continued.
+     ','line_number':486,'multiline':True]['text':'*
+     * Returns a cancellation token to be used by the transaction's client. May change depending on
+     * the state of the transaction, i.e. returns an uncancelable token in the kNeedsCleanup state.
+     ','line_number':491,'multiline':True]['text':'*
+     * Returns the latest operationTime returned by a command in this transaction.
+     ','line_number':497,'multiline':True]['text':'*
+     * Returns an unowned pointer to the ServiceContext used to create this transaction.
+     ','line_number':502,'multiline':True]['text':'*
+         * Transitions the state and validates the transition is legal, crashing if it is not.
+         ','line_number':530,'multiline':True]['text':'*
+     * Extracts transaction options from Operation Context and infers the internal transaction’s
+     * execution context, e.g. client has no session, client is running a retryable write.
+     ','line_number':560,'multiline':True]['text':' Protects the members below that are accessed by the TxnHooks, which are called by the user's','line_number':577,'multiline':False]['text':' callback and may run on a separate thread than the one that is driving the Transaction.','line_number':578,'multiline':False]['text':'*
+ * Hooks used by each TransactionClient to interface with its associated Transaction.
+ ','line_number':590,'multiline':True]['text':'*
+     * Called before sending a command in the TransactionClient.
+     ','line_number':597,'multiline':True]['text':'*
+     * Called after receiving a response to a command in the TransactionClient.
+     ','line_number':604,'multiline':True]['text':'*
+     * Called to get the cancellation token to be used for a command in the TransactionClient.
+     ','line_number':611,'multiline':True]['text':'*
+     * Returns a bundle with the commit command status and write concern error, if any. Any error
+     * prior to receiving a response from commit (e.g. an interruption or a user assertion in the
+     * given callback) will result in a non-ok StatusWith. Note that abort errors are not returned
+     * because an abort will only happen implicitly when another error has occurred, and that
+     * original error is returned instead.
+     *
+     * TODO SERVER-65840: Allow returning a SemiFuture with any type.
+     ','line_number':635,'multiline':True]['text':'*
+     * Returns the latest operationTime returned by a command in this transaction.
+     ','line_number':646,'multiline':True]['text':'*
+     * Returns if the transaction needs to be cleaned up, i.e. aborted.
+     ','line_number':653,'multiline':True]['text':'*
+     * Schedules the necessary work to clean up the transacton, assuming it needs cleanup. Callers
+     * can wait for cleanup by waiting on the returned future.
+     ','line_number':658,'multiline':True]['text':' Helper methods for running a transaction.','line_number':665,'multiline':False]['text':'*
+     * Attempts to abort the active internal transaction, logging on errors after swallowing them.
+     ','line_number':670,'multiline':True]['text':' namespace details','line_number':680,'multiline':False]['text':' namespace mongo::txn_api','line_number':681,'multiline':False]

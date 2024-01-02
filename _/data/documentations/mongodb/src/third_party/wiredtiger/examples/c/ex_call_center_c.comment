@@ -1,0 +1,82 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * ex_call_center.c
+ *	This is an example application that demonstrates how to map a
+ *	moderately complex SQL application into WiredTiger.
+ ','line_number':1,'multiline':True]['text':'! [call-center decl] ','line_number':36,'multiline':True]['text':'
+ * In SQL, the tables are described as follows:
+ *
+ * CREATE TABLE Customers(id INTEGER PRIMARY KEY,
+ *     name VARCHAR(30), address VARCHAR(50), phone VARCHAR(15))
+ * CREATE INDEX CustomersPhone ON Customers(phone)
+ *
+ * CREATE TABLE Calls(id INTEGER PRIMARY KEY, call_date DATE,
+ *     cust_id INTEGER, emp_id INTEGER, call_type VARCHAR(12),
+ *     notes VARCHAR(25))
+ * CREATE INDEX CallsCustDate ON Calls(cust_id, call_date)
+ *
+ * In this example, both tables will use record numbers for their IDs, which
+ * will be the key.  The C structs for the records are as follows.
+ ','line_number':37,'multiline':True]['text':' Customer records. ','line_number':53,'multiline':True]['text':' Call records. ','line_number':61,'multiline':True]['text':'! [call-center decl] ','line_number':70,'multiline':True]['text':'! [call-center work] ','line_number':90,'multiline':True]['text':'
+     * Create the customers table, give names and types to the columns. The columns will be stored
+     * in two groups: "main" and "address", created below.
+     ','line_number':93,'multiline':True]['text':' Create the main column group with value columns except address. ','line_number':100,'multiline':True]['text':' Create the address column group with just the address. ','line_number':103,'multiline':True]['text':' Create an index on the customer table by phone number. ','line_number':106,'multiline':True]['text':' Populate the customers table with some data. ','line_number':109,'multiline':True]['text':'
+     * Create the calls table, give names and types to the columns. All the columns will be stored
+     * together, so no column groups are declared.
+     ','line_number':117,'multiline':True]['text':'
+     * Create an index on the calls table with a composite key of cust_id and call_date.
+     ','line_number':124,'multiline':True]['text':' Populate the calls table with some data. ','line_number':129,'multiline':True]['text':'
+     * First query: a call arrives. In SQL:
+     *
+     * SELECT id, name FROM Customers WHERE phone=?
+     *
+     * Use the cust_phone index, lookup by phone number to fill the customer record. The cursor will
+     * have a key format of "S" for a string because the cust_phone index has a single column
+     * ("phone"), which is of type "S".
+     *
+     * Specify the columns we want: the customer ID and the name. This means the cursor's value
+     * format will be "rS".
+     ','line_number':138,'multiline':True]['text':'
+     * Next query: get the recent order history. In SQL:
+     *
+     * SELECT * FROM Calls WHERE cust_id=? ORDER BY call_date DESC LIMIT 3
+     *
+     * Use the call_cust_date index to find the matching calls. Since it is in increasing order by
+     * date for a given customer, we want to start with the last record for the customer and work
+     * backwards.
+     *
+     * Specify a subset of columns to be returned. (Note that if these were all covered by the
+     * index, the primary would not have to be accessed.) Stop after getting 3 records.
+     ','line_number':158,'multiline':True]['text':'
+     * The keys in the index are (cust_id,call_date) -- we want the largest call date for a given
+     * cust_id. Search for (cust_id+1,0), then work backwards.
+     ','line_number':173,'multiline':True]['text':'
+     * If the table is empty, search_near will return WT_NOTFOUND, else the cursor will be
+     * positioned on a matching key if one exists, or an adjacent key if one does not. If the
+     * positioned key is equal to or larger than the search key, go back one.
+     ','line_number':181,'multiline':True]['text':'! [call-center work] ','line_number':196,'multiline':True]

@@ -1,0 +1,112 @@
+['text':'*
+ * Like RollbackTest, but with five nodes (a primary, two secondaries and two arbiters). This allows
+ * for a controlled rollback on two nodes: one that performs writes as a primary, and one that
+ * performs writes as a secondary.
+ *
+ * This library exposes the following 5 sequential stages of rollback:
+ *
+ *   1. RollbackTest starts in kSteadyStateOps: the replica set is in steady state replication.
+ *          Operations applied will be replicated.
+ *   2. kRollbackOps: operations applied during this phase will not be replicated and eventually be
+ *          rolled back on both a primary and a secondary.
+ *   3. kSyncSourceOpsBeforeRollback: apply operations on the sync source before rollback begins.
+ *   4. kSyncSourceOpsDuringRollback: apply operations on the sync source after rollback has begun.
+ *   5. kSteadyStateOps: (same as stage 1) with the option of waiting for the rollback to finish.
+ *
+ * Refer to the various "transition" functions for more information on the behavior of each stage.
+ *
+ * With each complete five-step rollback (a "rollback cycle"), one node rolls back writes performed
+ * as a primary (the "primary"), one node rolls back writes performed as a secondary (the "rollback
+ * secondary"), and one node steps up from secondary to primary (the "standby secondary"). Their
+ * roles are then reassigned based on the RoleCycleMode:
+ *
+ *   - kCyclical:
+ *          Each node rotates to a new state. Performing multiple rollback cycles in this mode
+ *          allows each node to experience rollbacks in different states. Three complete rollback
+ *          cycles returns each node back to its original role.
+ *   - kFixedRollbackSecondary:
+ *          The primary and standby secondary swap back and forth, taking turns undergoing rollback
+ *          as primaries. The rollback secondary stays fixed and undergoes rollback as a secondary
+ *          every time.
+ *   - kRandom:
+ *          Roles are assigned at random.
+ *
+ * The default role cycle mode is kCyclical, though it is not guaranteed to be respected in the face
+ * of restarts.
+ ','line_number':1,'multiline':True]['text':'*
+ * This fixture allows the user to optionally pass in a custom ReplSetTest to be used for the test.
+ * The underlying replica set must meet the following requirements:
+ *
+ *      1. It must have exactly five nodes: a primary, two secondaries and two arbiters.
+ *      2. It must be running with mongobridge.
+ *
+ * If the caller does not provide their own replica set, a five-node replica set will be initialized
+ * instead, with all nodes running the latest version.
+ *
+ * @param {string} [optional] name the name of the test being run
+ * @param {Object} [optional] replSet the ReplSetTest instance to adopt
+ * @param {Object} [optional] nodeOptions command-line options to apply to all nodes in the replica
+ *     set. Ignored if 'replSet' is provided.
+ ','line_number':44,'multiline':True]['text':' Make sure we have a replica set up and running.','line_number':98,'multiline':False]['text':'*
+     * Returns the current primary of the replica set.
+     ','line_number':102,'multiline':True]['text':'*
+     * Returns an array containing connections to the arbiters, in no particular order.
+     ','line_number':109,'multiline':True]['text':'*
+     * Returns an array containing connections to the data-bearing secondaries, in no particular
+     * order.
+     ','line_number':116,'multiline':True]['text':'*
+     * Returns the node that is currently a secondary and will undergo rollback as a secondary.
+     ','line_number':124,'multiline':True]['text':'*
+     * Returns the node that is currently a secondary but is next in line for being promoted to
+     * primary.
+     ','line_number':131,'multiline':True]['text':'*
+     * Return an instance of ReplSetTest initialized with a standard five-node replica set running
+     * with the latest version.
+     ','line_number':139,'multiline':True]['text':' Tiebreaker's replication is paused for most of the test, avoid falling off the oplog.','line_number':169,'multiline':False]['text':'*
+     * Validate and use the provided ReplSetTest instance 'replSet'.
+     ','line_number':178,'multiline':True]['text':' Make sure we have a primary.','line_number':188,'multiline':False]['text':' The default WC is majority and we must use w:1 to be able to properly test rollback.','line_number':191,'multiline':False]['text':' Extract the other nodes and wait for them to be ready.','line_number':195,'multiline':False]['text':' Arbitrarily assign which secondary will roll back and which secondary will eventually','line_number':201,'multiline':False]['text':' become primary.','line_number':202,'multiline':False]['text':' Wait for collection drops to complete so that we don't get spurious failures during','line_number':217,'multiline':False]['text':' consistency checks.','line_number':218,'multiline':False]['text':'*
+     * Returns whether the cluster can transition from the current State to 'newState'.
+     ','line_number':241,'multiline':True]['text':' Transitioning to a disallowed State is likely a bug in the code, so we throw an','line_number':249,'multiline':False]['text':' error here instead of silently failing.','line_number':250,'multiline':False]['text':' in rollback complete state.','line_number':371,'multiline':False]['text':' After the previous rollback (if any) has completed and await replication has finished,','line_number':374,'multiline':False]['text':' the replica set should be in a consistent and "fresh" state. We now prepare for the next','line_number':375,'multiline':False]['text':' rollback.','line_number':376,'multiline':False]['text':'*
+     * Transition to the first stage of rollback testing. Writes performed on the replica set will
+     * eventually be rolled back.
+     *
+     * In this state, the standby secondary is isolated from the rest of the replica set.
+     *      P  | SS
+     *      RS |
+     *      A  |
+     *      A  |
+     ','line_number':382,'multiline':True]['text':' Ensure previous operations are replicated.','line_number':393,'multiline':False]['text':' Disconnect one secondary to wait on standby.','line_number':399,'multiline':False]['text':'*
+     * Force a stepdown while in the kRollbackOps state, swapping the primary and rollback
+     * secondary. This allows for each node to accept writes as both primary and secondary, which
+     * will then be rolled back when transitioning to kSyncSourceOpsBeforeRollback.
+     *
+     * Note that this function does not change the state of the test (that is, it remains in
+     * kRollbackOps). Furthermore, though the identity of the primary and rollback secondary have
+     * changed, the logical topology of the replica set remains the same.
+     *      P  | SS
+     *      RS |
+     *      A  |
+     *      A  |
+     ','line_number':407,'multiline':True]['text':' Insert one document to ensure that each of the data-bearing nodes perform a write while','line_number':426,'multiline':False]['text':' in their current replica set member state.','line_number':427,'multiline':False]['text':' Ensure that the new primary is the rollback secondary.','line_number':443,'multiline':False]['text':' Manually update the topology.','line_number':451,'multiline':False]['text':'*
+     * Transition to the second stage of rollback testing, where we isolate the old primary and the
+     * rollback secondary from the rest of the replica set. The arbiters are reconnected to the
+     * secondary on standby to elect it as the new primary.
+     *
+     * In this state, operations can be performed on the new primary so that optimes diverge and
+     * previous operations on the old primary and rollback secondary will be rolled back.
+     *      P  | SS
+     *      RS | A
+     *         | A
+     ','line_number':461,'multiline':True]['text':' Insert one document to ensure rollback will not be skipped.','line_number':475,'multiline':False]['text':' Ensure that the new primary is the standby secondary.','line_number':501,'multiline':False]['text':' Update the topology so that each node gets a new role the next time we enter rollback.','line_number':508,'multiline':False]['text':' Keep track of the last RBID on each node.','line_number':511,'multiline':False]['text':'*
+     * Transition to the third stage of rollback testing, where we reconnect the rollback node so
+     * it will start rolling back.
+     *
+     * Note that there is no guarantee that operations performed on the sync source while in this
+     * state will actually occur *during* the rollback process. They may happen before the rollback
+     * is finished or after the rollback is done. We provide this state, though, as an attempt to
+     * provide a way to test this behavior, even if it's non-deterministic.
+     ','line_number':520,'multiline':True]['text':'*
+     * Transitions to the stop state, stopping the replica set.
+     ','line_number':541,'multiline':True]['text':'*
+     * Sends the signal 'signal' to the node with id 'nodeId'.
+     ','line_number':550,'multiline':True]['text':' This restart is special so we don't follow the usual role assignment path. Log a','line_number':593,'multiline':False]['text':' message explaining the role change.','line_number':594,'multiline':False]['text':' Swap the primary and rollback secondary.','line_number':600,'multiline':False]['text':' Follow the usual transition rules.','line_number':609,'multiline':False]['text':' The primary must have stayed the same. The roles of each member of the set do not','line_number':612,'multiline':False]['text':' change.','line_number':613,'multiline':False]

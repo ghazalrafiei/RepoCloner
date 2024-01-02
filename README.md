@@ -40,6 +40,12 @@ python document_extractor.py
 #### Output
 See [documentations/]().
 
+#### Methods
+```
+naive_document_extractor()
+comment_document_extractor()
+```
+
 ### Naive Documentation Extractor:
 
 1. Extract all `.md` files, with the same structure in the doc directory.

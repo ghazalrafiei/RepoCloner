@@ -1,0 +1,44 @@
+['text':'*
+ * Tests exhaustion of read tickets, trying to force a deadlock reproduction
+ * after yield restores lock state. See SERVER-75205 for more information.
+ *
+ * Deadlock:
+ * The deadlock in question involves readers acquiring the RSTL lock, which no longer
+ * happens in 5.0+ due to lock-free reads. Therefore, this test doesn't exercise the
+ * deadlock behavior on 5.0+. 4.4 is the primary target of this test, but there isn't
+ * much test coverage of ticket exhaustion, so this test may provide other benefits on
+ * 5.0+.
+ *
+ * Parallel Shell Coordination:
+ * The 'jsTestName().timing_coordination' collection is used to coordinate timing
+ * between the main thread of the test and all the readers via writes to specific
+ * documents. One side will wait until the document appears.
+ *
+ * Two types of Parallel Shells:
+ * There are two sets of readers - queued and new - meant to saturate the ticketing
+ * system before and after the sleep operation that holds the global X lock. This
+ * dual system of readers ensures that enqueued/blocked readers as well as newly
+ * arriving reads are serviced without deadlocking.
+ * queuedLongReadsFunc - Issues long read commands until told to stop.
+ *    newLongReadsFunc - When told to begin, issues long read commands until told
+ *                       to stop.
+ *
+ * Test Steps:
+ * 0) Start ReplSet with special params:
+ *     - lower read ticket concurrency
+ *     - increase yielding
+ * 1) Insert 1000 documents.
+ * 2) Kick off parallel readers that perform long collection scans, subject to yields.
+ * 3) Sleep with global X Lock (including RSTL), thus queuing up reads.
+ * 4) Signal new readers that will be received after the global lock is released.
+ * 5) Initiate step down while queue is working its way down to ensure there is a mix of
+ *     enqueued readers from the global X lock and new readers initiated afterwards.
+ * <<Should have deadlocked by now for this scenario>>
+ * 6) Stop Readers.
+ *
+ * @tags: [
+ *   multiversion_incompatible,
+ *   requires_replication,
+ *   requires_wiredtiger,
+ * ]
+ ','line_number':1,'multiline':True]['text':' This test seeks the minimum amount of concurrency to force ticket exhaustion.','line_number':53,'multiline':False]['text':' Make yielding more common.','line_number':56,'multiline':False]['text':' Issues long read commands until told to stop.','line_number':70,'multiline':False]['text':' Should be run in a parallel shell via startParallelShell() with a unique id.','line_number':71,'multiline':False]['text':' When told to begin, issues long read commands until told to stop.','line_number':95,'multiline':False]['text':' Should be run in a parallel shell via startParallelShell() with a unique id.','line_number':96,'multiline':False]['text':' Coordinate all readers to begin at the same time.','line_number':100,'multiline':False]['text':' Force primary to step down, then unfreeze and allow it to step up.','line_number':131,'multiline':False]['text':'**************************************************','line_number':138,'multiline':True]['text':' 0) Start ReplSet with special params:','line_number':140,'multiline':False]['text':'     - lower read ticket concurrency','line_number':141,'multiline':False]['text':'     - increase yielding','line_number':142,'multiline':False]['text':' 1) Insert 1000 documents.','line_number':152,'multiline':False]['text':' 2) Kick off parallel readers that perform long collection scans, subject to yields.','line_number':159,'multiline':False]['text':' 3) Sleep with global X Lock (including RSTL), thus queuing up reads.','line_number':170,'multiline':False]['text':' MODE_X lock.','line_number':176,'multiline':False]['text':' 4) Signal new readers that will be received after the global lock is released.','line_number':181,'multiline':False]['text':' 5) Initiate step down while queue is working its way down to ensure there is a mix of','line_number':185,'multiline':False]['text':'     enqueued readers from the global X lock and new readers initiated afterwards.','line_number':186,'multiline':False]['text':' 6) Stop Readers.','line_number':196,'multiline':False]

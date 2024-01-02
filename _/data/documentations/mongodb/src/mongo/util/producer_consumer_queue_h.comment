@@ -1,0 +1,154 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * The default cost function for the producer consumer queue.
+ *
+ * By default, all items in the queue have equal weight.
+ ','line_number':59,'multiline':True]['text':'*
+ * These enums help make the following template specializations a bit more self documenting
+ ','line_number':71,'multiline':True]['text':'*
+ * Closes some end of the queue (given by the close pointer to member) on destruction.
+ *
+ * Also offers operator->() access to the underlying queue.
+ *
+ * We're only moveable because a copy would cause double closes
+ ','line_number':78,'multiline':True]['text':' We may be moved from','line_number':97,'multiline':False]['text':'*
+ * This holder provides a pivot for the construction of the Pipe ends of a producer consumer queue
+ * (when used in that mode).
+ *
+ * It holds a Producer or Consumer auto-closer end and is multi or not via the kind
+ *
+ * On destruction, the Closer constructed from PCQ and close will call closeProducerEnd() or
+ * closeConsumerEnd()
+ *
+ * We take by boolean kind so that we get convertibility from Producer and Consumer Kind.
+ ','line_number':111,'multiline':True]['text':'*
+ * {
+ *     // Takes the producer consumer queue by shared_ptr
+ *     explicit Holder(const std::shared_ptr<ProducerConsumerQueue>&);
+ *
+ *     // Convenience for getting down to our PCQ
+ *     const Closer& operator->() const;
+ * }
+ ','line_number':124,'multiline':True]['text':'*
+ * multi holder holds by shared_ptr
+ ','line_number':134,'multiline':True]['text':'*
+ * single holder holds the closer directly, but still allows operator->() access
+ ','line_number':153,'multiline':True]['text':'*
+ * Consumer state holds the state needed to manage the consumers of the queue.  It either invariants
+ * on multiple waiting consumers (if not multi) or queues them unfairly under the same condvar (for
+ * multi).
+ ','line_number':172,'multiline':True]['text':' condition variable to block on for waiting consumers','line_number':180,'multiline':False]['text':' operator size_t tells how many consumers there are','line_number':185,'multiline':False]['text':' Waiter type for blocking consumers','line_number':190,'multiline':False]['text':'*
+ * The producer state holds the state needed to manage producers waiting on the queue.  In its multi
+ * version, it FIFO queues producer requests.  In its single version, it invariants on multiple
+ * producers.
+ ','line_number':216,'multiline':True]['text':'*
+ * {
+ *     // we require access to the Options for maxProducerQueueDepth
+ *     explicit ProducerState(const Options&);
+ *
+ *     // The cv consumers should notify after consumption
+ *     stdx::condition_variable& cv();
+ *
+ *     // The amount the oldest producer wants to inject
+ *     size_t wants() const;
+ *
+ *     // The number of producers
+ *     operator size_t() const;
+ *
+ *     // The amount of work queued in all the waiting producers
+ *     size_t queueDepth() const;
+ *
+ *     // A Waiter type for waiting producers
+ *     class Waiter {
+ *         // queueing a producer modifies the producer state and takes how much the producer wants
+ *         // to produce
+ *         explicit Waiter(ProducerState& state, size_t wants);
+ *         ~Waiter();
+ *
+ *         // The cv that producer should block on
+ *         stdx::condition_variable& cv();
+ *
+ *         // If this producer is the current top level producer.  The producer thread should block
+ *         // on cv() and check isAtFrontOfQueue() before unblocking.
+ *         bool isAtFrontOfQueue() const;
+ *     };
+ * }
+ ','line_number':223,'multiline':True]['text':'*
+ * Single producer state holds one long live condvar for producers and the one producers desired
+ * capacity.  It invariants if another producer shows up.
+ ','line_number':257,'multiline':True]['text':'*
+ * The multi-producer holds a linked list of producers, along with cvs to wake them and their
+ * desired capacity.
+ ','line_number':316,'multiline':True]['text':' We store these in a linked list to allow for removal from the middle of the queue if','line_number':379,'multiline':False]['text':' we're interrupted','line_number':380,'multiline':False]['text':' One of these is allocated for each producer that blocks on pushing to the queue','line_number':386,'multiline':False]['text':' Each producer has their own cv, so that they can be woken individually in FIFO order','line_number':391,'multiline':False]['text':' A list of producers that want to push to the queue','line_number':395,'multiline':False]['text':' Maximum queue depth in cost func units','line_number':403,'multiline':False]['text':' Cost function for the queue','line_number':406,'multiline':False]['text':' maximum capacity for all waiting producers measured in cost func units','line_number':409,'multiline':False]['text':'*
+ * A bounded, blocking, interruptible, thread safe, cost parametrizable, X-producer, X-consumer
+ * queue.
+ *
+ * Properties:
+ *   bounded - the queue can be limited in the number of items it can hold
+ *   blocking - when the queue is full, or has no entries, callers block
+ *   thread safe - the queue can be accessed safely from multiple threads at the same time
+ *   cost parametrizable - the cost of items in the queue need not be equal. I.e. your items could
+ *                          be discrete byte buffers and the queue depth measured in bytes, so that
+ *                          the queue could hold one large buffer, or many smaller ones
+ *   X-producer - 1 or many threads may push work into the queue.  For multi-producer, producers
+ *                produce in FIFO order.
+ *   X-consumer - 1 or many threads may pop work out of the queue
+ *   interruptible - All of the blocking methods on this type take an interruptible.
+ *
+ * Exceptions outside the interruptible include:
+ *   closure of queue endpoints that isn't a pop() after producer end closed
+ *     ErrorCodes::ProducerConsumerQueueEndClosed
+ *   pushes with batches that exceed the max queue size
+ *     ErrorCodes::ProducerConsumerQueueBatchTooLarge
+ *   too many producers blocked on the queue
+ *     ErrorCodes::ProducerConsumerQueueProducerQueueDepthExceeded
+ *   pop() after producer end closed (I.e. eof)
+ *     ErrorCodes::ProducerConsumerQueueConsumed
+ *
+ * Cost Function:
+ *   The cost function must have a call operator which takes a const T& and returns the cost in
+ *   size_t units. It must be pure across moves for a given T and never return zero. The intent of
+ *   the cost function is to express the kind of bounds the queue provides, rather than to
+ *   specialize behavior for a type. I.e. you should not specialize the default cost function and
+ *   the cost function should always be explicit in the type.
+ ','line_number':413,'multiline':True]['text':' TODO more stats','line_number':456,'multiline':False]['text':'','line_number':457,'multiline':False]['text':' totalTimeBlocked on either side','line_number':458,'multiline':False]['text':' count of producers and consumers (blocked, or existing if we're a pipe)','line_number':459,'multiline':False]['text':' By default the queue depth is unlimited','line_number':464,'multiline':False]['text':' Pushes the passed T into the queue','line_number':479,'multiline':False]['text':'','line_number':480,'multiline':False]['text':' Leaves T unchanged if an interrupt exception is thrown while waiting for space','line_number':481,'multiline':False]['text':' Pushes all Ts into the queue','line_number':496,'multiline':False]['text':'','line_number':497,'multiline':False]['text':' Blocks until all of the Ts can be pushed at once','line_number':498,'multiline':False]['text':'','line_number':499,'multiline':False]['text':' StartIterator must be ForwardIterator','line_number':500,'multiline':False]['text':'','line_number':501,'multiline':False]['text':' Leaves the values underneath the iterators unchanged if an interrupt exception is thrown','line_number':502,'multiline':False]['text':' while waiting for space','line_number':503,'multiline':False]['text':'','line_number':504,'multiline':False]['text':' Lifecycle methods of T must not throw if you want to use this method, as there's no obvious','line_number':505,'multiline':False]['text':' mechanism to see what was and was not pushed if those do throw','line_number':506,'multiline':False]['text':' Attempts a non-blocking push of a value','line_number':531,'multiline':False]['text':'','line_number':532,'multiline':False]['text':' Leaves T unchanged if it fails','line_number':533,'multiline':False]['text':' Pops one T out of the queue','line_number':539,'multiline':False]['text':' Waits for at least one item in the queue, then pops items out of the queue until it would','line_number':547,'multiline':False]['text':' block','line_number':548,'multiline':False]['text':'','line_number':549,'multiline':False]['text':' Returns the popped values, along with the cost value of the items extracted','line_number':550,'multiline':False]['text':' Waits for at least one item in the queue, then pops items out of the queue until it would','line_number':559,'multiline':False]['text':' block, or the items cost would exceeded our budget','line_number':560,'multiline':False]['text':'','line_number':561,'multiline':False]['text':' Returns the popped values, along with the cost value of the items extracted.','line_number':562,'multiline':False]['text':'','line_number':563,'multiline':False]['text':' Note that if the next item in the queue costs more than our budget, this may return without','line_number':564,'multiline':False]['text':' any items.','line_number':565,'multiline':False]['text':'','line_number':566,'multiline':False]['text':' Attempts a non-blocking pop of a value','line_number':597,'multiline':False]['text':' Waits until there is at least one item in the queue.','line_number':611,'multiline':False]['text':' Closes the producer end. Consumers will continue to consume until the queue is exhausted, at','line_number':618,'multiline':False]['text':' which time they will begin to throw with an interruption dbexception','line_number':619,'multiline':False]['text':' Closes the consumer end. This causes all callers to throw with an interruption dbexception','line_number':628,'multiline':False]['text':'*
+     * This type wraps up the Producer portion of the PCQ api.  See Pipe for more details.
+     ','line_number':652,'multiline':True]['text':' Note that calling close() here is different than just allowing your pipe end to expire.','line_number':675,'multiline':False]['text':' This close() will close the end for all producers (possibly causing other's to fail)','line_number':676,'multiline':False]['text':' rather than closing after all producers have gone away.','line_number':677,'multiline':False]['text':'*
+     * This type wraps up the Consumer portion of the PCQ api.  See Pipe for more details.
+     ','line_number':691,'multiline':True]['text':' Note that calling close() here is different than just allowing your pipe end to expire.','line_number':716,'multiline':False]['text':' This close() will close the end for all consumers (possibly causing other's to fail)','line_number':717,'multiline':False]['text':' rather than closing after all consumers have gone away.','line_number':718,'multiline':False]['text':'*
+     * This type wraps up the Controller portion of the PCQ api.  See Pipe for more details.
+     ','line_number':732,'multiline':True]['text':'*
+     * This Pipe type offers a safe way of distributing portions of the ProducerConsumerQueue object
+     * via 3 distinct interfaces.  It takes into account whether the PCQ is single/multi
+     * producer/consumer in making the pipe ends copyable, or merely moveable, and closes that end
+     * of the pipe when all owners go away.  In this way, it enforces the contract of the PCQ and
+     * offers easy coordination of work.
+     *
+     * The administrative api is reflected in the "Controller member"
+     ','line_number':752,'multiline':True]['text':' This constructor is private, because the logic around closing endpoints when all producer','line_number':771,'multiline':False]['text':' or consumer references go away makes it difficult to use if there are public parent pcq','line_number':772,'multiline':False]['text':' references floating around.','line_number':773,'multiline':False]['text':' If we've closed the consumer end, or if the production end is closed and we've exhausted','line_number':804,'multiline':False]['text':' the queue, wake everyone up and get out of here','line_number':805,'multiline':False]['text':' Whether this one or many consumers, they all listen on the same cv','line_number':807,'multiline':False]['text':' In multi-producer situations, the producers notify each other in turn','line_number':812,'multiline':False]['text':' If a producer is queued, and we have enough space for it to push its work','line_number':820,'multiline':False]['text':' If we have consumers and anything in the queue, notify consumers','line_number':827,'multiline':False]['text':' We do some pre-flight checks to avoid creating a cv if we don't need one','line_number':900,'multiline':False]['text':' Current size of the queue','line_number':929,'multiline':False]['text':' State for waiting consumers and producers','line_number':934,'multiline':False]['text':' Flags that we're shutting down the queue','line_number':938,'multiline':False]['text':' namespace producer_consumer_queue_detail','line_number':943,'multiline':False]['text':' namespace mongo','line_number':973,'multiline':False]

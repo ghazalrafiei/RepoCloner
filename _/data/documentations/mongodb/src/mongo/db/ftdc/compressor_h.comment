@@ -1,0 +1,84 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * FTDCCompressor is responsible for taking a set of BSON documents containing metrics, and
+ * compressing them into a highly compressed buffer. Metrics are defined as BSON number or number
+ * like type (like dates, and timestamps).
+ *
+ * Compression Method
+ * 1. For each document after the first, it computes the delta between it and the preceding document
+ *    for the number fields
+ * 2. It stores the deltas into an array of std::int64_t.
+ * 3. It compressed each std::int64_t using VarInt integer compression. See varint.h.
+ * 4. Encodes zeros in Run Length Encoded pairs of <Count, Zero>
+ * 5. ZLIB compresses the final processed array
+ *
+ * NOTE: This compression ignores non-number data, and assumes the non-number data is constant
+ * across all documents in the series of documents.
+ ','line_number':50,'multiline':True]['text':'*
+     * The FTDCCompressor returns one of these values when a sample is added to indicate whether the
+     * caller should flush the buffer to disk or not.
+     ','line_number':71,'multiline':True]['text':'*
+         * Needs to flush because the schemas has changed. Caller needs to flush.
+         ','line_number':76,'multiline':True]['text':'*
+         * Quota on the number of samples in a metric chunk has been reached. Caller needs to flush.
+         ','line_number':81,'multiline':True]['text':'*
+     * Add a bson document containing metrics into the compressor.
+     *
+     * Returns flag indicating whether the caller should flush the compressor buffer to disk.
+     *  1. kCompressorFull if the compressor is considered full.
+     *  2. kSchemaChanged if there was a schema change, and buffer should be flushed.
+     *  3. kHasSpace if it has room for more metrics in the current buffer.
+     *
+     * date is the date at which the sample as started to be captured. It will be saved in the
+     * compressor if this sample is used as the reference document.N
+     ','line_number':89,'multiline':True]['text':'*
+     * Returns the number of enqueued samples.
+     *
+     * The a buffer will decompress to (1 + getCountCount). The extra 1 comes
+     * from the reference document.
+     ','line_number':103,'multiline':True]['text':' TODO: This method should probably be renamed, since it currently','line_number':110,'multiline':False]['text':' returns the number of deltas, which does not include the sample','line_number':111,'multiline':False]['text':' implicitly contained in the reference document.','line_number':112,'multiline':False]['text':'*
+     * Has a document been added?
+     *
+     * If addSample has been called, then we have at least the reference document, but not
+     * necessarily any additional metric samples. When the buffer is filled to capacity,
+     * the reference document is reset.
+     ','line_number':116,'multiline':True]['text':'*
+     * Gets buffer of compressed data contained in the FTDCCompressor.
+     *
+     * The returned buffer is valid until next call to addSample() or getCompressedSamples() with
+     * CompressBuffer::kGenerateNewCompressedBuffer.
+     ','line_number':127,'multiline':True]['text':'*
+     * Reset the state of the compressor.
+     *
+     * Callers can use this to reset the compressor to a clean state instead of recreating it.
+     ','line_number':135,'multiline':True]['text':'*
+     * Compute the offset into an array for given (sample, metric) pair
+     ','line_number':142,'multiline':True]['text':'*
+     * Reset the state
+     ','line_number':152,'multiline':True]['text':' Block Compressor','line_number':158,'multiline':False]['text':' Config','line_number':161,'multiline':False]['text':' Reference schema document','line_number':164,'multiline':False]['text':' Time at which reference schema document was collected.','line_number':167,'multiline':False]['text':' Passed in via addSample and returned with each chunk.','line_number':168,'multiline':False]['text':' Number of Metrics for the reference document','line_number':171,'multiline':False]['text':' Number of deltas recorded','line_number':174,'multiline':False]['text':' Max deltas for the current chunk','line_number':177,'multiline':False]['text':' Array of deltas - M x S','line_number':180,'multiline':False]['text':' _deltas[Metrics][Samples]','line_number':181,'multiline':False]['text':' Buffer for metric chunk compressed = uncompressed length + compressed data','line_number':184,'multiline':False]['text':' Buffer for uncompressed metric chunk','line_number':187,'multiline':False]['text':' Buffer to hold metrics','line_number':190,'multiline':False]['text':' namespace mongo','line_number':195,'multiline':False]

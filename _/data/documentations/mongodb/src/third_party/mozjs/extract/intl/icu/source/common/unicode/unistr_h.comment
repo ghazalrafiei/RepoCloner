@@ -1,0 +1,2544 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]['text':'
+**********************************************************************
+*   Copyright (C) 1998-2016, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+**********************************************************************
+*
+* File unistr.h
+*
+* Modification History:
+*
+*   Date        Name        Description
+*   09/25/98    stephen     Creation.
+*   11/11/98    stephen     Changed per 11/9 code review.
+*   04/20/99    stephen     Overhauled per 4/16 code review.
+*   11/18/99    aliu        Made to inherit from Replaceable.  Added method
+*                           handleReplaceBetween(); other methods unchanged.
+*   06/25/01    grhoten     Remove dependency on iostream.
+******************************************************************************
+','line_number':3,'multiline':True]['text':'*
+ * \file
+ * \brief C++ API: Unicode String
+ ','line_number':26,'multiline':True]['text':' unicode/ucnv.h','line_number':42,'multiline':False]['text':'*
+ * \ingroup ustring_ustrlen
+ * @param s Pointer to sequence of UChars.
+ * @return Length of sequence.
+ ','line_number':45,'multiline':True]['text':' unicode/brkiter.h','line_number':56,'multiline':False]['text':' Not #ifndef U_HIDE_INTERNAL_API because UnicodeString needs the UStringCaseMapper.','line_number':62,'multiline':False]['text':'*
+ * Internal string case mapping function type.
+ * All error checking must be done.
+ * src and dest must not overlap.
+ * @internal
+ ','line_number':63,'multiline':True]['text':' unicode/locid.h','line_number':81,'multiline':False]['text':' unicode/appendable.h','line_number':83,'multiline':False]['text':' The <iostream> include has been moved to unicode/ustream.h ','line_number':85,'multiline':True]['text':'*
+ * Constant to be used in the UnicodeString(char *, int32_t, EInvariant) constructor
+ * which constructs a Unicode string from an invariant-character char * string.
+ * About invariant characters see utypes.h.
+ * This constructor has no runtime dependency on conversion code and is
+ * therefore recommended over ones taking a charset name string
+ * (where the empty string "" indicates invariant-character conversion).
+ *
+ * @stable ICU 3.2
+ ','line_number':87,'multiline':True]['text':'*
+ * Unicode String literals in C++.
+ *
+ * Note: these macros are not recommended for new code.
+ * Prior to the availability of C++11 and u"unicode string literals",
+ * these macros were provided for portability and efficiency when
+ * initializing UnicodeStrings from literals.
+ *
+ * They work only for strings that contain "invariant characters", i.e.,
+ * only latin letters, digits, and some punctuation.
+ * See utypes.h for details.
+ *
+ * The string parameter must be a C string literal.
+ * The length of the string, not including the terminating
+ * `NUL`, must be specified as a constant.
+ * @stable ICU 2.0
+ ','line_number':99,'multiline':True]['text':'*
+ * Unicode String literals in C++.
+ * Dependent on the platform properties, different UnicodeString
+ * constructors should be used to create a UnicodeString object from
+ * a string literal.
+ * The macros are defined for improved performance.
+ * They work only for strings that contain "invariant characters", i.e.,
+ * only latin letters, digits, and some punctuation.
+ * See utypes.h for details.
+ *
+ * The string parameter must be a C string literal.
+ * @stable ICU 2.0
+ ','line_number':122,'multiline':True]['text':'*
+ * \def UNISTR_FROM_CHAR_EXPLICIT
+ * This can be defined to be empty or "explicit".
+ * If explicit, then the UnicodeString(char16_t) and UnicodeString(UChar32)
+ * constructors are marked as explicit, preventing their inadvertent use.
+ * @stable ICU 49
+ ','line_number':137,'multiline':True]['text':' Auto-"explicit" in ICU library code.','line_number':146,'multiline':False]['text':' Empty by default for source code compatibility.','line_number':149,'multiline':False]['text':'*
+ * \def UNISTR_FROM_STRING_EXPLICIT
+ * This can be defined to be empty or "explicit".
+ * If explicit, then the UnicodeString(const char *) and UnicodeString(const char16_t *)
+ * constructors are marked as explicit, preventing their inadvertent use.
+ *
+ * In particular, this helps prevent accidentally depending on ICU conversion code
+ * by passing a string literal into an API with a const UnicodeString & parameter.
+ * @stable ICU 49
+ ','line_number':154,'multiline':True]['text':' Auto-"explicit" in ICU library code.','line_number':166,'multiline':False]['text':' Empty by default for source code compatibility.','line_number':169,'multiline':False]['text':'*
+ * \def UNISTR_OBJECT_SIZE
+ * Desired sizeof(UnicodeString) in bytes.
+ * It should be a multiple of sizeof(pointer) to avoid unusable space for padding.
+ * The object size may want to be a multiple of 16 bytes,
+ * which is a common granularity for heap allocation.
+ *
+ * Any space inside the object beyond sizeof(vtable pointer) + 2
+ * is available for storing short strings inside the object.
+ * The bigger the object, the longer a string that can be stored inside the object,
+ * without additional heap allocation.
+ *
+ * Depending on a platform's pointer size, pointer alignment requirements,
+ * and struct padding, the compiler will usually round up sizeof(UnicodeString)
+ * to 4 * sizeof(pointer) (or 3 * sizeof(pointer) for P128 data models),
+ * to hold the fields for heap-allocated strings.
+ * Such a minimum size also ensures that the object is easily large enough
+ * to hold at least 2 char16_ts, for one supplementary code point (U16_MAX_LENGTH).
+ *
+ * sizeof(UnicodeString) >= 48 should work for all known platforms.
+ *
+ * For example, on a 64-bit machine where sizeof(vtable pointer) is 8,
+ * sizeof(UnicodeString) = 64 would leave space for
+ * (64 - sizeof(vtable pointer) - 2) / U_SIZEOF_UCHAR = (64 - 8 - 2) / 2 = 27
+ * char16_ts stored inside the object.
+ *
+ * The minimum object size on a 64-bit machine would be
+ * 4 * sizeof(pointer) = 4 * 8 = 32 bytes,
+ * and the internal buffer would hold up to 11 char16_ts in that case.
+ *
+ * @see U16_MAX_LENGTH
+ * @stable ICU 56
+ ','line_number':174,'multiline':True]['text':'*
+ * UnicodeString is a string class that stores Unicode characters directly and provides
+ * similar functionality as the Java String and StringBuffer/StringBuilder classes.
+ * It is a concrete implementation of the abstract class Replaceable (for transliteration).
+ *
+ * The UnicodeString equivalent of std::string’s clear() is remove().
+ *
+ * A UnicodeString may "alias" an external array of characters
+ * (that is, point to it, rather than own the array)
+ * whose lifetime must then at least match the lifetime of the aliasing object.
+ * This aliasing may be preserved when returning a UnicodeString by value,
+ * depending on the compiler and the function implementation,
+ * via Return Value Optimization (RVO) or the move assignment operator.
+ * (However, the copy assignment operator does not preserve aliasing.)
+ * For details see the description of storage models at the end of the class API docs
+ * and in the User Guide chapter linked from there.
+ *
+ * The UnicodeString class is not suitable for subclassing.
+ *
+ * For an overview of Unicode strings in C and C++ see the
+ * [User Guide Strings chapter](https://unicode-org.github.io/icu/userguide/strings#strings-in-cc).
+ *
+ * In ICU, a Unicode string consists of 16-bit Unicode *code units*.
+ * A Unicode character may be stored with either one code unit
+ * (the most common case) or with a matched pair of special code units
+ * ("surrogates"). The data type for code units is char16_t.
+ * For single-character handling, a Unicode character code *point* is a value
+ * in the range 0..0x10ffff. ICU uses the UChar32 type for code points.
+ *
+ * Indexes and offsets into and lengths of strings always count code units, not code points.
+ * This is the same as with multi-byte char* strings in traditional string handling.
+ * Operations on partial strings typically do not test for code point boundaries.
+ * If necessary, the user needs to take care of such boundaries by testing for the code unit
+ * values or by using functions like
+ * UnicodeString::getChar32Start() and UnicodeString::getChar32Limit()
+ * (or, in C, the equivalent macros U16_SET_CP_START() and U16_SET_CP_LIMIT(), see utf.h).
+ *
+ * UnicodeString methods are more lenient with regard to input parameter values
+ * than other ICU APIs. In particular:
+ * - If indexes are out of bounds for a UnicodeString object
+ *   (< 0 or > length()) then they are "pinned" to the nearest boundary.
+ * - If the buffer passed to an insert/append/replace operation is owned by the
+ *   target object, e.g., calling str.append(str), an extra copy may take place
+ *   to ensure safety.
+ * - If primitive string pointer values (e.g., const char16_t * or char *)
+ *   for input strings are NULL, then those input string parameters are treated
+ *   as if they pointed to an empty string.
+ *   However, this is *not* the case for char * parameters for charset names
+ *   or other IDs.
+ * - Most UnicodeString methods do not take a UErrorCode parameter because
+ *   there are usually very few opportunities for failure other than a shortage
+ *   of memory, error codes in low-level C++ string methods would be inconvenient,
+ *   and the error code as the last parameter (ICU convention) would prevent
+ *   the use of default parameter values.
+ *   Instead, such methods set the UnicodeString into a "bogus" state
+ *   (see isBogus()) if an error occurs.
+ *
+ * In string comparisons, two UnicodeString objects that are both "bogus"
+ * compare equal (to be transitive and prevent endless loops in sorting),
+ * and a "bogus" string compares less than any non-"bogus" one.
+ *
+ * Const UnicodeString methods are thread-safe. Multiple threads can use
+ * const methods on the same UnicodeString object simultaneously,
+ * but non-const methods must not be called concurrently (in multiple threads)
+ * with any other (const or non-const) methods.
+ *
+ * Similarly, const UnicodeString & parameters are thread-safe.
+ * One object may be passed in as such a parameter concurrently in multiple threads.
+ * This includes the const UnicodeString & parameters for
+ * copy construction, assignment, and cloning.
+ *
+ * UnicodeString uses several storage methods.
+ * String contents can be stored inside the UnicodeString object itself,
+ * in an allocated and shared buffer, or in an outside buffer that is "aliased".
+ * Most of this is done transparently, but careful aliasing in particular provides
+ * significant performance improvements.
+ * Also, the internal buffer is accessible via special functions.
+ * For details see the
+ * [User Guide Strings chapter](https://unicode-org.github.io/icu/userguide/strings#maximizing-performance-with-the-unicodestring-storage-model).
+ *
+ * @see utf.h
+ * @see CharacterIterator
+ * @stable ICU 2.0
+ ','line_number':211,'multiline':True]['text':'*
+   * Constant to be used in the UnicodeString(char *, int32_t, EInvariant) constructor
+   * which constructs a Unicode string from an invariant-character char * string.
+   * Use the macro US_INV instead of the full qualification for this value.
+   *
+   * @see US_INV
+   * @stable ICU 3.2
+   ','line_number':299,'multiline':True]['text':'*
+     * @see EInvariant
+     * @stable ICU 3.2
+     ','line_number':308,'multiline':True]['text':'========================================','line_number':315,'multiline':False]['text':' Read-only operations','line_number':316,'multiline':False]['text':'========================================','line_number':317,'multiline':False]['text':' Comparison - bitwise only - for international comparison use collation ','line_number':319,'multiline':True]['text':'*
+   * Equality operator. Performs only bitwise comparison.
+   * @param text The UnicodeString to compare to this one.
+   * @return true if `text` contains the same characters as this one,
+   * false otherwise.
+   * @stable ICU 2.0
+   ','line_number':321,'multiline':True]['text':'*
+   * Inequality operator. Performs only bitwise comparison.
+   * @param text The UnicodeString to compare to this one.
+   * @return false if `text` contains the same characters as this one,
+   * true otherwise.
+   * @stable ICU 2.0
+   ','line_number':330,'multiline':True]['text':'*
+   * Greater than operator. Performs only bitwise comparison.
+   * @param text The UnicodeString to compare to this one.
+   * @return true if the characters in this are bitwise
+   * greater than the characters in `text`, false otherwise
+   * @stable ICU 2.0
+   ','line_number':339,'multiline':True]['text':'*
+   * Less than operator. Performs only bitwise comparison.
+   * @param text The UnicodeString to compare to this one.
+   * @return true if the characters in this are bitwise
+   * less than the characters in `text`, false otherwise
+   * @stable ICU 2.0
+   ','line_number':348,'multiline':True]['text':'*
+   * Greater than or equal operator. Performs only bitwise comparison.
+   * @param text The UnicodeString to compare to this one.
+   * @return true if the characters in this are bitwise
+   * greater than or equal to the characters in `text`, false otherwise
+   * @stable ICU 2.0
+   ','line_number':357,'multiline':True]['text':'*
+   * Less than or equal operator. Performs only bitwise comparison.
+   * @param text The UnicodeString to compare to this one.
+   * @return true if the characters in this are bitwise
+   * less than or equal to the characters in `text`, false otherwise
+   * @stable ICU 2.0
+   ','line_number':366,'multiline':True]['text':'*
+   * Compare the characters bitwise in this UnicodeString to
+   * the characters in `text`.
+   * @param text The UnicodeString to compare to this one.
+   * @return The result of bitwise character comparison: 0 if this
+   * contains the same characters as `text`, -1 if the characters in
+   * this are bitwise less than the characters in `text`, +1 if the
+   * characters in this are bitwise greater than the characters
+   * in `text`.
+   * @stable ICU 2.0
+   ','line_number':375,'multiline':True]['text':'*
+   * Compare the characters bitwise in the range
+   * [`start`, `start + length`) with the characters
+   * in the **entire string** `text`.
+   * (The parameters "start" and "length" are not applied to the other text "text".)
+   * @param start the offset at which the compare operation begins
+   * @param length the number of characters of text to compare.
+   * @param text the other text to be compared against this string.
+   * @return The result of bitwise character comparison: 0 if this
+   * contains the same characters as `text`, -1 if the characters in
+   * this are bitwise less than the characters in `text`, +1 if the
+   * characters in this are bitwise greater than the characters
+   * in `text`.
+   * @stable ICU 2.0
+   ','line_number':388,'multiline':True]['text':'*
+   * Compare the characters bitwise in the range
+   * [`start`, `start + length`) with the characters
+   * in `srcText` in the range
+   * [`srcStart`, `srcStart + srcLength`).
+   * @param start the offset at which the compare operation begins
+   * @param length the number of characters in this to compare.
+   * @param srcText the text to be compared
+   * @param srcStart the offset into `srcText` to start comparison
+   * @param srcLength the number of characters in `src` to compare
+   * @return The result of bitwise character comparison: 0 if this
+   * contains the same characters as `srcText`, -1 if the characters in
+   * this are bitwise less than the characters in `srcText`, +1 if the
+   * characters in this are bitwise greater than the characters
+   * in `srcText`.
+   * @stable ICU 2.0
+   ','line_number':407,'multiline':True]['text':'*
+   * Compare the characters bitwise in this UnicodeString with the first
+   * `srcLength` characters in `srcChars`.
+   * @param srcChars The characters to compare to this UnicodeString.
+   * @param srcLength the number of characters in `srcChars` to compare
+   * @return The result of bitwise character comparison: 0 if this
+   * contains the same characters as `srcChars`, -1 if the characters in
+   * this are bitwise less than the characters in `srcChars`, +1 if the
+   * characters in this are bitwise greater than the characters
+   * in `srcChars`.
+   * @stable ICU 2.0
+   ','line_number':430,'multiline':True]['text':'*
+   * Compare the characters bitwise in the range
+   * [`start`, `start + length`) with the first
+   * `length` characters in `srcChars`
+   * @param start the offset at which the compare operation begins
+   * @param length the number of characters to compare.
+   * @param srcChars the characters to be compared
+   * @return The result of bitwise character comparison: 0 if this
+   * contains the same characters as `srcChars`, -1 if the characters in
+   * this are bitwise less than the characters in `srcChars`, +1 if the
+   * characters in this are bitwise greater than the characters
+   * in `srcChars`.
+   * @stable ICU 2.0
+   ','line_number':445,'multiline':True]['text':'*
+   * Compare the characters bitwise in the range
+   * [`start`, `start + length`) with the characters
+   * in `srcChars` in the range
+   * [`srcStart`, `srcStart + srcLength`).
+   * @param start the offset at which the compare operation begins
+   * @param length the number of characters in this to compare
+   * @param srcChars the characters to be compared
+   * @param srcStart the offset into `srcChars` to start comparison
+   * @param srcLength the number of characters in `srcChars` to compare
+   * @return The result of bitwise character comparison: 0 if this
+   * contains the same characters as `srcChars`, -1 if the characters in
+   * this are bitwise less than the characters in `srcChars`, +1 if the
+   * characters in this are bitwise greater than the characters
+   * in `srcChars`.
+   * @stable ICU 2.0
+   ','line_number':463,'multiline':True]['text':'*
+   * Compare the characters bitwise in the range
+   * [`start`, `limit`) with the characters
+   * in `srcText` in the range
+   * [`srcStart`, `srcLimit`).
+   * @param start the offset at which the compare operation begins
+   * @param limit the offset immediately following the compare operation
+   * @param srcText the text to be compared
+   * @param srcStart the offset into `srcText` to start comparison
+   * @param srcLimit the offset into `srcText` to limit comparison
+   * @return The result of bitwise character comparison: 0 if this
+   * contains the same characters as `srcText`, -1 if the characters in
+   * this are bitwise less than the characters in `srcText`, +1 if the
+   * characters in this are bitwise greater than the characters
+   * in `srcText`.
+   * @stable ICU 2.0
+   ','line_number':486,'multiline':True]['text':'*
+   * Compare two Unicode strings in code point order.
+   * The result may be different from the results of compare(), operator<, etc.
+   * if supplementary characters are present:
+   *
+   * In UTF-16, supplementary characters (with code points U+10000 and above) are
+   * stored with pairs of surrogate code units. These have values from 0xd800 to 0xdfff,
+   * which means that they compare as less than some other BMP characters like U+feff.
+   * This function compares Unicode strings in code point order.
+   * If either of the UTF-16 strings is malformed (i.e., it contains unpaired surrogates), then the result is not defined.
+   *
+   * @param text Another string to compare this one to.
+   * @return a negative/zero/positive integer corresponding to whether
+   * this string is less than/equal to/greater than the second one
+   * in code point order
+   * @stable ICU 2.0
+   ','line_number':509,'multiline':True]['text':'*
+   * Compare two Unicode strings in code point order.
+   * The result may be different from the results of compare(), operator<, etc.
+   * if supplementary characters are present:
+   *
+   * In UTF-16, supplementary characters (with code points U+10000 and above) are
+   * stored with pairs of surrogate code units. These have values from 0xd800 to 0xdfff,
+   * which means that they compare as less than some other BMP characters like U+feff.
+   * This function compares Unicode strings in code point order.
+   * If either of the UTF-16 strings is malformed (i.e., it contains unpaired surrogates), then the result is not defined.
+   *
+   * @param start The start offset in this string at which the compare operation begins.
+   * @param length The number of code units from this string to compare.
+   * @param srcText Another string to compare this one to.
+   * @return a negative/zero/positive integer corresponding to whether
+   * this string is less than/equal to/greater than the second one
+   * in code point order
+   * @stable ICU 2.0
+   ','line_number':528,'multiline':True]['text':'*
+   * Compare two Unicode strings in code point order.
+   * The result may be different from the results of compare(), operator<, etc.
+   * if supplementary characters are present:
+   *
+   * In UTF-16, supplementary characters (with code points U+10000 and above) are
+   * stored with pairs of surrogate code units. These have values from 0xd800 to 0xdfff,
+   * which means that they compare as less than some other BMP characters like U+feff.
+   * This function compares Unicode strings in code point order.
+   * If either of the UTF-16 strings is malformed (i.e., it contains unpaired surrogates), then the result is not defined.
+   *
+   * @param start The start offset in this string at which the compare operation begins.
+   * @param length The number of code units from this string to compare.
+   * @param srcText Another string to compare this one to.
+   * @param srcStart The start offset in that string at which the compare operation begins.
+   * @param srcLength The number of code units from that string to compare.
+   * @return a negative/zero/positive integer corresponding to whether
+   * this string is less than/equal to/greater than the second one
+   * in code point order
+   * @stable ICU 2.0
+   ','line_number':551,'multiline':True]['text':'*
+   * Compare two Unicode strings in code point order.
+   * The result may be different from the results of compare(), operator<, etc.
+   * if supplementary characters are present:
+   *
+   * In UTF-16, supplementary characters (with code points U+10000 and above) are
+   * stored with pairs of surrogate code units. These have values from 0xd800 to 0xdfff,
+   * which means that they compare as less than some other BMP characters like U+feff.
+   * This function compares Unicode strings in code point order.
+   * If either of the UTF-16 strings is malformed (i.e., it contains unpaired surrogates), then the result is not defined.
+   *
+   * @param srcChars A pointer to another string to compare this one to.
+   * @param srcLength The number of code units from that string to compare.
+   * @return a negative/zero/positive integer corresponding to whether
+   * this string is less than/equal to/greater than the second one
+   * in code point order
+   * @stable ICU 2.0
+   ','line_number':578,'multiline':True]['text':'*
+   * Compare two Unicode strings in code point order.
+   * The result may be different from the results of compare(), operator<, etc.
+   * if supplementary characters are present:
+   *
+   * In UTF-16, supplementary characters (with code points U+10000 and above) are
+   * stored with pairs of surrogate code units. These have values from 0xd800 to 0xdfff,
+   * which means that they compare as less than some other BMP characters like U+feff.
+   * This function compares Unicode strings in code point order.
+   * If either of the UTF-16 strings is malformed (i.e., it contains unpaired surrogates), then the result is not defined.
+   *
+   * @param start The start offset in this string at which the compare operation begins.
+   * @param length The number of code units from this string to compare.
+   * @param srcChars A pointer to another string to compare this one to.
+   * @return a negative/zero/positive integer corresponding to whether
+   * this string is less than/equal to/greater than the second one
+   * in code point order
+   * @stable ICU 2.0
+   ','line_number':599,'multiline':True]['text':'*
+   * Compare two Unicode strings in code point order.
+   * The result may be different from the results of compare(), operator<, etc.
+   * if supplementary characters are present:
+   *
+   * In UTF-16, supplementary characters (with code points U+10000 and above) are
+   * stored with pairs of surrogate code units. These have values from 0xd800 to 0xdfff,
+   * which means that they compare as less than some other BMP characters like U+feff.
+   * This function compares Unicode strings in code point order.
+   * If either of the UTF-16 strings is malformed (i.e., it contains unpaired surrogates), then the result is not defined.
+   *
+   * @param start The start offset in this string at which the compare operation begins.
+   * @param length The number of code units from this string to compare.
+   * @param srcChars A pointer to another string to compare this one to.
+   * @param srcStart The start offset in that string at which the compare operation begins.
+   * @param srcLength The number of code units from that string to compare.
+   * @return a negative/zero/positive integer corresponding to whether
+   * this string is less than/equal to/greater than the second one
+   * in code point order
+   * @stable ICU 2.0
+   ','line_number':622,'multiline':True]['text':'*
+   * Compare two Unicode strings in code point order.
+   * The result may be different from the results of compare(), operator<, etc.
+   * if supplementary characters are present:
+   *
+   * In UTF-16, supplementary characters (with code points U+10000 and above) are
+   * stored with pairs of surrogate code units. These have values from 0xd800 to 0xdfff,
+   * which means that they compare as less than some other BMP characters like U+feff.
+   * This function compares Unicode strings in code point order.
+   * If either of the UTF-16 strings is malformed (i.e., it contains unpaired surrogates), then the result is not defined.
+   *
+   * @param start The start offset in this string at which the compare operation begins.
+   * @param limit The offset after the last code unit from this string to compare.
+   * @param srcText Another string to compare this one to.
+   * @param srcStart The start offset in that string at which the compare operation begins.
+   * @param srcLimit The offset after the last code unit from that string to compare.
+   * @return a negative/zero/positive integer corresponding to whether
+   * this string is less than/equal to/greater than the second one
+   * in code point order
+   * @stable ICU 2.0
+   ','line_number':649,'multiline':True]['text':'*
+   * Compare two strings case-insensitively using full case folding.
+   * This is equivalent to this->foldCase(options).compare(text.foldCase(options)).
+   *
+   * @param text Another string to compare this one to.
+   * @param options A bit set of options:
+   *   - U_FOLD_CASE_DEFAULT or 0 is used for default options:
+   *     Comparison in code unit order with default case folding.
+   *
+   *   - U_COMPARE_CODE_POINT_ORDER
+   *     Set to choose code point order instead of code unit order
+   *     (see u_strCompare for details).
+   *
+   *   - U_FOLD_CASE_EXCLUDE_SPECIAL_I
+   *
+   * @return A negative, zero, or positive integer indicating the comparison result.
+   * @stable ICU 2.0
+   ','line_number':676,'multiline':True]['text':'*
+   * Compare two strings case-insensitively using full case folding.
+   * This is equivalent to this->foldCase(options).compare(srcText.foldCase(options)).
+   *
+   * @param start The start offset in this string at which the compare operation begins.
+   * @param length The number of code units from this string to compare.
+   * @param srcText Another string to compare this one to.
+   * @param options A bit set of options:
+   *   - U_FOLD_CASE_DEFAULT or 0 is used for default options:
+   *     Comparison in code unit order with default case folding.
+   *
+   *   - U_COMPARE_CODE_POINT_ORDER
+   *     Set to choose code point order instead of code unit order
+   *     (see u_strCompare for details).
+   *
+   *   - U_FOLD_CASE_EXCLUDE_SPECIAL_I
+   *
+   * @return A negative, zero, or positive integer indicating the comparison result.
+   * @stable ICU 2.0
+   ','line_number':696,'multiline':True]['text':'*
+   * Compare two strings case-insensitively using full case folding.
+   * This is equivalent to this->foldCase(options).compare(srcText.foldCase(options)).
+   *
+   * @param start The start offset in this string at which the compare operation begins.
+   * @param length The number of code units from this string to compare.
+   * @param srcText Another string to compare this one to.
+   * @param srcStart The start offset in that string at which the compare operation begins.
+   * @param srcLength The number of code units from that string to compare.
+   * @param options A bit set of options:
+   *   - U_FOLD_CASE_DEFAULT or 0 is used for default options:
+   *     Comparison in code unit order with default case folding.
+   *
+   *   - U_COMPARE_CODE_POINT_ORDER
+   *     Set to choose code point order instead of code unit order
+   *     (see u_strCompare for details).
+   *
+   *   - U_FOLD_CASE_EXCLUDE_SPECIAL_I
+   *
+   * @return A negative, zero, or positive integer indicating the comparison result.
+   * @stable ICU 2.0
+   ','line_number':721,'multiline':True]['text':'*
+   * Compare two strings case-insensitively using full case folding.
+   * This is equivalent to this->foldCase(options).compare(srcChars.foldCase(options)).
+   *
+   * @param srcChars A pointer to another string to compare this one to.
+   * @param srcLength The number of code units from that string to compare.
+   * @param options A bit set of options:
+   *   - U_FOLD_CASE_DEFAULT or 0 is used for default options:
+   *     Comparison in code unit order with default case folding.
+   *
+   *   - U_COMPARE_CODE_POINT_ORDER
+   *     Set to choose code point order instead of code unit order
+   *     (see u_strCompare for details).
+   *
+   *   - U_FOLD_CASE_EXCLUDE_SPECIAL_I
+   *
+   * @return A negative, zero, or positive integer indicating the comparison result.
+   * @stable ICU 2.0
+   ','line_number':750,'multiline':True]['text':'*
+   * Compare two strings case-insensitively using full case folding.
+   * This is equivalent to this->foldCase(options).compare(srcChars.foldCase(options)).
+   *
+   * @param start The start offset in this string at which the compare operation begins.
+   * @param length The number of code units from this string to compare.
+   * @param srcChars A pointer to another string to compare this one to.
+   * @param options A bit set of options:
+   *   - U_FOLD_CASE_DEFAULT or 0 is used for default options:
+   *     Comparison in code unit order with default case folding.
+   *
+   *   - U_COMPARE_CODE_POINT_ORDER
+   *     Set to choose code point order instead of code unit order
+   *     (see u_strCompare for details).
+   *
+   *   - U_FOLD_CASE_EXCLUDE_SPECIAL_I
+   *
+   * @return A negative, zero, or positive integer indicating the comparison result.
+   * @stable ICU 2.0
+   ','line_number':773,'multiline':True]['text':'*
+   * Compare two strings case-insensitively using full case folding.
+   * This is equivalent to this->foldCase(options).compare(srcChars.foldCase(options)).
+   *
+   * @param start The start offset in this string at which the compare operation begins.
+   * @param length The number of code units from this string to compare.
+   * @param srcChars A pointer to another string to compare this one to.
+   * @param srcStart The start offset in that string at which the compare operation begins.
+   * @param srcLength The number of code units from that string to compare.
+   * @param options A bit set of options:
+   *   - U_FOLD_CASE_DEFAULT or 0 is used for default options:
+   *     Comparison in code unit order with default case folding.
+   *
+   *   - U_COMPARE_CODE_POINT_ORDER
+   *     Set to choose code point order instead of code unit order
+   *     (see u_strCompare for details).
+   *
+   *   - U_FOLD_CASE_EXCLUDE_SPECIAL_I
+   *
+   * @return A negative, zero, or positive integer indicating the comparison result.
+   * @stable ICU 2.0
+   ','line_number':798,'multiline':True]['text':'*
+   * Compare two strings case-insensitively using full case folding.
+   * This is equivalent to this->foldCase(options).compareBetween(text.foldCase(options)).
+   *
+   * @param start The start offset in this string at which the compare operation begins.
+   * @param limit The offset after the last code unit from this string to compare.
+   * @param srcText Another string to compare this one to.
+   * @param srcStart The start offset in that string at which the compare operation begins.
+   * @param srcLimit The offset after the last code unit from that string to compare.
+   * @param options A bit set of options:
+   *   - U_FOLD_CASE_DEFAULT or 0 is used for default options:
+   *     Comparison in code unit order with default case folding.
+   *
+   *   - U_COMPARE_CODE_POINT_ORDER
+   *     Set to choose code point order instead of code unit order
+   *     (see u_strCompare for details).
+   *
+   *   - U_FOLD_CASE_EXCLUDE_SPECIAL_I
+   *
+   * @return A negative, zero, or positive integer indicating the comparison result.
+   * @stable ICU 2.0
+   ','line_number':827,'multiline':True]['text':'*
+   * Determine if this starts with the characters in `text`
+   * @param text The text to match.
+   * @return true if this starts with the characters in `text`,
+   * false otherwise
+   * @stable ICU 2.0
+   ','line_number':856,'multiline':True]['text':'*
+   * Determine if this starts with the characters in `srcText`
+   * in the range [`srcStart`, `srcStart + srcLength`).
+   * @param srcText The text to match.
+   * @param srcStart the offset into `srcText` to start matching
+   * @param srcLength the number of characters in `srcText` to match
+   * @return true if this starts with the characters in `text`,
+   * false otherwise
+   * @stable ICU 2.0
+   ','line_number':865,'multiline':True]['text':'*
+   * Determine if this starts with the characters in `srcChars`
+   * @param srcChars The characters to match.
+   * @param srcLength the number of characters in `srcChars`
+   * @return true if this starts with the characters in `srcChars`,
+   * false otherwise
+   * @stable ICU 2.0
+   ','line_number':879,'multiline':True]['text':'*
+   * Determine if this ends with the characters in `srcChars`
+   * in the range  [`srcStart`, `srcStart + srcLength`).
+   * @param srcChars The characters to match.
+   * @param srcStart the offset into `srcText` to start matching
+   * @param srcLength the number of characters in `srcChars` to match
+   * @return true if this ends with the characters in `srcChars`, false otherwise
+   * @stable ICU 2.0
+   ','line_number':890,'multiline':True]['text':'*
+   * Determine if this ends with the characters in `text`
+   * @param text The text to match.
+   * @return true if this ends with the characters in `text`,
+   * false otherwise
+   * @stable ICU 2.0
+   ','line_number':903,'multiline':True]['text':'*
+   * Determine if this ends with the characters in `srcText`
+   * in the range [`srcStart`, `srcStart + srcLength`).
+   * @param srcText The text to match.
+   * @param srcStart the offset into `srcText` to start matching
+   * @param srcLength the number of characters in `srcText` to match
+   * @return true if this ends with the characters in `text`,
+   * false otherwise
+   * @stable ICU 2.0
+   ','line_number':912,'multiline':True]['text':'*
+   * Determine if this ends with the characters in `srcChars`
+   * @param srcChars The characters to match.
+   * @param srcLength the number of characters in `srcChars`
+   * @return true if this ends with the characters in `srcChars`,
+   * false otherwise
+   * @stable ICU 2.0
+   ','line_number':926,'multiline':True]['text':'*
+   * Determine if this ends with the characters in `srcChars`
+   * in the range  [`srcStart`, `srcStart + srcLength`).
+   * @param srcChars The characters to match.
+   * @param srcStart the offset into `srcText` to start matching
+   * @param srcLength the number of characters in `srcChars` to match
+   * @return true if this ends with the characters in `srcChars`,
+   * false otherwise
+   * @stable ICU 2.0
+   ','line_number':937,'multiline':True]['text':' Searching - bitwise only ','line_number':952,'multiline':True]['text':'*
+   * Locate in this the first occurrence of the characters in `text`,
+   * using bitwise comparison.
+   * @param text The text to search for.
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':954,'multiline':True]['text':'*
+   * Locate in this the first occurrence of the characters in `text`
+   * starting at offset `start`, using bitwise comparison.
+   * @param text The text to search for.
+   * @param start The offset at which searching will start.
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':964,'multiline':True]['text':'*
+   * Locate in this the first occurrence in the range
+   * [`start`, `start + length`) of the characters
+   * in `text`, using bitwise comparison.
+   * @param text The text to search for.
+   * @param start The offset at which searching will start.
+   * @param length The number of characters to search
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':976,'multiline':True]['text':'*
+   * Locate in this the first occurrence in the range
+   * [`start`, `start + length`) of the characters
+   *  in `srcText` in the range
+   * [`srcStart`, `srcStart + srcLength`),
+   * using bitwise comparison.
+   * @param srcText The text to search for.
+   * @param srcStart the offset into `srcText` at which
+   * to start matching
+   * @param srcLength the number of characters in `srcText` to match
+   * @param start the offset into this at which to start matching
+   * @param length the number of characters in this to search
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':991,'multiline':True]['text':'*
+   * Locate in this the first occurrence of the characters in
+   * `srcChars`
+   * starting at offset `start`, using bitwise comparison.
+   * @param srcChars The text to search for.
+   * @param srcLength the number of characters in `srcChars` to match
+   * @param start the offset into this at which to start matching
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1013,'multiline':True]['text':'*
+   * Locate in this the first occurrence in the range
+   * [`start`, `start + length`) of the characters
+   * in `srcChars`, using bitwise comparison.
+   * @param srcChars The text to search for.
+   * @param srcLength the number of characters in `srcChars`
+   * @param start The offset at which searching will start.
+   * @param length The number of characters to search
+   * @return The offset into this of the start of `srcChars`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1028,'multiline':True]['text':'*
+   * Locate in this the first occurrence in the range
+   * [`start`, `start + length`) of the characters
+   * in `srcChars` in the range
+   * [`srcStart`, `srcStart + srcLength`),
+   * using bitwise comparison.
+   * @param srcChars The text to search for.
+   * @param srcStart the offset into `srcChars` at which
+   * to start matching
+   * @param srcLength the number of characters in `srcChars` to match
+   * @param start the offset into this at which to start matching
+   * @param length the number of characters in this to search
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1045,'multiline':True]['text':'*
+   * Locate in this the first occurrence of the BMP code point `c`,
+   * using bitwise comparison.
+   * @param c The code unit to search for.
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1067,'multiline':True]['text':'*
+   * Locate in this the first occurrence of the code point `c`,
+   * using bitwise comparison.
+   *
+   * @param c The code point to search for.
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1076,'multiline':True]['text':'*
+   * Locate in this the first occurrence of the BMP code point `c`,
+   * starting at offset `start`, using bitwise comparison.
+   * @param c The code unit to search for.
+   * @param start The offset at which searching will start.
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1086,'multiline':True]['text':'*
+   * Locate in this the first occurrence of the code point `c`
+   * starting at offset `start`, using bitwise comparison.
+   *
+   * @param c The code point to search for.
+   * @param start The offset at which searching will start.
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1097,'multiline':True]['text':'*
+   * Locate in this the first occurrence of the BMP code point `c`
+   * in the range [`start`, `start + length`),
+   * using bitwise comparison.
+   * @param c The code unit to search for.
+   * @param start the offset into this at which to start matching
+   * @param length the number of characters in this to search
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1109,'multiline':True]['text':'*
+   * Locate in this the first occurrence of the code point `c`
+   * in the range [`start`, `start + length`),
+   * using bitwise comparison.
+   *
+   * @param c The code point to search for.
+   * @param start the offset into this at which to start matching
+   * @param length the number of characters in this to search
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1123,'multiline':True]['text':'*
+   * Locate in this the last occurrence of the characters in `text`,
+   * using bitwise comparison.
+   * @param text The text to search for.
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1138,'multiline':True]['text':'*
+   * Locate in this the last occurrence of the characters in `text`
+   * starting at offset `start`, using bitwise comparison.
+   * @param text The text to search for.
+   * @param start The offset at which searching will start.
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1148,'multiline':True]['text':'*
+   * Locate in this the last occurrence in the range
+   * [`start`, `start + length`) of the characters
+   * in `text`, using bitwise comparison.
+   * @param text The text to search for.
+   * @param start The offset at which searching will start.
+   * @param length The number of characters to search
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1160,'multiline':True]['text':'*
+   * Locate in this the last occurrence in the range
+   * [`start`, `start + length`) of the characters
+   * in `srcText` in the range
+   * [`srcStart`, `srcStart + srcLength`),
+   * using bitwise comparison.
+   * @param srcText The text to search for.
+   * @param srcStart the offset into `srcText` at which
+   * to start matching
+   * @param srcLength the number of characters in `srcText` to match
+   * @param start the offset into this at which to start matching
+   * @param length the number of characters in this to search
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1175,'multiline':True]['text':'*
+   * Locate in this the last occurrence of the characters in `srcChars`
+   * starting at offset `start`, using bitwise comparison.
+   * @param srcChars The text to search for.
+   * @param srcLength the number of characters in `srcChars` to match
+   * @param start the offset into this at which to start matching
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1197,'multiline':True]['text':'*
+   * Locate in this the last occurrence in the range
+   * [`start`, `start + length`) of the characters
+   * in `srcChars`, using bitwise comparison.
+   * @param srcChars The text to search for.
+   * @param srcLength the number of characters in `srcChars`
+   * @param start The offset at which searching will start.
+   * @param length The number of characters to search
+   * @return The offset into this of the start of `srcChars`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1211,'multiline':True]['text':'*
+   * Locate in this the last occurrence in the range
+   * [`start`, `start + length`) of the characters
+   * in `srcChars` in the range
+   * [`srcStart`, `srcStart + srcLength`),
+   * using bitwise comparison.
+   * @param srcChars The text to search for.
+   * @param srcStart the offset into `srcChars` at which
+   * to start matching
+   * @param srcLength the number of characters in `srcChars` to match
+   * @param start the offset into this at which to start matching
+   * @param length the number of characters in this to search
+   * @return The offset into this of the start of `text`,
+   * or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1228,'multiline':True]['text':'*
+   * Locate in this the last occurrence of the BMP code point `c`,
+   * using bitwise comparison.
+   * @param c The code unit to search for.
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1250,'multiline':True]['text':'*
+   * Locate in this the last occurrence of the code point `c`,
+   * using bitwise comparison.
+   *
+   * @param c The code point to search for.
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1259,'multiline':True]['text':'*
+   * Locate in this the last occurrence of the BMP code point `c`
+   * starting at offset `start`, using bitwise comparison.
+   * @param c The code unit to search for.
+   * @param start The offset at which searching will start.
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1269,'multiline':True]['text':'*
+   * Locate in this the last occurrence of the code point `c`
+   * starting at offset `start`, using bitwise comparison.
+   *
+   * @param c The code point to search for.
+   * @param start The offset at which searching will start.
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1280,'multiline':True]['text':'*
+   * Locate in this the last occurrence of the BMP code point `c`
+   * in the range [`start`, `start + length`),
+   * using bitwise comparison.
+   * @param c The code unit to search for.
+   * @param start the offset into this at which to start matching
+   * @param length the number of characters in this to search
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1292,'multiline':True]['text':'*
+   * Locate in this the last occurrence of the code point `c`
+   * in the range [`start`, `start + length`),
+   * using bitwise comparison.
+   *
+   * @param c The code point to search for.
+   * @param start the offset into this at which to start matching
+   * @param length the number of characters in this to search
+   * @return The offset into this of `c`, or -1 if not found.
+   * @stable ICU 2.0
+   ','line_number':1306,'multiline':True]['text':' Character access ','line_number':1322,'multiline':True]['text':'*
+   * Return the code unit at offset `offset`.
+   * If the offset is not valid (0..length()-1) then U+ffff is returned.
+   * @param offset a valid offset into the text
+   * @return the code unit at offset `offset`
+   *         or 0xffff if the offset is not valid for this string
+   * @stable ICU 2.0
+   ','line_number':1324,'multiline':True]['text':'*
+   * Return the code unit at offset `offset`.
+   * If the offset is not valid (0..length()-1) then U+ffff is returned.
+   * @param offset a valid offset into the text
+   * @return the code unit at offset `offset`
+   * @stable ICU 2.0
+   ','line_number':1334,'multiline':True]['text':'*
+   * Return the code point that contains the code unit
+   * at offset `offset`.
+   * If the offset is not valid (0..length()-1) then U+ffff is returned.
+   * @param offset a valid offset into the text
+   * that indicates the text offset of any of the code units
+   * that will be assembled into a code point (21-bit value) and returned
+   * @return the code point of text at `offset`
+   *         or 0xffff if the offset is not valid for this string
+   * @stable ICU 2.0
+   ','line_number':1343,'multiline':True]['text':'*
+   * Adjust a random-access offset so that
+   * it points to the beginning of a Unicode character.
+   * The offset that is passed in points to
+   * any code unit of a code point,
+   * while the returned offset will point to the first code unit
+   * of the same code point.
+   * In UTF-16, if the input offset points to a second surrogate
+   * of a surrogate pair, then the returned offset will point
+   * to the first surrogate.
+   * @param offset a valid offset into one code point of the text
+   * @return offset of the first code unit of the same code point
+   * @see U16_SET_CP_START
+   * @stable ICU 2.0
+   ','line_number':1356,'multiline':True]['text':'*
+   * Adjust a random-access offset so that
+   * it points behind a Unicode character.
+   * The offset that is passed in points behind
+   * any code unit of a code point,
+   * while the returned offset will point behind the last code unit
+   * of the same code point.
+   * In UTF-16, if the input offset points behind the first surrogate
+   * (i.e., to the second surrogate)
+   * of a surrogate pair, then the returned offset will point
+   * behind the second surrogate (i.e., to the first surrogate).
+   * @param offset a valid offset after any code unit of a code point of the text
+   * @return offset of the first code unit after the same code point
+   * @see U16_SET_CP_LIMIT
+   * @stable ICU 2.0
+   ','line_number':1373,'multiline':True]['text':'*
+   * Move the code unit index along the string by delta code points.
+   * Interpret the input index as a code unit-based offset into the string,
+   * move the index forward or backward by delta code points, and
+   * return the resulting index.
+   * The input index should point to the first code unit of a code point,
+   * if there is more than one.
+   *
+   * Both input and output indexes are code unit-based as for all
+   * string indexes/offsets in ICU (and other libraries, like MBCS char*).
+   * If delta<0 then the index is moved backward (toward the start of the string).
+   * If delta>0 then the index is moved forward (toward the end of the string).
+   *
+   * This behaves like CharacterIterator::move32(delta, kCurrent).
+   *
+   * Behavior for out-of-bounds indexes:
+   * `moveIndex32` pins the input index to 0..length(), i.e.,
+   * if the input index<0 then it is pinned to 0;
+   * if it is index>length() then it is pinned to length().
+   * Afterwards, the index is moved by `delta` code points
+   * forward or backward,
+   * but no further backward than to 0 and no further forward than to length().
+   * The resulting index return value will be in between 0 and length(), inclusively.
+   *
+   * Examples:
+   * \code
+   *     // s has code points 'a' U+10000 'b' U+10ffff U+2029
+   *     UnicodeString s(u"a\U00010000b\U0010ffff\u2029");
+   *
+   *     // initial index: position of U+10000
+   *     int32_t index=1;
+   *
+   *     // the following examples will all result in index==4, position of U+10ffff
+   *
+   *     // skip 2 code points from some position in the string
+   *     index=s.moveIndex32(index, 2); // skips U+10000 and 'b'
+   *
+   *     // go to the 3rd code point from the start of s (0-based)
+   *     index=s.moveIndex32(0, 3); // skips 'a', U+10000, and 'b'
+   *
+   *     // go to the next-to-last code point of s
+   *     index=s.moveIndex32(s.length(), -2); // backward-skips U+2029 and U+10ffff
+   * \endcode
+   *
+   * @param index input code unit index
+   * @param delta (signed) code point count to move the index forward or backward
+   *        in the string
+   * @return the resulting code unit index
+   * @stable ICU 2.0
+   ','line_number':1391,'multiline':True]['text':' Substring extraction ','line_number':1443,'multiline':True]['text':'*
+   * Copy the characters in the range
+   * [`start`, `start + length`) into the array `dst`,
+   * beginning at `dstStart`.
+   * If the string aliases to `dst` itself as an external buffer,
+   * then extract() will not copy the contents.
+   *
+   * @param start offset of first character which will be copied into the array
+   * @param length the number of characters to extract
+   * @param dst array in which to copy characters.  The length of `dst`
+   * must be at least (`dstStart + length`).
+   * @param dstStart the offset in `dst` where the first character
+   * will be extracted
+   * @stable ICU 2.0
+   ','line_number':1445,'multiline':True]['text':'*
+   * Copy the contents of the string into dest.
+   * This is a convenience function that
+   * checks if there is enough space in dest,
+   * extracts the entire string if possible,
+   * and NUL-terminates dest if possible.
+   *
+   * If the string fits into dest but cannot be NUL-terminated
+   * (length()==destCapacity) then the error code is set to U_STRING_NOT_TERMINATED_WARNING.
+   * If the string itself does not fit into dest
+   * (length()>destCapacity) then the error code is set to U_BUFFER_OVERFLOW_ERROR.
+   *
+   * If the string aliases to `dest` itself as an external buffer,
+   * then extract() will not copy the contents.
+   *
+   * @param dest Destination string buffer.
+   * @param destCapacity Number of char16_ts available at dest.
+   * @param errorCode ICU error code.
+   * @return length()
+   * @stable ICU 2.0
+   ','line_number':1465,'multiline':True]['text':'*
+   * Copy the characters in the range
+   * [`start`, `start + length`) into the  UnicodeString
+   * `target`.
+   * @param start offset of first character which will be copied
+   * @param length the number of characters to extract
+   * @param target UnicodeString into which to copy characters.
+   * @stable ICU 2.0
+   ','line_number':1490,'multiline':True]['text':'*
+   * Copy the characters in the range [`start`, `limit`)
+   * into the array `dst`, beginning at `dstStart`.
+   * @param start offset of first character which will be copied into the array
+   * @param limit offset immediately following the last character to be copied
+   * @param dst array in which to copy characters.  The length of `dst`
+   * must be at least (`dstStart + (limit - start)`).
+   * @param dstStart the offset in `dst` where the first character
+   * will be extracted
+   * @stable ICU 2.0
+   ','line_number':1503,'multiline':True]['text':'*
+   * Copy the characters in the range [`start`, `limit`)
+   * into the UnicodeString `target`.  Replaceable API.
+   * @param start offset of first character which will be copied
+   * @param limit offset immediately following the last character to be copied
+   * @param target UnicodeString into which to copy characters.
+   * @stable ICU 2.0
+   ','line_number':1519,'multiline':True]['text':'*
+   * Copy the characters in the range
+   * [`start`, `start + startLength`) into an array of characters.
+   * All characters must be invariant (see utypes.h).
+   * Use US_INV as the last, signature-distinguishing parameter.
+   *
+   * This function does not write any more than `targetCapacity`
+   * characters but returns the length of the entire output string
+   * so that one can allocate a larger buffer and call the function again
+   * if necessary.
+   * The output string is NUL-terminated if possible.
+   *
+   * @param start offset of first character which will be copied
+   * @param startLength the number of characters to extract
+   * @param target the target buffer for extraction, can be NULL
+   *               if targetLength is 0
+   * @param targetCapacity the length of the target buffer
+   * @param inv Signature-distinguishing paramater, use US_INV.
+   * @return the output string length, not including the terminating NUL
+   * @stable ICU 3.2
+   ','line_number':1531,'multiline':True]['text':'*
+   * Copy the characters in the range
+   * [`start`, `start + length`) into an array of characters
+   * in the platform's default codepage.
+   * This function does not write any more than `targetLength`
+   * characters but returns the length of the entire output string
+   * so that one can allocate a larger buffer and call the function again
+   * if necessary.
+   * The output string is NUL-terminated if possible.
+   *
+   * @param start offset of first character which will be copied
+   * @param startLength the number of characters to extract
+   * @param target the target buffer for extraction
+   * @param targetLength the length of the target buffer
+   * If `target` is NULL, then the number of bytes required for
+   * `target` is returned.
+   * @return the output string length, not including the terminating NUL
+   * @stable ICU 2.0
+   ','line_number':1560,'multiline':True]['text':'*
+   * Copy the characters in the range
+   * [`start`, `start + length`) into an array of characters
+   * in a specified codepage.
+   * The output string is NUL-terminated.
+   *
+   * Recommendation: For invariant-character strings use
+   * extract(int32_t start, int32_t length, char *target, int32_t targetCapacity, enum EInvariant inv) const
+   * because it avoids object code dependencies of UnicodeString on
+   * the conversion code.
+   *
+   * @param start offset of first character which will be copied
+   * @param startLength the number of characters to extract
+   * @param target the target buffer for extraction
+   * @param codepage the desired codepage for the characters.  0 has
+   * the special meaning of the default codepage
+   * If `codepage` is an empty string (`""`),
+   * then a simple conversion is performed on the codepage-invariant
+   * subset ("invariant characters") of the platform encoding. See utypes.h.
+   * If `target` is NULL, then the number of bytes required for
+   * `target` is returned. It is assumed that the target is big enough
+   * to fit all of the characters.
+   * @return the output string length, not including the terminating NUL
+   * @stable ICU 2.0
+   ','line_number':1588,'multiline':True]['text':'*
+   * Copy the characters in the range
+   * [`start`, `start + length`) into an array of characters
+   * in a specified codepage.
+   * This function does not write any more than `targetLength`
+   * characters but returns the length of the entire output string
+   * so that one can allocate a larger buffer and call the function again
+   * if necessary.
+   * The output string is NUL-terminated if possible.
+   *
+   * Recommendation: For invariant-character strings use
+   * extract(int32_t start, int32_t length, char *target, int32_t targetCapacity, enum EInvariant inv) const
+   * because it avoids object code dependencies of UnicodeString on
+   * the conversion code.
+   *
+   * @param start offset of first character which will be copied
+   * @param startLength the number of characters to extract
+   * @param target the target buffer for extraction
+   * @param targetLength the length of the target buffer
+   * @param codepage the desired codepage for the characters.  0 has
+   * the special meaning of the default codepage
+   * If `codepage` is an empty string (`""`),
+   * then a simple conversion is performed on the codepage-invariant
+   * subset ("invariant characters") of the platform encoding. See utypes.h.
+   * If `target` is NULL, then the number of bytes required for
+   * `target` is returned.
+   * @return the output string length, not including the terminating NUL
+   * @stable ICU 2.0
+   ','line_number':1618,'multiline':True]['text':'*
+   * Convert the UnicodeString into a codepage string using an existing UConverter.
+   * The output string is NUL-terminated if possible.
+   *
+   * This function avoids the overhead of opening and closing a converter if
+   * multiple strings are extracted.
+   *
+   * @param dest destination string buffer, can be NULL if destCapacity==0
+   * @param destCapacity the number of chars available at dest
+   * @param cnv the converter object to be used (ucnv_resetFromUnicode() will be called),
+   *        or NULL for the default converter
+   * @param errorCode normal ICU error code
+   * @return the length of the output string, not counting the terminating NUL;
+   *         if the length is greater than destCapacity, then the string will not fit
+   *         and a buffer of the indicated length would need to be passed in
+   * @stable ICU 2.0
+   ','line_number':1653,'multiline':True]['text':'*
+   * Create a temporary substring for the specified range.
+   * Unlike the substring constructor and setTo() functions,
+   * the object returned here will be a read-only alias (using getBuffer())
+   * rather than copying the text.
+   * As a result, this substring operation is much faster but requires
+   * that the original string not be modified or deleted during the lifetime
+   * of the returned substring object.
+   * @param start offset of the first character visible in the substring
+   * @param length length of the substring
+   * @return a read-only alias UnicodeString object for the substring
+   * @stable ICU 4.4
+   ','line_number':1676,'multiline':True]['text':'*
+   * Create a temporary substring for the specified range.
+   * Same as tempSubString(start, length) except that the substring range
+   * is specified as a (start, limit) pair (with an exclusive limit index)
+   * rather than a (start, length) pair.
+   * @param start offset of the first character visible in the substring
+   * @param limit offset immediately following the last character visible in the substring
+   * @return a read-only alias UnicodeString object for the substring
+   * @stable ICU 4.4
+   ','line_number':1691,'multiline':True]['text':'*
+   * Convert the UnicodeString to UTF-8 and write the result
+   * to a ByteSink. This is called by toUTF8String().
+   * Unpaired surrogates are replaced with U+FFFD.
+   * Calls u_strToUTF8WithSub().
+   *
+   * @param sink A ByteSink to which the UTF-8 version of the string is written.
+   *             sink.Flush() is called at the end.
+   * @stable ICU 4.2
+   * @see toUTF8String
+   ','line_number':1703,'multiline':True]['text':'*
+   * Convert the UnicodeString to UTF-8 and append the result
+   * to a standard string.
+   * Unpaired surrogates are replaced with U+FFFD.
+   * Calls toUTF8().
+   *
+   * @param result A standard string (or a compatible object)
+   *        to which the UTF-8 version of the string is appended.
+   * @return The string object.
+   * @stable ICU 4.2
+   * @see toUTF8
+   ','line_number':1716,'multiline':True]['text':'*
+   * Convert the UnicodeString to UTF-32.
+   * Unpaired surrogates are replaced with U+FFFD.
+   * Calls u_strToUTF32WithSub().
+   *
+   * @param utf32 destination string buffer, can be NULL if capacity==0
+   * @param capacity the number of UChar32s available at utf32
+   * @param errorCode Standard ICU error code. Its input value must
+   *                  pass the U_SUCCESS() test, or else the function returns
+   *                  immediately. Check for U_FAILURE() on output or use with
+   *                  function chaining. (See User Guide for details.)
+   * @return The length of the UTF-32 string.
+   * @see fromUTF32
+   * @stable ICU 4.2
+   ','line_number':1735,'multiline':True]['text':' Length operations ','line_number':1752,'multiline':True]['text':'*
+   * Return the length of the UnicodeString object.
+   * The length is the number of char16_t code units are in the UnicodeString.
+   * If you want the number of code points, please use countChar32().
+   * @return the length of the UnicodeString object
+   * @see countChar32
+   * @stable ICU 2.0
+   ','line_number':1754,'multiline':True]['text':'*
+   * Count Unicode code points in the length char16_t code units of the string.
+   * A code point may occupy either one or two char16_t code units.
+   * Counting code points involves reading all code units.
+   *
+   * This functions is basically the inverse of moveIndex32().
+   *
+   * @param start the index of the first code unit to check
+   * @param length the number of char16_t code units to check
+   * @return the number of code points in the specified code units
+   * @see length
+   * @stable ICU 2.0
+   ','line_number':1764,'multiline':True]['text':'*
+   * Check if the length char16_t code units of the string
+   * contain more Unicode code points than a certain number.
+   * This is more efficient than counting all code points in this part of the string
+   * and comparing that number with a threshold.
+   * This function may not need to scan the string at all if the length
+   * falls within a certain range, and
+   * never needs to count more than 'number+1' code points.
+   * Logically equivalent to (countChar32(start, length)>number).
+   * A Unicode code point may occupy either one or two char16_t code units.
+   *
+   * @param start the index of the first code unit to check (0 for the entire string)
+   * @param length the number of char16_t code units to check
+   *               (use INT32_MAX for the entire string; remember that start/length
+   *                values are pinned)
+   * @param number The number of code points in the (sub)string is compared against
+   *               the 'number' parameter.
+   * @return Boolean value for whether the string contains more Unicode code points
+   *         than 'number'. Same as (u_countChar32(s, length)>number).
+   * @see countChar32
+   * @see u_strHasMoreChar32Than
+   * @stable ICU 2.4
+   ','line_number':1780,'multiline':True]['text':'*
+   * Determine if this string is empty.
+   * @return true if this string contains 0 characters, false otherwise.
+   * @stable ICU 2.0
+   ','line_number':1806,'multiline':True]['text':'*
+   * Return the capacity of the internal buffer of the UnicodeString object.
+   * This is useful together with the getBuffer functions.
+   * See there for details.
+   *
+   * @return the number of char16_ts available in the internal buffer
+   * @see getBuffer
+   * @stable ICU 2.0
+   ','line_number':1813,'multiline':True]['text':' Other operations ','line_number':1824,'multiline':True]['text':'*
+   * Generate a hash code for this object.
+   * @return The hash code of this UnicodeString.
+   * @stable ICU 2.0
+   ','line_number':1826,'multiline':True]['text':'*
+   * Determine if this object contains a valid string.
+   * A bogus string has no value. It is different from an empty string,
+   * although in both cases isEmpty() returns true and length() returns 0.
+   * setToBogus() and isBogus() can be used to indicate that no string value is available.
+   * For a bogus string, getBuffer() and getTerminatedBuffer() return NULL, and
+   * length() returns 0.
+   *
+   * @return true if the string is bogus/invalid, false otherwise
+   * @see setToBogus()
+   * @stable ICU 2.0
+   ','line_number':1833,'multiline':True]['text':'========================================','line_number':1848,'multiline':False]['text':' Write operations','line_number':1849,'multiline':False]['text':'========================================','line_number':1850,'multiline':False]['text':' Assignment operations ','line_number':1852,'multiline':True]['text':'*
+   * Assignment operator.  Replace the characters in this UnicodeString
+   * with the characters from `srcText`.
+   *
+   * Starting with ICU 2.4, the assignment operator and the copy constructor
+   * allocate a new buffer and copy the buffer contents even for readonly aliases.
+   * By contrast, the fastCopyFrom() function implements the old,
+   * more efficient but less safe behavior
+   * of making this string also a readonly alias to the same buffer.
+   *
+   * If the source object has an "open" buffer from getBuffer(minCapacity),
+   * then the copy is an empty string.
+   *
+   * @param srcText The text containing the characters to replace
+   * @return a reference to this
+   * @stable ICU 2.0
+   * @see fastCopyFrom
+   ','line_number':1854,'multiline':True]['text':'*
+   * Almost the same as the assignment operator.
+   * Replace the characters in this UnicodeString
+   * with the characters from `srcText`.
+   *
+   * This function works the same as the assignment operator
+   * for all strings except for ones that are readonly aliases.
+   *
+   * Starting with ICU 2.4, the assignment operator and the copy constructor
+   * allocate a new buffer and copy the buffer contents even for readonly aliases.
+   * This function implements the old, more efficient but less safe behavior
+   * of making this string also a readonly alias to the same buffer.
+   *
+   * The fastCopyFrom function must be used only if it is known that the lifetime of
+   * this UnicodeString does not exceed the lifetime of the aliased buffer
+   * including its contents, for example for strings from resource bundles
+   * or aliases to string constants.
+   *
+   * If the source object has an "open" buffer from getBuffer(minCapacity),
+   * then the copy is an empty string.
+   *
+   * @param src The text containing the characters to replace.
+   * @return a reference to this
+   * @stable ICU 2.4
+   ','line_number':1874,'multiline':True]['text':'*
+   * Move assignment operator; might leave src in bogus state.
+   * This string will have the same contents and state that the source string had.
+   * The behavior is undefined if *this and src are the same object.
+   * @param src source string
+   * @return *this
+   * @stable ICU 56
+   ','line_number':1901,'multiline':True]['text':'*
+   * Swap strings.
+   * @param other other string
+   * @stable ICU 56
+   ','line_number':1911,'multiline':True]['text':'*
+   * Non-member UnicodeString swap function.
+   * @param s1 will get s2's contents and state
+   * @param s2 will get s1's contents and state
+   * @stable ICU 56
+   ','line_number':1918,'multiline':True]['text':'*
+   * Assignment operator.  Replace the characters in this UnicodeString
+   * with the code unit `ch`.
+   * @param ch the code unit to replace
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':1929,'multiline':True]['text':'*
+   * Assignment operator.  Replace the characters in this UnicodeString
+   * with the code point `ch`.
+   * @param ch the code point to replace
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':1938,'multiline':True]['text':'*
+   * Set the text in the UnicodeString object to the characters
+   * in `srcText` in the range
+   * [`srcStart`, `srcText.length()`).
+   * `srcText` is not modified.
+   * @param srcText the source for the new characters
+   * @param srcStart the offset into `srcText` where new characters
+   * will be obtained
+   * @return a reference to this
+   * @stable ICU 2.2
+   ','line_number':1947,'multiline':True]['text':'*
+   * Set the text in the UnicodeString object to the characters
+   * in `srcText` in the range
+   * [`srcStart`, `srcStart + srcLength`).
+   * `srcText` is not modified.
+   * @param srcText the source for the new characters
+   * @param srcStart the offset into `srcText` where new characters
+   * will be obtained
+   * @param srcLength the number of characters in `srcText` in the
+   * replace string.
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':1961,'multiline':True]['text':'*
+   * Set the text in the UnicodeString object to the characters in
+   * `srcText`.
+   * `srcText` is not modified.
+   * @param srcText the source for the new characters
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':1978,'multiline':True]['text':'*
+   * Set the characters in the UnicodeString object to the characters
+   * in `srcChars`. `srcChars` is not modified.
+   * @param srcChars the source for the new characters
+   * @param srcLength the number of Unicode characters in srcChars.
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':1988,'multiline':True]['text':'*
+   * Set the characters in the UnicodeString object to the code unit
+   * `srcChar`.
+   * @param srcChar the code unit which becomes the UnicodeString's character
+   * content
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':1999,'multiline':True]['text':'*
+   * Set the characters in the UnicodeString object to the code point
+   * `srcChar`.
+   * @param srcChar the code point which becomes the UnicodeString's character
+   * content
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2009,'multiline':True]['text':'*
+   * Aliasing setTo() function, analogous to the readonly-aliasing char16_t* constructor.
+   * The text will be used for the UnicodeString object, but
+   * it will not be released when the UnicodeString is destroyed.
+   * This has copy-on-write semantics:
+   * When the string is modified, then the buffer is first copied into
+   * newly allocated memory.
+   * The aliased buffer is never modified.
+   *
+   * In an assignment to another UnicodeString, when using the copy constructor
+   * or the assignment operator, the text will be copied.
+   * When using fastCopyFrom(), the text will be aliased again,
+   * so that both strings then alias the same readonly-text.
+   *
+   * @param isTerminated specifies if `text` is `NUL`-terminated.
+   *                     This must be true if `textLength==-1`.
+   * @param text The characters to alias for the UnicodeString.
+   * @param textLength The number of Unicode characters in `text` to alias.
+   *                   If -1, then this constructor will determine the length
+   *                   by calling `u_strlen()`.
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2019,'multiline':True]['text':'*
+   * Aliasing setTo() function, analogous to the writable-aliasing char16_t* constructor.
+   * The text will be used for the UnicodeString object, but
+   * it will not be released when the UnicodeString is destroyed.
+   * This has write-through semantics:
+   * For as long as the capacity of the buffer is sufficient, write operations
+   * will directly affect the buffer. When more capacity is necessary, then
+   * a new buffer will be allocated and the contents copied as with regularly
+   * constructed strings.
+   * In an assignment to another UnicodeString, the buffer will be copied.
+   * The extract(Char16Ptr dst) function detects whether the dst pointer is the same
+   * as the string buffer itself and will in this case not copy the contents.
+   *
+   * @param buffer The characters to alias for the UnicodeString.
+   * @param buffLength The number of Unicode characters in `buffer` to alias.
+   * @param buffCapacity The size of `buffer` in char16_ts.
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2046,'multiline':True]['text':'*
+   * Make this UnicodeString object invalid.
+   * The string will test true with isBogus().
+   *
+   * A bogus string has no value. It is different from an empty string.
+   * It can be used to indicate that no string value is available.
+   * getBuffer() and getTerminatedBuffer() return NULL, and
+   * length() returns 0.
+   *
+   * This utility function is used throughout the UnicodeString
+   * implementation to indicate that a UnicodeString operation failed,
+   * and may be used in other functions,
+   * especially but not exclusively when such functions do not
+   * take a UErrorCode for simplicity.
+   *
+   * The following methods, and no others, will clear a string object's bogus flag:
+   * - remove()
+   * - remove(0, INT32_MAX)
+   * - truncate(0)
+   * - operator=() (assignment operator)
+   * - setTo(...)
+   *
+   * The simplest ways to turn a bogus string into an empty one
+   * is to use the remove() function.
+   * Examples for other functions that are equivalent to "set to empty string":
+   * \code
+   * if(s.isBogus()) {
+   *   s.remove();           // set to an empty string (remove all), or
+   *   s.remove(0, INT32_MAX); // set to an empty string (remove all), or
+   *   s.truncate(0);        // set to an empty string (complete truncation), or
+   *   s=UnicodeString();    // assign an empty string, or
+   *   s.setTo((UChar32)-1); // set to a pseudo code point that is out of range, or
+   *   s.setTo(u"", 0);      // set to an empty C Unicode string
+   * }
+   * \endcode
+   *
+   * @see isBogus()
+   * @stable ICU 2.0
+   ','line_number':2069,'multiline':True]['text':'*
+   * Set the character at the specified offset to the specified character.
+   * @param offset A valid offset into the text of the character to set
+   * @param ch The new character
+   * @return A reference to this
+   * @stable ICU 2.0
+   ','line_number':2110,'multiline':True]['text':' Append operations ','line_number':2121,'multiline':True]['text':'*
+   * Append operator. Append the code unit `ch` to the UnicodeString
+   * object.
+   * @param ch the code unit to be appended
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2123,'multiline':True]['text':'*
+   * Append operator. Append the code point `ch` to the UnicodeString
+   * object.
+   * @param ch the code point to be appended
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2132,'multiline':True]['text':'*
+   * Append operator. Append the characters in `srcText` to the
+   * UnicodeString object. `srcText` is not modified.
+   * @param srcText the source for the new characters
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2141,'multiline':True]['text':'*
+   * Append the characters
+   * in `srcText` in the range
+   * [`srcStart`, `srcStart + srcLength`) to the
+   * UnicodeString object at offset `start`. `srcText`
+   * is not modified.
+   * @param srcText the source for the new characters
+   * @param srcStart the offset into `srcText` where new characters
+   * will be obtained
+   * @param srcLength the number of characters in `srcText` in
+   * the append string
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2150,'multiline':True]['text':'*
+   * Append the characters in `srcText` to the UnicodeString object.
+   * `srcText` is not modified.
+   * @param srcText the source for the new characters
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2168,'multiline':True]['text':'*
+   * Append the characters in `srcChars` in the range
+   * [`srcStart`, `srcStart + srcLength`) to the UnicodeString
+   * object at offset
+   * `start`. `srcChars` is not modified.
+   * @param srcChars the source for the new characters
+   * @param srcStart the offset into `srcChars` where new characters
+   * will be obtained
+   * @param srcLength the number of characters in `srcChars` in
+   *                  the append string; can be -1 if `srcChars` is NUL-terminated
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2177,'multiline':True]['text':'*
+   * Append the characters in `srcChars` to the UnicodeString object
+   * at offset `start`. `srcChars` is not modified.
+   * @param srcChars the source for the new characters
+   * @param srcLength the number of Unicode characters in `srcChars`;
+   *                  can be -1 if `srcChars` is NUL-terminated
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2194,'multiline':True]['text':'*
+   * Append the code unit `srcChar` to the UnicodeString object.
+   * @param srcChar the code unit to append
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2206,'multiline':True]['text':'*
+   * Append the code point `srcChar` to the UnicodeString object.
+   * @param srcChar the code point to append
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2214,'multiline':True]['text':' Insert operations ','line_number':2223,'multiline':True]['text':'*
+   * Insert the characters in `srcText` in the range
+   * [`srcStart`, `srcStart + srcLength`) into the UnicodeString
+   * object at offset `start`. `srcText` is not modified.
+   * @param start the offset where the insertion begins
+   * @param srcText the source for the new characters
+   * @param srcStart the offset into `srcText` where new characters
+   * will be obtained
+   * @param srcLength the number of characters in `srcText` in
+   * the insert string
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2225,'multiline':True]['text':'*
+   * Insert the characters in `srcText` into the UnicodeString object
+   * at offset `start`. `srcText` is not modified.
+   * @param start the offset where the insertion begins
+   * @param srcText the source for the new characters
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2243,'multiline':True]['text':'*
+   * Insert the characters in `srcChars` in the range
+   * [`srcStart`, `srcStart + srcLength`) into the UnicodeString
+   *  object at offset `start`. `srcChars` is not modified.
+   * @param start the offset at which the insertion begins
+   * @param srcChars the source for the new characters
+   * @param srcStart the offset into `srcChars` where new characters
+   * will be obtained
+   * @param srcLength the number of characters in `srcChars`
+   * in the insert string
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2254,'multiline':True]['text':'*
+   * Insert the characters in `srcChars` into the UnicodeString object
+   * at offset `start`. `srcChars` is not modified.
+   * @param start the offset where the insertion begins
+   * @param srcChars the source for the new characters
+   * @param srcLength the number of Unicode characters in srcChars.
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2272,'multiline':True]['text':'*
+   * Insert the code unit `srcChar` into the UnicodeString object at
+   * offset `start`.
+   * @param start the offset at which the insertion occurs
+   * @param srcChar the code unit to insert
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2285,'multiline':True]['text':'*
+   * Insert the code point `srcChar` into the UnicodeString object at
+   * offset `start`.
+   * @param start the offset at which the insertion occurs
+   * @param srcChar the code point to insert
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2296,'multiline':True]['text':' Replace operations ','line_number':2308,'multiline':True]['text':'*
+   * Replace the characters in the range
+   * [`start`, `start + length`) with the characters in
+   * `srcText` in the range
+   * [`srcStart`, `srcStart + srcLength`).
+   * `srcText` is not modified.
+   * @param start the offset at which the replace operation begins
+   * @param length the number of characters to replace. The character at
+   * `start + length` is not modified.
+   * @param srcText the source for the new characters
+   * @param srcStart the offset into `srcText` where new characters
+   * will be obtained
+   * @param srcLength the number of characters in `srcText` in
+   * the replace string
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2310,'multiline':True]['text':'*
+   * Replace the characters in the range
+   * [`start`, `start + length`)
+   * with the characters in `srcText`.  `srcText` is
+   *  not modified.
+   * @param start the offset at which the replace operation begins
+   * @param length the number of characters to replace. The character at
+   * `start + length` is not modified.
+   * @param srcText the source for the new characters
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2333,'multiline':True]['text':'*
+   * Replace the characters in the range
+   * [`start`, `start + length`) with the characters in
+   * `srcChars` in the range
+   * [`srcStart`, `srcStart + srcLength`). `srcChars`
+   * is not modified.
+   * @param start the offset at which the replace operation begins
+   * @param length the number of characters to replace.  The character at
+   * `start + length` is not modified.
+   * @param srcChars the source for the new characters
+   * @param srcStart the offset into `srcChars` where new characters
+   * will be obtained
+   * @param srcLength the number of characters in `srcChars`
+   * in the replace string
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2349,'multiline':True]['text':'*
+   * Replace the characters in the range
+   * [`start`, `start + length`) with the characters in
+   * `srcChars`.  `srcChars` is not modified.
+   * @param start the offset at which the replace operation begins
+   * @param length number of characters to replace.  The character at
+   * `start + length` is not modified.
+   * @param srcChars the source for the new characters
+   * @param srcLength the number of Unicode characters in srcChars
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2372,'multiline':True]['text':'*
+   * Replace the characters in the range
+   * [`start`, `start + length`) with the code unit
+   * `srcChar`.
+   * @param start the offset at which the replace operation begins
+   * @param length the number of characters to replace.  The character at
+   * `start + length` is not modified.
+   * @param srcChar the new code unit
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2389,'multiline':True]['text':'*
+   * Replace the characters in the range
+   * [`start`, `start + length`) with the code point
+   * `srcChar`.
+   * @param start the offset at which the replace operation begins
+   * @param length the number of characters to replace.  The character at
+   * `start + length` is not modified.
+   * @param srcChar the new code point
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2404,'multiline':True]['text':'*
+   * Replace the characters in the range [`start`, `limit`)
+   * with the characters in `srcText`. `srcText` is not modified.
+   * @param start the offset at which the replace operation begins
+   * @param limit the offset immediately following the replace range
+   * @param srcText the source for the new characters
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2417,'multiline':True]['text':'*
+   * Replace the characters in the range [`start`, `limit`)
+   * with the characters in `srcText` in the range
+   * [`srcStart`, `srcLimit`). `srcText` is not modified.
+   * @param start the offset at which the replace operation begins
+   * @param limit the offset immediately following the replace range
+   * @param srcText the source for the new characters
+   * @param srcStart the offset into `srcChars` where new characters
+   * will be obtained
+   * @param srcLimit the offset immediately following the range to copy
+   * in `srcText`
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2430,'multiline':True]['text':'*
+   * Replace a substring of this object with the given text.
+   * @param start the beginning index, inclusive; `0 <= start <= limit`.
+   * @param limit the ending index, exclusive; `start <= limit <= length()`.
+   * @param text the text to replace characters `start` to `limit - 1`
+   * @stable ICU 2.0
+   ','line_number':2450,'multiline':True]['text':'*
+   * Replaceable API
+   * @return true if it has MetaData
+   * @stable ICU 2.4
+   ','line_number':2461,'multiline':True]['text':'*
+   * Copy a substring of this object, retaining attribute (out-of-band)
+   * information.  This method is used to duplicate or reorder substrings.
+   * The destination index must not overlap the source range.
+   *
+   * @param start the beginning index, inclusive; `0 <= start <= limit`.
+   * @param limit the ending index, exclusive; `start <= limit <= length()`.
+   * @param dest the destination index.  The characters from
+   *             `start..limit-1` will be copied to `dest`.
+   * Implementations of this method may assume that `dest <= start ||
+   * dest >= limit`.
+   * @stable ICU 2.0
+   ','line_number':2468,'multiline':True]['text':' Search and replace operations ','line_number':2483,'multiline':True]['text':'*
+   * Replace all occurrences of characters in oldText with the characters
+   * in newText
+   * @param oldText the text containing the search text
+   * @param newText the text containing the replacement text
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2485,'multiline':True]['text':'*
+   * Replace all occurrences of characters in oldText with characters
+   * in newText
+   * in the range [`start`, `start + length`).
+   * @param start the start of the range in which replace will performed
+   * @param length the length of the range in which replace will be performed
+   * @param oldText the text containing the search text
+   * @param newText the text containing the replacement text
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2496,'multiline':True]['text':'*
+   * Replace all occurrences of characters in oldText in the range
+   * [`oldStart`, `oldStart + oldLength`) with the characters
+   * in newText in the range
+   * [`newStart`, `newStart + newLength`)
+   * in the range [`start`, `start + length`).
+   * @param start the start of the range in which replace will performed
+   * @param length the length of the range in which replace will be performed
+   * @param oldText the text containing the search text
+   * @param oldStart the start of the search range in `oldText`
+   * @param oldLength the length of the search range in `oldText`
+   * @param newText the text containing the replacement text
+   * @param newStart the start of the replacement range in `newText`
+   * @param newLength the length of the replacement range in `newText`
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2512,'multiline':True]['text':' Remove operations ','line_number':2539,'multiline':True]['text':'*
+   * Removes all characters from the UnicodeString object and clears the bogus flag.
+   * This is the UnicodeString equivalent of std::string’s clear().
+   *
+   * @return a reference to this
+   * @see setToBogus
+   * @stable ICU 2.0
+   ','line_number':2541,'multiline':True]['text':'*
+   * Remove the characters in the range
+   * [`start`, `start + length`) from the UnicodeString object.
+   * @param start the offset of the first character to remove
+   * @param length the number of characters to remove
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2551,'multiline':True]['text':'*
+   * Remove the characters in the range
+   * [`start`, `limit`) from the UnicodeString object.
+   * @param start the offset of the first character to remove
+   * @param limit the offset immediately following the range to remove
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2562,'multiline':True]['text':'*
+   * Retain only the characters in the range
+   * [`start`, `limit`) from the UnicodeString object.
+   * Removes characters before `start` and at and after `limit`.
+   * @param start the offset of the first character to retain
+   * @param limit the offset immediately following the range to retain
+   * @return a reference to this
+   * @stable ICU 4.4
+   ','line_number':2573,'multiline':True]['text':' Length operations ','line_number':2584,'multiline':True]['text':'*
+   * Pad the start of this UnicodeString with the character `padChar`.
+   * If the length of this UnicodeString is less than targetLength,
+   * length() - targetLength copies of padChar will be added to the
+   * beginning of this UnicodeString.
+   * @param targetLength the desired length of the string
+   * @param padChar the character to use for padding. Defaults to
+   * space (U+0020)
+   * @return true if the text was padded, false otherwise.
+   * @stable ICU 2.0
+   ','line_number':2586,'multiline':True]['text':'*
+   * Pad the end of this UnicodeString with the character `padChar`.
+   * If the length of this UnicodeString is less than targetLength,
+   * length() - targetLength copies of padChar will be added to the
+   * end of this UnicodeString.
+   * @param targetLength the desired length of the string
+   * @param padChar the character to use for padding. Defaults to
+   * space (U+0020)
+   * @return true if the text was padded, false otherwise.
+   * @stable ICU 2.0
+   ','line_number':2600,'multiline':True]['text':'*
+   * Truncate this UnicodeString to the `targetLength`.
+   * @param targetLength the desired length of this UnicodeString.
+   * @return true if the text was truncated, false otherwise
+   * @stable ICU 2.0
+   ','line_number':2614,'multiline':True]['text':'*
+   * Trims leading and trailing whitespace from this UnicodeString.
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2622,'multiline':True]['text':' Miscellaneous operations ','line_number':2630,'multiline':True]['text':'*
+   * Reverse this UnicodeString in place.
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2632,'multiline':True]['text':'*
+   * Reverse the range [`start`, `start + length`) in
+   * this UnicodeString.
+   * @param start the start of the range to reverse
+   * @param length the number of characters to to reverse
+   * @return a reference to this
+   * @stable ICU 2.0
+   ','line_number':2639,'multiline':True]['text':'*
+   * Convert the characters in this to UPPER CASE following the conventions of
+   * the default locale.
+   * @return A reference to this.
+   * @stable ICU 2.0
+   ','line_number':2650,'multiline':True]['text':'*
+   * Convert the characters in this to UPPER CASE following the conventions of
+   * a specific locale.
+   * @param locale The locale containing the conventions to use.
+   * @return A reference to this.
+   * @stable ICU 2.0
+   ','line_number':2658,'multiline':True]['text':'*
+   * Convert the characters in this to lower case following the conventions of
+   * the default locale.
+   * @return A reference to this.
+   * @stable ICU 2.0
+   ','line_number':2667,'multiline':True]['text':'*
+   * Convert the characters in this to lower case following the conventions of
+   * a specific locale.
+   * @param locale The locale containing the conventions to use.
+   * @return A reference to this.
+   * @stable ICU 2.0
+   ','line_number':2675,'multiline':True]['text':'*
+   * Titlecase this string, convenience function using the default locale.
+   *
+   * Casing is locale-dependent and context-sensitive.
+   * Titlecasing uses a break iterator to find the first characters of words
+   * that are to be titlecased. It titlecases those characters and lowercases
+   * all others.
+   *
+   * The titlecase break iterator can be provided to customize for arbitrary
+   * styles, using rules and dictionaries beyond the standard iterators.
+   * It may be more efficient to always provide an iterator to avoid
+   * opening and closing one for each string.
+   * The standard titlecase iterator for the root locale implements the
+   * algorithm of Unicode TR 21.
+   *
+   * This function uses only the setText(), first() and next() methods of the
+   * provided break iterator.
+   *
+   * @param titleIter A break iterator to find the first characters of words
+   *                  that are to be titlecased.
+   *                  If none is provided (0), then a standard titlecase
+   *                  break iterator is opened.
+   *                  Otherwise the provided iterator is set to the string's text.
+   * @return A reference to this.
+   * @stable ICU 2.1
+   ','line_number':2686,'multiline':True]['text':'*
+   * Titlecase this string.
+   *
+   * Casing is locale-dependent and context-sensitive.
+   * Titlecasing uses a break iterator to find the first characters of words
+   * that are to be titlecased. It titlecases those characters and lowercases
+   * all others.
+   *
+   * The titlecase break iterator can be provided to customize for arbitrary
+   * styles, using rules and dictionaries beyond the standard iterators.
+   * It may be more efficient to always provide an iterator to avoid
+   * opening and closing one for each string.
+   * The standard titlecase iterator for the root locale implements the
+   * algorithm of Unicode TR 21.
+   *
+   * This function uses only the setText(), first() and next() methods of the
+   * provided break iterator.
+   *
+   * @param titleIter A break iterator to find the first characters of words
+   *                  that are to be titlecased.
+   *                  If none is provided (0), then a standard titlecase
+   *                  break iterator is opened.
+   *                  Otherwise the provided iterator is set to the string's text.
+   * @param locale    The locale to consider.
+   * @return A reference to this.
+   * @stable ICU 2.1
+   ','line_number':2714,'multiline':True]['text':'*
+   * Titlecase this string, with options.
+   *
+   * Casing is locale-dependent and context-sensitive.
+   * Titlecasing uses a break iterator to find the first characters of words
+   * that are to be titlecased. It titlecases those characters and lowercases
+   * all others. (This can be modified with options.)
+   *
+   * The titlecase break iterator can be provided to customize for arbitrary
+   * styles, using rules and dictionaries beyond the standard iterators.
+   * It may be more efficient to always provide an iterator to avoid
+   * opening and closing one for each string.
+   * The standard titlecase iterator for the root locale implements the
+   * algorithm of Unicode TR 21.
+   *
+   * This function uses only the setText(), first() and next() methods of the
+   * provided break iterator.
+   *
+   * @param titleIter A break iterator to find the first characters of words
+   *                  that are to be titlecased.
+   *                  If none is provided (0), then a standard titlecase
+   *                  break iterator is opened.
+   *                  Otherwise the provided iterator is set to the string's text.
+   * @param locale    The locale to consider.
+   * @param options   Options bit set, usually 0. See U_TITLECASE_NO_LOWERCASE,
+   *                  U_TITLECASE_NO_BREAK_ADJUSTMENT, U_TITLECASE_ADJUST_TO_CASED,
+   *                  U_TITLECASE_WHOLE_STRING, U_TITLECASE_SENTENCES.
+   * @return A reference to this.
+   * @stable ICU 3.8
+   ','line_number':2743,'multiline':True]['text':'*
+   * Case-folds the characters in this string.
+   *
+   * Case-folding is locale-independent and not context-sensitive,
+   * but there is an option for whether to include or exclude mappings for dotted I
+   * and dotless i that are marked with 'T' in CaseFolding.txt.
+   *
+   * The result may be longer or shorter than the original.
+   *
+   * @param options Either U_FOLD_CASE_DEFAULT or U_FOLD_CASE_EXCLUDE_SPECIAL_I
+   * @return A reference to this.
+   * @stable ICU 2.0
+   ','line_number':2777,'multiline':True]['text':'U_FOLD_CASE_DEFAULT','line_number':2790,'multiline':True]['text':'========================================','line_number':2792,'multiline':False]['text':' Access to the internal buffer','line_number':2793,'multiline':False]['text':'========================================','line_number':2794,'multiline':False]['text':'*
+   * Get a read/write pointer to the internal buffer.
+   * The buffer is guaranteed to be large enough for at least minCapacity char16_ts,
+   * writable, and is still owned by the UnicodeString object.
+   * Calls to getBuffer(minCapacity) must not be nested, and
+   * must be matched with calls to releaseBuffer(newLength).
+   * If the string buffer was read-only or shared,
+   * then it will be reallocated and copied.
+   *
+   * An attempted nested call will return 0, and will not further modify the
+   * state of the UnicodeString object.
+   * It also returns 0 if the string is bogus.
+   *
+   * The actual capacity of the string buffer may be larger than minCapacity.
+   * getCapacity() returns the actual capacity.
+   * For many operations, the full capacity should be used to avoid reallocations.
+   *
+   * While the buffer is "open" between getBuffer(minCapacity)
+   * and releaseBuffer(newLength), the following applies:
+   * - The string length is set to 0.
+   * - Any read API call on the UnicodeString object will behave like on a 0-length string.
+   * - Any write API call on the UnicodeString object is disallowed and will have no effect.
+   * - You can read from and write to the returned buffer.
+   * - The previous string contents will still be in the buffer;
+   *   if you want to use it, then you need to call length() before getBuffer(minCapacity).
+   *   If the length() was greater than minCapacity, then any contents after minCapacity
+   *   may be lost.
+   *   The buffer contents is not NUL-terminated by getBuffer().
+   *   If length() < getCapacity() then you can terminate it by writing a NUL
+   *   at index length().
+   * - You must call releaseBuffer(newLength) before and in order to
+   *   return to normal UnicodeString operation.
+   *
+   * @param minCapacity the minimum number of char16_ts that are to be available
+   *        in the buffer, starting at the returned pointer;
+   *        default to the current string capacity if minCapacity==-1
+   * @return a writable pointer to the internal string buffer,
+   *         or nullptr if an error occurs (nested calls, out of memory)
+   *
+   * @see releaseBuffer
+   * @see getTerminatedBuffer()
+   * @stable ICU 2.0
+   ','line_number':2796,'multiline':True]['text':'*
+   * Release a read/write buffer on a UnicodeString object with an
+   * "open" getBuffer(minCapacity).
+   * This function must be called in a matched pair with getBuffer(minCapacity).
+   * releaseBuffer(newLength) must be called if and only if a getBuffer(minCapacity) is "open".
+   *
+   * It will set the string length to newLength, at most to the current capacity.
+   * If newLength==-1 then it will set the length according to the
+   * first NUL in the buffer, or to the capacity if there is no NUL.
+   *
+   * After calling releaseBuffer(newLength) the UnicodeString is back to normal operation.
+   *
+   * @param newLength the new length of the UnicodeString object;
+   *        defaults to the current capacity if newLength is greater than that;
+   *        if newLength==-1, it defaults to u_strlen(buffer) but not more than
+   *        the current capacity of the string
+   *
+   * @see getBuffer(int32_t minCapacity)
+   * @stable ICU 2.0
+   ','line_number':2841,'multiline':True]['text':'*
+   * Get a read-only pointer to the internal buffer.
+   * This can be called at any time on a valid UnicodeString.
+   *
+   * It returns 0 if the string is bogus, or
+   * during an "open" getBuffer(minCapacity).
+   *
+   * It can be called as many times as desired.
+   * The pointer that it returns will remain valid until the UnicodeString object is modified,
+   * at which time the pointer is semantically invalidated and must not be used any more.
+   *
+   * The capacity of the buffer can be determined with getCapacity().
+   * The part after length() may or may not be initialized and valid,
+   * depending on the history of the UnicodeString object.
+   *
+   * The buffer contents is (probably) not NUL-terminated.
+   * You can check if it is with
+   * `(s.length() < s.getCapacity() && buffer[s.length()]==0)`.
+   * (See getTerminatedBuffer().)
+   *
+   * The buffer may reside in read-only memory. Its contents must not
+   * be modified.
+   *
+   * @return a read-only pointer to the internal string buffer,
+   *         or nullptr if the string is empty or bogus
+   *
+   * @see getBuffer(int32_t minCapacity)
+   * @see getTerminatedBuffer()
+   * @stable ICU 2.0
+   ','line_number':2863,'multiline':True]['text':'*
+   * Get a read-only pointer to the internal buffer,
+   * making sure that it is NUL-terminated.
+   * This can be called at any time on a valid UnicodeString.
+   *
+   * It returns 0 if the string is bogus, or
+   * during an "open" getBuffer(minCapacity), or if the buffer cannot
+   * be NUL-terminated (because memory allocation failed).
+   *
+   * It can be called as many times as desired.
+   * The pointer that it returns will remain valid until the UnicodeString object is modified,
+   * at which time the pointer is semantically invalidated and must not be used any more.
+   *
+   * The capacity of the buffer can be determined with getCapacity().
+   * The part after length()+1 may or may not be initialized and valid,
+   * depending on the history of the UnicodeString object.
+   *
+   * The buffer contents is guaranteed to be NUL-terminated.
+   * getTerminatedBuffer() may reallocate the buffer if a terminating NUL
+   * is written.
+   * For this reason, this function is not const, unlike getBuffer().
+   * Note that a UnicodeString may also contain NUL characters as part of its contents.
+   *
+   * The buffer may reside in read-only memory. Its contents must not
+   * be modified.
+   *
+   * @return a read-only pointer to the internal string buffer,
+   *         or 0 if the string is empty or bogus
+   *
+   * @see getBuffer(int32_t minCapacity)
+   * @see getBuffer()
+   * @stable ICU 2.2
+   ','line_number':2895,'multiline':True]['text':'========================================','line_number':2930,'multiline':False]['text':' Constructors','line_number':2931,'multiline':False]['text':'========================================','line_number':2932,'multiline':False]['text':'* Construct an empty UnicodeString.
+   * @stable ICU 2.0
+   ','line_number':2934,'multiline':True]['text':'*
+   * Construct a UnicodeString with capacity to hold `capacity` char16_ts
+   * @param capacity the number of char16_ts this UnicodeString should hold
+   * before a resize is necessary; if count is greater than 0 and count
+   * code points c take up more space than capacity, then capacity is adjusted
+   * accordingly.
+   * @param c is used to initially fill the string
+   * @param count specifies how many code points c are to be written in the
+   *              string
+   * @stable ICU 2.0
+   ','line_number':2939,'multiline':True]['text':'*
+   * Single char16_t (code unit) constructor.
+   *
+   * It is recommended to mark this constructor "explicit" by
+   * `-DUNISTR_FROM_CHAR_EXPLICIT=explicit`
+   * on the compiler command line or similar.
+   * @param ch the character to place in the UnicodeString
+   * @stable ICU 2.0
+   ','line_number':2952,'multiline':True]['text':'*
+   * Single UChar32 (code point) constructor.
+   *
+   * It is recommended to mark this constructor "explicit" by
+   * `-DUNISTR_FROM_CHAR_EXPLICIT=explicit`
+   * on the compiler command line or similar.
+   * @param ch the character to place in the UnicodeString
+   * @stable ICU 2.0
+   ','line_number':2963,'multiline':True]['text':'*
+   * char16_t* constructor.
+   *
+   * It is recommended to mark this constructor "explicit" by
+   * `-DUNISTR_FROM_STRING_EXPLICIT=explicit`
+   * on the compiler command line or similar.
+   * @param text The characters to place in the UnicodeString.  `text`
+   * must be NULL (U+0000) terminated.
+   * @stable ICU 2.0
+   ','line_number':2974,'multiline':True]['text':'*
+   * uint16_t * constructor.
+   * Delegates to UnicodeString(const char16_t *).
+   *
+   * It is recommended to mark this constructor "explicit" by
+   * `-DUNISTR_FROM_STRING_EXPLICIT=explicit`
+   * on the compiler command line or similar.
+   * @param text NUL-terminated UTF-16 string
+   * @stable ICU 59
+   ','line_number':2987,'multiline':True]['text':'*
+   * wchar_t * constructor.
+   * (Only defined if U_SIZEOF_WCHAR_T==2.)
+   * Delegates to UnicodeString(const char16_t *).
+   *
+   * It is recommended to mark this constructor "explicit" by
+   * `-DUNISTR_FROM_STRING_EXPLICIT=explicit`
+   * on the compiler command line or similar.
+   * @param text NUL-terminated UTF-16 string
+   * @stable ICU 59
+   ','line_number':3002,'multiline':True]['text':'*
+   * nullptr_t constructor.
+   * Effectively the same as the default constructor, makes an empty string object.
+   *
+   * It is recommended to mark this constructor "explicit" by
+   * `-DUNISTR_FROM_STRING_EXPLICIT=explicit`
+   * on the compiler command line or similar.
+   * @param text nullptr
+   * @stable ICU 59
+   ','line_number':3017,'multiline':True]['text':'*
+   * char16_t* constructor.
+   * @param text The characters to place in the UnicodeString.
+   * @param textLength The number of Unicode characters in `text`
+   * to copy.
+   * @stable ICU 2.0
+   ','line_number':3029,'multiline':True]['text':'*
+   * uint16_t * constructor.
+   * Delegates to UnicodeString(const char16_t *, int32_t).
+   * @param text UTF-16 string
+   * @param textLength string length
+   * @stable ICU 59
+   ','line_number':3040,'multiline':True]['text':'*
+   * wchar_t * constructor.
+   * (Only defined if U_SIZEOF_WCHAR_T==2.)
+   * Delegates to UnicodeString(const char16_t *, int32_t).
+   * @param text NUL-terminated UTF-16 string
+   * @param textLength string length
+   * @stable ICU 59
+   ','line_number':3052,'multiline':True]['text':'*
+   * nullptr_t constructor.
+   * Effectively the same as the default constructor, makes an empty string object.
+   * @param text nullptr
+   * @param textLength ignored
+   * @stable ICU 59
+   ','line_number':3064,'multiline':True]['text':'*
+   * Readonly-aliasing char16_t* constructor.
+   * The text will be used for the UnicodeString object, but
+   * it will not be released when the UnicodeString is destroyed.
+   * This has copy-on-write semantics:
+   * When the string is modified, then the buffer is first copied into
+   * newly allocated memory.
+   * The aliased buffer is never modified.
+   *
+   * In an assignment to another UnicodeString, when using the copy constructor
+   * or the assignment operator, the text will be copied.
+   * When using fastCopyFrom(), the text will be aliased again,
+   * so that both strings then alias the same readonly-text.
+   *
+   * @param isTerminated specifies if `text` is `NUL`-terminated.
+   *                     This must be true if `textLength==-1`.
+   * @param text The characters to alias for the UnicodeString.
+   * @param textLength The number of Unicode characters in `text` to alias.
+   *                   If -1, then this constructor will determine the length
+   *                   by calling `u_strlen()`.
+   * @stable ICU 2.0
+   ','line_number':3073,'multiline':True]['text':'*
+   * Writable-aliasing char16_t* constructor.
+   * The text will be used for the UnicodeString object, but
+   * it will not be released when the UnicodeString is destroyed.
+   * This has write-through semantics:
+   * For as long as the capacity of the buffer is sufficient, write operations
+   * will directly affect the buffer. When more capacity is necessary, then
+   * a new buffer will be allocated and the contents copied as with regularly
+   * constructed strings.
+   * In an assignment to another UnicodeString, the buffer will be copied.
+   * The extract(Char16Ptr dst) function detects whether the dst pointer is the same
+   * as the string buffer itself and will in this case not copy the contents.
+   *
+   * @param buffer The characters to alias for the UnicodeString.
+   * @param buffLength The number of Unicode characters in `buffer` to alias.
+   * @param buffCapacity The size of `buffer` in char16_ts.
+   * @stable ICU 2.0
+   ','line_number':3099,'multiline':True]['text':'*
+   * Writable-aliasing uint16_t * constructor.
+   * Delegates to UnicodeString(const char16_t *, int32_t, int32_t).
+   * @param buffer writable buffer of/for UTF-16 text
+   * @param buffLength length of the current buffer contents
+   * @param buffCapacity buffer capacity
+   * @stable ICU 59
+   ','line_number':3120,'multiline':True]['text':'*
+   * Writable-aliasing wchar_t * constructor.
+   * (Only defined if U_SIZEOF_WCHAR_T==2.)
+   * Delegates to UnicodeString(const char16_t *, int32_t, int32_t).
+   * @param buffer writable buffer of/for UTF-16 text
+   * @param buffLength length of the current buffer contents
+   * @param buffCapacity buffer capacity
+   * @stable ICU 59
+   ','line_number':3133,'multiline':True]['text':'*
+   * Writable-aliasing nullptr_t constructor.
+   * Effectively the same as the default constructor, makes an empty string object.
+   * @param buffer nullptr
+   * @param buffLength ignored
+   * @param buffCapacity ignored
+   * @stable ICU 59
+   ','line_number':3146,'multiline':True]['text':'*
+   * char* constructor.
+   * Uses the default converter (and thus depends on the ICU conversion code)
+   * unless U_CHARSET_IS_UTF8 is set to 1.
+   *
+   * For ASCII (really "invariant character") strings it is more efficient to use
+   * the constructor that takes a US_INV (for its enum EInvariant).
+   * For ASCII (invariant-character) string literals, see UNICODE_STRING and
+   * UNICODE_STRING_SIMPLE.
+   *
+   * It is recommended to mark this constructor "explicit" by
+   * `-DUNISTR_FROM_STRING_EXPLICIT=explicit`
+   * on the compiler command line or similar.
+   * @param codepageData an array of bytes, null-terminated,
+   *                     in the platform's default codepage.
+   * @stable ICU 2.0
+   * @see UNICODE_STRING
+   * @see UNICODE_STRING_SIMPLE
+   ','line_number':3158,'multiline':True]['text':'*
+   * char* constructor.
+   * Uses the default converter (and thus depends on the ICU conversion code)
+   * unless U_CHARSET_IS_UTF8 is set to 1.
+   * @param codepageData an array of bytes in the platform's default codepage.
+   * @param dataLength The number of bytes in `codepageData`.
+   * @stable ICU 2.0
+   ','line_number':3179,'multiline':True]['text':'*
+   * char* constructor.
+   * @param codepageData an array of bytes, null-terminated
+   * @param codepage the encoding of `codepageData`.  The special
+   * value 0 for `codepage` indicates that the text is in the
+   * platform's default codepage.
+   *
+   * If `codepage` is an empty string (`""`),
+   * then a simple conversion is performed on the codepage-invariant
+   * subset ("invariant characters") of the platform encoding. See utypes.h.
+   * Recommendation: For invariant-character strings use the constructor
+   * UnicodeString(const char *src, int32_t length, enum EInvariant inv)
+   * because it avoids object code dependencies of UnicodeString on
+   * the conversion code.
+   *
+   * @stable ICU 2.0
+   ','line_number':3193,'multiline':True]['text':'*
+   * char* constructor.
+   * @param codepageData an array of bytes.
+   * @param dataLength The number of bytes in `codepageData`.
+   * @param codepage the encoding of `codepageData`.  The special
+   * value 0 for `codepage` indicates that the text is in the
+   * platform's default codepage.
+   * If `codepage` is an empty string (`""`),
+   * then a simple conversion is performed on the codepage-invariant
+   * subset ("invariant characters") of the platform encoding. See utypes.h.
+   * Recommendation: For invariant-character strings use the constructor
+   * UnicodeString(const char *src, int32_t length, enum EInvariant inv)
+   * because it avoids object code dependencies of UnicodeString on
+   * the conversion code.
+   *
+   * @stable ICU 2.0
+   ','line_number':3212,'multiline':True]['text':'*
+   * char * / UConverter constructor.
+   * This constructor uses an existing UConverter object to
+   * convert the codepage string to Unicode and construct a UnicodeString
+   * from that.
+   *
+   * The converter is reset at first.
+   * If the error code indicates a failure before this constructor is called,
+   * or if an error occurs during conversion or construction,
+   * then the string will be bogus.
+   *
+   * This function avoids the overhead of opening and closing a converter if
+   * multiple strings are constructed.
+   *
+   * @param src input codepage string
+   * @param srcLength length of the input string, can be -1 for NUL-terminated strings
+   * @param cnv converter object (ucnv_resetToUnicode() will be called),
+   *        can be NULL for the default converter
+   * @param errorCode normal ICU error code
+   * @stable ICU 2.0
+   ','line_number':3231,'multiline':True]['text':'*
+   * Constructs a Unicode string from an invariant-character char * string.
+   * About invariant characters see utypes.h.
+   * This constructor has no runtime dependency on conversion code and is
+   * therefore recommended over ones taking a charset name string
+   * (where the empty string "" indicates invariant-character conversion).
+   *
+   * Use the macro US_INV as the third, signature-distinguishing parameter.
+   *
+   * For example:
+   * \code
+   *     void fn(const char *s) {
+   *       UnicodeString ustr(s, -1, US_INV);
+   *       // use ustr ...
+   *     }
+   * \endcode
+   * @param src String using only invariant characters.
+   * @param textLength Length of src, or -1 if NUL-terminated.
+   * @param inv Signature-distinguishing paramater, use US_INV.
+   *
+   * @see US_INV
+   * @stable ICU 3.2
+   ','line_number':3259,'multiline':True]['text':'*
+   * Copy constructor.
+   *
+   * Starting with ICU 2.4, the assignment operator and the copy constructor
+   * allocate a new buffer and copy the buffer contents even for readonly aliases.
+   * By contrast, the fastCopyFrom() function implements the old,
+   * more efficient but less safe behavior
+   * of making this string also a readonly alias to the same buffer.
+   *
+   * If the source object has an "open" buffer from getBuffer(minCapacity),
+   * then the copy is an empty string.
+   *
+   * @param that The UnicodeString object to copy.
+   * @stable ICU 2.0
+   * @see fastCopyFrom
+   ','line_number':3285,'multiline':True]['text':'*
+   * Move constructor; might leave src in bogus state.
+   * This string will have the same contents and state that the source string had.
+   * @param src source string
+   * @stable ICU 56
+   ','line_number':3303,'multiline':True]['text':'*
+   * 'Substring' constructor from tail of source string.
+   * @param src The UnicodeString object to copy.
+   * @param srcStart The offset into `src` at which to start copying.
+   * @stable ICU 2.2
+   ','line_number':3311,'multiline':True]['text':'*
+   * 'Substring' constructor from subrange of source string.
+   * @param src The UnicodeString object to copy.
+   * @param srcStart The offset into `src` at which to start copying.
+   * @param srcLength The number of characters from `src` to copy.
+   * @stable ICU 2.2
+   ','line_number':3319,'multiline':True]['text':'*
+   * Clone this object, an instance of a subclass of Replaceable.
+   * Clones can be used concurrently in multiple threads.
+   * If a subclass does not implement clone(), or if an error occurs,
+   * then NULL is returned.
+   * The caller must delete the clone.
+   *
+   * @return a clone of this object
+   *
+   * @see Replaceable::clone
+   * @see getDynamicClassID
+   * @stable ICU 2.6
+   ','line_number':3328,'multiline':True]['text':'* Destructor.
+   * @stable ICU 2.0
+   ','line_number':3343,'multiline':True]['text':'*
+   * Create a UnicodeString from a UTF-8 string.
+   * Illegal input is replaced with U+FFFD. Otherwise, errors result in a bogus string.
+   * Calls u_strFromUTF8WithSub().
+   *
+   * @param utf8 UTF-8 input string.
+   *             Note that a StringPiece can be implicitly constructed
+   *             from a std::string or a NUL-terminated const char * string.
+   * @return A UnicodeString with equivalent UTF-16 contents.
+   * @see toUTF8
+   * @see toUTF8String
+   * @stable ICU 4.2
+   ','line_number':3348,'multiline':True]['text':'*
+   * Create a UnicodeString from a UTF-32 string.
+   * Illegal input is replaced with U+FFFD. Otherwise, errors result in a bogus string.
+   * Calls u_strFromUTF32WithSub().
+   *
+   * @param utf32 UTF-32 input string. Must not be NULL.
+   * @param length Length of the input string, or -1 if NUL-terminated.
+   * @return A UnicodeString with equivalent UTF-16 contents.
+   * @see toUTF32
+   * @stable ICU 4.2
+   ','line_number':3363,'multiline':True]['text':' Miscellaneous operations ','line_number':3376,'multiline':True]['text':'*
+   * Unescape a string of characters and return a string containing
+   * the result.  The following escape sequences are recognized:
+   *
+   * \\uhhhh       4 hex digits; h in [0-9A-Fa-f]
+   * \\Uhhhhhhhh   8 hex digits
+   * \\xhh         1-2 hex digits
+   * \\ooo         1-3 octal digits; o in [0-7]
+   * \\cX          control-X; X is masked with 0x1F
+   *
+   * as well as the standard ANSI C escapes:
+   *
+   * \\a => U+0007, \\b => U+0008, \\t => U+0009, \\n => U+000A,
+   * \\v => U+000B, \\f => U+000C, \\r => U+000D, \\e => U+001B,
+   * \\" => U+0022, \\' => U+0027, \\? => U+003F, \\\\ => U+005C
+   *
+   * Anything else following a backslash is generically escaped.  For
+   * example, "[a\\-z]" returns "[a-z]".
+   *
+   * If an escape sequence is ill-formed, this method returns an empty
+   * string.  An example of an ill-formed sequence is "\\u" followed by
+   * fewer than 4 hex digits.
+   *
+   * This function is similar to u_unescape() but not identical to it.
+   * The latter takes a source char*, so it does escape recognition
+   * and also invariant conversion.
+   *
+   * @return a string with backslash escapes interpreted, or an
+   * empty string on error.
+   * @see UnicodeString#unescapeAt()
+   * @see u_unescape()
+   * @see u_unescapeAt()
+   * @stable ICU 2.0
+   ','line_number':3378,'multiline':True]['text':'*
+   * Unescape a single escape sequence and return the represented
+   * character.  See unescape() for a listing of the recognized escape
+   * sequences.  The character at offset-1 is assumed (without
+   * checking) to be a backslash.  If the escape sequence is
+   * ill-formed, or the offset is out of range, U_SENTINEL=-1 is
+   * returned.
+   *
+   * @param offset an input output parameter.  On input, it is the
+   * offset into this string where the escape sequence is located,
+   * after the initial backslash.  On output, it is advanced after the
+   * last character parsed.  On error, it is not advanced at all.
+   * @return the character represented by the escape sequence at
+   * offset, or U_SENTINEL=-1 on error.
+   * @see UnicodeString#unescape()
+   * @see u_unescape()
+   * @see u_unescapeAt()
+   * @stable ICU 2.0
+   ','line_number':3414,'multiline':True]['text':'*
+   * ICU "poor man's RTTI", returns a UClassID for this class.
+   *
+   * @stable ICU 2.2
+   ','line_number':3435,'multiline':True]['text':'*
+   * ICU "poor man's RTTI", returns a UClassID for the actual class.
+   *
+   * @stable ICU 2.2
+   ','line_number':3442,'multiline':True]['text':'========================================','line_number':3449,'multiline':False]['text':' Implementation methods','line_number':3450,'multiline':False]['text':'========================================','line_number':3451,'multiline':False]['text':'*
+   * Implement Replaceable::getLength() (see jitterbug 1027).
+   * @stable ICU 2.4
+   ','line_number':3454,'multiline':True]['text':'*
+   * The change in Replaceable to use virtual getCharAt() allows
+   * UnicodeString::charAt() to be inline again (see jitterbug 709).
+   * @stable ICU 2.4
+   ','line_number':3460,'multiline':True]['text':'*
+   * The change in Replaceable to use virtual getChar32At() allows
+   * UnicodeString::char32At() to be inline again (see jitterbug 709).
+   * @stable ICU 2.4
+   ','line_number':3467,'multiline':True]['text':' For char* constructors. Could be made public.','line_number':3475,'multiline':False]['text':' For extract(char*).','line_number':3477,'multiline':False]['text':' We could make a toUTF8(target, capacity, errorCode) public but not','line_number':3478,'multiline':False]['text':' this version: New API will be cleaner if we make callers create substrings','line_number':3479,'multiline':False]['text':' rather than having start+length on every method,','line_number':3480,'multiline':False]['text':' and it should take a UErrorCode&.','line_number':3481,'multiline':False]['text':'*
+   * Internal string contents comparison, called by operator==.
+   * Requires: this & text not bogus and have same lengths.
+   ','line_number':3486,'multiline':True]['text':' calculate hash code','line_number':3579,'multiline':False]['text':' get pointer to start of array','line_number':3582,'multiline':False]['text':' these do not check for kOpenGetBuffer, unlike the public getBuffer() function','line_number':3583,'multiline':False]['text':' A UnicodeString object (not necessarily its current buffer)','line_number':3590,'multiline':False]['text':' is writable unless it isBogus() or it has an "open" getBuffer(minCapacity).','line_number':3591,'multiline':False]['text':' Is the current buffer writable?','line_number':3594,'multiline':False]['text':' None of the following does releaseArray().','line_number':3597,'multiline':False]['text':' sets length but not flags','line_number':3602,'multiline':False]['text':' allocate the array; result may be the stack buffer','line_number':3604,'multiline':False]['text':' sets refCount to 1 if appropriate','line_number':3605,'multiline':False]['text':' sets fArray, fCapacity, and flags','line_number':3606,'multiline':False]['text':' sets length to 0','line_number':3607,'multiline':False]['text':' returns boolean for success or failure','line_number':3608,'multiline':False]['text':' release the array if owned','line_number':3611,'multiline':False]['text':' turn a bogus string into an empty one','line_number':3614,'multiline':False]['text':' implements assignment operator, copy constructor, and fastCopyFrom()','line_number':3617,'multiline':False]['text':' Copies just the fields without memory management.','line_number':3620,'multiline':False]['text':' Pin start and limit to acceptable values.','line_number':3623,'multiline':False]['text':' Internal extract() using UConverter. ','line_number':3630,'multiline':True]['text':'
+   * Real constructor for converting from codepage data.
+   * It assumes that it is called with !fRefCounted.
+   *
+   * If `codepage==0`, then the default converter
+   * is used for the platform encoding.
+   * If `codepage` is an empty string (`""`),
+   * then a simple conversion is performed on the codepage-invariant
+   * subset ("invariant characters") of the platform encoding. See utypes.h.
+   ','line_number':3636,'multiline':True]['text':'
+   * Worker function for creating a UnicodeString from
+   * a codepage string using a UConverter.
+   ','line_number':3650,'multiline':True]['text':'
+   * This function is called when write access to the array
+   * is necessary.
+   *
+   * We need to make a copy of the array if
+   * the buffer is read-only, or
+   * the buffer is refCounted (shared), and refCount>1, or
+   * the buffer is too small.
+   *
+   * Return false if memory could not be allocated.
+   ','line_number':3662,'multiline':True]['text':'*
+   * Common function for UnicodeString case mappings.
+   * The stringCaseMapper has the same type UStringCaseMapper
+   * as in ustr_imp.h for ustrcase_map().
+   ','line_number':3679,'multiline':True]['text':' ref counting','line_number':3691,'multiline':False]['text':' constants','line_number':3696,'multiline':False]['text':'*
+     * Size of stack buffer for short strings.
+     * Must be at least U16_MAX_LENGTH for the single-code point constructor to work.
+     * @see UNISTR_OBJECT_SIZE
+     ','line_number':3698,'multiline':True]['text':' U+FFFF returned by charAt(invalid index)','line_number':3704,'multiline':False]['text':' invalid hash code','line_number':3705,'multiline':False]['text':' hash code for empty string','line_number':3706,'multiline':False]['text':' bit flag values for fLengthAndFlags','line_number':3708,'multiline':False]['text':' this string is bogus, i.e., not valid or NULL','line_number':3709,'multiline':False]['text':' using fUnion.fStackFields instead of fUnion.fFields','line_number':3710,'multiline':False]['text':' there is a refCount field before the characters in fArray','line_number':3711,'multiline':False]['text':' do not write to this buffer','line_number':3712,'multiline':False]['text':' getBuffer(minCapacity) was called (is "open"),','line_number':3713,'multiline':False]['text':' and releaseBuffer(newLength) must be called','line_number':3714,'multiline':False]['text':' remaining 11 bits for non-negative short length, or negative if long','line_number':3717,'multiline':False]['text':' max non-negative short length (leaves top bit 0)','line_number':3719,'multiline':False]['text':' short length < 0, real length is in fUnion.fFields.fLength','line_number':3720,'multiline':False]['text':' combined values for convenience','line_number':3722,'multiline':False]['text':' forward declaration necessary before friend declaration','line_number':3731,'multiline':False]['text':' make US_STACKBUF_SIZE visible inside fUnion','line_number':3732,'multiline':False]['text':'
+   * The following are all the class fields that are stored
+   * in each UnicodeString object.
+   * Note that UnicodeString has virtual functions,
+   * therefore there is an implicit vtable pointer
+   * as the first real field.
+   * The fields should be aligned such that no padding is necessary.
+   * On 32-bit machines, the size should be 32 bytes,
+   * on 64-bit machines (8-byte pointers), it should be 40 bytes.
+   *
+   * We use a hack to achieve this.
+   *
+   * With at least some compilers, each of the following is forced to
+   * a multiple of sizeof(pointer) [the largest field base unit here is a data pointer],
+   * rounded up with additional padding if the fields do not already fit that requirement:
+   * - sizeof(class UnicodeString)
+   * - offsetof(UnicodeString, fUnion)
+   * - sizeof(fUnion)
+   * - sizeof(fStackFields)
+   *
+   * We optimize for the longest possible internal buffer for short strings.
+   * fUnion.fStackFields begins with 2 bytes for storage flags
+   * and the length of relatively short strings,
+   * followed by the buffer for short string contents.
+   * There is no padding inside fStackFields.
+   *
+   * Heap-allocated and aliased strings use fUnion.fFields.
+   * Both fStackFields and fFields must begin with the same fields for flags and short length,
+   * that is, those must have the same memory offsets inside the object,
+   * because the flags must be inspected in order to decide which half of fUnion is being used.
+   * We assume that the compiler does not reorder the fields.
+   *
+   * (Padding at the end of fFields is ok:
+   * As long as it is no larger than fStackFields, it is not wasted space.)
+   *
+   * For some of the history of the UnicodeString class fields layout, see
+   * - ICU ticket #11551 "longer UnicodeString contents in stack buffer"
+   * - ICU ticket #11336 "UnicodeString: recombine stack buffer arrays"
+   * - ICU ticket #8322 "why is sizeof(UnicodeString)==48?"
+   ','line_number':3734,'multiline':True]['text':' (implicit) *vtable;','line_number':3774,'multiline':False]['text':' fStackFields is used iff (fLengthAndFlags&kUsingStackBuffer) else fFields is used.','line_number':3776,'multiline':False]['text':' Each struct of the union must begin with fLengthAndFlags.','line_number':3777,'multiline':False]['text':' bit fields: see constants above','line_number':3779,'multiline':False]['text':' buffer for short strings','line_number':3780,'multiline':False]['text':' bit fields: see constants above','line_number':3783,'multiline':False]['text':' number of characters in fArray if >127; else undefined','line_number':3784,'multiline':False]['text':' capacity of fArray (in char16_ts)','line_number':3785,'multiline':False]['text':' array pointer last to minimize padding for machines with P128 data model','line_number':3786,'multiline':False]['text':' or pointer sizes that are not a power of 2','line_number':3787,'multiline':False]['text':' the Unicode data','line_number':3788,'multiline':False]['text':'*
+ * Create a new UnicodeString with the concatenation of two others.
+ *
+ * @param s1 The first string to be copied to the new one.
+ * @param s2 The second string to be copied to the new one, after s1.
+ * @return UnicodeString(s1).append(s2)
+ * @stable ICU 2.8
+ ','line_number':3793,'multiline':True]['text':'========================================','line_number':3804,'multiline':False]['text':' Inline members','line_number':3805,'multiline':False]['text':'========================================','line_number':3806,'multiline':False]['text':'========================================','line_number':3808,'multiline':False]['text':' Privates','line_number':3809,'multiline':False]['text':'========================================','line_number':3810,'multiline':False]['text':' pin index','line_number':3815,'multiline':False]['text':' pin indices','line_number':3827,'multiline':False]['text':'========================================','line_number':3853,'multiline':False]['text':' Default constructor','line_number':3854,'multiline':False]['text':'========================================','line_number':3855,'multiline':False]['text':'text','line_number':3862,'multiline':True]['text':'text','line_number':3866,'multiline':True]['text':'length','line_number':3866,'multiline':True]['text':'buffer','line_number':3870,'multiline':True]['text':'buffLength','line_number':3870,'multiline':True]['text':'buffCapacity','line_number':3870,'multiline':True]['text':'========================================','line_number':3874,'multiline':False]['text':' Read-only implementation methods','line_number':3875,'multiline':False]['text':'========================================','line_number':3876,'multiline':False]['text':' fLengthAndFlags must be non-negative -> short length >= 0','line_number':3884,'multiline':False]['text':' and arithmetic or logical shift does not matter.','line_number':3885,'multiline':False]['text':'========================================','line_number':3931,'multiline':False]['text':' Read-only alias methods','line_number':3932,'multiline':False]['text':'========================================','line_number':3933,'multiline':False]['text':' 0 if both are bogus, 1 otherwise','line_number':3942,'multiline':False]['text':' 0 if both are bogus, 1 otherwise','line_number':4034,'multiline':False]['text':' 0 if both are bogus, 1 otherwise','line_number':4096,'multiline':False]['text':'========================================','line_number':4388,'multiline':False]['text':' replace','line_number':4389,'multiline':False]['text':'========================================','line_number':4390,'multiline':False]['text':' ============================','line_number':4454,'multiline':False]['text':' extract','line_number':4455,'multiline':False]['text':' ============================','line_number':4456,'multiline':False]['text':' This dstSize value will be checked explicitly','line_number':4485,'multiline':False]['text':' Arithmetic or logical right shift does not matter: only testing for 0.','line_number':4526,'multiline':False]['text':'========================================','line_number':4530,'multiline':False]['text':' Write implementation methods','line_number':4531,'multiline':False]['text':'========================================','line_number':4532,'multiline':False]['text':' requires 0 <= len <= kMaxShortLength','line_number':4540,'multiline':False]['text':' remove() of a bogus string makes the string empty and non-bogus','line_number':4698,'multiline':False]['text':' remove(guaranteed everything) of a bogus string makes the string empty and non-bogus','line_number':4712,'multiline':False]['text':' truncate(0) of a bogus string makes the string empty and non-bogus','line_number':4733,'multiline':False]['text':' U_SHOW_CPLUSPLUS_API ','line_number':4755,'multiline':True]

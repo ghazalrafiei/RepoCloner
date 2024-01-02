@@ -1,0 +1,223 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]['text':'  
+**********************************************************************
+*   Copyright (C) 2002-2016, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+**********************************************************************
+*   file name:  ucnv_u7.c
+*   encoding:   UTF-8
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 2002jul01
+*   created by: Markus W. Scherer
+*
+*   UTF-7 converter implementation. Used to be in ucnv_utf.c.
+','line_number':3,'multiline':True]['text':' UTF-7 -------------------------------------------------------------------- ','line_number':29,'multiline':True]['text':'
+ * UTF-7 is a stateful encoding of Unicode.
+ * It is defined in RFC 2152. (http://www.ietf.org/rfc/rfc2152.txt)
+ * It was intended for use in Internet email systems, using in its bytewise
+ * encoding only a subset of 7-bit US-ASCII.
+ * UTF-7 is deprecated in favor of UTF-8/16/32 and SCSU, but still
+ * occasionally used.
+ *
+ * For converting Unicode to UTF-7, the RFC allows to encode some US-ASCII
+ * characters directly or in base64. Especially, the characters in set O
+ * as defined in the RFC (see below) may be encoded directly but are not
+ * allowed in, e.g., email headers.
+ * By default, the ICU UTF-7 converter encodes set O directly.
+ * By choosing the option "version=1", set O will be escaped instead.
+ * For example:
+ *     utf7Converter=ucnv_open("UTF-7,version=1");
+ *
+ * For details about email headers see RFC 2047.
+ ','line_number':31,'multiline':True]['text':'
+ * Tests for US-ASCII characters belonging to character classes
+ * defined in UTF-7.
+ *
+ * Set D (directly encoded characters) consists of the following
+ * characters: the upper and lower case letters A through Z
+ * and a through z, the 10 digits 0-9, and the following nine special
+ * characters (note that "+" and "=" are omitted):
+ *     '(),-./:?
+ *
+ * Set O (optional direct characters) consists of the following
+ * characters (note that "\" and "~" are omitted):
+ *     !"#$%&*;<=>@[]^_`{|}
+ *
+ * According to the rules in RFC 2152, the byte values for the following
+ * US-ASCII characters are not used in UTF-7 and are therefore illegal:
+ * - all C0 control codes except for CR LF TAB
+ * - BACKSLASH
+ * - TILDE
+ * - DEL
+ * - all codes beyond US-ASCII, i.e. all >127
+ ','line_number':51,'multiline':True]['text':' letters ','line_number':74,'multiline':True]['text':' digits ','line_number':75,'multiline':True]['text':' '() ','line_number':76,'multiline':True]['text':' ,-./ ','line_number':77,'multiline':True]['text':' :? ','line_number':78,'multiline':True]['text':' !"#$%& ','line_number':82,'multiline':True]['text':' ;<=> ','line_number':83,'multiline':True]['text':' ]^_` ','line_number':84,'multiline':True]['text':' {|} ','line_number':85,'multiline':True]['text':' *@[ ','line_number':86,'multiline':True]['text':' legal byte values: all US-ASCII graphic characters from space to before tilde, and CR LF TAB ','line_number':97,'multiline':True]['text':' encode directly sets D and O and CR LF SP TAB ','line_number':100,'multiline':True]['text':' 0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f ','line_number':102,'multiline':True]['text':' encode directly set D and CR LF SP TAB but not set O ','line_number':116,'multiline':True]['text':' 0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f ','line_number':118,'multiline':True]['text':' A-Z ','line_number':134,'multiline':True]['text':' a-z ','line_number':137,'multiline':True]['text':' 0-9 ','line_number':140,'multiline':True]['text':' +/ ','line_number':142,'multiline':True]['text':' C0 controls, -1 for legal ones (CR LF TAB), -3 for illegal ones ','line_number':148,'multiline':True]['text':' general punctuation with + and / and a special value (-2) for - ','line_number':152,'multiline':True]['text':' digits ','line_number':154,'multiline':True]['text':' A-Z ','line_number':157,'multiline':True]['text':' a-z ','line_number':161,'multiline':True]['text':'
+ * converter status values:
+ *
+ * toUnicodeStatus:
+ *     24 inDirectMode (boolean)
+ * 23..16 base64Counter (-1..7)
+ * 15..0  bits (up to 14 bits incoming base64)
+ *
+ * fromUnicodeStatus:
+ * 31..28 version (0: set O direct  1: set O escaped)
+ *     24 inDirectMode (boolean)
+ * 23..16 base64Counter (0..2)
+ *  7..0  bits (6 bits outgoing base64)
+ *
+ ','line_number':166,'multiline':True]['text':' reset toUnicode ','line_number':186,'multiline':True]['text':' inDirectMode=TRUE ','line_number':187,'multiline':True]['text':' reset fromUnicode ','line_number':191,'multiline':True]['text':' keep version, inDirectMode=TRUE ','line_number':192,'multiline':True]['text':' TODO(markus): Should just use cnv->options rather than copying the version number. ','line_number':202,'multiline':True]['text':' UTF-7 state ','line_number':224,'multiline':True]['text':' set up the local pointers ','line_number':234,'multiline':True]['text':' get the state machine state ','line_number':242,'multiline':True]['text':' sourceIndex=-1 if the current character began in the previous buffer ','line_number':252,'multiline':True]['text':'
+         * In Direct Mode, most US-ASCII characters are encoded directly, i.e.,
+         * with their US-ASCII byte values.
+         * Backslash and Tilde and most control characters are not allowed in UTF-7.
+         * A plus sign starts Unicode (or "escape") Mode.
+         *
+         * In Direct Mode, only the sourceIndex is used.
+         ','line_number':258,'multiline':True]['text':' illegal ','line_number':275,'multiline':True]['text':' write directly encoded character ','line_number':281,'multiline':True]['text':' PLUS ','line_number':286,'multiline':True]['text':' switch to Unicode mode ','line_number':287,'multiline':True]['text':' target is full ','line_number':298,'multiline':True]['text':'
+         * In Unicode (or "escape") Mode, UTF-16BE is base64-encoded.
+         * The base64 sequence ends with any character that is not in the base64 alphabet.
+         * A terminating minus sign is consumed.
+         *
+         * In Unicode Mode, the sourceIndex has the index to the start of the current
+         * base64 bytes, while nextSourceIndex is precisely parallel to source,
+         * keeping the index to the following byte.
+         * Note that in 2 out of 3 cases, UChars overlap within a base64 byte.
+         ','line_number':303,'multiline':True]['text':' initialize as illegal ','line_number':317,'multiline':True]['text':' either
+                     * base64Value==-1 for any legal character except base64 and minus sign, or
+                     * base64Value==-3 for illegal characters:
+                     * 1. In either case, leave Unicode mode.
+                     * 2.1. If we ended with an incomplete UChar or none after the +, then
+                     *      generate an error for the preceding erroneous sequence and deal with
+                     *      the current (possibly illegal) character next time through.
+                     * 2.2. Else the current char comes after a complete UChar, which was already
+                     *      pushed to the output buf, so:
+                     * 2.2.1. If the current char is legal, just save it for processing next time.
+                     *        It may be for example, a plus which we need to deal with in direct mode.
+                     * 2.2.2. Else if the current char is illegal, we might as well deal with it here.
+                     ','line_number':319,'multiline':True]['text':' illegal: + immediately followed by something other than base64 or minus sign ','line_number':334,'multiline':True]['text':' include the plus sign in the reported sequence, but not the subsequent char ','line_number':335,'multiline':True]['text':' bits are illegally left over, a UChar is incomplete ','line_number':342,'multiline':True]['text':' don't include current char (legal or illegal) in error seq ','line_number':343,'multiline':True]['text':' previous UChar was complete ','line_number':349,'multiline':True]['text':' current character is illegal, deal with it here ','line_number':351,'multiline':True]['text':' un-read the current character in case it is a plus sign ','line_number':355,'multiline':True]['text':' collect base64 bytes into UChars ','line_number':362,'multiline':True]['text':' -1 is immediately after the + ','line_number':364,'multiline':True]['text':' keep this byte in case an error occurs ','line_number':382,'multiline':True]['text':' keep this byte in case an error occurs ','line_number':393,'multiline':True]['text':' will never occur ','line_number':409,'multiline':True]['text':'base64Value==-2','line_number':412,'multiline':True]['text':' minus sign terminates the base64 sequence ','line_number':413,'multiline':True]['text':' +- i.e. a minus immediately following a plus ','line_number':416,'multiline':True]['text':' absorb the minus and leave the Unicode Mode ','line_number':422,'multiline':True]['text':' bits are illegally left over, a UChar is incomplete ','line_number':424,'multiline':True]['text':' target is full ','line_number':433,'multiline':True]['text':'
+         * if we are in Unicode mode, then the byteIndex might not be 0,
+         * but that is ok if bits==0
+         * -> we set byteIndex=0 at the end of the stream to avoid a truncated error
+         * (not true for IMAP-mailbox-name where we must end in direct mode)
+         ','line_number':441,'multiline':True]['text':' set the converter state back into UConverter ','line_number':450,'multiline':True]['text':' write back the updated pointers ','line_number':454,'multiline':True]['text':' UTF-7 state ','line_number':472,'multiline':True]['text':' set up the local pointers ','line_number':478,'multiline':True]['text':' set up the local pointers ','line_number':481,'multiline':True]['text':' get the state machine state ','line_number':488,'multiline':True]['text':' UTF-7 always encodes UTF-16 code units, therefore we need only a simple sourceIndex ','line_number':498,'multiline':True]['text':' currently always encode CR LF SP TAB directly ','line_number':510,'multiline':True]['text':' encode directly ','line_number':512,'multiline':True]['text':' output +- for + ','line_number':518,'multiline':True]['text':' realign length and targetCapacity ','line_number':526,'multiline':True]['text':' un-read this character and switch to Unicode Mode ','line_number':538,'multiline':True]['text':' target is full ','line_number':551,'multiline':True]['text':' encode directly ','line_number':560,'multiline':True]['text':' trick: back out this character to make this easier ','line_number':563,'multiline':True]['text':' terminate the base64 sequence ','line_number':566,'multiline':True]['text':' write remaining bits for the previous character ','line_number':568,'multiline':True]['text':' need to terminate with a minus ','line_number':575,'multiline':True]['text':'
+                     * base64 this character:
+                     * Output 2 or 3 base64 bytes for the remaining bits of the previous character
+                     * and the bits of this character, each implicitly in UTF-16BE.
+                     *
+                     * Here, bits is an 8-bit variable because only 6 bits need to be kept from one
+                     * character to the next. The actual 2 or 4 bits are shifted to the left edge
+                     * of the 6-bits field 5..0 to make the termination of the base64 sequence easier.
+                     ','line_number':590,'multiline':True]['text':' will never occur ','line_number':684,'multiline':True]['text':' target is full ','line_number':689,'multiline':True]['text':' flush remaining bits to the target ','line_number':697,'multiline':True]['text':' Add final MINUS to terminate unicodeMode ','line_number':710,'multiline':True]['text':' reset the state for the next conversion ','line_number':721,'multiline':True]['text':' keep version, inDirectMode=TRUE ','line_number':722,'multiline':True]['text':' set the converter state back into UConverter ','line_number':724,'multiline':True]['text':' keep version','line_number':726,'multiline':True]['text':' write back the updated pointers ','line_number':730,'multiline':True]['text':' we don't need writeSub() because we never call a callback at fromUnicode() ','line_number':766,'multiline':True]['text':' TODO CCSID for UTF-7 ','line_number':777,'multiline':True]['text':' the subchar is not used ','line_number':780,'multiline':True]['text':' reserved ','line_number':784,'multiline':True]['text':' IMAP mailbox name encoding ----------------------------------------------- ','line_number':790,'multiline':True]['text':'
+ * RFC 2060: INTERNET MESSAGE ACCESS PROTOCOL - VERSION 4rev1
+ * http://www.ietf.org/rfc/rfc2060.txt
+ *
+ * 5.1.3.  Mailbox International Naming Convention
+ *
+ * By convention, international mailbox names are specified using a
+ * modified version of the UTF-7 encoding described in [UTF-7].  The
+ * purpose of these modifications is to correct the following problems
+ * with UTF-7:
+ *
+ *    1) UTF-7 uses the "+" character for shifting; this conflicts with
+ *       the common use of "+" in mailbox names, in particular USENET
+ *       newsgroup names.
+ *
+ *    2) UTF-7's encoding is BASE64 which uses the "/" character; this
+ *       conflicts with the use of "/" as a popular hierarchy delimiter.
+ *
+ *    3) UTF-7 prohibits the unencoded usage of "\"; this conflicts with
+ *       the use of "\" as a popular hierarchy delimiter.
+ *
+ *    4) UTF-7 prohibits the unencoded usage of "~"; this conflicts with
+ *       the use of "~" in some servers as a home directory indicator.
+ *
+ *    5) UTF-7 permits multiple alternate forms to represent the same
+ *       string; in particular, printable US-ASCII characters can be
+ *       represented in encoded form.
+ *
+ * In modified UTF-7, printable US-ASCII characters except for "&"
+ * represent themselves; that is, characters with octet values 0x20-0x25
+ * and 0x27-0x7e.  The character "&" (0x26) is represented by the two-
+ * octet sequence "&-".
+ *
+ * All other characters (octet values 0x00-0x1f, 0x7f-0xff, and all
+ * Unicode 16-bit octets) are represented in modified BASE64, with a
+ * further modification from [UTF-7] that "," is used instead of "/".
+ * Modified BASE64 MUST NOT be used to represent any printing US-ASCII
+ * character which can represent itself.
+ *
+ * "&" is used to shift to modified BASE64 and "-" to shift back to US-
+ * ASCII.  All names start in US-ASCII, and MUST end in US-ASCII (that
+ * is, a name that ends with a Unicode 16-bit octet MUST end with a "-
+ * ").
+ *
+ * For example, here is a mailbox name which mixes English, Japanese,
+ * and Chinese text: ~peter/mail/&ZeVnLIqe-/&U,BTFw-
+ ','line_number':792,'multiline':True]['text':'
+ * Tests for US-ASCII characters belonging to character classes
+ * defined in UTF-7.
+ *
+ * Set D (directly encoded characters) consists of the following
+ * characters: the upper and lower case letters A through Z
+ * and a through z, the 10 digits 0-9, and the following nine special
+ * characters (note that "+" and "=" are omitted):
+ *     '(),-./:?
+ *
+ * Set O (optional direct characters) consists of the following
+ * characters (note that "\" and "~" are omitted):
+ *     !"#$%&*;<=>@[]^_`{|}
+ *
+ * According to the rules in RFC 2152, the byte values for the following
+ * US-ASCII characters are not used in UTF-7 and are therefore illegal:
+ * - all C0 control codes except for CR LF TAB
+ * - BACKSLASH
+ * - TILDE
+ * - DEL
+ * - all codes beyond US-ASCII, i.e. all >127
+ ','line_number':840,'multiline':True]['text':' uses '&' not '+' to start a base64 sequence ','line_number':863,'multiline':True]['text':' legal byte values: all US-ASCII graphic characters 0x20..0x7e ','line_number':868,'multiline':True]['text':' direct-encode all of printable ASCII 0x20..0x7e except '&' 0x26 ','line_number':871,'multiline':True]['text':'
+ * converter status values:
+ *
+ * toUnicodeStatus:
+ *     24 inDirectMode (boolean)
+ * 23..16 base64Counter (-1..7)
+ * 15..0  bits (up to 14 bits incoming base64)
+ *
+ * fromUnicodeStatus:
+ *     24 inDirectMode (boolean)
+ * 23..16 base64Counter (0..2)
+ *  7..0  bits (6 bits outgoing base64)
+ *
+ * ignore bits 31..25
+ ','line_number':877,'multiline':True]['text':' UTF-7 state ','line_number':908,'multiline':True]['text':' set up the local pointers ','line_number':920,'multiline':True]['text':' get the state machine state ','line_number':928,'multiline':True]['text':' sourceIndex=-1 if the current character began in the previous buffer ','line_number':938,'multiline':True]['text':'
+         * In Direct Mode, US-ASCII characters are encoded directly, i.e.,
+         * with their US-ASCII byte values.
+         * An ampersand starts Unicode (or "escape") Mode.
+         *
+         * In Direct Mode, only the sourceIndex is used.
+         ','line_number':944,'multiline':True]['text':' illegal ','line_number':960,'multiline':True]['text':' write directly encoded character ','line_number':966,'multiline':True]['text':' AMPERSAND ','line_number':971,'multiline':True]['text':' switch to Unicode mode ','line_number':972,'multiline':True]['text':' target is full ','line_number':983,'multiline':True]['text':'
+         * In Unicode (or "escape") Mode, UTF-16BE is base64-encoded.
+         * The base64 sequence ends with any character that is not in the base64 alphabet.
+         * A terminating minus sign is consumed.
+         * US-ASCII must not be base64-ed.
+         *
+         * In Unicode Mode, the sourceIndex has the index to the start of the current
+         * base64 bytes, while nextSourceIndex is precisely parallel to source,
+         * keeping the index to the following byte.
+         * Note that in 2 out of 3 cases, UChars overlap within a base64 byte.
+         ','line_number':988,'multiline':True]['text':' illegal - test other illegal US-ASCII values by base64Value==-3 ','line_number':1004,'multiline':True]['text':' collect base64 bytes into UChars ','line_number':1009,'multiline':True]['text':' -1 is immediately after the & ','line_number':1011,'multiline':True]['text':' illegal ','line_number':1026,'multiline':True]['text':' keep this byte in case an error occurs ','line_number':1036,'multiline':True]['text':' illegal ','line_number':1044,'multiline':True]['text':' keep this byte in case an error occurs ','line_number':1054,'multiline':True]['text':' illegal ','line_number':1062,'multiline':True]['text':' will never occur ','line_number':1077,'multiline':True]['text':' minus sign terminates the base64 sequence ','line_number':1081,'multiline':True]['text':' &- i.e. a minus immediately following an ampersand ','line_number':1084,'multiline':True]['text':' absorb the minus and leave the Unicode Mode ','line_number':1090,'multiline':True]['text':' bits are illegally left over, a UChar is incomplete ','line_number':1092,'multiline':True]['text':' base64Counter other than 0, 3, 6 means non-minimal zero-padding, also illegal ','line_number':1093,'multiline':True]['text':' illegal: & immediately followed by something other than base64 or minus sign ','line_number':1102,'multiline':True]['text':' include the ampersand in the reported sequence ','line_number':1103,'multiline':True]['text':' base64Value==-1 for characters that are illegal only in Unicode mode ','line_number':1109,'multiline':True]['text':' base64Value==-3 for illegal characters ','line_number':1110,'multiline':True]['text':' illegal ','line_number':1111,'multiline':True]['text':' target is full ','line_number':1117,'multiline':True]['text':'
+     * the end of the input stream and detection of truncated input
+     * are handled by the framework, but here we must check if we are in Unicode
+     * mode and byteIndex==0 because we must end in direct mode
+     *
+     * conditions:
+     *   successful
+     *   in Unicode mode and byteIndex==0
+     *   end of input and no truncated input
+     ','line_number':1125,'multiline':True]['text':' & at the very end of the input ','line_number':1140,'multiline':True]['text':' make the ampersand the reported sequence ','line_number':1141,'multiline':True]['text':' else if(base64Counter!=-1) byteIndex remains 0 because there is no particular byte sequence ','line_number':1145,'multiline':True]['text':' avoid looping ','line_number':1147,'multiline':True]['text':' set the converter state back into UConverter ','line_number':1151,'multiline':True]['text':' write back the updated pointers ','line_number':1155,'multiline':True]['text':' UTF-7 state ','line_number':1174,'multiline':True]['text':' set up the local pointers ','line_number':1179,'multiline':True]['text':' set up the local pointers ','line_number':1182,'multiline':True]['text':' get the state machine state ','line_number':1189,'multiline':True]['text':' UTF-7 always encodes UTF-16 code units, therefore we need only a simple sourceIndex ','line_number':1197,'multiline':True]['text':' encode 0x20..0x7e except '&' directly ','line_number':1209,'multiline':True]['text':' encode directly ','line_number':1211,'multiline':True]['text':' output &- for & ','line_number':1217,'multiline':True]['text':' realign length and targetCapacity ','line_number':1225,'multiline':True]['text':' un-read this character and switch to Unicode Mode ','line_number':1237,'multiline':True]['text':' target is full ','line_number':1250,'multiline':True]['text':' encode directly ','line_number':1259,'multiline':True]['text':' trick: back out this character to make this easier ','line_number':1262,'multiline':True]['text':' terminate the base64 sequence ','line_number':1265,'multiline':True]['text':' write remaining bits for the previous character ','line_number':1267,'multiline':True]['text':' need to terminate with a minus ','line_number':1273,'multiline':True]['text':'
+                     * base64 this character:
+                     * Output 2 or 3 base64 bytes for the remaining bits of the previous character
+                     * and the bits of this character, each implicitly in UTF-16BE.
+                     *
+                     * Here, bits is an 8-bit variable because only 6 bits need to be kept from one
+                     * character to the next. The actual 2 or 4 bits are shifted to the left edge
+                     * of the 6-bits field 5..0 to make the termination of the base64 sequence easier.
+                     ','line_number':1287,'multiline':True]['text':' will never occur ','line_number':1396,'multiline':True]['text':' target is full ','line_number':1401,'multiline':True]['text':' flush remaining bits to the target ','line_number':1409,'multiline':True]['text':' need to terminate with a minus ','line_number':1422,'multiline':True]['text':' reset the state for the next conversion ','line_number':1433,'multiline':True]['text':' keep version, inDirectMode=TRUE ','line_number':1434,'multiline':True]['text':' set the converter state back into UConverter ','line_number':1436,'multiline':True]['text':' keep version','line_number':1438,'multiline':True]['text':' write back the updated pointers ','line_number':1442,'multiline':True]['text':' we don't need writeSub() because we never call a callback at fromUnicode() ','line_number':1468,'multiline':True]['text':' TODO CCSID for IMAP-mailbox-name ','line_number':1478,'multiline':True]['text':' the subchar is not used ','line_number':1481,'multiline':True]['text':' reserved ','line_number':1485,'multiline':True]

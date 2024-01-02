@@ -1,0 +1,144 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':' 1. Match config.collections entries with {_id: nss}. This stage will produce, at most, one','line_number':136,'multiline':False]['text':' config.collections document.','line_number':137,'multiline':False]['text':' {','line_number':138,'multiline':False]['text':'     $match: {','line_number':139,'multiline':False]['text':'         _id: <nss>','line_number':140,'multiline':False]['text':'     }','line_number':141,'multiline':False]['text':' }','line_number':142,'multiline':False]['text':' 2. Two $unionWith stages guarded by a mutually exclusive condition on whether the refresh is','line_number':149,'multiline':False]['text':' incremental ('lastmodEpoch' matches sinceVersion.epoch), so that only a single one of them','line_number':150,'multiline':False]['text':' will possibly execute their $lookup stage. This is necessary because the query optimizer is','line_number':151,'multiline':False]['text':' not able to use indexes when a $match inside a $lookup includes a $cond operator.','line_number':152,'multiline':False]['text':'','line_number':153,'multiline':False]['text':' The $lookup stages get the config.chunks documents according to the','line_number':154,'multiline':False]['text':' type of refresh (incremental or full), sorted by ascending 'lastmod'. The $lookup is','line_number':155,'multiline':False]['text':' immediately followed by $unwind to take advantage of the $lookup + $unwind coalescence','line_number':156,'multiline':False]['text':' optimization which avoids creating large intermediate documents.','line_number':157,'multiline':False]['text':'','line_number':158,'multiline':False]['text':' This $unionWith stage will produce one result document for each config.chunks document','line_number':159,'multiline':False]['text':' matching the refresh query.','line_number':160,'multiline':False]['text':' Note that we must not make any assumption on where the document produced by stage 1 will be','line_number':161,'multiline':False]['text':' placed in the response in relation with the documents produced by stage 2. The','line_number':162,'multiline':False]['text':' config.collections document produced in stage 1 could be interleaved between the','line_number':163,'multiline':False]['text':' config.chunks documents produced by stage 2.','line_number':164,'multiline':False]['text':'','line_number':165,'multiline':False]['text':' {','line_number':166,'multiline':False]['text':'     $unionWith: {','line_number':167,'multiline':False]['text':'         coll: "collections",','line_number':168,'multiline':False]['text':'         pipeline: [','line_number':169,'multiline':False]['text':'             { $match: { _id: <nss> } },','line_number':170,'multiline':False]['text':'             { $match: { lastmodEpoch: <sinceVersion.epoch> } },','line_number':171,'multiline':False]['text':'             {','line_number':172,'multiline':False]['text':'                 $lookup: {','line_number':173,'multiline':False]['text':'                     from: "chunks",','line_number':174,'multiline':False]['text':'                     as: "chunks",','line_number':175,'multiline':False]['text':'                     let: { local_uuid: "$uuid" },','line_number':176,'multiline':False]['text':'                     pipeline: [','line_number':177,'multiline':False]['text':'                         {','line_number':178,'multiline':False]['text':'                             $match: {','line_number':179,'multiline':False]['text':'                                 $expr: {','line_number':180,'multiline':False]['text':'                                     $eq: ["$uuid", "$$local_uuid"],','line_number':181,'multiline':False]['text':'                                 },','line_number':182,'multiline':False]['text':'                             }','line_number':183,'multiline':False]['text':'                         },','line_number':184,'multiline':False]['text':'                         { $match: { lastmod: { $gte: <sinceVersion> } } },','line_number':185,'multiline':False]['text':'                         {','line_number':186,'multiline':False]['text':'                             $sort: {','line_number':187,'multiline':False]['text':'                                 lastmod: 1','line_number':188,'multiline':False]['text':'                             }','line_number':189,'multiline':False]['text':'                         }','line_number':190,'multiline':False]['text':'                     ]','line_number':191,'multiline':False]['text':'                 }','line_number':192,'multiline':False]['text':'             },','line_number':193,'multiline':False]['text':'             {','line_number':194,'multiline':False]['text':'                 $unwind: {','line_number':195,'multiline':False]['text':'                     path: "$chunks"','line_number':196,'multiline':False]['text':'                 }','line_number':197,'multiline':False]['text':'             },','line_number':198,'multiline':False]['text':'             {','line_number':199,'multiline':False]['text':'                 $project: { _id: false, chunks: true }','line_number':200,'multiline':False]['text':'             },','line_number':201,'multiline':False]['text':'         ]','line_number':202,'multiline':False]['text':'     }','line_number':203,'multiline':False]['text':' },','line_number':204,'multiline':False]['text':' {','line_number':205,'multiline':False]['text':'     $unionWith: {','line_number':206,'multiline':False]['text':'         coll: "collections",','line_number':207,'multiline':False]['text':'         pipeline: [','line_number':208,'multiline':False]['text':'             { $match: { _id: <nss> } },','line_number':209,'multiline':False]['text':'             { $match: { lastmodEpoch: { $ne: <sinceVersion.epoch> } } },','line_number':210,'multiline':False]['text':'             {','line_number':211,'multiline':False]['text':'                 $lookup: {','line_number':212,'multiline':False]['text':'                     from: "chunks",','line_number':213,'multiline':False]['text':'                     as: "chunks",','line_number':214,'multiline':False]['text':'                     let: { local_uuid: "$uuid" },','line_number':215,'multiline':False]['text':'                     pipeline: [','line_number':216,'multiline':False]['text':'                         {','line_number':217,'multiline':False]['text':'                             $match: {','line_number':218,'multiline':False]['text':'                                 $expr: {','line_number':219,'multiline':False]['text':'                                     $eq: ["$uuid", "$$local_uuid"],','line_number':220,'multiline':False]['text':'                                 },','line_number':221,'multiline':False]['text':'                             }','line_number':222,'multiline':False]['text':'                         },','line_number':223,'multiline':False]['text':'                         {','line_number':224,'multiline':False]['text':'                             $sort: {','line_number':225,'multiline':False]['text':'                                 lastmod: 1','line_number':226,'multiline':False]['text':'                             }','line_number':227,'multiline':False]['text':'                         }','line_number':228,'multiline':False]['text':'                     ]','line_number':229,'multiline':False]['text':'                 }','line_number':230,'multiline':False]['text':'             },','line_number':231,'multiline':False]['text':'             {','line_number':232,'multiline':False]['text':'                 $unwind: {','line_number':233,'multiline':False]['text':'                     path: "$chunks"','line_number':234,'multiline':False]['text':'                 }','line_number':235,'multiline':False]['text':'             },','line_number':236,'multiline':False]['text':'             {','line_number':237,'multiline':False]['text':'                 $project: { _id: false, chunks: true }','line_number':238,'multiline':False]['text':'             },','line_number':239,'multiline':False]['text':'         ]','line_number':240,'multiline':False]['text':'     }','line_number':241,'multiline':False]['text':' }','line_number':242,'multiline':False]['text':'noop','line_number':264,'multiline':True]['text':' incremental ','line_number':283,'multiline':True]['text':' incremental ','line_number':287,'multiline':True]['text':' 1. Match config.collections entries with {_id: nss}. This stage will produce, at most, one','line_number':310,'multiline':False]['text':' config.collections document.','line_number':311,'multiline':False]['text':' {','line_number':312,'multiline':False]['text':'     $match: {','line_number':313,'multiline':False]['text':'         _id: <nss>','line_number':314,'multiline':False]['text':'     }','line_number':315,'multiline':False]['text':' }','line_number':316,'multiline':False]['text':' 2. Retrieve config.csrs.indexes entries with the same uuid as the one from the','line_number':323,'multiline':False]['text':' config.collections document.','line_number':324,'multiline':False]['text':'','line_number':325,'multiline':False]['text':' The $lookup stage gets the config.csrs.indexes documents and puts them in a field called','line_number':326,'multiline':False]['text':' "indexes" in the document produced during stage 1.','line_number':327,'multiline':False]['text':'','line_number':328,'multiline':False]['text':' {','line_number':329,'multiline':False]['text':'      $lookup: {','line_number':330,'multiline':False]['text':'          from: "csrs.indexes",','line_number':331,'multiline':False]['text':'          as: "indexes",','line_number':332,'multiline':False]['text':'          localField: "uuid",','line_number':333,'multiline':False]['text':'          foreignField: "collectionUUID"','line_number':334,'multiline':False]['text':'      }','line_number':335,'multiline':False]['text':' }','line_number':336,'multiline':False]['text':' 1. Match config.collections entries with database name = dbName','line_number':367,'multiline':False]['text':' {','line_number':368,'multiline':False]['text':'     $match: {','line_number':369,'multiline':False]['text':'         _id: {$regex: dbName.*, unsplittable: true}','line_number':370,'multiline':False]['text':'     }','line_number':371,'multiline':False]['text':' }','line_number':372,'multiline':False]['text':' 2. Retrieve config.chunks entries with the same uuid as the one from the','line_number':381,'multiline':False]['text':' config.collections document.','line_number':382,'multiline':False]['text':'','line_number':383,'multiline':False]['text':' The $lookup stage gets the config.chunks documents and puts them in a field called','line_number':384,'multiline':False]['text':' "chunks" in the document produced during stage 1.','line_number':385,'multiline':False]['text':'','line_number':386,'multiline':False]['text':' {','line_number':387,'multiline':False]['text':'      $lookup: {','line_number':388,'multiline':False]['text':'          from: "chunks",','line_number':389,'multiline':False]['text':'          as: "chunks",','line_number':390,'multiline':False]['text':'          localField: "uuid",','line_number':391,'multiline':False]['text':'          foreignField: "uuid"','line_number':392,'multiline':False]['text':'      }','line_number':393,'multiline':False]['text':' }','line_number':394,'multiline':False]['text':' 3. Filter only the collection entries where the chunk has the shard field equal to shardId.','line_number':403,'multiline':False]['text':' {','line_number':404,'multiline':False]['text':'      $match: {','line_number':405,'multiline':False]['text':'          chunks.shard: {$nin: <excludedShards>}','line_number':406,'multiline':False]['text':'      }','line_number':407,'multiline':False]['text':' }','line_number':408,'multiline':False]['text':'*
+ * Returns keys for the given purpose and have an expiresAt value greater than newerThanThis on the
+ * given shard.
+ ','line_number':419,'multiline':True]['text':' namespace','line_number':458,'multiline':False]['text':' The admin database is always hosted on the config server.','line_number':472,'multiline':False]['text':' The config database's primary shard is always config, and it is always sharded.','line_number':477,'multiline':False]['text':' If we failed to find the database metadata on the 'nearest' config server, try again','line_number':484,'multiline':False]['text':' against the primary, in case the database was recently created.','line_number':485,'multiline':False]['text':' Reads on the config server may run on any node in its replica set. Such reads use the config','line_number':577,'multiline':False]['text':' time as an afterClusterTime token, but config time is only inclusive of majority committed','line_number':578,'multiline':False]['text':' data, so we should not use a weaker read concern. Note if the local node is a config server,','line_number':579,'multiline':False]['text':' it can use these concerns safely with a ShardLocal, which would require relaxing this','line_number':580,'multiline':False]['text':' invariant.','line_number':581,'multiline':False]['text':' Don't use a timeout on the config server to guarantee it can always refresh.','line_number':600,'multiline':False]['text':' Run the aggregation','line_number':605,'multiline':False]['text':' no limit ','line_number':856,'multiline':True]['text':' no limit','line_number':900,'multiline':False]['text':' TODO SERVER-80466 use the IDL parser instead of parsing BSON objects from','line_number':915,'multiline':False]['text':' _exhaustiveFindOnConfig returned values.','line_number':916,'multiline':False]['text':' Convert boost::optional<int> to boost::optional<long long>.','line_number':937,'multiline':False]['text':' The aggregation may return the config.collections document anywhere between the','line_number':981,'multiline':False]['text':' config.chunks documents.','line_number':982,'multiline':False]['text':' 1st: look for the collection since it is needed to properly build the chunks.','line_number':983,'multiline':False]['text':' 2nd: Traverse all the elements and build the chunks.','line_number':996,'multiline':False]['text':' no limit','line_number':1064,'multiline':False]['text':'collator','line_number':1089,'multiline':True]['text':' pipeline ','line_number':1092,'multiline':True]['text':' Parse pipeline:','line_number':1095,'multiline':False]['text':'      - First stage will find all that namespaces on 'config.tags' that are part of the','line_number':1096,'multiline':False]['text':'      given database.','line_number':1097,'multiline':False]['text':'      - Second stage will group namespaces to not have repetitions.','line_number':1098,'multiline':False]['text':'','line_number':1099,'multiline':False]['text':'      db.tags.aggregate([','line_number':1100,'multiline':False]['text':'          {$match: {ns: {$regex : "^dbName\\..*"}}},','line_number':1101,'multiline':False]['text':'          {$group: {_id : "$ns"}}','line_number':1102,'multiline':False]['text':'      ])','line_number':1103,'multiline':False]['text':'','line_number':1104,'multiline':False]['text':' Create pipeline','line_number':1118,'multiline':False]['text':' Run the aggregation','line_number':1126,'multiline':False]['text':' Parse the result','line_number':1134,'multiline':False]['text':' No sorting ','line_number':1152,'multiline':True]['text':' No limit ','line_number':1153,'multiline':True]['text':' Make sure that if the command has a write concern that it is w:1 or w:majority, and','line_number':1183,'multiline':False]['text':' convert w:1 or no write concern to w:majority before sending.','line_number':1184,'multiline':False]['text':' XXX','line_number':1276,'multiline':False]['text':' Pretend like the operation is idempotent because we're handling DuplicateKey errors','line_number':1306,'multiline':False]['text':' specially','line_number':1307,'multiline':False]['text':' If we get DuplicateKey error on the first attempt to insert, this definitively means that','line_number':1311,'multiline':False]['text':' we are trying to insert the same entry a second time, so error out. If it happens on a','line_number':1312,'multiline':False]['text':' retry attempt though, it is not clear whether we are actually inserting a duplicate key','line_number':1313,'multiline':False]['text':' or it is because we failed to wait for write concern on the first attempt. In order to','line_number':1314,'multiline':False]['text':' differentiate, fetch the entry and check.','line_number':1315,'multiline':False]['text':' Documents match, so treat the operation as success','line_number':1346,'multiline':False]['text':' TODO (SERVER-73029): Remove the invariant','line_number':1542,'multiline':False]['text':'
+    The aggregation pipeline is split in 2 sub pipelines:
+    - one pipeline "exactPlacementData" describing the list of shards currently active in the
+    cluster in which the data belonging to the input nss were placed at the given clusterTime. The
+    primary shard is always included in the list. In case the input nss is empty, the list of shards
+    includes all the shards in the cluster containing data at the given clusterTime. Stages can be
+    described as follow:
+        Stage 1. Select only the entry with timestamp <= clusterTime and filter out
+    all nss that are not the collection or the database using a regex. We also esclude all the
+    entries related to the fcv marker. In case the whole cluster info is searched, we filter any nss
+    with at least 1 caracter
+        Stage 2. sort by timestamp
+        Stage 3. Extract the first document for each database and collection matching the received
+    namespace
+        Stage 4. Discard the entries with empty shards (i.e. the collection was dropped or
+    renamed)
+        Stage 5. Group all documents and concat shards (this will generate an array of arrays)
+        Stage 6. Flatten the array of arrays into a set
+    (this will also remove duplicates)
+        Stage 7. Access to the list of shards currently active in the cluster
+    - one pipeline "approximatePlacementData" retreiving the last "marker" which is a special entry
+    where the nss is empty and the list of shard can be either empty or not.
+        - In case the list is not empty: it means the clusterTime requested was during an fcv
+    upgrade/downgrade. Thus we cannot guarantee the result of 'exactPlacementData' to
+    be correct. We therefore report the list of shards present in the "marker" entry, which
+    correspond to the list of shards in the cluster at the time the fcv upgrade/downgrade started.
+        - The pipeline selects only the fcv markers, sorts by decreasing timestamp and gets the
+    first element.
+
+    regex=^db(\.collection)?$ // matches db or db.collection
+    db.placementHistory.aggregate([
+      {
+        "$facet": {
+          "exactPlacementData": [
+            {
+              "$match": {
+                "timestamp": {
+                  "$lte":<clusterTime>
+                },
+                "nss": {
+                  $regex: regex
+                }
+              }
+            },
+            {
+              "$sort": {
+                "timestamp": -1
+              }
+            },
+            {
+              "$group": {
+                _id: "$nss",
+                shards: {
+                  $first: "$shards"
+                }
+              }
+            },
+            {
+              "$match": {
+                shards: {
+                  $not: {
+                    $size: 0
+                  }
+                }
+              }
+            },
+            {
+              "$group": {
+                _id: "",
+                shards: {
+                  $push: "$shards"
+                }
+              }
+            },
+            {
+              $project: {
+                "shards": {
+                  $reduce: {
+                    input: "$shards",
+                    initialValue: [],
+                    in: {
+                      "$setUnion": [
+                        "$$this",
+                        "$$value"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "approximatePlacementData": [
+            {
+              "$match": {
+                "timestamp": {
+                  "$lte": <clusterTime>
+                },
+                "nss": kConfigPlacementHistoryInitializationMarker
+              }
+            },
+            {
+              "$sort": {
+                "timestamp": -1
+              }
+            },
+            {
+              "$limit": 1
+            }
+          ]
+        }
+      }
+    ])
+
+        ','line_number':1545,'multiline':True]['text':'collator','line_number':1661,'multiline':True]['text':' pipeline ','line_number':1664,'multiline':True]['text':' pipeline ','line_number':1667,'multiline':True]['text':' Build the pipeline for the exact placement data.','line_number':1670,'multiline':False]['text':' 1. Get all the history entries prior to the requested time concerning either the collection','line_number':1671,'multiline':False]['text':' or the parent database.','line_number':1672,'multiline':False]['text':' 2 & 3. Sort by timestamp and extract the first document for collection and database','line_number':1694,'multiline':False]['text':' Stage 4. Discard the entries with empty shards (i.e. the collection was dropped or renamed)','line_number':1704,'multiline':False]['text':' Stage 5. Group all documents and concat shards (this will generate an array of arrays)','line_number':1708,'multiline':False]['text':' Stage 6. Flatten the array of arrays into a set (this will also remove duplicates)','line_number':1717,'multiline':False]['text':' Build the pipeline for the approximate data.','line_number':1736,'multiline':False]['text':' Build the facet pipeline','line_number':1748,'multiline':False]['text':' Run the aggregation','line_number':1760,'multiline':False]['text':' each sub-pipeline of $facet produces an array with a single element containing a 'shards'','line_number':1769,'multiline':False]['text':' field. for this aggregation, every pipeline result is an array of one element','line_number':1770,'multiline':False]['text':' if there is an fcv marker and the shards array is not empty, return the shards','line_number':1785,'multiline':False]['text':' array, declaring the retrieved data as "not exact".','line_number':1786,'multiline':False]['text':' if the fcv marker shards array is empty, return the shards array from the exact data','line_number':1792,'multiline':False]['text':' namespace mongo','line_number':1808,'multiline':False]

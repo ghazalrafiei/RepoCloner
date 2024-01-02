@@ -1,0 +1,75 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]['text':'
+ * In this test, we want to verify that search_near with cursor bounds set the prefix of a given key
+ * only traverses the portion of the tree that follows the prefix. The test is composed of a
+ * populate phase followed by a read phase. The populate phase will insert a set of random generated
+ * keys with a prefix of aaa -> zzz. During the read phase, we have one read thread that performs:
+ *  - Spawning multiple threads to perform one search near with bounds.
+ *  - Waiting on all threads to finish.
+ *  - Using WiredTiger statistics to validate that the number of entries traversed is within
+ * bounds of the search key.
+ ','line_number':37,'multiline':True]['text':'
+         * Generate a table of data with prefix keys aaa -> zzz. We have 26 threads from ids
+         * starting from 0 to 26. Each populate thread will insert separate prefix keys based on the
+         * id.
+         ','line_number':63,'multiline':True]['text':'
+                         * Generate the prefix key, and append a random generated key string based
+                         * on the key size configuration.
+                         ','line_number':75,'multiline':True]['text':' We failed to insert, rollback our transaction and retry. ','line_number':88,'multiline':True]['text':' Commit txn at commit timestamp 100. ','line_number':94,'multiline':True]['text':' Validate our config. ','line_number':119,'multiline':True]['text':' Check the prefix length is not greater than the key size. ','line_number':125,'multiline':True]['text':' Create n collections as per the configuration. ','line_number':133,'multiline':True]['text':'
+             * The database model will call into the API and create the collection, with its own
+             * session.
+             ','line_number':135,'multiline':True]['text':' Spawn 26 threads to populate the database. ','line_number':141,'multiline':True]['text':' Wait for our populate threads to finish and then join them. ','line_number':149,'multiline':True]['text':' Cleanup our workers. ','line_number':153,'multiline':True]['text':' Force evict all the populated keys in all of the collections. ','line_number':159,'multiline':True]['text':' Generate a search prefix key of random length between a -> zzz. ','line_number':191,'multiline':True]['text':'
+         * Read at timestamp 10, so that no keys are visible to this transaction. When performing
+         * bounded search near, we expect the search to early exit out of its prefix key range and
+         * return WT_NOTFOUND.
+         ','line_number':198,'multiline':True]['text':'
+         * There is an edge case where we may not early exit the bounded search near call because
+         * the specified prefix matches the rest of the entries in the tree.
+         *
+         * In this test, the keys in our database start with prefixes aaa -> zzz. If we search with
+         * a prefix such as "z", we will not early exit the search near call because the rest of the
+         * keys will also start with "z" and match the prefix. The statistic will stay the same if
+         * we do not early exit search near, track this through incrementing the number of z key
+         * searches we have done this iteration.
+         ','line_number':211,'multiline':True]['text':' Make sure that thread statistics cursor is null before we open it. ','line_number':229,'multiline':True]['text':' This test will only work with one read thread. ','line_number':231,'multiline':True]['text':'
+         * The number of expected entries is calculated to account for the maximum allowed entries
+         * per search near call. The key we search near can be different in length, which will
+         * increase the number of entries search by a factor of 26.
+         *
+         * As we walk forwards and backwards we multiply the value by 2.
+         ','line_number':251,'multiline':True]['text':' Get a collection and find a cached cursor. ','line_number':267,'multiline':True]['text':' Cleanup our workers. ','line_number':278,'multiline':True]['text':'
+             * It is possible that WiredTiger increments the entries skipped stat separately to the
+             * bounded search near. This is dependent on how many read threads are present in the
+             * test. Account for this by creating a small buffer using thread count. Assert that the
+             * number of expected entries is the upper limit which the bounded search near can
+             * traverse.
+             *
+             * Assert that the number of expected entries is the maximum allowed limit that the
+             * bounded search nears can traverse and that the bounded key fast path statistic has
+             * increased by the number of threads minus the number of search nears with z key.
+             ','line_number':293,'multiline':True]

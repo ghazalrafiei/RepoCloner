@@ -1,0 +1,63 @@
+['text':'*
+ *    Copyright (C) 2023-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * Implementation of a TaskExecutor that provides the ability to schedule RPC/networking on the same
+ * underlying network connection. The PinnedTaskExecutor is constructed from another TaskExecutor,
+ * and uses that TaskExecutor's ThreadPool and NetworkInterface/networking reactor to perform work.
+ * Specifically:
+ * - Functions that schedule work or manage events that happen locally, without going over the
+ *   network, are passed-through to the underlying TaskExecutor (i.e. scheduleWork,
+ *   makeEvent, waitForEvent).
+ * - Functions that involve scheduling RPC/networking are all run on the same underlying
+ *   network-connection (i.e. TCP/Unix Domain Socket).
+ * Note that this means that the PinnedConnectionTaskExecutor can only speak to one host over its
+ * entire lifetime! If you need to speak to a different host, you need a different connection, so
+ * construct a *new* PinnedCursorTaskExecutor from the underlying executor.
+ *
+ * Certain methods are illegal to call. startup() is illegal to call because the TaskExecutor
+ * passed to PinnedConnectionTaskExecutor should be started-up prior to this object's construction,
+ * and no additional startup is needed.
+ * Additionally, diagnostic and network management methods:
+ * - appendDiagnosticBSON()
+ * - appendConnectionStats()
+ * - dropConnections()
+ * - appendNetworkInterfaceStats()
+ * are illegal to call because this TaskExecutor provides a distinct networking API. Gather
+ * diagnostics from the underlying TaskExecutor instead if needed.
+ *
+ * This type uses ScopedTaskExecutor to proxy work to the underlying TaskExecutor it is
+ * constructed from. This means that shutdown() and join() address only tasks dispatched
+ * through this executor, rather than passing through to the underlying executor.
+ *
+ * Note! The executor that this PinnedConnectionTaskExecutor is constructed from _must_
+ * out-life it - i.e. this PinnedConnectionTaskExecutor must be shutdown and joined
+ * before the underlying executor is. This is because this type must have access
+ * to the underlying thread pool to complete cancellation tasks as it shuts down.
+ *
+ * Exhaust commands are not supported at this time.
+ ','line_number':59,'multiline':True]['text':' The provided NetworkInterface should be owned by the provided TaskExecutor, and','line_number':100,'multiline':False]['text':' must outlive this type.','line_number':101,'multiline':False]['text':' Startup is illegal to call, as the provided executor should already be started-up.','line_number':106,'multiline':False]['text':' These pass-through to the underlying TaskExecutor.','line_number':113,'multiline':False]['text':' This type provides special connection-pinning behavior for RPC functionality here.','line_number':125,'multiline':False]['text':' When cancel() is passed a CallbackHandle that was returned from schedule{Work}()/onEvent(),','line_number':136,'multiline':False]['text':' cancellation is passed-through to the underlying executor. If the CallbackHandle was returned','line_number':137,'multiline':False]['text':' from scheduleRemoteCommand then the executor will cancel the RPC attempt.','line_number':138,'multiline':False]['text':' Wait is unimplemented at this time.','line_number':141,'multiline':False]['text':' Illegal to call because the view does not track it's portion of the underlying TaskExecutor's','line_number':145,'multiline':False]['text':' resources.','line_number':146,'multiline':False]['text':' Ensures _stream is initialized with a valid LeasedStream to `target`.','line_number':154,'multiline':False]['text':' If we already have a _stream when this function is called, ensures the','line_number':155,'multiline':False]['text':' remote is `target` and returns a ready-future. Otherwise asynchronously','line_number':156,'multiline':False]['text':' initailizes _stream and returns a future that resolves once _stream is ready.','line_number':157,'multiline':False]['text':' Start processing pending/queued RPCs.','line_number':163,'multiline':False]['text':' CallbackState for RPCs. Non-RPC callbacks use the CallbackState from the _underlyingExecutor.','line_number':166,'multiline':False]['text':' Invoke the RPC and return a future of its response.','line_number':169,'multiline':False]['text':' Alias for an RPC request and the associated CallbackState.','line_number':175,'multiline':False]['text':' Helper to cancel a CallbackState from this executor.','line_number':178,'multiline':False]['text':' Helper that walks the _requestQueue in-order, completing any canceled callbacks, until','line_number':181,'multiline':False]['text':' it finds the first uncanceled one (if any), which it returns.','line_number':182,'multiline':False]['text':' Synchronizes access to the _requestQueue, _stream, and _isDoingNetworking variables, as well','line_number':185,'multiline':False]['text':' as all CallbackState members.','line_number':186,'multiline':False]['text':' Owned by the TaskExecutor backing _executor above. Since ScopedTaskExecutor keeps a','line_number':190,'multiline':False]['text':' shared_ptr to it's backing TaskExecutor, _net will remain valid for at least the lifetime of','line_number':191,'multiline':False]['text':' _executor.','line_number':192,'multiline':False]['text':' This is the same executor that the ScopedTaskExecutor above provides a view over. We keep','line_number':195,'multiline':False]['text':' a pointer to it so that we can run cancellation tasks even after the ScopedTaskExecutor','line_number':196,'multiline':False]['text':' is shut down. This should _only_ be used to guarantee cancellation tasks will run, even','line_number':197,'multiline':False]['text':' after shutdown is called on this type!','line_number':198,'multiline':False]['text':' Queue of pending/not-yet-started RPC requests and corresponding completion callbacks','line_number':201,'multiline':False]['text':' scheduled on this executor.','line_number':202,'multiline':False]['text':' Pinned-connection leased from _underlyingNet to run all RPCs through this executor.','line_number':205,'multiline':False]['text':' Initialized upon the execution of the first scheduled RPC, and subsequently re-used for all','line_number':206,'multiline':False]['text':' RPCs scheduled through this executor.','line_number':207,'multiline':False]['text':' namespace mongo::executor','line_number':216,'multiline':False]

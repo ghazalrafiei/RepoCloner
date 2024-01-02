@@ -1,0 +1,692 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':' AUTOMATIC FLAG VALUE GENERATION START 0 ','line_number':19,'multiline':True]['text':' Flag to __log_openfile() ','line_number':20,'multiline':True]['text':' AUTOMATIC FLAG VALUE GENERATION STOP 32 ','line_number':21,'multiline':True]['text':'
+ * __wt_log_printf --
+ *     Write a text message to the log.
+ ','line_number':23,'multiline':True]['text':'
+ * __log_checksum_match --
+ *     Given a log record, return whether the checksum matches.
+ ','line_number':39,'multiline':True]['text':'
+ * __log_get_files --
+ *     Retrieve the list of all log-related files of the given prefix type.
+ ','line_number':61,'multiline':True]['text':'
+ * __log_get_files_single --
+ *     Retrieve a single log-related file of the given prefix type.
+ ','line_number':81,'multiline':True]['text':'
+ * __log_prealloc_remove --
+ *     Remove all previously created pre-allocated files.
+ ','line_number':102,'multiline':True]['text':'
+     * Clean up any old interim pre-allocated files. We clean up these files because settings may
+     * have changed upon reboot and we want those settings to take effect right away.
+     ','line_number':119,'multiline':True]['text':'
+ * __log_wait_for_earlier_slot --
+ *     Wait for write_lsn to catch up to this slot.
+ ','line_number':140,'multiline':True]['text':'
+         * If we're on a locked path and the write LSN is not advancing, unlock in case an earlier
+         * thread is trying to switch its slot and complete its operation.
+         ','line_number':156,'multiline':True]['text':'
+         * This may not be initialized if we are starting at an older log file version. So only
+         * signal if valid.
+         ','line_number':162,'multiline':True]['text':'
+ * __log_fs_read --
+ *     Wrapper when reading from a log file.
+ ','line_number':177,'multiline':True]['text':'
+ * __log_fs_write --
+ *     Wrapper when writing to a log file. If we're writing to a new log file for the first time
+ *     wait for writes to the previous log file.
+ ','line_number':192,'multiline':True]['text':'
+     * If we're writing into a new log file and we're running in compatibility mode to an older
+     * release, we have to wait for all writes to the previous log file to complete otherwise there
+     * could be a hole at the end of the previous log file that we cannot detect.
+     *
+     * NOTE: Check for a version less than the one writing the system record since we've had a log
+     * version change without any actual file format changes.
+     ','line_number':203,'multiline':True]['text':'
+ * __log_fsync_dir --
+ *     Perform fsync of log->log_dir_fh. Requires log->log_sync_lock to be held by the caller.
+ ','line_number':222,'multiline':True]['text':'
+ * __log_fsync_file --
+ *     Perform fsync of log->log_fh if use_own_fh is false. If use_own_fh is true, perform fsync of
+ *     the file specified in min_lsn (will obtain a new file handle to that log file and close it).
+ *     Requires log->log_sync_lock to be held by the caller.
+ ','line_number':251,'multiline':True]['text':'
+         * Get our own file handle to the log file if requested as it is possible for the file
+         * handle in the log structure to change out from under us and either be NULL or point to a
+         * different file than we want.
+         ','line_number':270,'multiline':True]['text':'
+ * __wt_log_ckpt --
+ *     Record the given LSN as the checkpoint LSN and signal the removal thread as needed.
+ ','line_number':296,'multiline':True]['text':'
+     * If we are storing debugging LSNs to retain additional log files from removal, then rotate the
+     * newest LSN into the array.
+     ','line_number':312,'multiline':True]['text':'
+ * __wt_log_flush_lsn --
+ *     Force out buffered records and return the LSN, either the write_start_lsn or write_lsn
+ *     depending on the argument.
+ ','line_number':325,'multiline':True]['text':'
+ * __wt_log_force_sync --
+ *     Force a sync of the log and files.
+ ','line_number':347,'multiline':True]['text':'
+     * We need to wait for the previous log file to get written to disk before we sync out the
+     * current one and advance the LSN. Signal the worker thread because we know the LSN has moved
+     * into a later log file and there should be a log file ready to close.
+     ','line_number':359,'multiline':True]['text':'
+     * Sync the directory if the log file entry hasn't been written into the directory.
+     ','line_number':370,'multiline':True]['text':'
+     * Sync the log file if needed. Use a new file handle to the log file by setting use_own_fh to
+     * true.
+     ','line_number':375,'multiline':True]['text':'
+ * __wt_log_needs_recovery --
+ *     Return 0 if we encounter a clean shutdown and 1 if recovery must be run in the given
+ *     variable.
+ ','line_number':385,'multiline':True]['text':'
+     * Default is to run recovery always (regardless of whether this connection has logging
+     * enabled).
+     ','line_number':401,'multiline':True]['text':'
+     * See if there are any data modification records between the checkpoint LSN and the end of the
+     * log. If there are none then we can skip recovery.
+     ','line_number':413,'multiline':True]['text':'
+             * The only thing we care about is the rectype.
+             ','line_number':421,'multiline':True]['text':'
+         * If we get to the end of the log, we can skip recovery.
+         ','line_number':429,'multiline':True]['text':'
+         * We should always find the checkpoint LSN as it now points to the beginning of a written
+         * log record. But if we're running recovery on an earlier database we may not. In that
+         * case, we need to run recovery, don't return an error.
+         ','line_number':437,'multiline':True]['text':'
+ * __wt_log_written_reset --
+ *     Interface to reset the amount of log written during this checkpoint period. Called from the
+ *     checkpoint code.
+ ','line_number':451,'multiline':True]['text':'
+ * __wt_log_get_backup_files --
+ *     Retrieve the list of log files for taking a backup, either all of them or only the active
+ *     ones (those that are not candidates for removal). The caller is responsible for freeing the
+ *     directory list returned.
+ ','line_number':467,'multiline':True]['text':'
+     * Capture the next file utilized for writing to the log, before forcing a new log file. This
+     * represents the latest journal file that needs to be copied. Note the checkpoint selected for
+     * backup may be writing to an even later log file. In that case, copying the journal files is
+     * correct, but wasteful.
+     ','line_number':490,'multiline':True]['text':'
+     * Capture the journal file the current checkpoint started in. The current checkpoint or a later
+     * one may be selected for backing up, requiring log files as early as this file. Together with
+     * max_file, this defines the range of journal files to include.
+     ','line_number':498,'multiline':True]['text':'
+     * Force the current slot to get written to the file. Also switch to using a new log file. That
+     * log file will be removed from the list of files returned. New writes will not be included in
+     * the backup.
+     ','line_number':505,'multiline':True]['text':'
+             * Any files not being returned are individually freed and the array adjusted.
+             ','line_number':517,'multiline':True]['text':'
+     * Only free on error. The caller is responsible for calling free once it is done using the
+     * returned list.
+     ','line_number':534,'multiline':True]['text':'
+ * __wt_log_filename --
+ *     Given a log number, return a WT_ITEM of a generated log file name of the given prefix type.
+ ','line_number':545,'multiline':True]['text':'
+ * __wt_log_extract_lognum --
+ *     Given a log file name, extract out the log number.
+ ','line_number':556,'multiline':True]['text':' NOLINTNEXTLINE(cert-err34-c) ','line_number':568,'multiline':True]['text':'
+ * __wt_log_reset --
+ *     Reset the existing log file to after the given file number. Called from recovery when
+ *     toggling logging back on, it was off the previous open but it was on earlier before that
+ *     toggle.
+ ','line_number':574,'multiline':True]['text':'
+     * We know we're single threaded and called from recovery only when toggling logging back on.
+     * Therefore the only log files we have are old and outdated and the new one created when
+     * logging opened before recovery. We have to remove all old log files first and then create the
+     * new one so that log file numbers are contiguous in the file system.
+     ','line_number':598,'multiline':True]['text':' Send in true to update connection creation LSNs. ','line_number':613,'multiline':True]['text':'
+ * __log_prealloc --
+ *     Pre-allocate a log file.
+ ','line_number':621,'multiline':True]['text':'
+     * If the user configured zero filling, pre-allocate the log file manually. Otherwise use the
+     * file extension method to create and zero the log file based on what is available.
+     ','line_number':635,'multiline':True]['text':' If configured to not extend the file, we're done. ','line_number':645,'multiline':True]['text':'
+     * We have exclusive access to the log file and there are no other writes happening
+     * concurrently, so there are no locking issues. We don't need to worry about hot backup because
+     * logging never reduces the length of the file in pre-allocate.
+     ','line_number':649,'multiline':True]['text':'
+ * __log_size_fit --
+ *     Return whether or not recsize will fit in the log file.
+ ','line_number':658,'multiline':True]['text':'
+ * __log_decompress --
+ *     Decompress a log record.
+ ','line_number':674,'multiline':True]['text':'
+     * If checksums were turned off because we're depending on the decompression to fail on any
+     * corrupted data, we'll end up here after corruption happens. If we're salvaging the file, it's
+     * OK, otherwise it's really, really bad.
+     ','line_number':699,'multiline':True]['text':'
+ * __log_decrypt --
+ *     Decrypt a log record.
+ ','line_number':710,'multiline':True]['text':'
+ * __wt_log_fill --
+ *     Copy a thread's log records into the assigned slot.
+ ','line_number':730,'multiline':True]['text':'
+     * Call write or copy into the buffer. For now the offset is the real byte offset. If the offset
+     * becomes a unit of WT_LOG_ALIGN this is where we would multiply by WT_LOG_ALIGN to get the
+     * real file byte offset for write().
+     ','line_number':740,'multiline':True]['text':'
+         * If this is a force or unbuffered write, write it now.
+         ','line_number':748,'multiline':True]['text':'
+ * __log_file_header --
+ *     Create and write a log file header into a file handle. If writing into the main log, it will
+ *     be called locked. If writing into a pre-allocated log, it will be called unlocked.
+ ','line_number':765,'multiline':True]['text':'
+     * Set up the log descriptor record. Use a scratch buffer to get correct alignment for direct
+     * I/O.
+     ','line_number':785,'multiline':True]['text':'
+     * Now that the record is set up, initialize the record header.
+     *
+     * Checksum a little-endian version of the header, and write everything in little-endian format.
+     * The checksum is (potentially) returned in a big-endian format, swap it into place in a
+     * separate step.
+     ','line_number':801,'multiline':True]['text':'
+     * We may recursively call __wt_log_acquire to allocate log space for the log descriptor record.
+     * Call __wt_log_fill to write it, but we do not need to call __wt_log_release because we're not
+     * waiting for any earlier operations to complete.
+     ','line_number':820,'multiline':True]['text':'
+     * Make sure the header gets to disk.
+     ','line_number':833,'multiline':True]['text':'
+ * __log_openfile --
+ *     Open a log file with the given log file number and return the WT_FH.
+ ','line_number':845,'multiline':True]['text':'
+     * If we are creating the file then we use a temporary file name. Otherwise it is a log file
+     * name.
+     ','line_number':859,'multiline':True]['text':'
+ * __log_open_verify --
+ *     Open a log file with the given log file number, verify its header and return various pieces
+ *     of system information about this log file.
+ ','line_number':879,'multiline':True]['text':'
+     * Any operation that fails from here on out indicates corruption that could be salvaged.
+     ','line_number':918,'multiline':True]['text':'
+     * Read in the log file header and verify it.
+     ','line_number':923,'multiline':True]['text':'
+     * We cannot read future log file formats.
+     ','line_number':940,'multiline':True]['text':'
+     * We error if the log version is less than the required minimum or larger than the required
+     * maximum.
+     ','line_number':949,'multiline':True]['text':'
+     * Set up the return values since the header is valid.
+     ','line_number':967,'multiline':True]['text':'
+     * Skip reading in the previous LSN if log file is an old version or if the caller doesn't care
+     * about the LSN. Otherwise read that record in and set up the LSN. We already have a buffer
+     * that is the correct size. Reuse it.
+     ','line_number':973,'multiline':True]['text':'
+     * We have a valid header but the system record is not there. The log ends here. Return without
+     * setting the LSN.
+     ','line_number':984,'multiline':True]['text':'
+     * Return the file handle if needed, otherwise close it.
+     ','line_number':1009,'multiline':True]['text':' Let the caller know this file must be salvaged. ','line_number':1015,'multiline':True]['text':'
+ * __log_record_verify --
+ *     Check that values of the log record header are valid. No byteswap of the header has been done
+ *     at this point.
+ ','line_number':1027,'multiline':True]['text':'
+     * Make our own copy of the header so we can get the bytes in the proper order.
+     ','line_number':1041,'multiline':True]['text':'
+ * __log_alloc_prealloc --
+ *     Look for a pre-allocated log file and rename it to use as the next real log file. Called
+ *     locked.
+ ','line_number':1077,'multiline':True]['text':'
+     * If there are no pre-allocated files, return WT_NOTFOUND.
+     ','line_number':1098,'multiline':True]['text':' We have a file to use. ','line_number':1105,'multiline':True]['text':'
+     * All file setup, writing the header and pre-allocation was done before. We only need to rename
+     * it.
+     ','line_number':1116,'multiline':True]['text':'
+ * __log_newfile --
+ *     Create the next log file and write the file header record into it.
+ ','line_number':1130,'multiline':True]['text':'
+     * Set aside the log file handle to be closed later. Other threads may still be using it to
+     * write to the log. If the log file size is small we could fill a log file before the previous
+     * one is closed. Wait for that to close.
+     ','line_number':1148,'multiline':True]['text':'
+         * Processing slots will conditionally signal the file close server thread. But if we've
+         * tried a while, signal the thread directly here.
+         ','line_number':1156,'multiline':True]['text':'
+     * Note, the file server worker thread requires the LSN be set once the close file handle is
+     * set, force that ordering.
+     ','line_number':1170,'multiline':True]['text':' Paired with an ordered read in the log file server path. ','line_number':1178,'multiline':True]['text':'
+     * If pre-allocating log files look for one; otherwise, or if we don't find one, create a log
+     * file. We can't use pre-allocated log files while a hot backup is in progress: applications
+     * can copy the files in any way they choose, and a log file rename might confuse things.
+     ','line_number':1183,'multiline':True]['text':'
+             * If ret is 0 it means we found a pre-allocated file. If ret is WT_NOTFOUND, create the
+             * new log file and signal the server, we missed our pre-allocation. If ret is non-zero
+             * but not WT_NOTFOUND, return the error.
+             ','line_number':1194,'multiline':True]['text':'
+     * If we need to create the log file, do so now.
+     ','line_number':1209,'multiline':True]['text':'
+         * Increment the missed pre-allocated file counter only if a hot backup is not in progress.
+         * We are deliberately not using pre-allocated log files during backup (see comment above).
+         ','line_number':1213,'multiline':True]['text':'
+     * Since the file system clears the output file handle pointer before searching the handle list
+     * and filling in the new file handle, we must pass in a local file handle. Otherwise there is a
+     * wide window where another thread could see a NULL log file handle.
+     ','line_number':1221,'multiline':True]['text':'
+     * Write the LSN at the end of the last record in the previous log file as the first record in
+     * this log file.
+     ','line_number':1227,'multiline':True]['text':'
+     * We need to setup the LSNs. Set the end LSN and alloc LSN to the end of the header.
+     ','line_number':1235,'multiline':True]['text':'
+     * If we're running the version where we write a system record do so now and update the
+     * alloc_lsn.
+     ','line_number':1239,'multiline':True]['text':'
+     * If we're called from connection creation code, we need to update the LSNs since we're the
+     * only write in progress.
+     ','line_number':1250,'multiline':True]['text':'
+ * __log_set_version --
+ *     Set version related information under lock.
+ ','line_number':1266,'multiline':True]['text':'
+ * __wt_log_set_version --
+ *     Change the version number in logging. Will be done with locking. We need to force the log
+ *     file to advance and remove all old pre-allocated files.
+ ','line_number':1294,'multiline':True]['text':'
+     * The steps are:
+     * - Set up versions and remove files under lock.
+     * - Set a flag so that the next slot change forces a file change.
+     * - Force out the slot that is currently active in the current log.
+     * - Write a log record to force a record into the new log file.
+     ','line_number':1310,'multiline':True]['text':'
+     * A new log file will be used when we force out the earlier slot.
+     ','line_number':1322,'multiline':True]['text':'
+     * We need to write a record to the new version log file so that a potential checkpoint finds
+     * LSNs in that new log file and an remove correctly removes all earlier logs. Write an internal
+     * printf record.
+     ','line_number':1327,'multiline':True]['text':'
+ * __wt_log_acquire --
+ *     Called serially when switching slots. Can be called recursively from __log_newfile when we
+ *     change log files.
+ ','line_number':1339,'multiline':True]['text':'
+     * Add recsize to alloc_lsn. Save our starting LSN where the previous allocation finished for
+     * the release LSN. That way when log files switch, we're waiting for the correct LSN from
+     * outstanding writes.
+     ','line_number':1354,'multiline':True]['text':'
+     * We need to set the release LSN earlier, before a log file change.
+     ','line_number':1360,'multiline':True]['text':'
+     * Make sure that the size can fit in the file. Proactively switch if it cannot. This reduces,
+     * but does not eliminate, log files that exceed the maximum file size. We want to minimize the
+     * risk of an error due to no space.
+     ','line_number':1364,'multiline':True]['text':'
+     * Pre-allocate on the first real write into the log file, if it was just created (i.e. not
+     * pre-allocated).
+     ','line_number':1376,'multiline':True]['text':'
+     * Initialize the slot for activation.
+     ','line_number':1382,'multiline':True]['text':'
+ * __log_truncate_file --
+ *     Truncate a log file to the specified offset. If the underlying file system doesn't support
+ *     truncate then we need to zero out the rest of the file, doing an effective truncate.
+ ','line_number':1390,'multiline':True]['text':'
+ * __log_truncate --
+ *     Truncate the log to the given LSN. If this_log is set, it will only truncate the log file
+ *     indicated in the given LSN. If not set, it will truncate between the given LSN and the
+ *     trunc_lsn. That is, since we pre-allocate log files, it will free that space and allow the
+ *     log to be traversed. We use the trunc_lsn because logging has already opened the new/next log
+ *     file before recovery ran. If salvage_mode is set, we verify headers of log files visited and
+ *     recreate them if they are damaged. This function assumes we are in recovery or other
+ *     dedicated time and not during live running.
+ ','line_number':1419,'multiline':True]['text':'
+     * Truncate the log file to the given LSN.
+     *
+     * It's possible the underlying file system doesn't support truncate (there are existing
+     * examples), which is fine, but we don't want to repeatedly do the setup work just to find that
+     * out every time. Check before doing work, and if there's a not-supported error, turn off
+     * future truncates.
+     ','line_number':1449,'multiline':True]['text':'
+     * If we just want to truncate the current log, return and skip looking for intervening logs.
+     ','line_number':1466,'multiline':True]['text':'
+                 * When salvaging, we verify that the header of the log file is valid. If not,
+                 * create a new, empty one.
+                 ','line_number':1477,'multiline':True]['text':'
+             * If there are intervening files pre-allocated, truncate them to the end of the log
+             * file header.
+             ','line_number':1496,'multiline':True]['text':'
+ * __wt_log_allocfile --
+ *     Given a log number, create a new log file by writing the header, pre-allocating the file and
+ *     moving it to the destination name.
+ ','line_number':1520,'multiline':True]['text':'
+     * Preparing a log file entails creating a temporary file:
+     * - Writing the header.
+     * - Truncating to the offset of the first record.
+     * - Pre-allocating the file if needed.
+     * - Renaming it to the desired file name.
+     ','line_number':1540,'multiline':True]['text':'
+     * Set up the temporary file.
+     ','line_number':1553,'multiline':True]['text':'
+     * Rename it into place and make it available.
+     ','line_number':1563,'multiline':True]['text':'
+ * __wt_log_remove --
+ *     Given a log number, remove that log file.
+ ','line_number':1576,'multiline':True]['text':'
+ * __wt_log_compat_verify --
+ *     Verify the last log when opening for the compatibility settings. This is separate because we
+ *     need to do it very early in the startup process.
+ ','line_number':1595,'multiline':True]['text':'
+ * __wt_log_open --
+ *     Open the appropriate log file for the connection. The purpose is to find the last log file
+ *     that exists, open it and set our initial LSNs to the end of that file. If none exist, call
+ *     __log_newfile to create it.
+ ','line_number':1622,'multiline':True]['text':'
+     * Open up a file handle to the log directory if we haven't.
+     ','line_number':1645,'multiline':True]['text':'
+     * Now look at the log files and set our LSNs.
+     ','line_number':1658,'multiline':True]['text':'
+         * If we have existing log files, check the last log now before we create a new log file so
+         * that we can detect an unsupported version before modifying the file space.
+         ','line_number':1679,'multiline':True]['text':'
+         * If we were asked to salvage and the last log file was indeed corrupt, remove it and try
+         * all over again.
+         ','line_number':1685,'multiline':True]['text':'
+     * Start logging at the beginning of the next log file, no matter where the previous log file
+     * ends.
+     ','line_number':1699,'multiline':True]['text':' If we found log files, save the new state. ','line_number':1708,'multiline':True]['text':'
+         * If we're running in a downgraded mode and there are earlier logs detect if they're at a
+         * higher version. If so, we need to force recovery (to write a full checkpoint) and force
+         * removal to remove all higher version logs.
+         ','line_number':1710,'multiline':True]['text':'
+                 * By sending in a NULL file handle, we don't have to close the file.
+                 ','line_number':1718,'multiline':True]['text':'
+                 * If we find any log file at the wrong version set the flag and we're done.
+                 ','line_number':1722,'multiline':True]['text':'
+ * __wt_log_close --
+ *     Close the log file.
+ ','line_number':1742,'multiline':True]['text':'
+ * __log_has_hole --
+ *     Determine if the current offset represents a hole in the log file (i.e. there is valid data
+ *     somewhere after the hole), or if this is the end of this log file and the remainder of the
+ *     file is zeroes.
+ ','line_number':1779,'multiline':True]['text':'
+     * It can be very slow looking for the last real record in the log in very small chunks. Walk a
+     * megabyte at a time. If we find a part of the log that is not just zeroes we know this log
+     * file has a hole in it.
+     ','line_number':1805,'multiline':True]['text':'
+     * Read in a chunk starting at the given offset. Compare against a known zero byte chunk.
+     ','line_number':1826,'multiline':True]['text':'
+             * Find where the next log record starts after the hole.
+             ','line_number':1834,'multiline':True]['text':'
+             * A presumed log record begins here where the buffer becomes non-zero. If we have
+             * enough of a log record present in the buffer, we either have a valid header or
+             * corruption. Verify the header of this record to determine whether it is just a hole
+             * or corruption.
+             *
+             * We don't bother making this check for backup copies, as records may have their
+             * beginning zeroed, hence the part after a hole may in fact be the middle of the
+             * record.
+             ','line_number':1842,'multiline':True]['text':'
+ * __log_check_partial_write --
+ *     Determine if the log record may be a partial write. If that's possible, return true,
+ *     otherwise false. Since the log file is initially zeroed up to a predetermined size, any
+ *     record that falls within that boundary that ends in one or more zeroes may be partial (or the
+ *     initial record may have been padded with zeroes before writing). The only way we have any
+ *     certainty is if the last byte is non-zero, when that happens, we know that the write cannot
+ *     be partial.
+ ','line_number':1872,'multiline':True]['text':'
+     * We only check the final byte since that's the only way have any certainty. Even if the second
+     * to last byte is non-zero and the last byte is zero, that could still technically be the
+     * result of a partial write, however unlikely it may be.
+     ','line_number':1888,'multiline':True]['text':'
+ * __wt_log_release --
+ *     Release a log slot.
+ ','line_number':1897,'multiline':True]['text':'
+     * Checkpoints can be configured based on amount of log written. Add in this log record to the
+     * sum and if needed, signal the checkpoint condition. The logging subsystem manages the
+     * accumulated field. There is a bit of layering violation here checking the connection ckpt
+     * field and using its condition.
+     ','line_number':1917,'multiline':True]['text':' Write the buffered records ','line_number':1928,'multiline':True]['text':'
+     * If we have to wait for a synchronous operation, we do not pass handling of this slot off to
+     * the worker thread. The caller is responsible for freeing the slot in that case. Otherwise the
+     * worker thread will free it. Make sure the server thread is running as logging can be called
+     * before it starts up.
+     ','line_number':1933,'multiline':True]['text':'
+         * After this point the worker thread owns the slot. There is nothing more to do but return.
+         ','line_number':1944,'multiline':True]['text':'
+         * !!! Signaling the wrlsn_cond condition here results in
+         * worse performance because it causes more scheduling churn
+         * and more walking of the slot pool for a very small number
+         * of slots to process.  Don't signal here.
+         ','line_number':1947,'multiline':True]['text':'
+     * Wait for earlier groups to finish, otherwise there could be holes in the log file.
+     ','line_number':1956,'multiline':True]['text':'
+     * Signal the close thread if needed.
+     ','line_number':1969,'multiline':True]['text':'
+         * Ignore ENOTSUP, but don't try again.
+         ','line_number':1977,'multiline':True]['text':'
+     * Try to consolidate calls to fsync to wait less. Acquire a spin lock so that threads finishing
+     * writing to the log will wait while the current fsync completes and advance log->sync_lsn.
+     ','line_number':1985,'multiline':True]['text':'
+         * We have to wait until earlier log files have finished their sync operations. The most
+         * recent one will set the LSN to the beginning of our file.
+         ','line_number':1990,'multiline':True]['text':'
+         * Record the current end of our update after the lock. That is how far our calls can
+         * guarantee.
+         ','line_number':2000,'multiline':True]['text':'
+         * Check if we have to sync the parent directory. Some combinations of sync flags may result
+         * in the log file not yet stable in its parent directory. Do that now if needed.
+         ','line_number':2005,'multiline':True]['text':'
+         * Sync the log file if needed.
+         ','line_number':2012,'multiline':True]['text':'
+         * Clear the flags before leaving the loop.
+         ','line_number':2018,'multiline':True]['text':'
+ * __log_salvage_message --
+ *     Show messages consistently for a salvageable error.
+ ','line_number':2031,'multiline':True]['text':'
+ * __wt_log_scan --
+ *     Scan the logs, calling a function on each record found.
+ ','line_number':2046,'multiline':True]['text':'
+     * If the caller did not give us a callback function there is nothing to do.
+     ','line_number':2083,'multiline':True]['text':'
+     * Set up the allocation size, starting and ending LSNs. The values for those depend on whether
+     * logging is currently enabled or not.
+     ','line_number':2091,'multiline':True]['text':'
+         * If logging is not configured, we can still print out the log if log files exist. We just
+         * need to set the LSNs from what is in the files versus what is in the live connection.
+         ','line_number':2108,'multiline':True]['text':'
+         * Set allocsize to the minimum alignment it could be. Larger records and larger allocation
+         * boundaries should always be a multiple of this.
+         ','line_number':2112,'multiline':True]['text':'
+         * Offsets must be on allocation boundaries. An invalid LSN from a user should just return
+         * WT_NOTFOUND. It is not an error. But if it is from recovery, we expect valid LSNs so give
+         * more information about that.
+         ','line_number':2132,'multiline':True]['text':'
+         * If the file is in the future it doesn't exist. An invalid LSN from a user should just
+         * return WT_NOTFOUND. It is not an error. But if it is from recovery, we expect valid LSNs
+         * so give more information about that.
+         ','line_number':2144,'multiline':True]['text':'
+         * Log cursors may not know the starting LSN. If an LSN is passed in that it is equal to the
+         * smallest LSN, start from the beginning of the log.
+         ','line_number':2157,'multiline':True]['text':'
+                 * See if there is anything non-zero at the end of this log file.
+                 ','line_number':2182,'multiline':True]['text':'
+             * If we read the last record, go to the next file.
+             ','line_number':2192,'multiline':True]['text':'
+             * Truncate this log file before we move to the next.
+             ','line_number':2198,'multiline':True]['text':'
+             * If we had a partial record, we'll want to break now after closing and truncating.
+             * Although for now log_truncate does not modify the LSN passed in, this code does not
+             * assume it is unmodified after that call which is why it uses the boolean set earlier.
+             ','line_number':2206,'multiline':True]['text':'
+             * Avoid an error message when we reach end of log by checking here.
+             ','line_number':2213,'multiline':True]['text':'
+             * Opening the log file reads with verify sets up the previous LSN from the first
+             * record. This detects a "hole" at the end of the previous log file.
+             ','line_number':2227,'multiline':True]['text':'
+             * If we read a current version log file without a previous LSN record the log ended
+             * after writing that header. We're done.
+             ','line_number':2236,'multiline':True]['text':'
+         * Read the minimum allocation size a record could be. Conditionally set the need_salvage
+         * flag so that if the read fails, we know this is an situation we can salvage.
+         ','line_number':2250,'multiline':True]['text':'
+         * See if we need to read more than the allocation size. We expect that we rarely will have
+         * to read more. Most log records will be fairly small.
+         ','line_number':2258,'multiline':True]['text':'
+         * Log files are pre-allocated. We need to detect the difference between a hole in the file
+         * (where this location would be considered the end of log) and the last record in the log
+         * and we're at the zeroed part of the file. If we find a zeroed record, scan forward in the
+         * log looking for any data. If we detect any we have a hole and stop. Otherwise if the rest
+         * is all zeroes advance to the next file. When recovery finds the end of the log, truncate
+         * the file and remove any later log files that may exist.
+         ','line_number':2266,'multiline':True]['text':' Found a hole. This LSN is the end. ','line_number':2281,'multiline':True]['text':' Last record in log.  Look for more. ','line_number':2283,'multiline':True]['text':'
+             * The log file end could be the middle of this log record. If we have a partially
+             * written record then this is considered the end of the log.
+             ','line_number':2288,'multiline':True]['text':'
+             * We need to round up and read in the full padded record, especially for direct I/O.
+             ','line_number':2296,'multiline':True]['text':'
+         * We read in the record, now verify the checksum. A failed checksum does not imply
+         * corruption, it may be the result of a partial write.
+         ','line_number':2303,'multiline':True]['text':'
+             * A checksum mismatch means we have reached the end of the useful part of the log. This
+             * should be found on the first pass through recovery. In the second pass where we
+             * truncate the log, this is where it should end. Continue processing where possible, so
+             * remember any error returns, but don't skip to the error handler.
+             ','line_number':2310,'multiline':True]['text':'
+             * If the user asked for a specific LSN and it is not a valid LSN, return WT_NOTFOUND.
+             ','line_number':2318,'multiline':True]['text':'
+             * When we have a checksum mismatch, we would like
+             * to determine whether it may be the result of:
+             *  1) some expected corruption that can occur during
+             *     backups
+             *  2) a partial write that can naturally occur when
+             *     an application crashes
+             *  3) some other corruption
+             * so that we can (in case 3) flag cases of file system
+             * or hardware failures. Unfortunately, we have found
+             * on some systems that file system writes may in fact
+             * be lost, and this can readily be triggered with
+             * normal operations. Rather than force users to
+             * salvage in these situations, we merely truncate the
+             * log at this point and issue a message.
+             ','line_number':2324,'multiline':True]['text':'
+                 * It's not a partial write, and we have a bad checksum. We treat it as a corruption
+                 * that must be salvaged.
+                 ','line_number':2344,'multiline':True]['text':'
+                 * It may be a partial write, or it's possible that the header is corrupt. Make a
+                 * sanity check of the log record header.
+                 ','line_number':2352,'multiline':True]['text':'
+         * We have a valid log record. If it is not the log file header, invoke the callback.
+         ','line_number':2366,'multiline':True]['text':'
+             * We need to manage the different buffers here. Buf is the buffer this function uses to
+             * read from the disk. The callback buffer may change based on whether encryption and
+             * compression are used.
+             *
+             * We want to free any buffers from compression and encryption but keep the one we use
+             * for reading.
+             ','line_number':2373,'multiline':True]['text':'
+         * Exit the scanning loop if the next LSN seen is greater than our user set end range LSN.
+         ','line_number':2398,'multiline':True]['text':' Truncate if we're in recovery. ','line_number':2407,'multiline':True]['text':' Preserve prior error and fall through to error handling. ','line_number':2412,'multiline':True]['text':'
+     * If we are salvaging and failed a salvageable operation, then truncate the log at the fail
+     * point.
+     ','line_number':2418,'multiline':True]['text':'
+     * If the first attempt to read a log record results in an error recovery is likely going to
+     * fail. Try to provide a helpful failure message.
+     ','line_number':2429,'multiline':True]['text':'
+     * If the caller wants one record and it is at the end of log, return WT_NOTFOUND.
+     ','line_number':2449,'multiline':True]['text':'
+ * __wt_log_force_write --
+ *     Force a switch and release and write of the current slot. Wrapper function that takes the
+ *     lock.
+ ','line_number':2458,'multiline':True]['text':'
+ * __wt_log_write --
+ *     Write a record into the log, compressing as necessary.
+ ','line_number':2478,'multiline':True]['text':'
+     * An error during opening the logging subsystem can result in it being enabled, but without an
+     * open log file. In that case, just return. We can also have logging opened for reading in a
+     * read-only database and attempt to write a record on close.
+     ','line_number':2500,'multiline':True]['text':' Skip the log header ','line_number':2511,'multiline':True]['text':'
+         * Compute the size needed for the destination buffer. We only allocate enough memory for a
+         * copy of the original by default, if any compressed version is bigger than the original,
+         * we won't use it. However, some compression engines (snappy is one example), may need more
+         * memory because they don't stop just because there's no more memory into which to
+         * compress.
+         ','line_number':2515,'multiline':True]['text':' Skip the header bytes of the destination data. ','line_number':2530,'multiline':True]['text':'
+         * If compression fails, or doesn't gain us at least one unit of allocation, fallback to the
+         * original version. This isn't unexpected: if compression doesn't work for some chunk of
+         * data for some reason (noting likely additional format/header information which compressed
+         * output requires), it just means the uncompressed version is as good as it gets, and
+         * that's what we use.
+         ','line_number':2539,'multiline':True]['text':'
+             * Copy in the skipped header bytes, set the final data size.
+             ','line_number':2553,'multiline':True]['text':'
+         * Allocate enough space for the original record plus the encryption size constant plus the
+         * length we store.
+         ','line_number':2566,'multiline':True]['text':'
+         * Final setup of new buffer. Set the flag for encryption in the record header.
+         ','line_number':2575,'multiline':True]['text':'
+ * __log_write_internal --
+ *     Write a record into the log.
+ ','line_number':2591,'multiline':True]['text':'
+     * Assume the WT_ITEM the caller passed is a WT_LOG_RECORD, which has a header at the beginning
+     * for us to fill in.
+     *
+     * If using direct_io, the caller should pass us an aligned record. But we need to make sure it
+     * is big enough and zero-filled so that we can write the full amount. Do this whether or not
+     * direct_io is in use because it makes the reading code cleaner.
+     ','line_number':2617,'multiline':True]['text':'
+     * If the caller's record only partially fills the necessary space, we need to zero-fill the
+     * remainder.
+     *
+     * The cast is safe, we've already checked to make sure it's in range.
+     ','line_number':2629,'multiline':True]['text':'
+         * Set the last byte of the log record to a non-zero value, that allows us, on the input
+         * side, to tell that a log record was completely written; there couldn't have been a
+         * partial write. That means that any checksum mismatch in those conditions is a log
+         * corruption.
+         *
+         * Without this changed byte, when we see a zeroed last byte, we must always treat a
+         * checksum error as a possible partial write. Since partial writes can happen as a result
+         * of an interrupted process (for example, a shutdown), we must treat a checksum error as a
+         * normal occurrence, and merely the place where the log must be truncated. So any real
+         * corruption within log records is hard to detect as such.
+         *
+         * However, we can only make this modification if there is more than one byte being filled,
+         * as the first zero byte past the actual record is needed to terminate the loop in
+         * txn_commit_apply.
+         *
+         * This is not a log format change, as we only are changing a byte in the padding portion of
+         * a record, and no logging code has ever checked that it is any particular value up to now.
+         ','line_number':2638,'multiline':True]['text':'
+     * Checksum a little-endian version of the header, and write everything in little-endian format.
+     * The checksum is (potentially) returned in a big-endian format, swap it into place in a
+     * separate step.
+     ','line_number':2661,'multiline':True]['text':'
+     * The only time joining a slot should ever return an error is if it detects a panic.
+     ','line_number':2677,'multiline':True]['text':'
+     * If the addition of this record crosses the buffer boundary, switch in a new slot.
+     ','line_number':2682,'multiline':True]['text':'
+     * If we get an error we still need to do proper accounting in the slot fields. XXX On error we
+     * may still need to call release and free.
+     ','line_number':2692,'multiline':True]['text':'
+         * If we are going to wait for this slot to get written, signal the log server thread.
+         *
+         * XXX I've seen times when conditions are NULL.
+         ','line_number':2704,'multiline':True]['text':' Wait for our writes to reach the OS ','line_number':2716,'multiline':True]['text':' Wait for our writes to reach disk ','line_number':2720,'multiline':True]['text':'
+     * If we're synchronous and some thread had an error, we don't know if our write made it out to
+     * the file or not. The error could be before or after us. So, if anyone got an error, we report
+     * it. If we're not synchronous, only report if our own operation got an error.
+     ','line_number':2728,'multiline':True]['text':'
+     * If one of the sync flags is set, assert the proper LSN has moved to match on success.
+     ','line_number':2736,'multiline':True]['text':'
+ * __wt_log_vprintf --
+ *     Write a message into the log.
+ ','line_number':2746,'multiline':True]['text':'
+     * We're writing a record with the type (an integer) followed by a string (NUL-terminated data).
+     * To avoid writing the string into a buffer before copying it, we write the header first, then
+     * the raw bytes of the string.
+     ','line_number':2776,'multiline':True]['text':'
+ * __wt_log_flush --
+ *     Forcibly flush the log to the synchronization level specified. Wait until it has been
+ *     completed.
+ ','line_number':2797,'multiline':True]['text':'
+     * We need to flush out the current slot first to get the real end of log LSN in log->alloc_lsn.
+     ','line_number':2812,'multiline':True]['text':'
+     * If the last write caused a switch to a new log file, we should only wait for the last write
+     * to be flushed. Otherwise, if the workload is single-threaded we could wait here forever
+     * because the write LSN doesn't switch into the new file until it contains a record.
+     ','line_number':2818,'multiline':True]['text':'
+     * Wait until all current outstanding writes have been written to the file system.
+     ','line_number':2826,'multiline':True]['text':'
+     * If the user wants write-no-sync, there is nothing more to do. If the user wants background
+     * sync, set the LSN and we're done. If the user wants sync, force it now.
+     ','line_number':2836,'multiline':True]

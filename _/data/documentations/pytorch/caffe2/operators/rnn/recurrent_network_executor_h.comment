@@ -1,0 +1,41 @@
+['text':'*
+ * RecurrentNetworkExecutor is a specialized runtime for recurrent
+ * neural networks (RNNs). It is invoked from the RecurrentNetworkOp
+ * and RecurrentNetworkGradientOp.
+ *
+ * Its main benefit over running each RNN timestep as a separate net
+ * is that it can run ops in subsequent timesteps in parallel when possible.
+ * For example, multi-layer LSTMs allow for timestep parallelism because
+ * next timestep's lower layer can start executing at the same time as
+ * the same timestep's upper layer.
+ *
+ * There are two implementations of the RNN executor: one for CPUs
+ * (ThreadedRecurrentNetworkExecutor) and another for GPUs
+ * (CUDARecurrentNetworkExecutor).
+ ','line_number':17,'multiline':True]['text':' In the case when net def specifies device option, final device option','line_number':44,'multiline':False]['text':' will be equal to merge of operator and net def device options, with','line_number':45,'multiline':False]['text':' preference to settings from the operator.','line_number':46,'multiline':False]['text':'*
+   * Callers must call EnsureTimestepInitialized before starting execution
+   * for each of the relevant timesteps. If timestep was initialized before,
+   * this is a no-op. First time this is called the dependencies of the
+   * operators in timestep are analyzed, and that incurs higher overhead
+   * than subsequent calls.
+   ','line_number':69,'multiline':True]['text':' Firrt invocation -- compute dependencies','line_number':82,'multiline':False]['text':' Label ops based on whether they contain reference to the timestep','line_number':85,'multiline':False]['text':' blob. This is an optimization to avoid string comparisons later.','line_number':86,'multiline':False]['text':' Initialize timestep if it is not initialized','line_number':104,'multiline':False]['text':' Initialize empty timestep ops vectors for each timestep preceding','line_number':107,'multiline':False]['text':' this.','line_number':108,'multiline':False]['text':' Keep track of workspaces for optimization in forward-only case','line_number':114,'multiline':False]['text':' Create a specific timestep blob for this timestep. This is to','line_number':120,'multiline':False]['text':' avoid conflicting timestep blobs when reusing workspaces, as with','line_number':121,'multiline':False]['text':' the forward-only mode.','line_number':122,'multiline':False]['text':' Copy the operators from template','line_number':130,'multiline':False]['text':' For ops that have the timestep blob as an input we need to','line_number':134,'multiline':False]['text':' create a new operator definition with the timestep-specific','line_number':135,'multiline':False]['text':' timestep blob. This is required to avoid race conditions when','line_number':136,'multiline':False]['text':' multiple timesteps execute in parallel.','line_number':137,'multiline':False]['text':' Optimization for forward-only models when we can share workspaces','line_number':156,'multiline':False]['text':' with timesteps: then we can just copy the op reference.','line_number':157,'multiline':False]['text':' Otherwise, we need to create a brand new op with the workspace','line_number':163,'multiline':False]['text':' owned by this timestep.','line_number':164,'multiline':False]['text':'*
+   * Set limit for the number of timesteps that run in parallel. Useful
+   * for forward-only execution when we rotate workspaces over timesteps,
+   * i.e when timestep[t] and timestep[t + p] have same workspace.
+   ','line_number':182,'multiline':True]['text':' Utility method to check if any of the op inputs or control inputs','line_number':202,'multiline':False]['text':' contain given blob 'input'','line_number':203,'multiline':False]['text':' Return all outbound dependencies of an op. Special case for','line_number':218,'multiline':False]['text':' rnn dependencies, that are set in recurrent_network_op.','line_number':219,'multiline':False]['text':'*
+   * Calculate dependencies of this op, for the ops following it in this
+   * timestep and also for the next timestep. Removes redundant dependencies.
+   ','line_number':234,'multiline':True]['text':' Now we can take the deps of this ops and not','line_number':257,'multiline':False]['text':' add them anymore','line_number':258,'multiline':False]['text':' This op produces output of the original op, so the dependency','line_number':265,'multiline':False]['text':' passed through that op','line_number':266,'multiline':False]['text':'*
+   * Add dependencies to ops in the next timestep that would write an op
+   * that this op has as an input or output. This is special for RNNs,
+   * since we can have ops running in different timesteps concurrently.
+   * Also, we need to check ops that output a blob that is input of
+   * of the op in question.
+   ','line_number':276,'multiline':True]['text':'*
+   * Calculate the dependencies between ops inside timestep and across
+   * timestep. These are store in timestep_ops_ vector that is copied
+   * for each timestep.
+   ','line_number':313,'multiline':True]['text':' Then see which outputs appear as inputs, and those are','line_number':322,'multiline':False]['text':' the internal blobs.','line_number':323,'multiline':False]['text':' Add recurrent dependencies as 'outputs' for this op','line_number':330,'multiline':False]['text':' Compute dependencies of this op.','line_number':340,'multiline':False]['text':' Race conditions arise when operator writes a blob that is','line_number':349,'multiline':False]['text':' being read by another.','line_number':350,'multiline':False]['text':' Sort in ascending order of dependency distance. If op','line_number':360,'multiline':False]['text':' j > i, then distance is j - i. But if j < i, then distance','line_number':361,'multiline':False]['text':' from i to j passes the timestep boundary and is j + num ops - i.','line_number':362,'multiline':False]['text':' Update dependency counts','line_number':381,'multiline':False]['text':' Find ops that have no recurrent inputs, and bind them','line_number':393,'multiline':False]['text':' to the last op of the timestep. If there is only one op','line_number':394,'multiline':False]['text':' in the step net, then it will depend on itself. Note that','line_number':395,'multiline':False]['text':' we do not increase the dynamic input counter.','line_number':396,'multiline':False]['text':' compute parents','line_number':406,'multiline':False]['text':'*
+   * For debug purposes, print the dependency structure. Set
+   * rnn_executor_debug=1 in the RecurrentNetworkOp to enable.
+   ','line_number':416,'multiline':True]['text':' namespace caffe2','line_number':529,'multiline':False]['text':' CAFFE2_OPERATORS_RECURRENT_NETWORK_EXECUTOR_H_','line_number':531,'multiline':False]

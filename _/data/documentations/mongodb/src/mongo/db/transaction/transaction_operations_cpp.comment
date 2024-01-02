@@ -1,0 +1,41 @@
+['text':'*
+ *    Copyright (C) 2022-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * Returns operations that can fit into an "applyOps" entry. The returned operations are
+ * serialized to BSON. The operations are given by range ['operationsBegin', 'operationsEnd').
+ * - Multi-document transactions follow the following constraints for fitting the operations:
+ *    (1) the resulting "applyOps" entry shouldn't exceed the 16MB limit, unless only one operation
+ *          is allocated to it;
+ *    (2) the number of operations is not larger than the maximum number of transaction statements
+ *          allowed in one entry as defined by
+ *          'gMaxNumberOfTransactionOperationsInSingleOplogEntry'.
+ * - Batched writes (WUOWs that pack writes into a single applyOps outside of a multi-doc
+ *    transaction) are exempt from the constraints above, but instead are subject to one:
+ *    (1) If the operations cannot be packed into a single applyOps that's within the BSON size
+ *         limit (16MB), the batched write will fail with TransactionTooLarge.
+ ','line_number':54,'multiline':True]['text':' Add BSON array element overhead since operations will ultimately be packed into BSON','line_number':91,'multiline':False]['text':' array.','line_number':92,'multiline':False]['text':' namespace','line_number':100,'multiline':False]['text':' static','line_number':104,'multiline':False]['text':' BSONArrayBuilder will throw a BSONObjectTooLarge exception if we exceeded the max BSON','line_number':126,'multiline':False]['text':' size.','line_number':127,'multiline':False]['text':' Change the error code to TransactionTooLarge if it is BSONObjectTooLarge.','line_number':130,'multiline':False]['text':' If the addOperation fails, we need to remove any statement IDs inserted.','line_number':166,'multiline':False]['text':' The pre-image size is always added to the collection transaction size, but','line_number':183,'multiline':False]['text':' there are additional conditions for adding the pre-image to','line_number':184,'multiline':False]['text':' '_numberOfPrePostImagesToWrite'. See SERVER-59694.','line_number':185,'multiline':False]['text':' The post-image, if present, is always included in the size and pre/post image counters.','line_number':194,'multiline':False]['text':' No-ops can't modify data, so there's no need to check if they involved a temporary','line_number':219,'multiline':False]['text':' collection.','line_number':220,'multiline':False]['text':' Ignore operations without collection UUIDs. No need for invariant.','line_number':224,'multiline':False]['text':'applyOpsEntries=','line_number':243,'multiline':True]['text':'numberOfOplogSlotsUsed=','line_number':244,'multiline':True]['text':'numOperationsWithNeedsRetryImage=','line_number':245,'multiline':True]['text':' Assign operations to "applyOps" entries.','line_number':262,'multiline':False]['text':' Reserve a slot for a forged no-op entry.','line_number':269,'multiline':False]['text':' In the special case of writing the implicit 'prepare' oplog entry, we use the last reserved','line_number':279,'multiline':False]['text':' oplog slot. This may mean we skipped over some reserved slots, but there's no harm in that.','line_number':280,'multiline':False]['text':'numberOfOplogSlotsUsed=','line_number':285,'multiline':True]['text':'numOperationsWithNeedsRetryImage=','line_number':286,'multiline':True]['text':' Each entry in a chain of applyOps contains a 'prevOpTime' field that serves as a back','line_number':298,'multiline':False]['text':' pointer to the previous entry.','line_number':299,'multiline':False]['text':' The first entry will always have a null op time with term -1 and a timestamp containing','line_number':300,'multiline':False]['text':' 0 seconds and 0 for the increment component.','line_number':301,'multiline':False]['text':' For the atomic applyOps format used for batched writes, any value in this field will be','line_number':302,'multiline':False]['text':' rejected during secondary oplog application in the form of an invariant, so it is important','line_number':303,'multiline':False]['text':' for 'logApplyOpsFn' to remove this field before writing to the actual oplog collection.','line_number':304,'multiline':False]['text':' Stores the statement ids of all write statements in the transaction.','line_number':307,'multiline':False]['text':' At the beginning of each loop iteration below, 'stmtsIter' will always point to the','line_number':310,'multiline':False]['text':' first statement of the sequence of remaining, unpacked transaction statements. If all','line_number':311,'multiline':False]['text':' statements have been packed, it should point to stmts.end(), which is the loop's','line_number':312,'multiline':False]['text':' termination condition.','line_number':313,'multiline':False]['text':' If we packed the last op, then the next oplog entry we log should be the implicit','line_number':333,'multiline':False]['text':' commit or implicit prepare, i.e. we omit the 'partialTxn' field.','line_number':334,'multiline':False]['text':' A 'prepare' oplog entry should never include a 'partialTxn' field.','line_number':350,'multiline':False]['text':' The 'count' field gives the total number of individual operations in the','line_number':359,'multiline':False]['text':' transaction, and is included on a non-initial implicit commit or prepare entry.','line_number':360,'multiline':False]['text':' This field is used by the oplog application logic on secondary nodes to determine','line_number':361,'multiline':False]['text':' how many operations to apply in the same batch without having to step through','line_number':362,'multiline':False]['text':' all the oplog entries in an applyOps chain.','line_number':363,'multiline':False]['text':' The 'count' field is redundant for single entry applyOps operations because','line_number':364,'multiline':False]['text':' the number of operations can be derived from the length of the array in the','line_number':365,'multiline':False]['text':' 'applyOps' field.','line_number':366,'multiline':False]['text':' See SERVER-40676 and SERVER-40678.','line_number':367,'multiline':False]['text':' TODO SERVER-69286: replace this temporary fix to set the top-level tenantId to the','line_number':380,'multiline':False]['text':' tenantId on the first op in the list','line_number':381,'multiline':False]['text':' Advance the iterator to the beginning of the remaining unpacked statements.','line_number':398,'multiline':False]['text':' namespace mongo','line_number':415,'multiline':False]

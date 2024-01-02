@@ -1,0 +1,75 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':' Cells are aligned to CellAlignShift, so the largest tagged null pointer is:','line_number':39,'multiline':False]['text':'
+ * The minimum cell size ends up as twice the cell alignment because the mark
+ * bitmap contains one bit per CellBytesPerMarkBit bytes (which is equal to
+ * CellAlignBytes) and we need two mark bits per cell.
+ ','line_number':42,'multiline':True]['text':'
+ * A FreeSpan represents a contiguous sequence of free cells in an Arena. It
+ * can take two forms.
+ *
+ * - In an empty span, |first| and |last| are both zero.
+ *
+ * - In a non-empty span, |first| is the address of the first free thing in the
+ *   span, and |last| is the address of the last free thing in the span.
+ *   Furthermore, the memory pointed to by |last| holds a FreeSpan structure
+ *   that points to the next span (which may be empty); this works because
+ *   sizeof(FreeSpan) is less than the smallest thingSize.
+ ','line_number':52,'multiline':True]['text':' This inits just |first| and |last|; if the span is non-empty it doesn't','line_number':73,'multiline':False]['text':' do anything with the next span stored at |last|.','line_number':74,'multiline':False]['text':' This sets |first| and |last|, and also sets the next span stored at','line_number':86,'multiline':False]['text':' |last| as empty. (As a result, |firstArg| and |lastArg| cannot represent','line_number':87,'multiline':False]['text':' an empty span.)','line_number':88,'multiline':False]['text':' Like nextSpan(), but no checking of the following span is done.','line_number':105,'multiline':False]['text':' Eschew the usual checks, because this might be the placeholder span.','line_number':117,'multiline':False]['text':' If this is somehow an invalid, non-empty span, checkSpan() will catch it.','line_number':118,'multiline':False]['text':' We have space for at least two more things, so do a simple','line_number':123,'multiline':False]['text':' bump-allocate.','line_number':124,'multiline':False]['text':' The last space points to the next free span (which may be empty).','line_number':127,'multiline':False]['text':' The span is empty.','line_number':132,'multiline':False]['text':'
+ * Arenas are the allocation units of the tenured heap in the GC. An arena
+ * is 4kiB in size and 4kiB-aligned. It starts with several header fields
+ * followed by some bytes of padding. The remainder of the arena is filled
+ * with GC things of a particular AllocKind. The padding ensures that the
+ * GC thing array ends exactly at the end of the arena:
+ *
+ * <----------------------------------------------> = ArenaSize bytes
+ * +---------------+---------+----+----+-----+----+
+ * | header fields | padding | T0 | T1 | ... | Tn |
+ * +---------------+---------+----+----+-----+----+
+ * <-------------------------> = first thing offset
+ ','line_number':146,'multiline':True]['text':'
+   * The first span of free things in the arena. Most of these spans are
+   * stored as offsets in free regions of the data array, and most operations
+   * on FreeSpans take an Arena pointer for safety. However, the FreeSpans
+   * used for allocation are stored here, at the start of an Arena, and use
+   * their own address to grab the next span within the same Arena.
+   ','line_number':163,'multiline':True]['text':'
+   * One of the AllocKind constants or AllocKind::LIMIT when the arena does
+   * not contain any GC things and is on the list of empty arenas in the GC
+   * chunk.
+   ','line_number':173,'multiline':True]['text':'
+   * The zone that this Arena is contained within, when allocated. The offset
+   * of this field must match the ArenaZoneOffset stored in js/HeapAPI.h,
+   * as is statically asserted below.
+   ','line_number':180,'multiline':True]['text':'
+   * Arena::next has two purposes: when unallocated, it points to the next
+   * available Arena. When allocated, it points to the next Arena in the same
+   * zone and with the same alloc kind.
+   ','line_number':187,'multiline':True]['text':'
+   * True until the arena is swept for the first time.
+   ','line_number':203,'multiline':True]['text':'
+   * When recursive marking uses too much stack we delay marking of arenas and
+   * link them into a list for later processing. This uses the following fields.
+   ','line_number':208,'multiline':True]['text':'
+     * For arenas in zones other than the atoms zone, if non-null, points
+     * to an ArenaCellSet that represents the set of cells in this arena
+     * that are in the nursery's store buffer.
+     ','line_number':218,'multiline':True]['text':'
+     * For arenas in the atoms zone, the starting index into zone atom
+     * marking bitmaps (see AtomMarking.h) of the things in this zone.
+     * Atoms never refer to nursery things, so no store buffer index is
+     * needed.
+     ','line_number':225,'multiline':True]['text':'
+   * The size of data should be |ArenaSize - offsetof(data)|, but the offset
+   * is not yet known to the compiler, so we do it by hand. |firstFreeSpan|
+   * takes up 8 bytes on 64-bit due to alignment requirements; the rest are
+   * obvious. This constant is stored in js/HeapAPI.h.
+   ','line_number':235,'multiline':True]['text':' Sets |firstFreeSpan| to the Arena's entire valid range, and','line_number':245,'multiline':False]['text':' also sets the next span stored at |firstFreeSpan.last| as empty.','line_number':246,'multiline':False]['text':' Initialize an arena to its unallocated state. For arenas that were','line_number':255,'multiline':False]['text':' previously allocated for some zone, use release() instead.','line_number':256,'multiline':False]['text':' Poison zone pointer to highlight UAF on released arenas in crash data.','line_number':260,'multiline':False]['text':' Return an allocated arena to its unallocated state.','line_number':274,'multiline':False]['text':' Arena is empty if its first span covers the whole arena.','line_number':324,'multiline':False]['text':' If the thing comes before the current span, it's not free. ','line_number':350,'multiline':True]['text':' If we find it before the end of the span, it's free. ','line_number':355,'multiline':True]['text':' Things ends at the arena end. ','line_number':364,'multiline':True]['text':' If there's a following span, it must have a higher address,','line_number':472,'multiline':False]['text':' and the gap must be at least 2 * thingSize.','line_number':473,'multiline':False]['text':' Mark bitmap API:','line_number':495,'multiline':False]['text':' The return value indicates if the cell went from unmarked to marked.','line_number':519,'multiline':False]['text':'
+     * We use getMarkWordAndMask to recalculate both mask and word as
+     * doing just mask << color may overflow the mask.
+     ','line_number':531,'multiline':True]['text':'
+ * A chunk in the tenured heap. TenuredChunks contain arenas and associated data
+ * structures (mark bitmap, delayed marking state).
+ ','line_number':598,'multiline':True]['text':' This will decommit each unused not-already decommitted arena. It performs a','line_number':654,'multiline':False]['text':' system call for each arena but is only used during OOM.','line_number':655,'multiline':False]['text':' Unlink and return the freeArenasHead. ','line_number':661,'multiline':True]['text':' Search for a decommitted page to allocate. ','line_number':669,'multiline':True]['text':' Add Arenas located in the page of pageIndex to the free list.','line_number':675,'multiline':False]['text':' Mark areans located in the same page of arena as decommitted.','line_number':677,'multiline':False]['text':' Rebuild info.freeArenasHead by ascending order of arenas' address.','line_number':684,'multiline':False]['text':' Check if the page is free.','line_number':687,'multiline':False]['text':' Check the arena from freeArenasList is located in a free page.','line_number':689,'multiline':False]['text':' Unlike the isPageFree(size_t) version, this isPageFree(Arena*) will see the','line_number':690,'multiline':False]['text':' following arenas from the freeArenasHead are also located in the same page,','line_number':691,'multiline':False]['text':' to prevent not to access the arenas mprotect'ed during compaction in debug','line_number':692,'multiline':False]['text':' build.','line_number':693,'multiline':False]['text':' Get the page index of the arena.','line_number':696,'multiline':False]['text':' Cell header stored before all nursery cells.','line_number':729,'multiline':False]['text':' Store zone pointer with the trace kind in the lowest three bits.','line_number':731,'multiline':False]['text':' We only need to store a subset of trace kinds so this doesn't cover the','line_number':734,'multiline':False]['text':' full range.','line_number':735,'multiline':False]['text':' namespace gc ','line_number':770,'multiline':True]['text':' Utility functions meant to be called from an interactive debugger.','line_number':774,'multiline':False]['text':' Get the mark color for a cell, in a way easily usable from a debugger.','line_number':782,'multiline':False]['text':' Sample usage from gdb:','line_number':785,'multiline':False]['text':'','line_number':786,'multiline':False]['text':'   (gdb) p $word = js::debug::GetMarkWordAddress(obj)','line_number':787,'multiline':False]['text':'   $1 = (uintptr_t *) 0x7fa56d5fe360','line_number':788,'multiline':False]['text':'   (gdb) p/x $mask = js::debug::GetMarkMask(obj, js::gc::GRAY)','line_number':789,'multiline':False]['text':'   $2 = 0x200000000','line_number':790,'multiline':False]['text':'   (gdb) watch *$word','line_number':791,'multiline':False]['text':'   Hardware watchpoint 7: *$word','line_number':792,'multiline':False]['text':'   (gdb) cond 7 *$word & $mask','line_number':793,'multiline':False]['text':'   (gdb) cont','line_number':794,'multiline':False]['text':'','line_number':795,'multiline':False]['text':' Note that this is *not* a watchpoint on a single bit. It is a watchpoint on','line_number':796,'multiline':False]['text':' the whole word, which will trigger whenever the word changes and the','line_number':797,'multiline':False]['text':' selected bit is set after the change.','line_number':798,'multiline':False]['text':'','line_number':799,'multiline':False]['text':' So if the bit changing is the desired one, this is exactly what you want.','line_number':800,'multiline':False]['text':' But if a different bit changes (either set or cleared), you may still stop','line_number':801,'multiline':False]['text':' execution if the $mask bit happened to already be set. gdb does not expose','line_number':802,'multiline':False]['text':' enough information to restrict the watchpoint to just a single bit.','line_number':803,'multiline':False]['text':' Return the address of the word containing the mark bits for the given cell,','line_number':805,'multiline':False]['text':' or nullptr if the cell is in the nursery.','line_number':806,'multiline':False]['text':' Return the mask for the given cell and color bit, or 0 if the cell is in the','line_number':809,'multiline':False]['text':' nursery.','line_number':810,'multiline':False]['text':' namespace debug ','line_number':813,'multiline':True]['text':' namespace js ','line_number':814,'multiline':True]['text':' gc_Heap_h ','line_number':816,'multiline':True]

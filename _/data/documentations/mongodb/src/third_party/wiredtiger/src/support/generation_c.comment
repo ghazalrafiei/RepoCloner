@@ -1,0 +1,121 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * WiredTiger uses generations to manage various resources. Threads publish a current generation
+ * before accessing a resource, and clear it when they are done. For example, a thread wanting to
+ * replace an object in memory replaces the object and increments the object's generation. Once no
+ * threads have the previous generation published, it is safe to discard the previous version of the
+ * object.
+ ','line_number':11,'multiline':True]['text':'
+ * __gen_name --
+ *     Return the generation name.
+ ','line_number':19,'multiline':True]['text':'
+ * __wt_gen_init --
+ *     Initialize the connection's generations.
+ ','line_number':43,'multiline':True]['text':'
+     * All generations start at 1, a session with a generation of 0 isn't using the resource.
+     ','line_number':52,'multiline':True]['text':' Ensure threads see the state change. ','line_number':58,'multiline':True]['text':'
+ * __wt_gen --
+ *     Return the resource's generation.
+ ','line_number':62,'multiline':True]['text':'
+ * __wt_gen_next --
+ *     Switch the resource to its next generation.
+ ','line_number':72,'multiline':True]['text':'
+ * __wt_gen_next_drain --
+ *     Switch the resource to its next generation, then wait for it to drain.
+ ','line_number':86,'multiline':True]['text':'
+ * __gen_drain_callback --
+ *     Wait for single session's generation to drain. Callback from the session array walk.
+ ','line_number':100,'multiline':True]['text':' Ensure we only read the value once. ','line_number':120,'multiline':True]['text':'
+         * The generation argument is newer than the limit. Wait for threads in generations older
+         * than the argument generation, threads in argument generations are OK.
+         *
+         * The thread's generation may be 0 (that is, not set).
+         ','line_number':123,'multiline':True]['text':'
+             * We turn on additional logging just before generation drain times out, but it's
+             * possible that we get unblocked after increasing the traces but before hitting the
+             * timeout. If this occurs set verbose levels back to their original values so we can
+             * continue normal operation.
+             ','line_number':131,'multiline':True]['text':' If we're waiting on ourselves, we're deadlocked. ','line_number':151,'multiline':True]['text':'
+         * The pause count is cumulative, quit spinning if it's not doing us any good, that can
+         * happen in generations that don't move quickly.
+         ','line_number':158,'multiline':True]['text':'
+         * If we wait for more than a minute, log the event. In diagnostic mode, abort if we ever
+         * wait more than the configured timeout.
+         ','line_number':167,'multiline':True]['text':' If there is no timeout, there is nothing else to do. ','line_number':185,'multiline':True]['text':' In diagnostic mode, enable extra logs 20ms before reaching the timeout. ','line_number':190,'multiline':True]['text':' Now we have enabled more logs, spin another time to get some information. ','line_number':210,'multiline':True]['text':'
+ * __wt_gen_drain --
+ *     Wait for the resource to drain.
+ ','line_number':225,'multiline':True]['text':'
+ * __gen_oldest_callback --
+ *     Check a single session's generation to find the oldest. Callback from the session array walk.
+ ','line_number':242,'multiline':True]['text':'
+ * __gen_oldest --
+ *     Return the oldest generation in use for the resource.
+ ','line_number':264,'multiline':True]['text':'
+     * We need to order the read of the connection generation before the read of the session
+     * generation. If the session generation read is ordered before the connection generation read
+     * it could read an earlier session generation value. This would then violate the acquisition
+     * semantics and could result in us reading 0 for the session generation when it is non-zero.
+     ','line_number':278,'multiline':True]['text':'
+ * __gen_active_callback --
+ *     Check if a session's generation is relevant given a specific generation. Callback from the
+ *     session array walk.
+ ','line_number':291,'multiline':True]['text':'
+ * __wt_gen_active --
+ *     Return if a specified generation is in use for the resource.
+ ','line_number':315,'multiline':True]['text':'
+ * __wt_session_gen --
+ *     Return the thread's resource generation.
+ ','line_number':334,'multiline':True]['text':'
+ * __wt_session_gen_enter --
+ *     Publish a thread's resource generation.
+ ','line_number':344,'multiline':True]['text':'
+     * Don't enter a generation we're already in, it will likely result in code intended to be
+     * protected by a generation running outside one.
+     ','line_number':351,'multiline':True]['text':'
+     * Assign the thread's resource generation and publish it, ensuring threads waiting on a
+     * resource to drain see the new value. Check we haven't raced with a generation update after
+     * publishing, we rely on the published value not being missed when scanning for the oldest
+     * generation and for draining.
+     *
+     * This requires a full barrier as the second read of the connection generation needs to be
+     * ordered after the write of our session's generation. If it is reordered it could be read, for
+     * example before we do the first read. This would make re-checking redundant and in this case
+     * can result in the generation drain and generation oldest code not working correctly.
+     ','line_number':359,'multiline':True]['text':'
+ * __wt_session_gen_leave --
+ *     Leave a thread's resource generation.
+ ','line_number':376,'multiline':True]['text':' Ensure writes made by this thread are visible. ','line_number':386,'multiline':True]['text':' Let threads waiting for the resource to drain proceed quickly. ','line_number':389,'multiline':True]['text':'
+ * __stash_discard --
+ *     Discard any memory from a session stash that we can.
+ ','line_number':393,'multiline':True]['text':' Get the resource's oldest generation. ','line_number':409,'multiline':True]['text':'
+         * The list is expected to be in generation-sorted order, quit as soon as we find a object
+         * we can't discard.
+         ','line_number':415,'multiline':True]['text':'
+         * It's a bad thing if another thread is in this memory after we free it, make sure nothing
+         * good happens to that thread.
+         ','line_number':425,'multiline':True]['text':'
+     * If there are enough free slots at the beginning of the list, shuffle everything down.
+     ','line_number':432,'multiline':True]['text':'
+ * __wt_stash_discard --
+ *     Discard any memory from a session stash that we can.
+ ','line_number':440,'multiline':True]['text':'
+ * __wt_stash_add --
+ *     Add a new entry into a session stash list.
+ ','line_number':457,'multiline':True]['text':' Grow the list as necessary. ','line_number':471,'multiline':True]['text':'
+     * If no caller stashes memory with a lower generation than a previously stashed object, the
+     * list is in generation-sorted order and discarding can be faster. (An error won't cause
+     * problems other than we might not discard stashed objects as soon as we otherwise would have.)
+     ','line_number':475,'multiline':True]['text':' See if we can free any previous entries. ','line_number':488,'multiline':True]['text':'
+ * __wt_stash_discard_all --
+ *     Discard all memory from a session's stash.
+ ','line_number':495,'multiline':True]['text':'
+     * This function is called during WT_CONNECTION.close to discard any memory that remains. For
+     * that reason, we take two WT_SESSION_IMPL arguments: session_safe is still linked to the
+     * WT_CONNECTION and can be safely used for calls to other WiredTiger functions, while session
+     * is the WT_SESSION_IMPL we're cleaning up.
+     ','line_number':507,'multiline':True]

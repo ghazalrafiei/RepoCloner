@@ -1,0 +1,554 @@
+['text':' for PyArray_SetObjectsToNone ','line_number':25,'multiline':True]['text':' for array_item_asarray ','line_number':32,'multiline':True]['text':' for npy_mul_sizes_with_overflow ','line_number':33,'multiline':True]['text':'
+ * Reading from a file or a string.
+ *
+ * As much as possible, we try to use the same code for both files and strings,
+ * so the semantics for fromstring and fromfile are the same, especially with
+ * regards to the handling of text representations.
+ ','line_number':42,'multiline':True]['text':'
+ * Scanning function for next element parsing and separator skipping.
+ * These functions return:
+ *   - 0 to indicate more data to read
+ *   - -1 when reading stopped at the end of the string/file
+ *   - -2 when reading stopped before the end was reached.
+ *
+ * The dtype specific parsing functions may set the python error state
+ * (they have to get the GIL first) additionally.
+ ','line_number':50,'multiline':True]['text':' null terminated ','line_number':67,'multiline':True]['text':' fixed length ','line_number':70,'multiline':True]['text':'
+     * fromstr always returns 0 for basic dtypes; s points to the end of the
+     * parsed string. If s is not changed an error occurred or the end was
+     * reached.
+     ','line_number':81,'multiline':True]['text':' Nothing read, could be end of string or an error (or both) ','line_number':87,'multiline':True]['text':' Stop the iteration if we read far enough ','line_number':95,'multiline':True]['text':' the NULL argument is for backwards-compatibility ','line_number':105,'multiline':True]['text':' r can be EOF or the number of items read (0 or 1) ','line_number':107,'multiline':True]['text':' unable to read more, but EOF not reached indicating an error. ','line_number':115,'multiline':True]['text':'
+ * Remove multiple whitespace from the separator, and add a space to the
+ * beginning and end. This simplifies the separator-skipping code below.
+ ','line_number':120,'multiline':True]['text':' add space to front if there isn't one ','line_number':135,'multiline':True]['text':' add space to end if there isn't one ','line_number':158,'multiline':True]['text':'
+ * Assuming that the separator is the next bit in the string (file), skip it.
+ *
+ * Single spaces in the separator are matched to arbitrary-long sequences
+ * of whitespace in the input. If the separator consists only of spaces,
+ * it matches one or more whitespace characters.
+ *
+ * If we can't match the separator, return -2.
+ * If we hit the end of the string (file), return -1.
+ * Otherwise, return 0.
+ ','line_number':167,'multiline':True]['text':' matched separator ','line_number':192,'multiline':True]['text':' separator was whitespace wildcard that didn't match ','line_number':197,'multiline':True]['text':' whitespace wildcard ','line_number':203,'multiline':True]['text':' matched separator ','line_number':238,'multiline':True]['text':' separator was whitespace wildcard that didn't match ','line_number':243,'multiline':True]['text':' whitespace wildcard ','line_number':249,'multiline':True]['text':'
+ * Change a sub-array field to the base descriptor
+ * and update the dimensions and strides
+ * appropriately.  Dimensions and strides are added
+ * to the end.
+ *
+ * Strides are only added if given (because data is given).
+ ','line_number':271,'multiline':True]['text':' Make new strides -- always C-contiguous ','line_number':323,'multiline':True]['text':' no byteswap necessary ','line_number':378,'multiline':True]['text':' If numitems > 1, then dst must be contiguous ','line_number':438,'multiline':True]['text':' private helper to get a default descriptor from a','line_number':463,'multiline':False]['text':' possibly NULL dtype, returns NULL on error, which','line_number':464,'multiline':False]['text':' can only happen if NPY_DT_CALL_default_descr errors.','line_number':465,'multiline':False]['text':'
+ * Recursive helper to assign using a coercion cache. This function
+ * must consume the cache depth first, just as the cache was originally
+ * produced.
+ ','line_number':479,'multiline':True]['text':' Consume first cache element by extracting information and freeing it ','line_number':488,'multiline':True]['text':' The element is either a sequence, or an array ','line_number':495,'multiline':True]['text':' Straight forward array assignment ','line_number':497,'multiline':True]['text':'
+                 * Straight forward assignment of elements.  Note that it is
+                 * possible for such an element to be a 0-D array or array-like.
+                 * `PyArray_Pack` supports arrays as well as we want: We
+                 * support exact NumPy arrays, but at this point ignore others.
+                 * (Please see the `PyArray_Pack` function comment if this
+                 * rightly confuses you.)
+                 ','line_number':517,'multiline':True]['text':' If this was an array(-like) we still need to unlike int: ','line_number':530,'multiline':True]['text':'*
+ * Fills an item based on a coercion cache object. It consumes the cache
+ * object while doing so.
+ *
+ * @param self Array to fill.
+ * @param cache coercion_cache_object, will be consumed. The cache must not
+ *        contain a single array (must start with a sequence). The array case
+ *        should be handled by `PyArray_FromArray()` before.
+ * @return 0 on success -1 on failure.
+ ','line_number':558,'multiline':True]['text':'
+     * Do not support ndim == 0 now with an array in the cache.
+     * The ndim == 0 is special because np.array(np.array(0), dtype=object)
+     * should unpack the inner array.
+     * Since the single-array case is special, it is handled previously
+     * in either case.
+     ','line_number':571,'multiline':True]['text':' guaranteed if cache contains a sequence ','line_number':579,'multiline':True]['text':' free the remaining cache. ','line_number':582,'multiline':True]['text':'
+     * Sanity check, this is the initial call, and when it returns, the
+     * cache has to be fully consumed, otherwise something is wrong.
+     * NOTE: May be nicer to put into a recursion helper.
+     ','line_number':587,'multiline':True]['text':' produce an error object ','line_number':620,'multiline':True]['text':' we couldn't raise the formatted exception for some reason ','line_number':631,'multiline':True]['text':'
+ * Generic new array creation routine.
+ * Internal variant with calloc argument for PyArray_Zeros.
+ *
+ * steals a reference to descr. On failure or descr->subarray, descr will
+ * be decrefed.
+ ','line_number':636,'multiline':True]['text':' finalize the descriptor if the DType defines a finalization function ','line_number':662,'multiline':True]['text':'
+     * Unless explicitly asked not to, we do replace dtypes in some cases.
+     * This mainly means that we never create arrays with a subarray dtype
+     * (unless for internal use when requested).  And neither do we create
+     * S0/U0 arrays in most cases (unless data == NULL so this is probably
+     * a view where growing the dtype would be presumable wrong).
+     ','line_number':673,'multiline':True]['text':' Check datatype element size ','line_number':699,'multiline':True]['text':' needed for zero-filling logic below, defined and initialized up here
+       so cleanup logic can go in the fail block ','line_number':752,'multiline':True]['text':'
+         * Copy dimensions, check them, and find total array size `nbytes`
+         ','line_number':765,'multiline':True]['text':'
+                 * Continue calculating the max size "as if" this were 1
+                 * to get the proper overflow error
+                 ','line_number':773,'multiline':True]['text':'
+             * Care needs to be taken to avoid integer overflow when multiplying
+             * the dimensions together to get the total size of the array.
+             ','line_number':787,'multiline':True]['text':' Fill the strides (or copy them if they were passed in) ','line_number':802,'multiline':True]['text':' fill the strides and set the contiguity flags ','line_number':804,'multiline':True]['text':' User to provided strides (user is responsible for correctness) ','line_number':809,'multiline':True]['text':' Since the strides were passed in must update contiguity ','line_number':813,'multiline':True]['text':' float errors do not matter and we do not release GIL ','line_number':826,'multiline':True]['text':'
+         * We always want a zero-filled array allocated with calloc if
+         * NPY_NEEDS_INIT is set on the dtype, for safety.  We also want a
+         * zero-filled array if zeroed is set and the zero-filling loop isn't
+         * defined, for better performance.
+         *
+         * If the zero-filling loop is defined and zeroed is set, allocate
+         * with malloc and let the zero-filling loop fill the array buffer
+         * with valid zero values for the dtype.
+         ','line_number':838,'multiline':True]['text':' Store the handler in case the default is modified ','line_number':852,'multiline':True]['text':'
+         * Allocate something even for zero-space arrays
+         * e.g. shape=(0,) -- otherwise buffer exposure
+         * (a.data) doesn't work as it should.
+         ','line_number':857,'multiline':True]['text':' Make sure all the strides are 0 ','line_number':864,'multiline':True]['text':'
+         * If the array needs special dtype-specific zero-filling logic, do that
+         ','line_number':881,'multiline':True]['text':' The handlers should never be called in this case ','line_number':897,'multiline':True]['text':'
+         * If data is passed in, this object won't own it.
+         ','line_number':899,'multiline':True]['text':'
+     * Always update the aligned flag.  Not owned data or input strides may
+     * not be aligned. Also on some platforms (debian sparc) malloc does not
+     * provide enough alignment for long double types.
+     ','line_number':906,'multiline':True]['text':' Set the base object. It's important to do it here so that
+     * __array_finalize__ below receives it
+     ','line_number':913,'multiline':True]['text':'
+     * call the __array_finalize__ method if a subtype was requested.
+     * If obj is NULL use Py_None for the Python callback.
+     * For speed, we skip if __array_finalize__ is inherited from ndarray
+     * (since that function does nothing), or, for backward compatibility,
+     * if it is None.
+     ','line_number':923,'multiline':True]['text':' First time, cache ndarray's __array_finalize__ ','line_number':933,'multiline':True]['text':'
+             * 2022-01-08, NumPy 1.23; when deprecation period is over, remove this
+             * whole stanza so one gets a "NoneType object is not callable" TypeError.
+             ','line_number':947,'multiline':True]['text':' A C-function is stored here ','line_number':962,'multiline':True]['text':'NUMPY_API
+ * Generic new array creation routine.
+ *
+ * steals a reference to descr. On failure or when dtype->subarray is
+ * true, dtype will be decrefed.
+ ','line_number':999,'multiline':True]['text':'
+ * Sets the base object using PyArray_SetBaseObject
+ ','line_number':1029,'multiline':True]['text':'
+ * Creates a new array with the same shape as the provided one,
+ * with possible memory layout order, data type and shape changes.
+ *
+ * prototype - The array the new one should be like.
+ * order     - NPY_CORDER - C-contiguous result.
+ *             NPY_FORTRANORDER - Fortran-contiguous result.
+ *             NPY_ANYORDER - Fortran if prototype is Fortran, C otherwise.
+ *             NPY_KEEPORDER - Keeps the axis ordering of prototype.
+ * descr     - If not NULL, overrides the data type of the result.
+ * dtype     - If not NULL and if descr is NULL, overrides the data type
+               of the result, so long as dtype is non-parameteric
+ * ndim      - If not -1, overrides the shape of the result.
+ * dims      - If ndim is not -1, overrides the shape of the result.
+ * subok     - If 1, use the prototype's array subtype, otherwise
+ *             always create a base-class array.
+ *
+ * NOTE: If dtype is not NULL, steals the dtype reference.  On failure or when
+ * dtype->subarray is true, dtype will be decrefed.
+ ','line_number':1043,'multiline':True]['text':' If no override data type, use the one from the prototype ','line_number':1079,'multiline':True]['text':' Handle ANYORDER and simple KEEPORDER cases ','line_number':1090,'multiline':True]['text':' If it's not KEEPORDER, this is simple ','line_number':1110,'multiline':True]['text':' KEEPORDER needs some analysis of the strides ','line_number':1121,'multiline':True]['text':' Build the new strides ','line_number':1131,'multiline':True]['text':' Special case for dtype=str or dtype=bytes. ','line_number':1134,'multiline':True]['text':' dtype is bytes ','line_number':1136,'multiline':True]['text':' dtype is str (type_num is NPY_UNICODE) ','line_number':1140,'multiline':True]['text':' Finally, allocate the array ','line_number':1150,'multiline':True]['text':' Logic shared by `empty`, `empty_like`, and `ndarray.__new__` ','line_number':1164,'multiline':True]['text':'NUMPY_API
+ * Creates a new array with the same shape as the provided one,
+ * with possible memory layout order and data type changes.
+ *
+ * prototype - The array the new one should be like.
+ * order     - NPY_CORDER - C-contiguous result.
+ *             NPY_FORTRANORDER - Fortran-contiguous result.
+ *             NPY_ANYORDER - Fortran if prototype is Fortran, C otherwise.
+ *             NPY_KEEPORDER - Keeps the axis ordering of prototype.
+ * dtype     - If not NULL, overrides the data type of the result.
+ * subok     - If 1, use the prototype's array subtype, otherwise
+ *             always create a base-class array.
+ *
+ * NOTE: If dtype is not NULL, steals the dtype reference.  On failure or when
+ * dtype->subarray is true, dtype will be decrefed.
+ ','line_number':1175,'multiline':True]['text':'NUMPY_API
+ * Generic new array creation routine.
+ ','line_number':1203,'multiline':True]['text':' If no format is specified, just assume a byte array
+         * TODO: void would make more sense here, as it wouldn't null
+         *       terminate.
+         ','line_number':1256,'multiline':True]['text':' PEP 3118 ','line_number':1273,'multiline':True]['text':' Sanity check ','line_number':1299,'multiline':True]['text':' Ctypes has bugs in its PEP3118 implementation, which we need to
+         * work around.
+         *
+         * bpo-10746
+         * bpo-32780
+         * bpo-32782
+         *
+         * Note that even if the above are fixed in main, we have to drop the
+         * early patch versions of python to actually make use of the fixes.
+         ','line_number':1301,'multiline':True]['text':' This object has no excuse for a broken PEP3118 buffer ','line_number':1312,'multiline':True]['text':' Thankfully, np.dtype(ctypes_type) works in most cases.
+         * For an array input, this produces a dtype containing all the
+         * dimensions, so the array is now 0d.
+         ','line_number':1333,'multiline':True]['text':'*
+ * Attempts to extract an array from an array-like object.
+ *
+ * array-like is defined as either
+ *
+ * * an object implementing the PEP 3118 buffer interface;
+ * * an object with __array_struct__ or __array_interface__ attributes;
+ * * an object with an __array__ function.
+ *
+ * @param op The object to convert to an array
+ * @param requested_type a requested dtype instance, may be NULL; The result
+ *                       DType may be used, but is not enforced.
+ * @param writeable whether the result must be writeable.
+ * @param context Unused parameter, must be NULL (should be removed later).
+ * @param never_copy Specifies that a copy is not allowed.
+ *
+ * @returns The array object, Py_NotImplemented if op is not array-like,
+ *          or NULL with an error set. (A new reference to Py_NotImplemented
+ *          is returned.)
+ ','line_number':1410,'multiline':True]['text':'
+     * If op supports the PEP 3118 buffer interface.
+     * We skip bytes and unicode since they are considered scalars. Unicode
+     * would fail but bytes would be incorrectly converted to a uint8 array.
+     ','line_number':1436,'multiline':True]['text':' TODO: Should probably not blanket ignore errors. ','line_number':1444,'multiline':True]['text':'
+     * If op supports the __array_struct__ or __array_interface__ interface.
+     ','line_number':1465,'multiline':True]['text':' Until the return, NotImplemented is always a borrowed reference','line_number':1473,'multiline':True]['text':'
+     * If op supplies the __array__ function.
+     * The documentation says this should produce a copy, so
+     * we skip this method if writeable is true, because the intent
+     * of writeable is to modify the operand.
+     * XXX: If the implementation is wrong, and/or if actual
+     *      usage requires this behave differently,
+     *      this should be changed!
+     ','line_number':1480,'multiline':True]['text':' Until here Py_NotImplemented was borrowed ','line_number':1506,'multiline':True]['text':'NUMPY_API
+ * Does not check for NPY_ARRAY_ENSURECOPY and NPY_ARRAY_NOTSWAPPED in flags
+ * Steals a reference to newtype --- which can be NULL
+ ','line_number':1512,'multiline':True]['text':'
+ * Internal version of PyArray_FromAny that accepts a dtypemeta. Borrows
+ * references to the descriptor and dtype.
+ ','line_number':1541,'multiline':True]['text':'
+     * This is the main code to make a NumPy array from a Python
+     * Object.  It is called from many different places.
+     ','line_number':1551,'multiline':True]['text':' Got the correct parameters, but the cache may already hold the result ','line_number':1593,'multiline':True]['text':'
+         * There is only a single array-like and it was converted, it
+         * may still have the incorrect type, but that is handled below.
+         ','line_number':1595,'multiline':True]['text':' we may need to cast or assert flags (e.g. copy) ','line_number':1601,'multiline':True]['text':'
+         * Special case, we return a *view* into void scalars, mainly to
+         * allow things similar to the "reversed" assignment:
+         *    arr[indx]["field"] = val  # instead of arr["field"][indx] = val
+         *
+         * It is unclear that this is necessary in this particular code path.
+         * Note that this path is only activated when the user did _not_
+         * provide a dtype (newtype is NULL).
+         ','line_number':1609,'multiline':True]['text':'
+     * If we got this far, we definitely have to create a copy, since we are
+     * converting either from a scalar (cache == NULL) or a (nested) sequence.
+     ','line_number':1627,'multiline':True]['text':'
+         * This is an (possible) inconsistency where:
+         *
+         *     np.array(np.float64(np.nan), dtype=np.int64)
+         *
+         * behaves differently from:
+         *
+         *     np.array([np.float64(np.nan)], dtype=np.int64)
+         *     arr1d_int64[0] = np.float64(np.nan)
+         *     np.array(np.array(np.nan), dtype=np.int64)
+         *
+         * by not raising an error instead of using typical casting.
+         * The error is desirable, but to always error seems like a
+         * larger change to be considered at some other time and it is
+         * undesirable that 0-D arrays behave differently from scalars.
+         * This retains the behaviour, largely due to issues in pandas
+         * which relied on a try/except (although hopefully that will
+         * have a better solution at some point):
+         * https://github.com/pandas-dev/pandas/issues/35481
+         ','line_number':1643,'multiline':True]['text':' There was no array (or array-like) passed in directly. ','line_number':1666,'multiline':True]['text':' Create a new array and copy the data ','line_number':1675,'multiline':True]['text':' hold on in case of a subarray that is replaced ','line_number':1676,'multiline':True]['text':'
+         * Appending of dimensions did not occur, so use the actual dtype
+         * below. This is relevant for S0 or U0 which can be replaced with
+         * S1 or U1, although that should likely change.
+         ','line_number':1686,'multiline':True]['text':' This is a single item. Set it directly. ','line_number':1696,'multiline':True]['text':' Decrease the number of dimensions to the detected ones ','line_number':1710,'multiline':True]['text':'
+ * flags is any of
+ * NPY_ARRAY_C_CONTIGUOUS (formerly CONTIGUOUS),
+ * NPY_ARRAY_F_CONTIGUOUS (formerly FORTRAN),
+ * NPY_ARRAY_ALIGNED,
+ * NPY_ARRAY_WRITEABLE,
+ * NPY_ARRAY_NOTSWAPPED,
+ * NPY_ARRAY_ENSURECOPY,
+ * NPY_ARRAY_WRITEBACKIFCOPY,
+ * NPY_ARRAY_FORCECAST,
+ * NPY_ARRAY_ENSUREARRAY,
+ * NPY_ARRAY_ELEMENTSTRIDES,
+ * NPY_ARRAY_ENSURENOCOPY
+ *
+ * or'd (|) together
+ *
+ * Any of these flags present means that the returned array should
+ * guarantee that aspect of the array.  Otherwise the returned array
+ * won't guarantee it -- it will depend on the object as to whether or
+ * not it has such features.
+ *
+ * Note that NPY_ARRAY_ENSURECOPY is enough
+ * to guarantee NPY_ARRAY_C_CONTIGUOUS, NPY_ARRAY_ALIGNED and
+ * NPY_ARRAY_WRITEABLE and therefore it is redundant to include
+ * those as well.
+ *
+ * NPY_ARRAY_BEHAVED == NPY_ARRAY_ALIGNED | NPY_ARRAY_WRITEABLE
+ * NPY_ARRAY_CARRAY = NPY_ARRAY_C_CONTIGUOUS | NPY_ARRAY_BEHAVED
+ * NPY_ARRAY_FARRAY = NPY_ARRAY_F_CONTIGUOUS | NPY_ARRAY_BEHAVED
+ *
+ * NPY_ARRAY_F_CONTIGUOUS can be set in the FLAGS to request a FORTRAN array.
+ * Fortran arrays are always behaved (aligned,
+ * notswapped, and writeable) and not (C) CONTIGUOUS (if > 1d).
+ *
+ * NPY_ARRAY_WRITEBACKIFCOPY flag sets this flag in the returned
+ * array if a copy is made and the base argument points to the (possibly)
+ * misbehaved array. Before returning to python, PyArray_ResolveWritebackIfCopy
+ * must be called to update the contents of the original array from the copy.
+ *
+ * NPY_ARRAY_FORCECAST will cause a cast to occur regardless of whether or not
+ * it is safe.
+ *
+ ','line_number':1730,'multiline':True]['text':'NUMPY_API
+ * steals a reference to descr -- accepts NULL
+ ','line_number':1774,'multiline':True]['text':'
+ * Internal version of PyArray_CheckFromAny that accepts a dtypemeta. Borrows
+ * references to the descriptor and dtype.
+ ','line_number':1803,'multiline':True]['text':'NUMPY_API
+ * steals reference to newtype --- acc. NULL
+ ','line_number':1852,'multiline':True]['text':'
+         * Check if object is of array with Null newtype.
+         * If so return it directly instead of checking for casting.
+         ','line_number':1867,'multiline':True]['text':' If the casting if forced, use the 'unsafe' casting rule ','line_number':1886,'multiline':True]['text':' Raise an error if the casting rule isn't followed ','line_number':1891,'multiline':True]['text':' If a guaranteed copy was requested ','line_number':1901,'multiline':True]['text':' If C contiguous was requested, and arr is not ','line_number':1903,'multiline':True]['text':' If an aligned array was requested, and arr is not ','line_number':1906,'multiline':True]['text':' If a Fortran contiguous array was requested, and arr is not ','line_number':1909,'multiline':True]['text':' If a writeable array was requested, and arr is not ','line_number':1912,'multiline':True]['text':' Set the order for the copy being made based on the flags ','line_number':1928,'multiline':True]['text':'
+     * If no copy then take an appropriate view if necessary, or
+     * just return a reference to ret itself.
+     ','line_number':1974,'multiline':True]['text':'NUMPY_API ','line_number':2003,'multiline':True]['text':'
+             * If the input is a class `attr` should be a property-like object.
+             * This cannot be interpreted as an array, but is a valid.
+             * (Needed due to the lookup being on the instance rather than type)
+             ','line_number':2022,'multiline':True]['text':' a tuple to hold references ','line_number':2066,'multiline':True]['text':' add a reference to the object sharing the data ','line_number':2073,'multiline':True]['text':' take a reference to the PyCapsule containing the PyArrayInterface
+     * structure. When the PyCapsule reference is released the PyCapsule
+     * destructor will free any resources that need to persist while numpy has
+     * access to the data. ','line_number':2077,'multiline':True]['text':' create the numpy array, this call adds a reference to refs ','line_number':2083,'multiline':True]['text':'
+ * Checks if the object in descr is the default 'descr' member for the
+ * __array_interface__ dictionary with 'typestr' member typestr.
+ ','line_number':2099,'multiline':True]['text':'NUMPY_API','line_number':2121,'multiline':True]['text':'
+             * If the input is a class `iface` should be a property-like object.
+             * This cannot be interpreted as an array, but is a valid.
+             * (Needed due to the lookup being on the instance rather than type)
+             ','line_number':2146,'multiline':True]['text':' Get type string from interface specification ','line_number':2161,'multiline':True]['text':' allow bytes for backwards compatibility ','line_number':2172,'multiline':True]['text':' Get dtype from type string ','line_number':2179,'multiline':True]['text':'
+     * If the dtype is NPY_VOID, see if there is extra information in
+     * the 'descr' attribute.
+     ','line_number':2184,'multiline':True]['text':' Get shape tuple from interface specification ','line_number':2213,'multiline':True]['text':' Shape must be specified when 'data' is specified ','line_number':2219,'multiline':True]['text':' Assume shape as scalar otherwise ','line_number':2230,'multiline':True]['text':' NOTE: pointers to data and base should be NULL ','line_number':2232,'multiline':True]['text':' Make sure 'shape' is a tuple ','line_number':2236,'multiline':True]['text':' Get dimensions from shape tuple ','line_number':2242,'multiline':True]['text':' Get data buffer from interface specification ','line_number':2254,'multiline':True]['text':' Case for data access through pointer ','line_number':2260,'multiline':True]['text':' Case for data access through buffer ','line_number':2292,'multiline':True]['text':'
+         * In Python 3 both of the deprecated functions PyObject_AsWriteBuffer and
+         * PyObject_AsReadBuffer that this code replaces release the buffer. It is
+         * up to the object that supplies the buffer to guarantee that the buffer
+         * sticks around after the release.
+         ','line_number':2310,'multiline':True]['text':' Get offset number from interface specification ','line_number':2318,'multiline':True]['text':'
+     * Ref to dtype was stolen by PyArray_NewFromDescrAndBase
+     * Prevent DECREFing dtype in fail codepath by setting to NULL
+     ','line_number':2338,'multiline':True]['text':'*
+ * Check for an __array__ attribute and call it when it exists.
+ *
+ *  .. warning:
+ *      If returned, `NotImplemented` is borrowed and must not be Decref'd
+ *
+ * @param op The Python object to convert to an array.
+ * @param descr The desired `arr.dtype`, passed into the `__array__` call,
+ *        as information but is not checked/enforced!
+ * @param never_copy Specifies that a copy is not allowed.
+ *        NOTE: Currently, this means an error is raised instead of calling
+ *        `op.__array__()`.  In the future we could call for example call
+ *        `op.__array__(never_copy=True)` instead.
+ * @returns NotImplemented if `__array__` is not defined or a NumPy array
+ *          (or subclass).  On error, return NULL.
+ ','line_number':2398,'multiline':True]['text':' Currently, we must always assume that `__array__` returns a copy ','line_number':2429,'multiline':True]['text':'
+         * If the input is a class `array_meth` may be a property-like object.
+         * This cannot be interpreted as an array (called), but is a valid.
+         * Trying `array_meth.__call__()` on this should not be useful.
+         * (Needed due to the lookup being on the instance rather than type)
+         ','line_number':2439,'multiline':True]['text':'NUMPY_API
+ ','line_number':2469,'multiline':True]['text':'NUMPY_API
+* new reference -- accepts NULL for mintype
+','line_number':2483,'multiline':True]['text':'NUMPY_API
+ * This is a quick wrapper around
+ * PyArray_FromAny(op, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL)
+ * that special cases Arrays and PyArray_Scalars up front
+ * It *steals a reference* to the object
+ * It also guarantees that the result is PyArray_Type
+ * Because it decrefs op if any conversion needs to take place
+ * so it can be used like PyArray_EnsureArray(some_function(...))
+ ','line_number':2507,'multiline':True]['text':'NUMPY_API','line_number':2538,'multiline':True]['text':'
+ * Private implementation of PyArray_CopyAnyInto with an additional order
+ * parameter.
+ ','line_number':2548,'multiline':True]['text':'
+     * If the shapes match and a particular order is forced
+     * for both, use the more efficient CopyInto
+     ','line_number':2573,'multiline':True]['text':' Zero-sized arrays require nothing be done ','line_number':2593,'multiline':True]['text':'
+     * This copy is based on matching C-order traversals of src and dst.
+     * By using two iterators, we can find maximal sub-chunks that
+     * can be processed at once.
+     ','line_number':2602,'multiline':True]['text':' Get all the values needed for the inner loop ','line_number':2623,'multiline':True]['text':' Since buffering is disabled, we can cache the stride ','line_number':2626,'multiline':True]['text':' Since buffering is disabled, we can cache the stride ','line_number':2632,'multiline':True]['text':'
+     * Because buffering is disabled in the iterator, the inner loop
+     * strides will be the same throughout the iteration loop.  Thus,
+     * we can pass them to this function to take advantage of
+     * contiguous strides, etc.
+     ','line_number':2645,'multiline':True]['text':' Transfer the biggest amount that fits both ','line_number':2679,'multiline':True]['text':' If we exhausted the dst block, refresh it ','line_number':2687,'multiline':True]['text':' If we exhausted the src block, refresh it ','line_number':2701,'multiline':True]['text':'NUMPY_API
+ * Copy an Array into another array -- memory must not overlap
+ * Does not require src and dest to have "broadcastable" shapes
+ * (only the same number of elements).
+ *
+ * TODO: For NumPy 2.0, this could accept an order parameter which
+ *       only allows NPY_CORDER and NPY_FORDER.  Could also rename
+ *       this to CopyAsFlat to make the name more intuitive.
+ *
+ * Returns 0 on success, -1 on error.
+ ','line_number':2736,'multiline':True]['text':'NUMPY_API
+ * Copy an Array into another array.
+ * Broadcast to the destination shape if necessary.
+ *
+ * Returns 0 on success, -1 on failure.
+ ','line_number':2753,'multiline':True]['text':'NUMPY_API
+ * PyArray_CheckAxis
+ *
+ * check that axis is valid
+ * convert 0-d arrays to 1-d arrays
+ ','line_number':2765,'multiline':True]['text':'NUMPY_API
+ * Zeros
+ *
+ * steals a reference to type. On failure or when dtype->subarray is
+ * true, dtype will be decrefed.
+ * accepts NULL type
+ ','line_number':2821,'multiline':True]['text':' steal reference','line_number':2836,'multiline':False]['text':'
+ *  Internal version of PyArray_Zeros that accepts a dtypemeta.
+ *  Borrows references to the descriptor and dtype.
+ ','line_number':2854,'multiline':True]['text':'
+     * PyArray_NewFromDescr_int steals a ref to descr,
+     * incref so caller of this function can clean up descr
+     ','line_number':2872,'multiline':True]['text':'NUMPY_API
+ * Empty
+ *
+ * accepts NULL type
+ * steals a reference to type
+ ','line_number':2887,'multiline':True]['text':' steal reference','line_number':2901,'multiline':False]['text':'
+ *  Internal version of PyArray_Empty that accepts a dtypemeta.
+ *  Borrows references to the descriptor and dtype.
+ ','line_number':2916,'multiline':True]['text':'
+     * PyArray_NewFromDescr steals a ref to descr,
+     * incref so caller of this function can clean up descr
+     ','line_number':2934,'multiline':True]['text':' Logic shared by `empty`, `empty_like`, and `ndarray.__new__` ','line_number':2947,'multiline':True]['text':'
+ * Like ceil(value), but check for overflow.
+ *
+ * Return 0 on success, -1 on failure. In case of failure, set a PyExc_Overflow
+ * exception
+ ','line_number':2958,'multiline':True]['text':' condition inverted to handle NaN ','line_number':2970,'multiline':True]['text':'NUMPY_API
+  Arange,
+','line_number':2986,'multiline':True]['text':' Underflow and divide-by-inf check ','line_number':3003,'multiline':True]['text':'
+     * place start in the buffer and the next value in the second position
+     * if length > 2, then call the inner loop, otherwise stop
+     ','line_number':3031,'multiline':True]['text':'
+ * the formula is len = (intp) ceil((stop - start) / step);
+ ','line_number':3073,'multiline':True]['text':' Underflow and divide-by-inf check ','line_number':3154,'multiline':True]['text':'NUMPY_API
+ *
+ * ArangeObj,
+ *
+ * this doesn't change the references
+ ','line_number':3180,'multiline':True]['text':' Datetime arange is handled specially ','line_number':3197,'multiline':True]['text':' We need to replace many of these, so hold on for easier cleanup ','line_number':3206,'multiline':True]['text':' intentionally made to be at least NPY_LONG ','line_number':3213,'multiline':True]['text':'
+     * If dtype is not in native byte-order then get native-byte
+     * order version.  And then swap on the way out.
+     ','line_number':3233,'multiline':True]['text':' This effectively forbids subarray types as well... ','line_number':3252,'multiline':True]['text':' calculate the length and next = start + step','line_number':3273,'multiline':True]['text':'
+     * place start in the buffer and the next value in the second position
+     * if length > 2, then call the inner loop, otherwise stop
+     ','line_number':3296,'multiline':True]['text':' TODO: This swapping could be handled on the fly by the nditer ','line_number':3321,'multiline':True]['text':' Replace dtype after swapping in-place above: ','line_number':3329,'multiline':True]['text':' This array creation function does not steal the reference to dtype. ','line_number':3353,'multiline':True]['text':'
+     * Array creation may move sub-array dimensions from the dtype to array
+     * dimensions, so we need to use the original element size when reading.
+     ','line_number':3386,'multiline':True]['text':' do not steal the original dtype. ','line_number':3392,'multiline':True]['text':'
+ * Create an array by reading from the given stream, using the passed
+ * next_element and skip_separator functions.
+ * Does not steal the reference to dtype.
+ ','line_number':3405,'multiline':True]['text':' -1 means end reached; -2 a parsing error ','line_number':3420,'multiline':True]['text':'
+     * Array creation may move sub-array dimensions from the dtype to array
+     * dimensions, so we need to use the original dtype when reading.
+     ','line_number':3427,'multiline':True]['text':' The handler is always valid ','line_number':3459,'multiline':True]['text':' if we read as much as requested sep is optional ','line_number':3473,'multiline':True]['text':' The handler is always valid ','line_number':3483,'multiline':True]['text':' If an error is already set (unlikely), do not create new one ','line_number':3501,'multiline':True]['text':' 2019-09-12, NumPy 1.18 ','line_number':3505,'multiline':True]['text':'NUMPY_API
+ *
+ * Given a ``FILE *`` pointer ``fp``, and a ``PyArray_Descr``, return an
+ * array corresponding to the data encoded in that file.
+ *
+ * The reference to `dtype` is stolen (it is possible that the passed in
+ * dtype is not held on to).
+ *
+ * The number of elements to read is given as ``num``; if it is < 0, then
+ * then as many as possible are read.
+ *
+ * If ``sep`` is NULL or empty, then binary data is assumed, else
+ * text data, with ``sep`` as the separator between elements. Whitespace in
+ * the separator matches any length of whitespace in the text, and a match
+ * for whitespace around the separator is added.
+ *
+ * For memory-mapped files, use the buffer interface. No more data than
+ * necessary is read by this routine.
+ ','line_number':3525,'multiline':True]['text':' Nothing to read, just create an empty array of the requested type ','line_number':3561,'multiline':True]['text':'
+         * Realloc memory for smaller number of elements, use original dtype
+         * which may have include a subarray (and is used for `nread`).
+         ','line_number':3587,'multiline':True]['text':' The handler is always valid ','line_number':3594,'multiline':True]['text':'NUMPY_API','line_number':3608,'multiline':True]['text':'
+     * If the object supports `releasebuffer`, the new buffer protocol allows
+     * tying the memories lifetime to the `Py_buffer view`.
+     * NumPy cannot hold on to the view itself (it is not an object) so it
+     * has to wrap the original object in a Python `memoryview` which deals
+     * with the lifetime management for us.
+     * For backwards compatibility of `arr.base` we try to avoid this when
+     * possible.  (For example, NumPy arrays will never get wrapped here!)
+     ','line_number':3639,'multiline':True]['text':' `buf` is an array or a memoryview; so we know `view` does not own data ','line_number':3670,'multiline':True]['text':'NUMPY_API
+ *
+ * Given a pointer to a string ``data``, a string length ``slen``, and
+ * a ``PyArray_Descr``, return an array corresponding to the data
+ * encoded in that string.
+ *
+ * If the dtype is NULL, the default array type is used (double).
+ * If non-null, the reference is stolen.
+ *
+ * If ``slen`` is < 0, then the end of string is used for text data.
+ * It is an error for ``slen`` to be < 0 for binary data (since embedded NULLs
+ * would be the norm).
+ *
+ * The number of elements to read is given as ``num``; if it is < 0, then
+ * then as many as possible are read.
+ *
+ * If ``sep`` is NULL or empty, then binary data is assumed, else
+ * text data, with ``sep`` as the separator between elements. Whitespace in
+ * the separator matches any length of whitespace in the text, and a match
+ * for whitespace around the separator is added.
+ ','line_number':3730,'multiline':True]['text':'
+         * NewFromDescr may replace dtype to absorb subarray shape
+         * into the array, so get size beforehand.
+         ','line_number':3801,'multiline':True]['text':' read from character-based string ','line_number':3816,'multiline':True]['text':'NUMPY_API
+ *
+ * steals a reference to dtype (which cannot be NULL)
+ ','line_number':3844,'multiline':True]['text':' If this error is removed, the `ret` allocation may need fixing ','line_number':3865,'multiline':True]['text':'
+     * Note that PyArray_DESCR(ret) may not match dtype.  There are exactly
+     * two cases where this can happen: empty strings/bytes/void (rejected
+     * above) and subarray dtypes (supported by sticking with `dtype`).
+     ','line_number':3882,'multiline':True]['text':' Fetching next item failed perhaps due to exhausting iterator ','line_number':3899,'multiline':True]['text':'
+              Grow PyArray_DATA(ret):
+              this is similar for the strategy for PyListObject, but we use
+              50% overallocation => 0, 4, 8, 14, 23, 36, 56, 86 ...
+              TODO: The loadtxt code now uses a `growth` helper that would
+                    be suitable to reuse here.
+            ','line_number':3908,'multiline':True]['text':' The handler is always valid ','line_number':3917,'multiline':True]['text':' resize array for cleanup: ','line_number':3928,'multiline':True]['text':' Reset `item` pointer to point into realloc'd chunk ','line_number':3930,'multiline':True]['text':' Initialize new chunk: ','line_number':3933,'multiline':True]['text':'
+     * Realloc the data so that don't keep extra memory tied up and fix
+     * the arrays first dimension (there could be more than one).
+     ','line_number':3952,'multiline':True]['text':' The size cannot be zero for realloc. ','line_number':3957,'multiline':True]['text':' Resize array to actual final size (it may be too large) ','line_number':3960,'multiline':True]['text':' The handler is always valid ','line_number':3961,'multiline':True]['text':'
+             * If the count was smaller than zero, the strides may be all 0
+             * (even in the later dimensions for `count < 0`!
+             * Thus, fix all strides here again for C-contiguity.
+             ','line_number':3973,'multiline':True]['text':'
+ * This is the main array creation routine.
+ *
+ * Flags argument has multiple related meanings
+ * depending on data and strides:
+ *
+ * If data is given, then flags is flags associated with data.
+ * If strides is not given, then a contiguous strides array will be created
+ * and the NPY_ARRAY_C_CONTIGUOUS bit will be set.  If the flags argument
+ * has the NPY_ARRAY_F_CONTIGUOUS bit set, then a FORTRAN-style strides array will be
+ * created (and of course the NPY_ARRAY_F_CONTIGUOUS flag bit will be set).
+ *
+ * If data is not given but created here, then flags will be NPY_ARRAY_DEFAULT
+ * and a non-zero flags argument can be used to indicate a FORTRAN style
+ * array is desired.
+ *
+ * Dimensions and itemsize must have been checked for validity.
+ ','line_number':3998,'multiline':True]['text':' A dim != 1 was found ','line_number':4023,'multiline':True]['text':' Check if new array is both F- and C-contiguous ','line_number':4025,'multiline':True]['text':' Only make Fortran strides if not contiguous as well ','line_number':4036,'multiline':True]['text':'
+ * Calls arr_of_subclass.__array_wrap__(towrap), in order to make 'towrap'
+ * have the same ndarray subclass as 'arr_of_subclass'.
+ ','line_number':4077,'multiline':True]

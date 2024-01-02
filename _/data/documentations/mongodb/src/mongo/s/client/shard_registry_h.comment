@@ -1,0 +1,203 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+     * Creates a basic ShardRegistryData, that only contains the config shard.  Needed during
+     * initialization, when the config servers are contacted for the first time (ie. the first time
+     * createFromCatalogClient() is called).
+     ','line_number':73,'multiline':True]['text':'*
+     * Reads shards docs from the catalog client and fills in maps.
+     ','line_number':80,'multiline':True]['text':'*
+     * Merges alreadyCachedData and configServerData into a new ShardRegistryData.
+     *
+     * The merged data is the same as configServerData, except that for the host and connection
+     * string based lookups, any values from alreadyCachedData will take precedence over those from
+     * configServerData.
+     *
+     * Returns the merged data, as well as the shards that have been removed (ie. that are present
+     * in alreadyCachedData but not configServerData) as a mapping from ShardId to
+     * std::shared_ptr<Shard>.
+     *
+     * Called when reloading the shard registry. It is important to merge _hostLookup because
+     * reloading the shard registry can interleave with updates to the shard registry passed by the
+     * RSM.
+     ','line_number':86,'multiline':True]['text':'*
+     * Create a duplicate of existingData, but additionally updates the shard for newConnString.
+     * Used when notified by the RSM of a new connection string from a shard.
+     ','line_number':104,'multiline':True]['text':'*
+     * Returns the shard with the given shard id, connection string, or host and port.
+     *
+     * Callers might pass in the connection string or HostAndPort rather than ShardId, so this
+     * method will first look for the shard by ShardId, then connection string, then HostAndPort
+     * stopping once it finds the shard.
+     ','line_number':112,'multiline':True]['text':'*
+     * Returns the shard with the given replica set name, or nullptr if no such shard.
+     ','line_number':121,'multiline':True]['text':'*
+     * Returns the shard which contains a mongod with the given host and port, or nullptr if no such
+     * shard.
+     ','line_number':126,'multiline':True]['text':'*
+     * Returns a vector of all known shard ids.
+     * The order of the elements is not guaranteed.
+     ','line_number':132,'multiline':True]['text':'*
+     * Returns a vector of all known shard objects.
+     * The order of the elements is not guaranteed.
+     ','line_number':138,'multiline':True]['text':'*
+     * Returns the shard with the given shard id, or nullptr if no such shard.
+     ','line_number':149,'multiline':True]['text':'*
+     * Returns the shard with the given connection string, or nullptr if no such shard.
+     ','line_number':154,'multiline':True]['text':'*
+     * Puts the given shard object into the lookup maps.
+     ','line_number':159,'multiline':True]['text':' Map of shardName -> Shard','line_number':164,'multiline':False]['text':' Map from replica set name to shard corresponding to this replica set','line_number':167,'multiline':False]['text':' Map of HostAndPort to Shard','line_number':170,'multiline':False]['text':' Map of connection string to Shard','line_number':173,'multiline':False]['text':'*
+ * Each node (router, shard server, config server, primaries and secondaries) has one instance of
+ * this object. It is an in-memory cache mirroring the `config.shards` collection on the config
+ * server, whose causal consistency is driven by the `topologyTime` component of the vector clock.
+ * The collection (and thus the cache) contains an entry for each shard in the cluster. Each entry
+ * contains the connection string for that shard.
+ *
+ * Retrieving a shard from the registry returns a `Shard` object. Using that object, one can access
+ * more information about a shard and run commands against that shard. A `Shard` object can be
+ * retrieved from the registry by using any of:
+ * - The shard's name
+ * - The replica set's name
+ * - The HostAndPort object
+ * - The connection string
+ *
+ * REFRESHES: The shard registry refreshes itself in these scenarios:
+ * - Upon the node's start-up
+ * - Upon completion of a background job that runs every thirty seconds
+ * - Upon an attempt to retrieve a shard that doesn’t have a matching entry in the cache
+ * - Upon calling the ShardRegistry’s reload function (ShardRegistry::reload())
+ * - After an operation has gossipped-in a higher `topologyTime`
+ *
+ * The shard registry makes updates to the `config.shards` collection in one case. If the shard
+ * registry discovers an updated connection string for another shard via a replica set topology
+ * change, it will persist that update to `config.shards`.
+ ','line_number':177,'multiline':True]['text':'*
+     * A callback type for functions that can be called on shard removal.
+     ','line_number':208,'multiline':True]['text':'*
+     * Used when informing updateReplSetHosts() of a new connection string for a shard.
+     ','line_number':213,'multiline':True]['text':'*
+     * Instantiates a new shard registry.
+     *
+     * @param shardFactory      Makes shards
+     * @param configServerCS    ConnectionString used for communicating with the config servers
+     * @param shardRemovalHooks A list of hooks that will be called when a shard is removed. The
+     *                          hook is expected not to throw. If it does throw, the process will be
+     *                          terminated.
+     ','line_number':218,'multiline':True]['text':'*
+     * Initializes ShardRegistry with config shard, if a connection string was provided at
+     * construction.
+     *
+     * The creation of the config shard object will intialize the associated RSM monitor that in
+     * turn will call ShardRegistry::updateReplSetHosts(). Hence the config shard object MUST be
+     * created after the ShardRegistry is fully constructed.
+     ','line_number':234,'multiline':True]['text':'*
+     * Sets up the registry's config shard from the given connection string. Only takes effect if
+     * the registry has not already done this.
+     ','line_number':244,'multiline':True]['text':'*
+     * Startup the periodic reloader of the ShardRegistry.
+     * Can be called only after ShardRegistry::init()
+     ','line_number':250,'multiline':True]['text':'*
+     * Shutdown the periodic reloader of the ShardRegistry.
+     ','line_number':256,'multiline':True]['text':'*
+     * Shuts down the threadPool. Needs to be called explicitly because ShardRegistry is never
+     * destroyed as it's owned by the static grid object.
+     ','line_number':261,'multiline':True]['text':'*
+     * This is invalid to use on the config server and will hit an invariant if it is done.
+     * If the config server has need of a connection string for itself, it should get it from the
+     * replication state.
+     *
+     * Returns the connection string for the config server.
+     ','line_number':267,'multiline':True]['text':'*
+     * Returns shared pointer to the shard object representing the config servers.
+     *
+     * The config shard is always known, so this function never blocks.
+     ','line_number':276,'multiline':True]['text':'*
+     * Returns a shared pointer to the shard object with the given shard id, or ShardNotFound error
+     * otherwise.
+     *
+     * May refresh the shard registry if there's no cached information about the shard. The shardId
+     * parameter can actually be the shard name or the HostAndPort for any server in the shard.
+     ','line_number':283,'multiline':True]['text':'*
+     * Returns a vector containing all known shard IDs.
+     * The order of the elements is not guaranteed.
+     ','line_number':295,'multiline':True]['text':'*
+     * Returns the number of shards.
+     ','line_number':301,'multiline':True]['text':'*
+     * Takes a connection string describing either a shard or config server replica set, looks
+     * up the corresponding Shard object based on the replica set name, then updates the
+     * ShardRegistry's notion of what hosts make up that shard.
+     ','line_number':306,'multiline':True]['text':'*
+     * Instantiates a new detached shard connection, which does not appear in the list of shards
+     * tracked by the registry and as a result will not be returned by getAllShardIds.
+     *
+     * The caller owns the returned shard object and is responsible for disposing of it when done.
+     *
+     * @param connStr Connection string to the shard.
+     ','line_number':314,'multiline':True]['text':'*
+     * Returns a ShardLocal for the config server that is not tracked by the registry. May only be
+     * called on a config server node.
+     ','line_number':324,'multiline':True]['text':'*
+     * Force a reload of the ShardRegistry based on the contents of the config server's
+     * config.shards collection.
+     ','line_number':332,'multiline':True]['text':'*
+     * To be used on mongod only. If the mongod is a primary, schedules a write to update the
+     * connection string in the config.shards document for the shard it corresponds to. Upon an
+     * error, retries if the mongod is still a primary.
+     ','line_number':338,'multiline':True]['text':'
+     * Returns true if the given host is part of the config server replica set.
+     *
+     * This method relies on the RSM to have pushed the correct CSRS membership information.
+     ','line_number':346,'multiline':True]['text':' TODO SERVER-50206: Remove usage of these non-causally consistent accessors.','line_number':353,'multiline':False]['text':'','line_number':354,'multiline':False]['text':' Their most important current users are dispatching requests to hosts, and processing','line_number':355,'multiline':False]['text':' responses from hosts.  These contexts need to know the shard that the host is associated','line_number':356,'multiline':False]['text':' with, but usually have no access to any associated opCtx (if there even is one), and also','line_number':357,'multiline':False]['text':' cannot tolerate waiting for further network activity (if the cache is stale and needs to be','line_number':358,'multiline':False]['text':' refreshed via _lookup()).','line_number':359,'multiline':False]['text':'*
+     * Finds the Shard that the mongod listening at this HostAndPort is a member of. Will not
+     * refresh the shard registry or otherwise perform any network traffic.
+     ','line_number':361,'multiline':True]['text':'*
+     * The ShardRegistry uses the ReadThroughCache to handle refreshing itself.  The cache stores
+     * a single entry, with key of Singleton, value of ShardRegistryData, and causal-consistency
+     * time which is primarily Timestamp (based on the TopologyTime), but with additional
+     * "increment"s that are used to flag additional refresh criteria.
+     ','line_number':368,'multiline':True]['text':' SERVER-56950: When setFCV(v4.4) overlaps with a ShardRegistry reload,','line_number':397,'multiline':False]['text':' the ShardRegistry can fall into an infinite loop of lookups','line_number':398,'multiline':False]['text':' The increments are used locally to trigger the lookup function.','line_number':424,'multiline':False]['text':'','line_number':425,'multiline':False]['text':' The rsmIncrement is used to indicate that that there are stashed RSM updates that need to','line_number':426,'multiline':False]['text':' be incorporated.','line_number':427,'multiline':False]['text':'','line_number':428,'multiline':False]['text':' The forceReloadIncrement is used to indicate that the latest data should be fetched from','line_number':429,'multiline':False]['text':' the configsvrs (ie. when the topologyTime can't be used for this, eg. in the first','line_number':430,'multiline':False]['text':' lookup, and in contexts like unittests where topologyTime isn't gossipped but the','line_number':431,'multiline':False]['text':' ShardRegistry still needs to be reloaded).  This is how reload() is able to force a','line_number':432,'multiline':False]['text':' refresh from the config servers - incrementing the forceReloadIncrement causes the cache','line_number':433,'multiline':False]['text':' to call _lookup() (rather than having reload() attempt to do a synchronous refresh).','line_number':434,'multiline':False]['text':'*
+     * Gets a causally-consistent (ie. latest-known) copy of the ShardRegistryData, refreshing from
+     * the config servers if necessary.
+     ','line_number':449,'multiline':True]['text':'*
+     * Gets a causally-consistent (ie. latest-known) copy of the ShardRegistryData asynchronously,
+     * refreshing from the config servers if necessary.
+     ','line_number':455,'multiline':True]['text':'*
+     * Triggers a reload without waiting for it to complete.
+     ','line_number':461,'multiline':True]['text':'*
+     * Gets the latest-cached copy of the ShardRegistryData.  Never fetches from the config servers.
+     * Only used by the "NoReload" accessors.
+     * TODO SERVER-50206: Remove usage of this non-causally consistent accessor.
+     ','line_number':466,'multiline':True]['text':'*
+     * Factory to create shards.  Never changed after startup so safe to access outside of _mutex.
+     ','line_number':487,'multiline':True]['text':'*
+     * Specified in the ShardRegistry c-tor. It's used only in init() to initialize the config
+     * shard.
+     ','line_number':492,'multiline':True]['text':'*
+     * A list of callbacks to be called asynchronously when it has been discovered that a shard was
+     * removed.
+     ','line_number':498,'multiline':True]['text':' Thread pool used when looking up new values for the cache (ie. in which _lookup() runs).','line_number':504,'multiline':False]['text':' Executor for periodically reloading the registry (ie. in which _periodicReload() runs).','line_number':507,'multiline':False]['text':' Counters for incrementing the rsmIncrement and forceReloadIncrement fields of the Time used','line_number':513,'multiline':False]['text':' by the _cache.  See the comments for these fields in the Time class above for an explanation','line_number':514,'multiline':False]['text':' of their purpose.','line_number':515,'multiline':False]['text':' Protects _configShardData, and _latestNewConnStrings.','line_number':519,'multiline':False]['text':' Store a reference to the configShard.','line_number':522,'multiline':False]['text':' The key is replset name (the type is ShardId just to take advantage of its hasher).','line_number':525,'multiline':False]['text':' Set to true in shutdown call to prevent calling it twice.','line_number':530,'multiline':False]['text':' namespace mongo','line_number':534,'multiline':False]

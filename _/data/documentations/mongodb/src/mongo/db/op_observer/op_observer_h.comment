@@ -1,0 +1,270 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * The generic container for onUpdate/onDelete/onUnpreparedTransactionCommit state-passing between
+ * OpObservers. Despite the naming, some OpObserver's don't strictly observe. This struct is written
+ * by OpObserverImpl and useful for later observers to inspect state they need.
+ *
+ * These structs are decorable to support the sharing of critical resources between OpObserverImpl
+ * and MigrationChunkClonerSourceOpObserver. No other decorations should be added to these structs.
+ ','line_number':77,'multiline':True]['text':' Use either 'opTime' for non-insert operations or 'insertOpTimes', but not both.','line_number':88,'multiline':False]['text':' Temporary pre/post image information for a retryable findAndModify operation to be written','line_number':92,'multiline':False]['text':' to the image collection (config.image_collection).','line_number':93,'multiline':False]['text':' The operation is not retryable, or not a "findAndModify" command. Do not record a','line_number':102,'multiline':False]['text':' pre-image.','line_number':103,'multiline':False]['text':' Store the pre-image in the side collection.','line_number':106,'multiline':False]['text':'*
+ * Holds document update information used in logging.
+ ','line_number':110,'multiline':True]['text':' Specifies the pre-image recording option for retryable "findAndModify" commands.','line_number':118,'multiline':False]['text':'*
+ * Holds supplementary information required for OpObserver::onDelete() to write out an
+ * oplog entry for deleting a single document from a collection.
+ *
+ * This struct is also passed to OpObserver::aboutToDelete() so that OpObserver
+ * implementations may include additional information (via decorations) to be shared with
+ * the onDelete() method within the same implementation.
+ ','line_number':126,'multiline':True]['text':' "fromMigrate" indicates whether the delete was induced by a chunk migration, and so','line_number':135,'multiline':False]['text':' should be ignored by the user as an internal maintenance operation and not a real delete.','line_number':136,'multiline':False]['text':' Specifies the pre-image recording option for retryable "findAndModify" commands.','line_number':140,'multiline':False]['text':' Set if OpTimes were reserved for the delete ahead of time for this retryable','line_number':144,'multiline':False]['text':' "findAndModify" operation.','line_number':145,'multiline':False]['text':' Implies 'retryableFindAndModifyLocation' is set to kSideCollection but the','line_number':146,'multiline':False]['text':' other way round (because of multi-doc transactions).','line_number':147,'multiline':False]['text':' See reserveOplogSlotsForRetryableFindAndModify() in collection_write_path.cpp.','line_number':148,'multiline':False]['text':'*
+ * The OpObserver interface contains methods that get called on certain database events. It provides
+ * a way for various server subsystems to be notified of other events throughout the server.
+ *
+ * In order to call any OpObserver method, you must be in a 'WriteUnitOfWork'. This means that any
+ * locks acquired for writes in that WUOW are still held. So, you can assume that any locks required
+ * to perform the operation being observed are still held. These rules should apply for all observer
+ * methods unless otherwise specified.
+ ','line_number':164,'multiline':True]['text':'*
+     * Used by CRUD ops: onInserts, onUpdate, aboutToDelete, and onDelete.
+     ','line_number':177,'multiline':True]['text':' config database (i.e. config.*)','line_number':181,'multiline':False]['text':' system collection (i.e. *.system.*)','line_number':182,'multiline':False]['text':' run the observer on config and system, but not user collections','line_number':183,'multiline':False]['text':' run the observer on all collections/databases','line_number':184,'multiline':False]['text':' never run the observer for this CRUD event','line_number':185,'multiline':False]['text':' Controls the OpObserverRegistry's filtering of CRUD events.','line_number':188,'multiline':False]['text':' Each OpObserver declares which events it cares about with this.','line_number':189,'multiline':False]['text':' onInserts, onUpdate','line_number':191,'multiline':False]['text':' aboutToDelete, onDelete','line_number':192,'multiline':False]['text':' The collection is being dropped immediately, in one step.','line_number':196,'multiline':False]['text':' The collection is being dropped in two phases, by renaming to a drop pending collection','line_number':199,'multiline':False]['text':' which is registered to be reaped later.','line_number':200,'multiline':False]['text':' Used by the OpObserverRegistry to filter out CRUD operations.','line_number':206,'multiline':False]['text':' With this method, each OpObserver should declare if it wants to subscribe','line_number':207,'multiline':False]['text':' to a subset of operations to special internal collections. This helps','line_number':208,'multiline':False]['text':' improve performance. Avoid using 'kAll' as much as possible.','line_number':209,'multiline':False]['text':'*
+     * Generates a timestamp by writing a no-op oplog entry. This is only necessary for tenant
+     * migrations that are aborting single-phase index builds.
+     ','line_number':242,'multiline':True]['text':'*
+     * 'fromMigrate' array contains settings for each insert operation and takes into
+     * account orphan documents.
+     * 'defaultFromMigrate' is the initial 'fromMigrate' value for the 'fromMigrate' array
+     * and is intended to be forwarded to downstream subsystems that expect a single
+     * 'fromMigrate' to describe the entire set of inserts.
+     * Examples: ShardServerOpObserver, UserWriteBlockModeOpObserver, and
+     * MigrationChunkClonerSourceOpObserver::onInserts().
+     ','line_number':264,'multiline':True]['text':'*
+     * Handles logging before document is deleted.
+     *
+     * "ns" name of the collection from which deleteState.idDoc will be deleted.
+     *
+     * "doc" holds the pre-image of the document to be deleted.
+     *
+     * "args" is a reference to information detailing whether the pre-image of the doc should be
+     * preserved with deletion. OpObserverImpl::aboutToDelete() initializes the documentKey as a
+     * decoration on OplogDeleteEntryArgs.
+     ','line_number':303,'multiline':True]['text':'*
+     * Logs a no-op with "msgObj" in the o field into oplog.
+     *
+     * This function should only be used internally. "nss", "uuid", "o2", and the opTimes should
+     * never be exposed to users (for instance through the appendOplogNote command).
+     ','line_number':321,'multiline':True]['text':'*
+     * Logs a no-op with "msgObj" in the o field into oplog.
+     ','line_number':337,'multiline':True]['text':'*
+     * This function logs an oplog entry when a 'collMod' command on a collection is executed.
+     * Since 'collMod' commands can take a variety of different formats, the 'o' field of the
+     * oplog entry is populated with the 'collMod' command object. For TTL index updates, we
+     * transform key pattern index specifications into index name specifications, for uniformity.
+     * All other collMod fields are added to the 'o' object without modifications.
+     *
+     * To facilitate the rollback process, 'oldCollOptions' contains the previous state of all
+     * collection options i.e. the state prior to completion of the current collMod command.
+     * 'ttlInfo' contains the index name and previous expiration time of a TTL index. The old
+     * collection options will be stored in the 'o2.collectionOptions_old' field, and the old TTL
+     * expiration value in the 'o2.expireAfterSeconds_old' field.
+     *
+     * Oplog Entry Example ('o' and 'o2' fields shown):
+     *
+     *      {
+     *          ...
+     *          o: {
+     *              collMod: "test",
+     *              validationLevel: "off",
+     *              index: {name: "indexName_1", expireAfterSeconds: 600}
+     *          }
+     *          o2: {
+     *              collectionOptions_old: {
+     *                  validationLevel: "strict",
+     *              },
+     *              expireAfterSeconds_old: 300
+     *          }
+     *      }
+     *
+     ','line_number':359,'multiline':True]['text':'*
+     * This function logs an oplog entry when a 'drop' command on a collection is executed.
+     * Returns the optime of the oplog entry successfully written to the oplog.
+     * Returns a null optime if an oplog entry was not written for this operation.
+     *
+     * 'dropType' describes whether the collection drop is one-phase or two-phase.
+     ','line_number':398,'multiline':True]['text':'*
+     * This function logs an oplog entry when an index is dropped. The namespace of the index,
+     * the index name, and the index info from the index descriptor are used to create a
+     * 'dropIndexes' op where the 'o' field is the name of the index and the 'o2' field is the
+     * index info. The index info can then be used to reconstruct the index on rollback.
+     *
+     * If a user specifies {dropIndexes: 'foo', index: '*'}, each index dropped will have its own
+     * oplog entry. This means it's possible to roll back half of the index drops.
+     ','line_number':413,'multiline':True]['text':'*
+     * This function logs an oplog entry when a 'renameCollection' command on a collection is
+     * executed. It should be used specifically in instances where the optime is necessary to
+     * be obtained prior to performing the actual rename, and should only be used in conjunction
+     * with postRenameCollection.
+     * Returns the optime of the oplog entry successfully written to the oplog.
+     * Returns a null optime if an oplog entry was not written for this operation.
+     ','line_number':428,'multiline':True]['text':'*
+     * This function performs all op observer handling for a 'renameCollection' command except for
+     * logging the oplog entry. It should be used specifically in instances where the optime is
+     * necessary to be obtained prior to performing the actual rename, and should only be used in
+     * conjunction with preRenameCollection.
+     ','line_number':445,'multiline':True]['text':'*
+     * This function logs an oplog entry when a 'renameCollection' command on a collection is
+     * executed. It calls preRenameCollection to log the entry and postRenameCollection to do all
+     * other handling.
+     ','line_number':457,'multiline':True]['text':'*
+     * The onTransaction Start method is called at the beginning of a multi-document transaction.
+     * It must not be called when the transaction is already in progress.
+     ','line_number':484,'multiline':True]['text':'*
+     * The onUnpreparedTransactionCommit method is called on the commit of an unprepared
+     * transaction, before the RecoveryUnit onCommit() is called.  It must not be called when no
+     * transaction is active.
+     *
+     * 'reservedSlots' is a list of oplog slots reserved for the oplog entries in a transaction.
+     *
+     * The 'transactionOperations' contains the list of CRUD operations (formerly 'statements') to
+     * be applied in this transaction.
+     *
+     * The 'applyOpsOperationAssignment' contains a representation of "applyOps" entries and oplog
+     * slots to be used for writing pre- and post- image oplog entries for a transaction.
+     ','line_number':490,'multiline':True]['text':'*
+     * The onPreparedTransactionCommit method is called on the commit of a prepared transaction,
+     * after the RecoveryUnit onCommit() is called.  It must not be called when no transaction is
+     * active.
+     *
+     * The 'commitOplogEntryOpTime' is passed in to be used as the OpTime of the oplog entry. The
+     * 'commitTimestamp' is the timestamp at which the multi-document transaction was committed.
+     *
+     * The 'statements' are the list of CRUD operations to be applied in this transaction.
+     ','line_number':510,'multiline':True]['text':'*
+     * Events for logical grouping of writes to be replicated atomically.
+     * After onBatchedWriteStart(), the replication subsystem is prepared to
+     * start collecting operations to replicate in an applyOps oplog entry.
+     ','line_number':526,'multiline':True]['text':'*
+     * The write operations between onBatchedWriteStart() and onBatchedWriteCommit()
+     * are gathered in a single applyOps oplog entry, similar to multi-doc transactions, and written
+     * to the oplog.
+     ','line_number':533,'multiline':True]['text':'*
+     * Clears the accumulated write operations. No further writes is allowed in this storage
+     * transaction (WriteUnitOfWork). Calling this function after onBatchedWriteCommit()
+     * should be fine for cleanup purposes.
+     ','line_number':540,'multiline':True]['text':'*
+     * This method is called before an atomic transaction is prepared. It must be called when a
+     * transaction is active.
+     *
+     * The 'transactionOperations' contains the list of CRUD operations to be applied in this
+     * transaction. The operations may be modified by setting pre-image and post-image oplog entry
+     * timestamps.
+     *
+     * The 'applyOpsOperationAssignment' contains a representation of "applyOps" entries and oplog
+     * slots to be used for writing pre- and post- image oplog entries for a transaction.
+     *
+     * The 'wallClockTime' is the time to record as wall clock time on oplog entries resulting from
+     * transaction preparation.
+     ','line_number':547,'multiline':True]['text':'*
+     * The onTransactionPrepare method is called when an atomic transaction is prepared. It must be
+     * called when a transaction is active.
+     *
+     * 'reservedSlots' is a list of oplog slots reserved for the oplog entries in a transaction. The
+     * last reserved slot represents the prepareOpTime used for the prepare oplog entry.
+     *
+     * The 'transactionOperations' contains the list of CRUD operations to be applied in
+     * this transaction.
+     *
+     * The 'applyOpsOperationAssignment' contains a representation of "applyOps" entries and oplog
+     * slots to be used for writing pre- and post- image oplog entries for a transaction.
+     * The same "applyOps" information should be passed to 'preTransactionPrepare()'.
+     *
+     * The 'numberOfPrePostImagesToWrite' is the number of CRUD operations that have a pre-image
+     * to write as a noop oplog entry. The op observer will reserve oplog slots for these
+     * preimages in addition to the statements.
+     *
+     * The 'wallClockTime' is the time to record as wall clock time on oplog entries resulting from
+     * transaction preparation. The same time value should be passed to 'preTransactionPrepare()'.
+     ','line_number':567,'multiline':True]['text':'*
+     * The postTransactionPrepare method is called after an atomic transaction is prepared. It must
+     * be called when a transaction is active.
+     *
+     * 'reservedSlots' is a list of oplog slots reserved for the oplog entries in a transaction. The
+     * last reserved slot represents the prepareOpTime used for the prepare oplog entry.
+     *
+     * The 'transactionOperations' contains the list of CRUD operations to be applied in
+     * this transaction.
+     ','line_number':597,'multiline':True]['text':'*
+     * This method is called when a transaction transitions into prepare while it is not primary,
+     * e.g. during secondary oplog application or recoverying prepared transactions from the
+     * oplog after restart. The method explicitly requires a session id (i.e. does not use the
+     * session id attached to the opCtx) because transaction oplog application currently applies the
+     * oplog entries for each prepared transaction in multiple internal sessions acquired from the
+     * InternalSessionPool. Currently, those internal sessions are completely unrelated to the
+     * session for the transaction itself. For a non-retryable internal transaction, not using the
+     * transaction session id in the codepath here can cause the opTime for the transaction to
+     * show up in the chunk migration opTime buffer although the writes they correspond to are not
+     * retryable and therefore are discarded anyway.
+     *
+     ','line_number':611,'multiline':True]['text':'*
+     * The onTransactionAbort method is called when an atomic transaction aborts, before the
+     * RecoveryUnit onRollback() is called. It must not be called when the transaction to abort is
+     * active.
+     *
+     * If the transaction was prepared, then 'abortOplogEntryOpTime' is passed in to be used as the
+     * OpTime of the oplog entry.
+     ','line_number':629,'multiline':True]['text':'*
+     * A structure to hold information about a replication rollback suitable to be passed along to
+     * any external subsystems that need to be notified of a rollback occurring.
+     ','line_number':640,'multiline':True]['text':' A count of all oplog entries seen during rollback (even no-op entries).','line_number':645,'multiline':False]['text':' Set of all namespaces from ops being rolled back.','line_number':648,'multiline':False]['text':' Set of all session ids from ops being rolled back.','line_number':651,'multiline':False]['text':' Maps UUIDs to a set of BSONObjs containing the _ids of the documents that will be deleted','line_number':654,'multiline':False]['text':' from that collection due to rollback, and is used to populate rollback files.','line_number':655,'multiline':False]['text':' For simplicity, this BSONObj set uses the simple binary comparison, as it is never wrong','line_number':656,'multiline':False]['text':' to consider two _ids as distinct even if the collection default collation would put them','line_number':657,'multiline':False]['text':' in the same equivalence class.','line_number':658,'multiline':False]['text':' True if the shard identity document was rolled back.','line_number':661,'multiline':False]['text':' True if the config.version document was rolled back.','line_number':664,'multiline':False]['text':' Maps command names to a count of the number of those commands that are being rolled back.','line_number':667,'multiline':False]['text':'*
+     * This function will get called after the replication system has completed a rollback. This
+     * means that all on-disk, replicated data will have been reverted to the rollback common point
+     * by the time this function is called. Subsystems may use this method to invalidate any in
+     * memory caches or, optionally, rebuild any data structures from the data that is now on disk.
+     * This function should not write any persistent state.
+     *
+     * When this function is called, there will be no locks held on the given OperationContext, and
+     * it will not be called inside an existing WriteUnitOfWork. Any work done inside this handler
+     * is expected to handle this on its own.
+     *
+     * This method is only applicable to the "rollback to a stable timestamp" algorithm, and is not
+     * called when using any other rollback algorithm i.e "rollback via refetch".
+     ','line_number':671,'multiline':True]['text':'*
+     * Called when the majority commit point is updated by replication.
+     *
+     * This is called while holding a very hot mutex (the ReplicationCoordinator mutex). Therefore
+     * it should avoid doing any work that can be done later, and avoid calling back into any
+     * replication functions that take this mutex (which would cause self-deadlock).
+     ','line_number':688,'multiline':True]['text':'*
+ * This struct is a decoration for `OperationContext` which contains collected `repl::OpTime`
+ * and `Date_t` timestamps of various critical stages of an operation performed by an OpObserver
+ * chain.
+ ','line_number':704,'multiline':True]['text':' Because `OpObserver`s are re-entrant, it is necessary to track the recursion depth to know','line_number':717,'multiline':False]['text':' when to actually clear the `reservedOpTimes` vector, using the `ReservedTimes` scope object.','line_number':718,'multiline':False]['text':'*
+ * This class is an RAII object to manage the state of the `OpObserver::Times` decoration on an
+ * operation context. Upon destruction the list of times in the decoration on the operation context
+ * is cleared. It is intended for use as a scope object in `OpObserverRegistry` to manage
+ * re-entrancy.
+ ','line_number':722,'multiline':True]['text':' namespace mongo','line_number':744,'multiline':False]

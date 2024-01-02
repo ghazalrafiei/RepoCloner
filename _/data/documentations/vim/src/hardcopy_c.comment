@@ -1,0 +1,264 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]['text':'
+ * hardcopy.c: printing to paper
+ ','line_number':10,'multiline':True]['text':'
+ * To implement printing on a platform, the following functions must be
+ * defined:
+ *
+ * int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
+ * Called once.  Code should display printer dialogue (if appropriate) and
+ * determine printer font and margin settings.  Reset has_color if the printer
+ * doesn't support colors at all.
+ * Returns FAIL to abort.
+ *
+ * int mch_print_begin(prt_settings_T *settings)
+ * Called to start the print job.
+ * Return FALSE to abort.
+ *
+ * int mch_print_begin_page(char_u *msg)
+ * Called at the start of each page.
+ * "msg" indicates the progress of the print job, can be NULL.
+ * Return FALSE to abort.
+ *
+ * int mch_print_end_page()
+ * Called at the end of each page.
+ * Return FALSE to abort.
+ *
+ * int mch_print_blank_page()
+ * Called to generate a blank page for collated, duplex, multiple copy
+ * document.  Return FALSE to abort.
+ *
+ * void mch_print_end(prt_settings_T *psettings)
+ * Called at normal end of print job.
+ *
+ * void mch_print_cleanup()
+ * Called if print job ends normally or is abandoned. Free any memory, close
+ * devices and handles.  Also called when mch_print_begin() fails, but not
+ * when mch_print_init() fails.
+ *
+ * void mch_print_set_font(int Bold, int Italic, int Underline);
+ * Called whenever the font style changes.
+ *
+ * void mch_print_set_bg(long_u bgcol);
+ * Called to set the background color for the following text. Parameter is an
+ * RGB value.
+ *
+ * void mch_print_set_fg(long_u fgcol);
+ * Called to set the foreground color for the following text. Parameter is an
+ * RGB value.
+ *
+ * mch_print_start_line(int margin, int page_line)
+ * Sets the current position at the start of line "page_line".
+ * If margin is TRUE start in the left margin (for header and line number).
+ *
+ * int mch_print_text_out(char_u *p, int len);
+ * Output one character of text p[len] at the current position.
+ * Return TRUE if there is no room for another character in the same line.
+ *
+ * Note that the generic code has no idea of margins. The machine code should
+ * simply make the page look smaller!  The header and the line numbers are
+ * printed in the margin.
+ ','line_number':18,'multiline':True]['text':'
+ * These values determine the print position on a page.
+ ','line_number':125,'multiline':True]['text':' remaining spaces for a TAB','line_number':130,'multiline':False]['text':' virtual column for computing TABs','line_number':131,'multiline':False]['text':' byte column','line_number':132,'multiline':False]['text':' line nr in the buffer','line_number':133,'multiline':False]['text':' bytes printed so far','line_number':134,'multiline':False]['text':' seen form feed character','line_number':135,'multiline':False]['text':'
+ * Parse 'printoptions' and set the flags in "printer_opts".
+ * Returns an error message or NULL;
+ ','line_number':142,'multiline':True]['text':'
+ * Parse 'printmbfont' and set the flags in "mbfont_opts".
+ * Returns an error message or NULL;
+ ','line_number':153,'multiline':True]['text':'
+ * Parse a list of options in the form
+ * option:value,option:value,option:value
+ *
+ * "value" can start with a number which is parsed out, e.g.  margin:12mm
+ *
+ * Returns an error message for an illegal option, NULL otherwise.
+ * Only used for the printer at the moment...
+ ','line_number':164,'multiline':True]['text':' init for GCC','line_number':185,'multiline':False]['text':' Save the old values, so that they can be restored in case of an error.','line_number':188,'multiline':False]['text':'
+     * Repeat for all comma separated parts.
+     ','line_number':199,'multiline':True]['text':' advances p','line_number':237,'multiline':False]['text':' Restore old options in case of error','line_number':250,'multiline':False]['text':'
+ * If using a dark background, the colors will probably be too bright to show
+ * up well on white paper, so reduce their brightness.
+ ','line_number':260,'multiline':True]['text':' TODO: Should check for xterm with 88 or 256 colors.','line_number':275,'multiline':False]['text':' TODO: HL_UNDERDOUBLE, HL_UNDERDOTTED, HL_UNDERDASHED','line_number':296,'multiline':False]['text':' FEAT_SYN_HL','line_number':332,'multiline':False]['text':'
+ * Print the line number in the left margin.
+ ','line_number':368,'multiline':True]['text':' Leave two spaces between the number and the text; depends on','line_number':385,'multiline':False]['text':' PRINT_NUMBER_WIDTH.','line_number':386,'multiline':False]['text':' Set colors for next character.','line_number':393,'multiline':False]['text':' Set colors and font back to normal.','line_number':398,'multiline':False]['text':'
+ * Get the currently effective header height.
+ ','line_number':405,'multiline':True]['text':'
+ * Return TRUE if using a line number for printing.
+ ','line_number':416,'multiline':True]['text':'
+ * Return the unit used in a margin item in 'printoptions'.
+ * Returns PRT_UNIT_NONE if not recognized.
+ ','line_number':426,'multiline':True]['text':'
+ * Print the page header.
+ ','line_number':449,'multiline':True]['text':' Also use the space for the line number.','line_number':464,'multiline':False]['text':'
+	 * Need to (temporarily) set current line number and first/last line
+	 * number on the 'window'.  Since we don't know how long the page is,
+	 * set the first and current line number to the top line, and guess
+	 * that the page length is 64.
+	 ','line_number':477,'multiline':True]['text':' Reset line numbers','line_number':494,'multiline':False]['text':' Use a negative line number to indicate printing in the top margin.','line_number':507,'multiline':False]['text':' out of room in header','line_number':515,'multiline':False]['text':' Set colors for next character.','line_number':526,'multiline':False]['text':' Set colors and font back to normal.','line_number':531,'multiline':False]['text':'
+ * Display a print status message.
+ ','line_number':538,'multiline':True]['text':' Expand things like "%.ps".','line_number':567,'multiline':False]['text':'
+     * Initialise for printing.  Ask the user for settings, unless forceit is
+     * set.
+     * The mch_print_init() code should set up margins if applicable. (It may
+     * not be a real printer - for example the engine might generate HTML or
+     * PS.)
+     ','line_number':580,'multiline':True]['text':' Set up printing attributes for line numbers','line_number':617,'multiline':False]['text':'
+     * Syntax highlighting of line numbers.
+     ','line_number':624,'multiline':True]['text':'
+     * Estimate the total lines to be printed
+     ','line_number':639,'multiline':True]['text':' Set colors and font to normal.','line_number':650,'multiline':False]['text':'
+     * Loop over collated copies: 1 2 3, 1 2 3, ...
+     ','line_number':670,'multiline':True]['text':' current print position','line_number':678,'multiline':False]['text':' print position at page start','line_number':679,'multiline':False]['text':' Splitting jobs: Stop a previous job and start a new one.','line_number':688,'multiline':False]['text':'
+	 * Loop over all pages in the print job: 1 2 3 ...
+	 ','line_number':694,'multiline':True]['text':'
+	     * Loop over uncollated copies: 1 1 1, 2 2 2, 3 3 3, ...
+	     * For duplex: 12 12 12 34 34 34, ...
+	     ','line_number':699,'multiline':True]['text':' Set the print position to the start of this page.','line_number':707,'multiline':False]['text':'
+		 * Do front and rear side of a page.
+		 ','line_number':710,'multiline':True]['text':'
+		     * Print one page.
+		     ','line_number':715,'multiline':True]['text':' Check for interrupt character every page.','line_number':719,'multiline':False]['text':'
+		     * Output header if required
+		     ','line_number':741,'multiline':True]['text':' finished a file line','line_number':755,'multiline':False]['text':' reached the end','line_number':759,'multiline':False]['text':' Line had a formfeed in it - start new page but','line_number':763,'multiline':False]['text':' stay on the current line','line_number':764,'multiline':False]['text':' reached the end','line_number':772,'multiline':False]['text':'
+		 * Extra blank page for duplexing with odd number of pages and
+		 * more copies to come.
+		 ','line_number':775,'multiline':True]['text':' Remember the position where the next page starts.','line_number':790,'multiline':False]['text':'
+ * Print one page line.
+ * Return the next column to print, or zero if the line is finished.
+ ','line_number':811,'multiline':True]['text':' left over from wrap halfway a tab','line_number':842,'multiline':False]['text':'
+     * Loop over the columns until the end of the file line or right margin.
+     ','line_number':850,'multiline':True]['text':'
+	 * syntax highlighting stuff.
+	 ','line_number':859,'multiline':True]['text':' Get the line again, a multi-line regexp may invalidate it.','line_number':869,'multiline':False]['text':'
+	 * Appropriately expand any tabs to spaces.
+	 ','line_number':883,'multiline':True]['text':' Keep the TAB if we didn't finish it.','line_number':904,'multiline':False]['text':'
+     * Start next line of file if we clip lines, or have reached end of the
+     * line, unless we are doing a formfeed.
+     ','line_number':929,'multiline':True]['text':'
+ * PS printer stuff.
+ *
+ * Sources of information to help maintain the PS printing code:
+ *
+ * 1. PostScript Language Reference, 3rd Edition,
+ *      Addison-Wesley, 1999, ISBN 0-201-37922-8
+ * 2. PostScript Language Program Design,
+ *      Addison-Wesley, 1988, ISBN 0-201-14396-8
+ * 3. PostScript Tutorial and Cookbook,
+ *      Addison Wesley, 1985, ISBN 0-201-10179-3
+ * 4. PostScript Language Document Structuring Conventions Specification,
+ *    version 3.0,
+ *      Adobe Technote 5001, 25th September 1992
+ * 5. PostScript Printer Description File Format Specification, Version 4.3,
+ *      Adobe technote 5003, 9th February 1996
+ * 6. Adobe Font Metrics File Format Specification, Version 4.1,
+ *      Adobe Technote 5007, 7th October 1998
+ * 7. Adobe CMap and CIDFont Files Specification, Version 1.0,
+ *      Adobe Technote 5014, 8th October 1996
+ * 8. Adobe CJKV Character Collections and CMaps for CID-Keyed Fonts,
+ *      Adoboe Technote 5094, 8th September, 2001
+ * 9. CJKV Information Processing, 2nd Edition,
+ *      O'Reilly, 2002, ISBN 1-56592-224-7
+ *
+ * Some of these documents can be found in PDF form on Adobe's web site -
+ * http://www.adobe.com
+ ','line_number':944,'multiline':True]['text':' Default user space resolution','line_number':973,'multiline':False]['text':' width and height in points for portrait','line_number':980,'multiline':False]['text':' Yes, it is wider than taller!','line_number':997,'multiline':False]['text':' PS font names, must be in Roman, Bold, Italic, Bold-Italic order','line_number':1004,'multiline':False]['text':' Standard font metrics for Courier family','line_number':1020,'multiline':False]['text':' Generic font metrics for multi-byte fonts','line_number':1029,'multiline':False]['text':' Pointer to current font set being used','line_number':1038,'multiline':False]['text':' Structures to map user named encoding and mapping to PS equivalents for','line_number':1041,'multiline':False]['text':' building CID font name','line_number':1042,'multiline':False]['text':' Japanese encodings and charsets','line_number':1067,'multiline':False]['text':' Simplified Chinese encodings and charsets','line_number':1099,'multiline':False]['text':' Traditional Chinese encodings and charsets','line_number':1135,'multiline':False]['text':' Korean encodings and charsets','line_number':1172,'multiline':False]['text':' Collections of encodings and charsets for multi-byte printing','line_number':1195,'multiline':False]['text':' Types of PS resource file currently used','line_number':1251,'multiline':False]['text':' The PS prolog file version number has to match - if the prolog file is','line_number':1256,'multiline':False]['text':' updated, increment the number in the file and here.  Version checking was','line_number':1257,'multiline':False]['text':' added as of VIM 6.2.','line_number':1258,'multiline':False]['text':' The CID prolog file version number behaves as per PS prolog.','line_number':1259,'multiline':False]['text':' Table of VIM and prolog versions:','line_number':1260,'multiline':False]['text':'','line_number':1261,'multiline':False]['text':' VIM      Prolog  CIDProlog','line_number':1262,'multiline':False]['text':' 6.2      1.3','line_number':1263,'multiline':False]['text':' 7.0      1.4	    1.0','line_number':1264,'multiline':False]['text':' String versions of PS resource types - indexed by constants above so don't','line_number':1268,'multiline':False]['text':' re-order!','line_number':1269,'multiline':False]['text':' Strings to look for in a PS resource file','line_number':1277,'multiline':False]['text':' Data for table based DSC comment recognition, easy to extend if VIM needs to','line_number':1285,'multiline':False]['text':' read more comments.','line_number':1286,'multiline':False]['text':'
+ * Variables for the output PostScript file.
+ ','line_number':1324,'multiline':True]['text':'
+ * Various offsets and dimensions in default PostScript user space (points).
+ * Used for text positioning calculations
+ ','line_number':1331,'multiline':True]['text':'
+ * Various control variables used to decide when and how to change the
+ * PostScript graphics state.
+ ','line_number':1349,'multiline':True]['text':'
+ * Variables controlling physical printing.
+ ','line_number':1371,'multiline':True]['text':'
+ * Buffers used when generating PostScript output
+ ','line_number':1381,'multiline':True]['text':'
+ * Write a string.
+ ','line_number':1423,'multiline':True]['text':'
+ * Write an int and a space.
+ ','line_number':1433,'multiline':True]['text':'
+ * Write a boolean and a space.
+ ','line_number':1443,'multiline':True]['text':'
+ * Write PostScript to re-encode and define the font.
+ ','line_number':1453,'multiline':True]['text':'
+ * Write a line to define the CID font.
+ ','line_number':1475,'multiline':True]['text':'
+ * Write a line to define a duplicate of a CID font
+ ','line_number':1489,'multiline':True]['text':'
+ * Convert a real value into an integer and fractional part as integers, with
+ * the fractional part being in the range [0,10^precision).  The fractional part
+ * is also rounded based on the precision + 1'th fractional digit.
+ ','line_number':1500,'multiline':True]['text':'
+ * Write a real and a space.  Save bytes if real value has no fractional part!
+ * We use prt_real_bits() as %f in sprintf uses the locale setting to decide
+ * what decimal point character to use, but PS always requires a '.'.
+ ','line_number':1527,'multiline':True]['text':' Emit integer part','line_number':1539,'multiline':False]['text':' Only emit fraction if necessary','line_number':1542,'multiline':False]['text':' Remove any trailing zeros','line_number':1545,'multiline':False]['text':' Emit fraction left padded with zeros','line_number':1551,'multiline':False]['text':'
+ * Write a line to define a numeric variable.
+ ','line_number':1559,'multiline':True]['text':' Convert size from font space to user space at current font scale','line_number':1573,'multiline':False]['text':' Any background color must be drawn first','line_number':1582,'multiline':False]['text':' Size of rect of background color on which text is printed','line_number':1595,'multiline':False]['text':' Lastly add the color of the background','line_number':1599,'multiline':False]['text':' Draw underlines before the text as it makes it slightly easier to','line_number':1608,'multiline':False]['text':' find the starting point.','line_number':1609,'multiline':False]['text':' Underline length of text run','line_number':1620,'multiline':False]['text':' Draw the text','line_number':1624,'multiline':False]['text':' Add a moveto if need be and use the appropriate show procedure','line_number':1634,'multiline':False]['text':' moveto and a show','line_number':1639,'multiline':False]['text':' Simple show','line_number':1643,'multiline':False]['text':' Look for named resource file in runtimepath','line_number':1673,'multiline':False]['text':' PS CR and LF characters have platform independent values','line_number':1686,'multiline':False]['text':' Static buffer to read initial comments in a resource file, some can have a','line_number':1690,'multiline':False]['text':' couple of KB of comments!','line_number':1691,'multiline':False]['text':' Move to start of next line and then find end of line','line_number':1708,'multiline':False]['text':' Force not equal if string is longer than remainder of line','line_number':1732,'multiline':False]['text':' prt_next_dsc() - returns detail on next DSC comment line found.  Returns true','line_number':1770,'multiline':False]['text':' if a DSC comment is found, else false','line_number':1771,'multiline':False]['text':' Move to start of next line','line_number':1778,'multiline':False]['text':' DSC comments always start %%','line_number':1782,'multiline':False]['text':' Find type of DSC comment','line_number':1786,'multiline':False]['text':' Return type of comment','line_number':1794,'multiline':False]['text':' Unrecognised DSC comment, skip to ws after comment leader','line_number':1800,'multiline':False]['text':' Skip ws to comment value','line_number':1807,'multiline':False]['text':'
+ * Improved hand crafted parser to get the type, title, and version number of a
+ * PS resource file so the file details can be added to the DSC header comments.
+ ','line_number':1818,'multiline':True]['text':' Parse first line to ensure valid resource file','line_number':1840,'multiline':False]['text':' Skip over any version numbers and following ws','line_number':1867,'multiline':False]['text':' Decide type of resource in the file','line_number':1885,'multiline':False]['text':' Look for title and version of resource','line_number':1902,'multiline':False]['text':' Won't find title or resource after this comment, stop searching','line_number':1927,'multiline':False]['text':' Not interested in whatever comment this line had','line_number':1932,'multiline':False]['text':' Version number m.n should match, the revision number does not matter','line_number':1950,'multiline':False]['text':' Other checks to be added as needed','line_number':1958,'multiline':False]['text':' TODO - should scan 'text' for any chars needing escaping!','line_number':1987,'multiline':False]['text':' if NULL add to previous','line_number':2015,'multiline':False]['text':' Only output the comment if we need to.','line_number':2052,'multiline':False]['text':' Note: tumble is ignored if we are not duplexing','line_number':2053,'multiline':False]['text':' Note: no space wanted so don't use prt_write_int()','line_number':2073,'multiline':False]['text':' Free off all CID font names created, but first clear duplicate','line_number':2115,'multiline':False]['text':' pointers to the same string (when the same font is used for more than','line_number':2116,'multiline':False]['text':' one style).','line_number':2117,'multiline':False]['text':'
+ * Calculate margins for given width and height from printoptions settings.
+ ','line_number':2176,'multiline':True]['text':' If we are outputting multi-byte characters then line numbers will be','line_number':2208,'multiline':False]['text':' printed with half width characters','line_number':2209,'multiline':False]['text':'
+ * Get number of lines of text that fit on a page (excluding the header).
+ ','line_number':2234,'multiline':True]['text':'
+     * Calculate offset to lower left corner of background rect based on actual
+     * font height (based on its bounding box) and the line height, handling the
+     * case where the font height can exceed the line height.
+     ','line_number':2242,'multiline':True]['text':' Get height for topmost line based on background rect offset.','line_number':2256,'multiline':False]['text':' Calculate lpp','line_number':2259,'multiline':False]['text':' Adjust top margin if there is a header','line_number':2262,'multiline':False]['text':' Look for recognised encoding','line_number':2279,'multiline':False]['text':' Look for recognised character set, using default if one is not given','line_number':2304,'multiline':False]['text':'
+     * TODO:
+     * If "forceit" is false: pop up a dialog to select:
+     *	- printer name
+     *	- copies
+     *	- collated/uncollated
+     *	- duplex off/long side/short side
+     *	- paper size
+     *	- portrait/landscape
+     *	- font size
+     *
+     * If "forceit" is true: use the default printer and settings
+     ','line_number':2344,'multiline':True]['text':'
+     * Set up font and encoding.
+     ','line_number':2361,'multiline':True]['text':' Look for a multi-byte font that matches the encoding and character set.','line_number':2368,'multiline':False]['text':' Only look if multi-byte character set is defined, or using multi-byte','line_number':2369,'multiline':False]['text':' encoding other than Unicode.  This is because a Unicode encoding does not','line_number':2370,'multiline':False]['text':' uniquely identify a CJK character set to use.','line_number':2371,'multiline':False]['text':' Use first encoding matched if no charset matched','line_number':2393,'multiline':False]['text':' Build CMap name - will be same for all multi-byte fonts used','line_number':2404,'multiline':False]['text':' Check encoding and character set are compatible','line_number':2410,'multiline':False]['text':' Add charset name if not empty','line_number':2417,'multiline':False]['text':' Add custom CMap character set name','line_number':2427,'multiline':False]['text':' CMap name ends with (optional) encoding name and -H for horizontal','line_number':2437,'multiline':False]['text':' Derive CID font names with fallbacks if not defined','line_number':2452,'multiline':False]['text':' Check if need to use Courier for ASCII code range, and if so pick up','line_number':2473,'multiline':False]['text':' the encoding to use','line_number':2474,'multiline':False]['text':' Use national ASCII variant unless ASCII wanted','line_number':2479,'multiline':False]['text':'
+     * Find the size of the paper and set the margins.
+     ','line_number':2495,'multiline':True]['text':'
+     * Set PS pagesize based on media dimensions and print orientation.
+     * Note: Media and page sizes have defined meanings in PostScript and should
+     * be kept distinct.  Media is the paper (or transparency, or ...) that is
+     * printed on, whereas the page size is the area that the PostScript
+     * interpreter renders into.
+     ','line_number':2519,'multiline':True]['text':'
+     * Set PS page margins based on the PS pagesize, not the mediasize - this
+     * needs to be done before the cpl and lpp are calculated.
+     ','line_number':2537,'multiline':True]['text':'
+     * Set up the font size.
+     ','line_number':2548,'multiline':True]['text':'
+     * Return the number of characters per line, and lines per page for the
+     * generic print code.
+     ','line_number':2557,'multiline':True]['text':' Catch margin settings that leave no space for output!','line_number':2564,'multiline':False]['text':'
+     * Sort out the number of copies to be printed.  PS by default will do
+     * uncollated copies for you, so once we know how many uncollated copies are
+     * wanted cache it away and lie to the generic code that we only want one
+     * uncollated copy.
+     ','line_number':2568,'multiline':True]['text':' TODO: Get number of collated copies wanted.','line_number':2581,'multiline':False]['text':' TODO: Get number of uncollated copies wanted and update the cached','line_number':2586,'multiline':False]['text':' count.','line_number':2587,'multiline':False]['text':'
+     * Set up printer duplex and tumble based on Duplex option setting - default
+     * is long sided duplex printing (i.e. no tumble).
+     ','line_number':2593,'multiline':True]['text':' For now user abort not supported','line_number':2612,'multiline':False]['text':' If the user didn't specify a file name, use a temp file.','line_number':2615,'multiline':False]['text':'
+     * PS DSC Header comments - no PS code!
+     ','line_number':2732,'multiline':True]['text':' Note: to ensure Clean8bit I don't think we can use LC_TIME','line_number':2741,'multiline':False]['text':' The bbox does not change with orientation - it is always in the default','line_number':2748,'multiline':False]['text':' user coordinate system!  We have to recalculate right and bottom','line_number':2749,'multiline':False]['text':' coordinates based on the font metrics for the bbox to be accurate.','line_number':2750,'multiline':False]['text':' In portrait printing the fixed point is the top left corner so we','line_number':2757,'multiline':False]['text':' derive the bbox from that point.  We have the expected cpl chars','line_number':2758,'multiline':False]['text':' across the media and lpp lines down the media.','line_number':2759,'multiline':False]['text':' In landscape printing the fixed point is the bottom left corner so we','line_number':2768,'multiline':False]['text':' derive the bbox from that point.  We have lpp chars across the media','line_number':2769,'multiline':False]['text':' and cpl lines up the media.','line_number':2770,'multiline':False]['text':' The media width and height does not change with landscape printing!','line_number':2778,'multiline':False]['text':' Define fonts needed','line_number':2783,'multiline':False]['text':' Search for external resources VIM supplies','line_number':2794,'multiline':False]['text':' Look for required version of multi-byte printing procset','line_number':2806,'multiline':False]['text':' Find an encoding to use for printing.','line_number':2818,'multiline':False]['text':' Check 'printencoding'. If not set or not found, then use 'encoding'. If','line_number':2819,'multiline':False]['text':' that cannot be found then default to "latin1".','line_number':2820,'multiline':False]['text':' Note: VIM specific encoding header is always skipped.','line_number':2821,'multiline':False]['text':' 'printencoding' not set or not supported - find alternate','line_number':2828,'multiline':False]['text':' 8-bit 'encoding' is not supported','line_number':2835,'multiline':False]['text':' Use latin1 as default printing encoding','line_number':2837,'multiline':False]['text':' For the moment there are no checks on encoding resource files to','line_number':2849,'multiline':False]['text':' perform','line_number':2850,'multiline':False]['text':' Include ASCII range encoding vector','line_number':2859,'multiline':False]['text':' For the moment there are no checks on encoding resource files to','line_number':2868,'multiline':False]['text':' perform','line_number':2869,'multiline':False]['text':' Set up encoding conversion if required','line_number':2876,'multiline':False]['text':' Find user supplied CMap','line_number':2888,'multiline':False]['text':' List resources supplied','line_number':2898,'multiline':False]['text':'
+     * PS Document page defaults
+     ','line_number':2934,'multiline':True]['text':' List font resources most likely common to all pages','line_number':2939,'multiline':False]['text':' Paper will be used for all pages','line_number':2950,'multiline':False]['text':'
+     * PS Document prolog inclusion - all required procsets.
+     ','line_number':2955,'multiline':True]['text':' Add required procsets - NOTE: order is important!','line_number':2960,'multiline':False]['text':' Add CID font procset, and any user supplied CMap','line_number':2965,'multiline':False]['text':' There will be only one Roman font encoding to be included in the PS','line_number':2973,'multiline':False]['text':' file.','line_number':2974,'multiline':False]['text':'
+     * PS Document setup - must appear after the prolog
+     ','line_number':2980,'multiline':True]['text':' Device setup - page size and number of uncollated copies','line_number':2985,'multiline':False]['text':' Font resource inclusion and definition','line_number':2998,'multiline':False]['text':' When using Courier for ASCII range when printing multi-byte, need to','line_number':3001,'multiline':False]['text':' pick up ASCII encoding to use with it.','line_number':3002,'multiline':False]['text':' Define the CID fonts to be used in the job.	Typically CJKV fonts do','line_number':3024,'multiline':False]['text':' not have an italic form being a western style, so where no font is','line_number':3025,'multiline':False]['text':' defined for these faces VIM falls back to an existing face.','line_number':3026,'multiline':False]['text':' Note: if using Courier for the ASCII range then the printout will','line_number':3027,'multiline':False]['text':' have bold/italic/bolditalic regardless of the setting of printmbfont.','line_number':3028,'multiline':False]['text':' Use ROMAN for BOLD','line_number':3046,'multiline':False]['text':' Use ROMAN for OBLIQUE','line_number':3059,'multiline':False]['text':' Use BOLD for BOLDOBLIQUE','line_number':3072,'multiline':False]['text':' Misc constant vars used for underlining and background rects','line_number':3076,'multiline':False]['text':' Fail if any problems writing out to the PS file','line_number':3085,'multiline':False]['text':'
+     * Output any info we don't know in toto until we finish
+     ','line_number':3102,'multiline':True]['text':' Write CTRL-D to close serial communication link if used.','line_number':3109,'multiline':False]['text':' NOTHING MUST BE WRITTEN AFTER THIS!','line_number':3110,'multiline':False]['text':' Close the file first.','line_number':3116,'multiline':False]['text':' Not printing to a file: use 'printexpr' to print the file.','line_number':3124,'multiline':False]['text':' Set up page transformation for landscape printing.','line_number':3168,'multiline':False]['text':' We have reset the font attributes, force setting them again.','line_number':3177,'multiline':False]['text':' Ideally VIM would create a rearranged CID font to combine a Roman and','line_number':3224,'multiline':False]['text':' CJKV font to do what VIM is doing here - use a Roman font for characters','line_number':3225,'multiline':False]['text':' in the ASCII range, and the original CID font for everything else.','line_number':3226,'multiline':False]['text':' The problem is that GhostScript still (as of 8.13) does not support','line_number':3227,'multiline':False]['text':' rearranged fonts even though they have been documented by Adobe for 7','line_number':3228,'multiline':False]['text':' years!  If they ever do, a lot of this code will disappear.','line_number':3229,'multiline':False]['text':' No longer in ASCII range - need to switch font','line_number':3237,'multiline':False]['text':' Now in ASCII range - need to switch font','line_number':3245,'multiline':False]['text':' Output any required changes to the graphics state, after flushing any','line_number':3275,'multiline':False]['text':' text buffered so far.','line_number':3276,'multiline':False]['text':' Reset count of number of chars that will be printed','line_number':3280,'multiline':False]['text':' Convert from multi-byte to 8-bit encoding','line_number':3339,'multiline':False]['text':' Multi-byte character strings are represented more efficiently as hex','line_number':3350,'multiline':False]['text':' strings when outputting clean 8 bit PS.','line_number':3351,'multiline':False]['text':' Add next character to buffer of characters to output.','line_number':3363,'multiline':False]['text':' Note: One printed character may require several PS characters to','line_number':3364,'multiline':False]['text':' represent it, but we only count them as one printed character.','line_number':3365,'multiline':False]['text':' Convert non-printing characters to either their escape or octal','line_number':3369,'multiline':False]['text':' sequence, ensures PS sent over a serial line does not interfere','line_number':3370,'multiline':False]['text':' with the comms protocol.','line_number':3371,'multiline':False]['text':' Need to free any translated characters','line_number':3396,'multiline':False]['text':' The downside of fp - use relative error on right margin check','line_number':3402,'multiline':False]['text':'FEAT_POSTSCRIPT','line_number':3456,'multiline':False]['text':'FEAT_PRINTER','line_number':3457,'multiline':False]

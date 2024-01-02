@@ -1,0 +1,82 @@
+['text':'*
+ *    Copyright (C) 2019-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * A special Controller for the sharding ConnectionPool
+ *
+ * This class has two special members:
+ * * A global set of synchronized Parameters for the ShardingTaskExecutorPool server parameters
+ * * A ReplicaSetChangeListener to inform it of changes to replica set membership
+ *
+ * When the MatchingStrategy from its Parameters is kDisabled, this class operates much like the
+ * LimitController but with its limits allowed to shift at runtime (via Parameters).
+ *
+ * When the MatchingStrategy is kMatchPrimaryNode, the limits are obeyed but, when the pool for a
+ * primary member calls updateHost, it can increase the targetConnections for the pool of each other
+ * member of its replica set. Note that this will, at time of writing, follow the "hosts" field
+ * from the primary isMaster combined with the seed list for the replica set. If the seed list were
+ * to include arbiters or hidden members, then they would also be subject to these constraints.
+ *
+ * When the MatchingStrategy is kMatchBusiestNode, it operates like kMatchPrimaryNode, but any pool
+ * can be responsible for increasing the targetConnections of each member of its set.
+ *
+ * Note that, in essence, there are three outside elements that can mutate the state of this class:
+ * * The ReplicaSetChangeNotifier can notify the listener which updates the host groups
+ * * The ServerParameters can update the Parameters which will used in the next update
+ * * The SpecificPools for its ConnectionPool can updateHost with their individual States
+ ','line_number':59,'multiline':True]['text':'*
+     * Validate that hostTimeoutMS is greater than the sum of pendingTimeoutMS and
+     * toRefreshTimeoutMS
+     ','line_number':128,'multiline':True]['text':'*
+     * Validate that pendingTimeoutMS is less than toRefreshTimeoutMS
+     ','line_number':134,'multiline':True]['text':'*
+     *  Matches the matching strategy string against a set of literals
+     *  and either sets gParameters.matchingStrategy or returns !Status::isOK().
+     ','line_number':140,'multiline':True]['text':'*
+     * GroupData is a shared state for a set of hosts (a replica set).
+     *
+     * When the ReplicaSetChangeListener is informed of a change to a replica set,
+     * it creates a new GroupData and fills it into _groupDatas[setName] and
+     * _groupAndIds[memberHost].
+     *
+     * When a SpecificPool calls updateHost, it then will update target for its group according to
+     * the MatchingStrategy. It will also postpone shutdown until all members of its group are ready
+     * to shutdown.
+     *
+     * Note that a PoolData can find itself orphaned from its GroupData during a reconfig.
+     ','line_number':172,'multiline':True]['text':' The members for this group','line_number':186,'multiline':False]['text':' The primary member for this group','line_number':189,'multiline':False]['text':' Id for each pool in the set','line_number':192,'multiline':False]['text':' The number of connections that all pools in the group should maintain','line_number':195,'multiline':False]['text':'*
+     * PoolData represents the current state for a SpecificPool.
+     *
+     * It is mutated by addHost/updateHost/removeHost and used along with Parameters to form
+     * Controls for getControls.
+     ','line_number':199,'multiline':True]['text':' The host associated with this pool','line_number':206,'multiline':False]['text':' A pool connected to a config server gets special treatment','line_number':209,'multiline':False]['text':' The GroupData associated with this pool.','line_number':212,'multiline':False]['text':' Note that this will be invalid if there was a replica set change','line_number':213,'multiline':False]['text':' The number of connections the host should maintain','line_number':216,'multiline':False]['text':' This host is able to shutdown','line_number':219,'multiline':False]['text':'*
+     * A GroupAndId allows incoming GroupData and PoolData to find each other
+     *
+     * Note that each side of the pair initializes independently. The side that is ctor'd last adds
+     * the id to the GroupData's poolIds and a GroupData ptr to the PoolData for maybeId. Likewise,
+     * the side that is dtor'd last removes the GroupAndId.
+     ','line_number':223,'multiline':True]['text':'* Needed by isConfigServer ','line_number':235,'multiline':True]['text':' Entires to _poolDatas are added by addHost() and removed by removeHost()','line_number':242,'multiline':False]['text':' Entries to _groupData are added by _addGroup() and removed by _removeGroup()','line_number':245,'multiline':False]['text':' Entries to _groupAndIds are added by the first caller of either addHost() or _addGroup() and','line_number':248,'multiline':False]['text':' removed by the last caller either removeHost() or _removeGroup(). This map exists to tie','line_number':249,'multiline':False]['text':' together a pool and a group based on a HostAndPort. It is hopefully used once, because a','line_number':250,'multiline':False]['text':' PoolId is much cheaper to index than a HostAndPort.','line_number':251,'multiline':False]['text':' namespace mongo','line_number':254,'multiline':False]

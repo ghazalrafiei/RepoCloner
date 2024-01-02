@@ -1,0 +1,22 @@
+['text':'
+ * This implements a machine-wide mutex to be used
+ * to synchronize CUDA calls (memory allocation and frees) and
+ * NCCL calls. This prevents a potential deadlock that
+ * can occur.
+ *
+ * The implementation has a few caveats:
+ *   - it assumes that PID are not reused
+ *   - there is a possible race between the creation (shm_open followed
+ *     by ftruncate) and the spin on 'isInitialized' (if the memory region is
+ *     not all zeroes).
+ *
+ * There are two implementations of the mutex and they vary mostly by how
+ * they wait:
+ *   - The ShmTicketMutex_t is a simple ticket based lock and processes will
+ *     queue up and only attempt to grab the lock when it is their turn
+ *   - The ShmTTSetMutex_t is a simple test-test-and-set mutex. It is possibly
+ *     faster for low contention.
+ *
+ * Use both as you would use any std::mutex. Both mutexes support try_lock as
+ * well.
+ ','line_number':1,'multiline':True]['text':' Try to open and map the shared memory location','line_number':76,'multiline':False]['text':' Create new object','line_number':86,'multiline':False]['text':' Some other process created first; loop around to re-open','line_number':89,'multiline':False]['text':' At this point, we are the creator of the shared object.','line_number':94,'multiline':False]['text':' Initialize the header_ (it's all 0 right now)','line_number':95,'multiline':False]['text':' Map memory and initialize','line_number':99,'multiline':False]['text':' Object exists, we just map it','line_number':115,'multiline':False]['text':' Wait for memory to be initialized','line_number':125,'multiline':False]['text':' Spin; should be done soon','line_number':127,'multiline':False]['text':' Now check if we can register ourself by incrementing countMapped.','line_number':129,'multiline':False]['text':' If we are "locked-out" (shared object being destroyed), retry','line_number':130,'multiline':False]['text':' We are participating in a lock. Destroy','line_number':146,'multiline':False]['text':' Copy and assignment operator are implicitly deleted','line_number':151,'multiline':False]['text':' Someone else has the lock. We check if that process is','line_number':184,'multiline':False]['text':' still alive','line_number':185,'multiline':False]['text':' The process no longer exists. Try to "steal" the lock','line_number':187,'multiline':False]['text':' Someone else has the lock. We check if that process is','line_number':213,'multiline':False]['text':' still alive','line_number':214,'multiline':False]['text':' The process no longer exists. Try to "steal" the lock once','line_number':217,'multiline':False]['text':' Unmap the memory. If we are the last one, "lock" the','line_number':241,'multiline':False]['text':' shared memory and free it if successful','line_number':242,'multiline':False]['text':' We were the last one. We attempt to lock out','line_number':246,'multiline':False]['text':' future processes by exchanging with something very negative','line_number':247,'multiline':False]['text':' This simplifies the checks when checking for lock out','line_number':248,'multiline':False]['text':' Empty loop','line_number':280,'multiline':False]['text':' Empty loop','line_number':306,'multiline':False]

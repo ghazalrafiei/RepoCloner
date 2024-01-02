@@ -1,0 +1,140 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':'*
+ * In a directed graph with a root node `R`, a node `A` is said to "dominate" a
+ * node `B` iff every path from `R` to `B` contains `A`. A node `A` is said to
+ * be the "immediate dominator" of a node `B` iff it dominates `B`, is not `B`
+ * itself, and does not dominate any other nodes which also dominate `B` in
+ * turn.
+ *
+ * If we take every node from a graph `G` and create a new graph `T` with edges
+ * to each node from its immediate dominator, then `T` is a tree (each node has
+ * only one immediate dominator, or none if it is the root). This tree is called
+ * a "dominator tree".
+ *
+ * This class represents a dominator tree constructed from a `JS::ubi::Node`
+ * heap graph. The domination relationship and dominator trees are useful tools
+ * for analyzing heap graphs because they tell you:
+ *
+ *   - Exactly what could be reclaimed by the GC if some node `A` became
+ *     unreachable: those nodes which are dominated by `A`,
+ *
+ *   - The "retained size" of a node in the heap graph, in contrast to its
+ *     "shallow size". The "shallow size" is the space taken by a node itself,
+ *     not counting anything it references. The "retained size" of a node is its
+ *     shallow size plus the size of all the things that would be collected if
+ *     the original node wasn't (directly or indirectly) referencing them. In
+ *     other words, the retained size is the shallow size of a node plus the
+ *     shallow sizes of every other node it dominates. For example, the root
+ *     node in a binary tree might have a small shallow size that does not take
+ *     up much space itself, but it dominates the rest of the binary tree and
+ *     its retained size is therefore significant (assuming no external
+ *     references into the tree).
+ *
+ * The simple, engineered algorithm presented in "A Simple, Fast Dominance
+ * Algorithm" by Cooper el al[0] is used to find dominators and construct the
+ * dominator tree. This algorithm runs in O(n^2) time, but is faster in practice
+ * than alternative algorithms with better theoretical running times, such as
+ * Lengauer-Tarjan which runs in O(e * log(n)). The big caveat to that statement
+ * is that Cooper et al found it is faster in practice *on control flow graphs*
+ * and I'm not convinced that this property also holds on *heap* graphs. That
+ * said, the implementation of this algorithm is *much* simpler than
+ * Lengauer-Tarjan and has been found to be fast enough at least for the time
+ * being.
+ *
+ * [0]: http://www.cs.rice.edu/~keith/EMBED/dom.pdf
+ ','line_number':26,'multiline':True]['text':' Types.','line_number':72,'multiline':False]['text':'*
+   * A pointer to an immediately dominated node.
+   *
+   * Don't use this type directly; it is no safer than regular pointers. This
+   * is only for use indirectly with range-based for loops and
+   * `DominatedSetRange`.
+   *
+   * @see JS::ubi::DominatorTree::getDominatedSet
+   ','line_number':83,'multiline':True]['text':'*
+   * A range of immediately dominated `JS::ubi::Node`s for use with
+   * range-based for loops.
+   *
+   * @see JS::ubi::DominatorTree::getDominatedSet
+   ','line_number':110,'multiline':True]['text':'*
+     * Safely skip ahead `n` dominators in the range, in O(1) time.
+     *
+     * Example usage:
+     *
+     *     mozilla::Maybe<DominatedSetRange> range =
+     *         myDominatorTree.getDominatedSet(myNode);
+     *     if (range.isNothing()) {
+     *         // Handle unknown nodes however you see fit...
+     *         return false;
+     *     }
+     *
+     *     // Don't care about the first ten, for whatever reason.
+     *     range->skip(10);
+     *     for (const JS::ubi::Node& dominatedNode : *range) {
+     *         // ...
+     *     }
+     ','line_number':142,'multiline':True]['text':'*
+   * The set of all dominated sets in a dominator tree.
+   *
+   * Internally stores the sets in a contiguous array, with a side table of
+   * indices into that contiguous array to denote the start index of each
+   * individual set.
+   ','line_number':169,'multiline':True]['text':' DominatedSets is not copy-able.','line_number':185,'multiline':False]['text':' DominatedSets is move-able.','line_number':189,'multiline':False]['text':'*
+     * Create the DominatedSets given the mapping of a node index to its
+     * immediate dominator. Returns `Some` on success, `Nothing` on OOM
+     * failure.
+     ','line_number':200,'multiline':True]['text':' Create a vector `dominated` holding a flattened set of buckets of','line_number':210,'multiline':False]['text':' immediately dominated children nodes, with a lookup table','line_number':211,'multiline':False]['text':' `indices` mapping from each node to the beginning of its bucket.','line_number':212,'multiline':False]['text':'','line_number':213,'multiline':False]['text':' This has three phases:','line_number':214,'multiline':False]['text':'','line_number':215,'multiline':False]['text':' 1. Iterate over the full set of nodes and count up the size of','line_number':216,'multiline':False]['text':'    each bucket. These bucket sizes are temporarily stored in the','line_number':217,'multiline':False]['text':'    `indices` vector.','line_number':218,'multiline':False]['text':'','line_number':219,'multiline':False]['text':' 2. Convert the `indices` vector to store the cumulative sum of','line_number':220,'multiline':False]['text':'    the sizes of all buckets before each index, resulting in a','line_number':221,'multiline':False]['text':'    mapping from node index to one past the end of that node's','line_number':222,'multiline':False]['text':'    bucket.','line_number':223,'multiline':False]['text':'','line_number':224,'multiline':False]['text':' 3. Iterate over the full set of nodes again, filling in bucket','line_number':225,'multiline':False]['text':'    entries from the end of the bucket's range to its','line_number':226,'multiline':False]['text':'    beginning. This decrements each index as a bucket entry is','line_number':227,'multiline':False]['text':'    filled in. After having filled in all of a bucket's entries,','line_number':228,'multiline':False]['text':'    the index points to the start of the bucket.','line_number':229,'multiline':False]['text':' 1','line_number':237,'multiline':False]['text':' 2','line_number':243,'multiline':False]['text':' 3','line_number':251,'multiline':False]['text':' Assert that our buckets are non-overlapping and don't run off the','line_number':259,'multiline':False]['text':' end of the vector.','line_number':260,'multiline':False]['text':'*
+     * Get the set of nodes immediately dominated by the node at
+     * `postOrder[nodeIndex]`.
+     ','line_number':273,'multiline':True]['text':' Data members.','line_number':289,'multiline':False]['text':' We use `UNDEFINED` as a sentinel value in the `doms` vector to signal','line_number':297,'multiline':False]['text':' that we haven't found any dominators for the node at the corresponding','line_number':298,'multiline':False]['text':' index in `postOrder` yet.','line_number':299,'multiline':False]['text':' Do the post order traversal of the heap graph and populate our','line_number':323,'multiline':False]['text':' predecessor sets.','line_number':324,'multiline':False]['text':' Populates the given `map` with an entry for each node to its index in','line_number':355,'multiline':False]['text':' `postOrder`.','line_number':356,'multiline':False]['text':' Convert the Node -> NodeSet predecessorSets to a index -> Vector<index>','line_number':371,'multiline':False]['text':' form.','line_number':372,'multiline':False]['text':' Initialize `doms` such that the immediate dominator of the `root` is the','line_number':411,'multiline':False]['text':' `root` itself and all others are `UNDEFINED`.','line_number':412,'multiline':False]['text':' Iterate in forward order so that we know all of a node's children in','line_number':443,'multiline':False]['text':' the dominator tree have already had their retained size','line_number':444,'multiline':False]['text':' computed. Then we can simply say that the retained size of a node is','line_number':445,'multiline':False]['text':' its shallow size (JS::ubi::Node::size) plus the retained sizes of its','line_number':446,'multiline':False]['text':' immediate children in the tree.','line_number':447,'multiline':False]['text':' The root node dominates itself, but shouldn't contribute to','line_number':453,'multiline':False]['text':' its own retained size.','line_number':454,'multiline':False]['text':' DominatorTree is not copy-able.','line_number':474,'multiline':False]['text':' DominatorTree is move-able.','line_number':478,'multiline':False]['text':'*
+   * Construct a `DominatorTree` of the heap graph visible from `root`. The
+   * `root` is also used as the root of the resulting dominator tree.
+   *
+   * The resulting `DominatorTree` instance must not outlive the
+   * `JS::ubi::Node` graph it was constructed from.
+   *
+   *   - For `JS::ubi::Node` graphs backed by the live heap graph, this means
+   *     that the `DominatorTree`'s lifetime _must_ be contained within the
+   *     scope of the provided `AutoCheckCannotGC` reference because a GC will
+   *     invalidate the nodes.
+   *
+   *   - For `JS::ubi::Node` graphs backed by some other offline structure
+   *     provided by the embedder, the resulting `DominatorTree`'s lifetime is
+   *     bounded by that offline structure's lifetime.
+   *
+   * In practice, this means that within SpiderMonkey we must treat
+   * `DominatorTree` as if it were backed by the live heap graph and trust
+   * that embedders with knowledge of the graph's implementation will do the
+   * Right Thing.
+   *
+   * Returns `mozilla::Nothing()` on OOM failure. It is the caller's
+   * responsibility to handle and report the OOM.
+   ','line_number':493,'multiline':True]['text':' From here on out we wish to avoid hash table lookups, and we use','line_number':530,'multiline':False]['text':' indices into `postOrder` instead of actual nodes wherever','line_number':531,'multiline':False]['text':' possible. This greatly improves the performance of this','line_number':532,'multiline':False]['text':' implementation, but we have to pay a little bit of upfront cost to','line_number':533,'multiline':False]['text':' convert our data structures to play along first.','line_number':534,'multiline':False]['text':' Iterate over the non-root nodes in reverse post order.','line_number':556,'multiline':False]['text':' Take the intersection of every predecessor's dominator set;','line_number':561,'multiline':False]['text':' that is the current best guess at the immediate dominator for','line_number':562,'multiline':False]['text':' this node.','line_number':563,'multiline':False]['text':' If the immediate dominator changed, we will have to do','line_number':591,'multiline':False]['text':' another pass of the outer while loop to continue the forward','line_number':592,'multiline':False]['text':' dataflow.','line_number':593,'multiline':False]['text':'*
+   * Get the root node for this dominator tree.
+   ','line_number':611,'multiline':True]['text':'*
+   * Return the immediate dominator of the given `node`. If `node` was not
+   * reachable from the `root` that this dominator tree was constructed from,
+   * then return the null `JS::ubi::Node`.
+   ','line_number':616,'multiline':True]['text':'*
+   * Get the set of nodes immediately dominated by the given `node`. If `node`
+   * is not a member of this dominator tree, return `Nothing`.
+   *
+   * Example usage:
+   *
+   *     mozilla::Maybe<DominatedSetRange> range =
+   *         myDominatorTree.getDominatedSet(myNode);
+   *     if (range.isNothing()) {
+   *         // Handle unknown node however you see fit...
+   *         return false;
+   *     }
+   *
+   *     for (const JS::ubi::Node& dominatedNode : *range) {
+   *         // Do something with each immediately dominated node...
+   *     }
+   ','line_number':633,'multiline':True]['text':'*
+   * Get the retained size of the given `node`. The size is placed in
+   * `outSize`, or 0 if `node` is not a member of the dominator tree. Returns
+   * false on OOM failure, leaving `outSize` unchanged.
+   ','line_number':662,'multiline':True]['text':' namespace ubi','line_number':688,'multiline':False]['text':' namespace JS','line_number':689,'multiline':False]['text':' js_UbiNodeDominatorTree_h','line_number':691,'multiline':False]

@@ -1,0 +1,584 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]['text':'
+Arcsinh & Arccosh  
+--------------------------------------
+
+
+    This source can be compiled into both Arcsine and Arccosine
+    routines. The definitions necessary to create the function follow.
+
+
+    Function Generation:
+
+    Along with any standard compile time definitions required  by  the  dpml
+    the following items should be defined on the compilation command line to
+    create the indicated routine.
+
+        Arcsinh :       ASINH
+            
+        Arccosh :       ACOSH
+            
+
+    To create each routine's 'include' file an initial compilation should be
+    done using the following definition in addition to those above.
+
+        MAKE_INCLUDE
+
+
+    Selectable Build-time Parameters:
+
+    The definitions below define the minimum  "overhang"  limits  for  those
+    ranges  of  the  routine  with  adjustable accuracy bounds.  The numbers
+    specified in  the  definitions  are  the  number  of  binary  digits  of
+    overhang.   A  complete  discussion  of  these  values  and their use is
+    included in the individual routine documentation.
+','line_number':51,'multiline':True]['text':'
+Arcsinh
+--------------------------
+
+    The Arcsinh designs described here are the result  of
+    an effort to create a fast Arcsinh routine with error bounds near 1/2
+    lsb.  The  inherent  conflict  is  that,  to  create  fast  routines  we
+    generally  need  to  give  up  some accuracy, and conversely, to increase
+    accuracy we often must give up speed.  As a  result,  the  design  we're
+    presenting  defines a user (builder) configureable routine.  That is, it
+    is set up such that the builder of a routine  may  choose,  through  the
+    proper  setting  of  parameters, the degree of accuracy of the generated
+    routine and hence, indirectly, its speed.
+
+
+    The Design:
+
+    The overall domain of the Arcsinh function has been divided  up  into
+    six regions or paths as follows:
+
+            (1)        (2)         (3)         (4)       (5)     (6) 
+        |--------|------------|-----------|-----------|-------|----------|
+        0  small   polynomial   reduction   asymptotic  large    huge 
+
+    (Note:   Although  the  domain  of  Arcsinh  extends  from  -infinite to 
+    +infinite,  the  problem can be considered one of only positive arguments 
+    through the application of the identity asinh(-x) = - asinh(x).  )
+
+
+    Within each region a unique approximation to the Arcsinh function  is
+    used.   Each is chosen for its error characteristics, efficiency and the
+    range over which it can be applied.
+
+    1. Small region:      
+
+                asinh(x) = x                         (x <= max_small)
+
+        Within the "small" region the Arcsinh function is approximated as
+        asinh(x)  =  x. This is a very quick approximation but it may only be
+        applied to small input values.  There is effectively  no  associated
+        storage  costs.   By limiting the magnitude of x the error bound can
+        be limited to <= 1/2 lsb.
+
+    2. Polynomial region:     
+
+        Within the "polynomial" region the function is approximated as
+
+                asinh(x) = x (1 + x^2 P(x))       (max_small_x <x <= max_poly_x)
+
+        where P(x) is a minimax polynomial approximation to (asinh(x)/x -1)/x^2,
+        given by Remes' algorithm and max_poly_x is the upper bound of the 
+        polynomial region whose value satisfies: 
+
+                (asinh(x)-x)/asinh(x) <= 2^(-POLY_RANGE_OVERHANG)
+
+
+    3. Reduction region:   
+
+        In this region, asinh(x) is computed by
+
+                asinh(x) = asinh(x0) + asinh(x*sqrt(1+x0^2)-x0*sqrt(1+x^2))
+
+                                max_poly_x < x <= max_reduce_x
+
+        i.e. asinh(x) is computed as the sum of two quantities:   asinh(x0),  
+        and a reduced value asinh(t), where
+                
+                t = x * sqrt(1+x0^2) - x0*sqrt(1+x^2).
+
+        This approach incurs the cost  of  calculating  t  and also an 
+        lookup table. The values x0, asinh(x0) and sqrt(1+xo^2) are
+        stored in the table to reduce the run time cost. Increased accuracy
+        and efficiency are gained by choosing the asinh(x0) table values such 
+        that  they  have  a predetermined number of trailing 0's or 1's beyond 
+        the extent of the floating point precision.  This reduces the error 
+        bound  and  avoids the need to perform an extended addition between 
+        the two quantities.  The error bounds here can be established at a value
+        close to 1/2 lsb.
+
+
+    4. Asymptotic region: In this region, asinh(x) is computed as:
+
+                asinh(x) = ln(2x) + 1/4 x^-2 - 3/16 x^-4
+
+                        + 5/96 x^-6 -...
+
+                        where max_reduce_x < x <= max_asym_x
+
+       The upperbound of the reduction region, max_reduce_x, ( or the lowerbound
+       of the asymptotic region) is determined by finding a smallest x such that
+
+                ((asinh(x) - ln(2x)) / asinh(x)) < 2^-(ASYM_RANGE_OVERHANG)
+
+
+    5. Large region: In this region, asinh(x) is computed as:
+
+                asinh(x) = ln(2x),               where max_asym_x < x <= HUGE/2
+
+       where HUGE is the largest floating number represented by the machine
+       and max_asym_x is determined by
+
+        (asinh(x) - ln(2x))/asinh(x) < 2^-(F_PRECISION+LARGE_RANGE_OVERHANG+1)
+
+
+    6. Huge region: In this region, to avoid overflow, asinh(x) is computed as:
+
+                asinh(x) = ln(2) + log(x),       where HUGE/2 < x <= HUGE
+
+
+    Special cases:  
+
+    Infinities and Nans passed as input result in an Infinities or
+    Nans being returned.
+
+
+
+    Configuring the implementation:
+
+    For polynomial, reduction, asymptotic, large and huge regions (paths 2, 3,
+    4, 5 and 6), the implementation has been set up so  that the builder can 
+    control the accuracy. This is accomplished by allowing the builder to 
+    specify a lower limit to the floating-point alignment shift of the operation
+    which significantly affects round-off error in that range.  By establishing
+    an alignment shift the builder  determines  the  relative  accuracy  of  the
+    approximation  and  thereby determines the effective rate at which the
+    routine will execute.
+
+    In the case of the approximations used for Arcsinh we have the  following
+    situations:
+
+    Polynomial region:
+
+        The function is computed as
+
+                x + x^3 P(x)
+
+        where P(x) is approximately
+
+                -1/6 + 3/40 x^2 + ....
+
+        Thus overhang is 
+
+                (asinh(x) - x) / asinh(x)
+
+        or approximately x^2 P(x).
+
+
+    Reduced region: 
+
+        In this region the result are computed by 
+
+        asinh(x) = asinh(xi) + asinh(ti),
+
+        where ti = x * sqrt(1+xi^2) - xi * sqrt(1+x^2). Obviously, we
+        have asinh(ti) = mx - mi, where mx = asinh(x) and mi = asinh(xi).
+        Thus the overhang is determined by
+
+                (mx-mi)/mi.
+
+        The minimum alignment shift can be properly controlled by adjusting 
+        the size of interval (m1 - m0) and m0.
+
+    The builder of the Arcsinh routines can specify the  overhang  limits
+    for  each  of  the  above paths (The "small" regions have
+    error bounds  pre-established  to  within  1/2  lsb).   The  larger  the
+    overhang is,  the  more  accurate of the results are. However, larger
+    overhang generates larger size of the lookup table. The values of these
+    overhangs are defined within the main source file header and can be set
+    there.
+
+
+
+    Design Specifics:
+
+    The following sections discuss the design and implementation details  of
+    each path.
+
+
+    Note:
+
+
+    Interlaced along with the documentation is the source code necessary  to
+    generate  the boundary points, constants, etc.  Understanding the design
+    should not require an understanding of the source.
+','line_number':99,'multiline':True]['text':'
+        The following command establishes the working precision required for
+        accurate  computations  in  the  current  floating  point precision.
+
+        Note:  For most all our work, the required precision is  bounded  by
+        the  accuracy  needed to generate the "accurate" table values of the
+        'reduce' range.  There we need an accuracy equivalent of the current
+        floating  point  precision plus the number of bits in the "accurate"
+        value overhang.
+
+        precision =
+            ceil( (2*floating_precision +
+                   bits of overhang in the reduce range +
+                   7-bit potential shift in a normalized MP number) / MP_radix)
+    ','line_number':290,'multiline':True]['text':'      INC_BIT & DEC_BIT increment and decrement x,  respectively,  by  one
+        bit at position p.
+','line_number':313,'multiline':True]['text':' "index" determines the lookup index of a floating point value.
+               It extracts  the  exponent and necessary fraction bits of a
+               floating point number and returns them as an integer.
+            ','line_number':326,'multiline':True]['text':' get base 2 exponent of value ','line_number':335,'multiline':True]['text':' get first K fraction bits of value (NOT
+                                   including the hidden bit) as an integer ','line_number':337,'multiline':True]['text':' index = ((bias + n - norm)<< K) + f
+                                   as an integer ','line_number':341,'multiline':True]['text':' "make_accurate" determines a value, v, such that asinh(v) has
+               trailing 1's or 0's between the limit of the current precision
+               and the extent of the specified overhang.
+               lower_bound < v <= argument.
+            ','line_number':347,'multiline':True]['text':'
+        The "small" region:
+
+        Within the "small" region asinh(x) is approximated as  asinh(x)  =  x.
+        The reasoning follows:
+
+        Given the Taylor Series expansion to asinh(x)
+
+           asinh(x) = x - x^3 (1/6) + x^5 (3/40) + ...,  for x < 1.        
+
+        we find that successive terms of  the  series  decrease  rapidly  in
+        magnitude,  and  that  as x goes to 0, the relative distance between
+        individual terms of the series becomes greater.  It is meaningful to
+        ask, at what point does x^3/6, and hence all succeeding terms of the
+        series, become irrelevant with respect to the magnitude of x given a
+        fixed  floating point precision?  I.e. when is the ratio of x^3/6 to
+        x less than 1 / 2^(precision + 1)?  Solving we find:
+
+        let,
+            p = current floating point precision.
+        
+            (1/6) * (x^3)/x  <  1/2^(p+1)   ==>
+        
+                    x  <  sqrt( 6/2^(p+1) )
+
+        So, when x  <  sqrt(  6/2^(p+1)  ),  asinh(x)  correctly  rounded  is
+        equivalent  to  x. The value sqrt( 6/2^(p+1) ) will thus be made the
+        upper bound of the "small" region.
+
+        error bounds:
+
+        Since x is equivalent to asinh(x) correctly rounded, the error  bound
+        for this approximation is 1/2 lsb.
+','line_number':380,'multiline':True]['text':'
+        The "polynomial" region:
+
+        Within the "polynomial" region, Arcsinh is approximated as
+        asinh(x) = x  -  x^3/6 + x^5 (3/40) + ..., or rather a truncated
+        polynomial approximation to this series.  This is a reasonably quick
+        approximation   and  has  storage  costs  limited  to  that  of  the
+        coefficients.
+
+        error bounds:
+
+        The error bound for this  approach  is  roughly  determined  by  two
+        things:
+
+          - The overhang between the first two terms of the series (or
+
+            more  exactly,  between  x and the sum of the remaining terms of
+            the series = x - asinh(x)).
+
+          - The accuracy of the term largest in magnitude.
+
+        The overhang between the terms is a function of x and,  in  general,
+        will  decrease  as  x gets larger.  The largest term is x and, as an
+        input argument, is assumed to be exact.  This implies  that  we  can
+        enforce  an  error  bound  of our choosing (greater than 1/2 lsb) by
+        limiting the size of our input argument such that  the  leading  two
+        terms maintain a chosen overhang.
+
+        If our desired overhang limit is V, we can compute a maximum X  for
+        which  that overhang is satisfied by determining when the following
+        is true:
+
+            (X - asinh(X))/asinh(X) <  2^-V
+
+        This point X will be upper bound of the "polynomial" range.
+
+        Note:
+            Since X can not be computed analytically  it  must  be  computed
+            numerically (e.g Newton's method).
+
+
+
+        The following code determines the polynomial range
+','line_number':418,'multiline':True]['text':' The following code determines the upper bound of the reduced range 
+        (or the lower bound of the asymptotic region.) In the asymptotic region, 
+        asinh(x) is determined by the following formula:
+                                           
+                asinh(x) = ln(2x) + 1/4 x^-2 - 3/16 x^-4
+
+                        + 5/96 x^-6 -...
+
+        The maximum of the reduction region( or the minimum of the asymptotic
+        region) is determined by finding a minimal x such that
+
+                ((asinh(x) - ln(2x)) / asinh(x)) < 2^-(ASYM_RANGE_OVERHANG);
+        ','line_number':478,'multiline':True]['text':' The following code determines the upperbound of the asymptotic 
+
+        region.  ( or the lower bound of the large region.) Within this region, 
+        asinh(x) is approximated by
+
+                sign(x) asinh(x) = ln(2|x|) + 1/4 x^-2 - 3/16 x^-4
+
+                        + 5/96 x^-6 -...
+
+        The upperbound of the asymptotic region( or the lower bound of the large 
+        region) is determined by finding a minimal x such that
+
+        (asinh(x) - ln(2x))/asinh(x) < 2^-(F_PRECISION+LARGE_RANGE_OVERHANG+1)
+        ','line_number':507,'multiline':True]['text':' The following code determines and prints the terms of the
+        asymptotic expansion in the asymptotic region.
+
+                asinh(x) = ln(2x) + 1/4 x^-2 - 3/16 x^-4
+
+                        + 5/96 x^-6 -...
+        ','line_number':537,'multiline':True]['text':' Approximation to the function:  x^2(asinh(x) - ln(2x)) ','line_number':546,'multiline':True]['text':' The "reduction" region: Within the "reduction" region asinh(x) is 
+        approximated as  
+
+                asinh(x)  = asinh(m)  +  asinh(t), 
+
+                        where t = x*sqrt(1+m*m) - m*sqrt(1+x*x).
+
+        error bounds:
+
+        As in the "polynomial" regions the error bound  here  is
+        roughly a function of:
+
+          - The overhang between the final addition  of  asinh(m)  and  
+            asinh(t).
+
+          - The accuracy of the dominating (larger) value, asinh(m).
+
+        As for the overhang, given some value m, t will decrease
+        as x moves closer to m.  This in turn implies asinh(t)
+        becomes smaller.  Thus given some x in the "reduce" range we can
+        chose some m near x such that asinh(m) + asinh(t) has
+        at least the desired alignment shift.
+
+        As for the accuracy of asinh(m), we can chose the m above  such  that
+        asinh(m)  has  trailing  0's  or 1's from the boundary of the current
+        precision to the extent of the chosen overhang.   This  will  reduce
+        the  overall  error  in our computation.  These asinh(m) are known as
+        "accurate" values.
+
+        This implies that we can roughly enforce what error bound we  choose
+        (greater than 1/2 lsb).
+
+
+
+        Determining the "m" and asinh(m) tables:
+
+        Ensuring  a  certain  overhang,  k,  between  asinh(m)   and  
+        asinh(t):
+
+        From the identity above, it is obvious that asinh(t) is the
+        difference between asinh(x) and asinh(m). Thus, if we choose a
+        net of equal length subintervals in [asinh(max_poly_x), 
+        asihn(max_reduce_x)] such that the size of subinterval is sufficiently 
+        small, we can ensure the alignment shift.
+
+                asinh(t)/asinh(m) = (ax - am)/am,
+
+        where   ax = asinh(x) and am = asinh(m) and (ax-am) <= 1/2 of the
+        subinterval size.
+  
+
+        The generation of these "m",s and x's divides the  reduce  range  up
+        into subintervals like the following:
+
+
+            |--|--|---|---|----|----|-- ... --|
+            Xo Mo X1  M1  X2   M2   X3        Xn
+
+        For each input x such that Xi < x <= Xi+1 the  asinh(x)  is  computed
+        using   Mi   and   asinh(Mi).    Note  that  these  subdivisions  are
+        non-uniform.  As x moves to the right the  relative  size  of  these
+        intervals is increasing.
+
+        Indexing the "m" and asinh(m) table:
+
+        Given an x which lies within the 'reduce' range we need an efficient
+        way  of  determining which "m" and asinh(m) should be used in our our
+        calculations.  We will accomplish this using a  second  table.   For
+        each  value  of  x such that Xi < x <= Xi+1 we will use the exponent
+        bits of x and a certain number of fraction bits (enough to  uniquely
+        characterize  which  subinterval  x  lies within) to act as an index
+        into a second  "indexing"  table.   The  values  stored  within  the
+        "indexing"  table will in turn point to the appropriate value of "m"
+        (and asinh(m)) to use for the current x.
+
+
+        Mapping input arguments to the appropriate region:
+
+        As described throughout, each input argument x maps to  one  of  the
+        three  different  approximations  for  asinh(x).   An efficient way of
+        determining which approximation should be used for an input x is  to
+        calculate  the  "index" of each argument x (as we do in the 'reduce'
+        region) and use it to make the choice of approximation.
+        This  simply  involves  determining the index value for the boundary
+        points of each region and then comparing  the  index  of  the  input
+        argument x to these values and branching accordingly.
+
+
+        The indicies:
+
+        Indices consist of exponents & fraction bits to uniquely characterize
+        an interval.  The number of fraction bits indicates table size.
+
+        Calculation of the number of fraction bits needed for the index:
+
+        It is desirable to minimize the number  of  fraction  bits  used  to
+        address  the  "indexing"  table.   Each  additional  bit we use will
+        increases the size of the "indexing" table by a power of 2. (This is
+        not  completely  true.   Depending  on  what value is chosen for the
+        upper bound of the 'reduce' range it may not be necessary  to  store
+        indexes  for  values  at  the far end of the range.  The increase in
+        table size, however, is still on the order of a power of 2.)
+
+        Since the size of the intervals Xi <--> Xi+1 decrease as x  goes  to
+        one,  we  find  that  the smallest interval for which we need to
+        uniquely specify each x is the interval X(n-1)  <-->  Xn. The minimum
+        number  of  fraction  bits  we need to characterize this interval is
+        given by the overhang difference  between  X(n-1) and Xn.  Thus,  the
+        minimum number of fraction bits, k, required to satisfy our index is
+        given by:
+
+            (X(n-1) - Xn)/Xn = 1/2^k
+
+            k = floor( log2 ((Xn - X(n-1))/Xn) )
+
+        as the number of fraction bits required for our index.
+
+
+        Mapping the index:
+
+        Realizing that an arguments exponent and fraction bits are going  to
+        be  looked  at as an integer index to the "indexing" table leaves an
+        issue of addressing.  Since we want  Xo,  the  lower  bound  of  the
+        'reduce'  range, to map to the first element of the "indexing" table
+        it is necessary to map the generated index of Xo down to zero.  This
+        is  accomplished by predetermining the index of Xo and using it as a
+        offset (subtracting it off) from the generated  index  of  Xo.
+        If  we  subtract this offset from all generated indexes we can
+        map the indexes of the 'reduce' range into a table  look-up  address
+        between 0 and tablesize-1.
+
+
+        The following code:
+        1. compute the minimum number of "index" bits required
+           to accurately determine the mapping of input values to table
+           values in the 'reduce' range.
+        2. compute the accurate table.
+        ','line_number':578,'multiline':True]['text':' computation of the "index" represented by the maximum
+               value we will evaluate in the 'polynomial' range.  Since the
+               'reduce' range begins beyond this value, we will use this
+               "index" to map all "indicies" so that those of the 'reduce'
+               range will take on values between 0 and the table size.
+            ','line_number':770,'multiline':True]['text':' computation of the "accurate" table "indecies" for values
+               within the 'reduce' range.
+            ','line_number':796,'multiline':True]['text':'
+     *  Pad this table up to avoid alignment problem on HP machine.
+     ','line_number':839,'multiline':True]['text':' Generate the coefficients for the 'polynomial' range polynomial ','line_number':851,'multiline':True]['text':' Approximation to the function:  (asinh(x) - x) / x^3 ','line_number':854,'multiline':True]['text':' Generate the coefficients for the 'reduce' range polynomial ','line_number':882,'multiline':True]['text':' ACOSH ','line_number':901,'multiline':True]['text':' The computation of ACOSH is devided into four regions:
+
+        1. Direct region: In this region, ACOSH(x) is computed as
+
+                acosh(x) = log(x + sqrt((x-1)*(x+1)))
+                
+                        where 1 < x <= max_direct_x.
+
+
+        2. Asymptotic regions: In this region, ACOSH(x) is computed as
+
+                acosh(x) = ln(2x) - 1/4 x^-2 - 3/16 x^-4
+
+                        - 5/96 x^-6 -...
+
+                        where max_direct_x < x <= max_asym_x.
+
+        3. Large region: In this region, ACOSH(x) is computed as
+
+                acosh(x) = log(2x).
+
+                        where max_asym_x < x <= HUGE/2. 
+
+
+        4. Huge region: In this region, ACOSH(x) is computed as
+
+                acosh(x) = ln(2) + log(x).
+
+                        where  HUGE/2 < x <= HUGE. 
+        ','line_number':903,'multiline':True]['text':' The following code determines the upper bound of the direct region
+        (or the lower bound of the asymptotic region). In the asymptotic region,
+        asinh(x) is determined by the following formula:
+                                           
+                acosh(x) = ln(2x) - 1/4 x^-2 - 3/16 x^-4
+
+                         - 5/96 x^-6 -...
+
+        The upper bound of the direct region region is determined by finding 
+        the smallest x such that
+
+                ((ln(2x)-acosh(x)) / acosh(x)) < 2^-(ASYM_RANGE_OVERHANG);
+        ','line_number':935,'multiline':True]['text':' The following code determines the the upper bound of the asymptotic 
+        region.(or the lower bound of the large region.) In the large region,
+        acosh(x) is approximated by
+
+                acosh(x) = ln(2x).
+
+        Thus, the lower bound of the large region (or max_asym_x) is determined 
+        by finding the smallest x such that
+
+          -(ln(2x)-acosh(x))/acosh(x) < 2^(-F_PRECISION+LARGE_RANGE_OVER_HANG+1)
+        ','line_number':963,'multiline':True]['text':' The computation in asymptotic and large region is more efficient
+        than the computation in the direct region if the number of the
+        terms in the asymptotic expansion is kept reasonably small. The
+        following procedure computes and prints the terms of the
+        asymptotic series. 
+        ','line_number':992,'multiline':True]['text':' Approximation to the function:  -[x^2(acosh(x) - ln(2x))] ','line_number':999,'multiline':True]['text':' MAKE_ASINH ','line_number':1031,'multiline':True]['text':' compute correctly rounded "high" and "low" parts of log(2) ','line_number':1033,'multiline':True]['text':' the following values are defined for use in performing
+        automated testing with MTC.
+        ','line_number':1044,'multiline':True]['text':' MAKE_INCLUDE ','line_number':1073,'multiline':True]['text':' macros specific to asinh ','line_number':1082,'multiline':True]['text':' Reduced region ','line_number':1141,'multiline':True]['text':' Polynomial region ','line_number':1155,'multiline':True]['text':' Small region ','line_number':1163,'multiline':True]['text':' Asymptotic region ','line_number':1170,'multiline':True]['text':' Large region ','line_number':1180,'multiline':True]['text':' Huge region ','line_number':1188,'multiline':True]['text':' ACOSH ','line_number':1198,'multiline':True]['text':' Direct region ','line_number':1219,'multiline':True]['text':' Asymptotic region ','line_number':1233,'multiline':True]['text':' Large region ','line_number':1242,'multiline':True]['text':' Huge region ','line_number':1248,'multiline':True]['text':' MAKE_ASINH ','line_number':1277,'multiline':True]['text':'
+**  accuracy and key point tests for single 
+**  and double precision asinh or acosh functions.
+','line_number':1288,'multiline':True]['text':'  For testing acosh ','line_number':1361,'multiline':True]['text':' MAKE_ASINH ','line_number':1422,'multiline':True]['text':' MTC ','line_number':1425,'multiline':True]

@@ -1,0 +1,68 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':' Registration interface','line_number':45,'multiline':False]['text':' Check for duplication in dotted name(s).','line_number':51,'multiline':False]['text':' Deprecated name must not already be registered by previous setting,','line_number':59,'multiline':False]['text':' must not match non-deprecated name,','line_number':60,'multiline':False]['text':' and must not match any other single deprecated name.','line_number':61,'multiline':False]['text':' Check for duplication in single name(s).','line_number':73,'multiline':False]['text':' Deprecated name must not already be registered by previous setting,','line_number':81,'multiline':False]['text':' must not match non-deprecated name,','line_number':82,'multiline':False]['text':' and must not match any other single deprecated name.','line_number':83,'multiline':False]['text':' namespace','line_number':97,'multiline':False]['text':' Matches existing section name, merge options.','line_number':121,'multiline':False]['text':' New section name, just adopt it.','line_number':129,'multiline':False]['text':' dottedName must be non-empty.','line_number':146,'multiline':False]['text':' Verify deprecated dotted names.','line_number':151,'multiline':False]['text':' No empty deprecated dotted names.','line_number':152,'multiline':False]['text':' Should not be the same as dottedName.','line_number':157,'multiline':False]['text':' Verify deprecated single names.','line_number':163,'multiline':False]['text':' No empty deprecated single names.','line_number':164,'multiline':False]['text':' Should not be the same as singleName.','line_number':169,'multiline':False]['text':' Should not contain any already registered name.','line_number':175,'multiline':False]['text':' Stuff for dealing with Boost','line_number':191,'multiline':False]['text':'
+ * Helper for option types that should be interpreted as a string by boost.  We do this to
+ * take the responsibility away from boost for handling type conversions, since sometimes
+ * those conversions are inconsistent with our own.  See SERVER-14110 For an example.
+ ','line_number':195,'multiline':True]['text':'* Helper function to convert the values of our OptionType enum into the classes that
+ *  boost::program_option uses to pass around this information
+ ','line_number':237,'multiline':True]['text':' Boost doesn't support maps, so we just register a vector parameter and','line_number':264,'multiline':False]['text':' parse it as "key=value" strings','line_number':265,'multiline':False]['text':' In boost, switches default to false which makes it impossible to tell if','line_number':283,'multiline':False]['text':' a switch in a config file is not present or was explicitly set to false.','line_number':284,'multiline':False]['text':'','line_number':285,'multiline':False]['text':' Because of this, and because of the fact that we use the same set of','line_number':286,'multiline':False]['text':' options for the legacy key=value config file, we need a way to control','line_number':287,'multiline':False]['text':' whether we are telling boost that an option is a switch type or that an','line_number':288,'multiline':False]['text':' option is a bool type.','line_number':289,'multiline':False]['text':' Switches should be true if they are present with no explicit value.','line_number':294,'multiline':False]['text':' namespace','line_number':349,'multiline':False]['text':' Only include this option if it matches the sources we specified and the option is','line_number':358,'multiline':False]['text':' either visible or we are requesting hidden options','line_number':359,'multiline':False]['text':' Do not add empty sections to our option_description unless we specifically requested.','line_number':413,'multiline':False]['text':'
+ * The way we specify positional options in our interface differs from the way boost does it, so
+ * we have to convert them here.
+ *
+ * For example, to specify positionals such that you can run "./exec [pos1] [pos2] [pos2]":
+ *
+ * Our interface:
+ *
+ * options.addOptionChaining("pos2", "pos2", moe::StringVector, "Pos2")
+ *                          .hidden() <- doesn't show up in help
+ *                          .sources(moe::SourceCommandLine) <- only allowed on command line
+ *                          .positional(2, <- start position
+ *                          3); <- end position
+ * options.addOptionChaining("pos1", "pos1", moe::String, "Pos1")
+ *                          .hidden() <- doesn't show up in help
+ *                          .sources(moe::SourceCommandLine) <- only allowed on command line
+ *                          .positional(1, <- start position
+ *                          1); <- end position
+ * // Note that order doesn't matter
+ *
+ * Boost's interface:
+ *
+ * boostHiddenOptions->add_options()("pos1", po::value<std::string>(), "Pos1")
+ *                                  ("pos2", po::value<std::string>(), "Pos2")
+ *
+ * boostPositionalOptions->add("pos1", 1); <- count of option (number of times it appears)
+ * boostPositionalOptions->add("pos2", 2); <- count of option (number of times it appears)
+ * // Note that order does matter
+ *
+ * Because of this, we have to perform the conversion in this function.  The tasks performed by
+ * this function are:
+ *
+ * 1. Making sure the ranges are valid as a whole (no overlap or holes)
+ * 2. Convert to the boost options and add them in the correct order
+ ','line_number':434,'multiline':True]['text':' Check if this is a positional option, and extract it if it is','line_number':475,'multiline':False]['text':' XXX: Right now only the top level section can have positional options','line_number':528,'multiline':False]['text':' Get options for iterating','line_number':533,'multiline':False]['text':' TODO: should I make this an iterator?','line_number':534,'multiline':False]['text':' We need to check here that we didn't register an option with an empty single name','line_number':538,'multiline':False]['text':' that is allowed on the command line or in an old style config, since we don't have','line_number':539,'multiline':False]['text':' this information available all at once when the option is registered','line_number':540,'multiline':False]['text':' Only count this option if it matches the sources we specified and the option is','line_number':583,'multiline':False]['text':' either visible or we are requesting hidden options','line_number':584,'multiline':False]['text':' If we can have unlimited positional options, this returns','line_number':635,'multiline':False]['text':' std::numeric_limits<unsigned>::max().  Check here for that case and record what name to','line_number':636,'multiline':False]['text':' look for.','line_number':637,'multiline':False]['text':' If we have a trailing position, we break when we see it the first time.','line_number':649,'multiline':False]['text':' visibleOnly ','line_number':663,'multiline':True]['text':' includeDefaults ','line_number':664,'multiline':True]['text':' getEmptySections ','line_number':666,'multiline':True]['text':' Can't use a StringBuilder here because boost::program_options only has functions that','line_number':673,'multiline':False]['text':' output to std::ostream','line_number':674,'multiline':False]['text':' Debugging ','line_number':680,'multiline':True]['text':' namespace optionenvironment','line_number':697,'multiline':False]['text':' namespace mongo','line_number':698,'multiline':False]

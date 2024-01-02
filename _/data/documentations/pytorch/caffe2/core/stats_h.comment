@@ -1,0 +1,87 @@
+['text':'*
+ * @brief Holds names and values of counters exported from a StatRegistry.
+ ','line_number':37,'multiline':True]['text':'*
+ * @brief Holds a map of atomic counters keyed by name.
+ *
+ * The StatRegistry singleton, accessed through StatRegistry::get(), holds
+ * counters registered through the macro CAFFE_EXPORTED_STAT. Example of usage:
+ *
+ * struct MyCaffeClass {
+ *   MyCaffeClass(const std::string& instanceName): stats_(instanceName) {}
+ *   void run(int numRuns) {
+ *     try {
+ *       CAFFE_EVENT(stats_, num_runs, numRuns);
+ *       tryRun(numRuns);
+ *       CAFFE_EVENT(stats_, num_successes);
+ *     } catch (std::exception& e) {
+ *       CAFFE_EVENT(stats_, num_failures, 1, "arg_to_usdt", e.what());
+ *     }
+ *     CAFFE_EVENT(stats_, usdt_only, 1, "arg_to_usdt");
+ *   }
+ *  private:
+ *   struct MyStats {
+ *     CAFFE_STAT_CTOR(MyStats);
+ *     CAFFE_EXPORTED_STAT(num_runs);
+ *     CAFFE_EXPORTED_STAT(num_successes);
+ *     CAFFE_EXPORTED_STAT(num_failures);
+ *     CAFFE_STAT(usdt_only);
+ *   } stats_;
+ * };
+ *
+ * int main() {
+ *   MyCaffeClass a("first");
+ *   MyCaffeClass b("second");
+ *   for (const auto i : c10::irange(10)) {
+ *     a.run(10);
+ *     b.run(5);
+ *   }
+ *   ExportedStatList finalStats;
+ *   StatRegistry::get().publish(finalStats);
+ * }
+ *
+ * For every new instance of MyCaffeClass, a new counter is created with
+ * the instance name as prefix. Everytime run() is called, the corresponding
+ * counter will be incremented by the given value, or 1 if value not provided.
+ *
+ * Counter values can then be exported into an ExportedStatList. In the
+ * example above, considering "tryRun" never throws, `finalStats` will be
+ * populated as follows:
+ *
+ *   first/num_runs       100
+ *   first/num_successes   10
+ *   first/num_failures     0
+ *   second/num_runs       50
+ *   second/num_successes  10
+ *   second/num_failures    0
+ *
+ * The event usdt_only is not present in ExportedStatList because it is declared
+ * as CAFFE_STAT, which does not create a counter.
+ *
+ * Additionally, for each call to CAFFE_EVENT, a USDT probe is generated.
+ * The probe will be set up with the following arguments:
+ *   - Probe name: field name (e.g. "num_runs")
+ *   - Arg #0: instance name (e.g. "first", "second")
+ *   - Arg #1: For CAFFE_EXPORTED_STAT, value of the updated counter
+ *             For CAFFE_STAT, -1 since no counter is available
+ *   - Args ...: Arguments passed to CAFFE_EVENT, including update value
+ *             when provided.
+ *
+ * It is also possible to create additional StatRegistry instances beyond
+ * the singleton. These instances are not automatically populated with
+ * CAFFE_EVENT. Instead, they can be populated from an ExportedStatList
+ * structure by calling StatRegistry::update().
+ *
+ ','line_number':45,'multiline':True]['text':'*
+   * Retrieve the singleton StatRegistry, which gets populated
+   * through the CAFFE_EVENT macro.
+   ','line_number':122,'multiline':True]['text':'*
+   * Add a new counter with given name. If a counter for this name already
+   * exists, returns a pointer to it.
+   ','line_number':128,'multiline':True]['text':'*
+   * Populate an ExportedStatList with current counter values.
+   * If `reset` is true, resets all counters to zero. It is guaranteed that no
+   * count is lost.
+   ','line_number':134,'multiline':True]['text':'*
+   * Update values of counters contained in the given ExportedStatList to
+   * the values provided, creating counters that don't exist.
+   ','line_number':147,'multiline':True]['text':' Uses an offset (first_) to remove issue of cancellation','line_number':204,'multiline':False]['text':' Variance is then (sumsqoffset_ - (sumoffset_^2) / count_) / (count_ - 1)','line_number':205,'multiline':False]['text':' Using implicit cast to bool so that it can be used in an 'if' condition','line_number':296,'multiline':False]['text':' within CAFFE_DURATION macro below.','line_number':297,'multiline':False]['text':' implicit ','line_number':298,'multiline':True]['text':' namespace detail','line_number':307,'multiline':False]['text':' namespace caffe2','line_number':358,'multiline':False]

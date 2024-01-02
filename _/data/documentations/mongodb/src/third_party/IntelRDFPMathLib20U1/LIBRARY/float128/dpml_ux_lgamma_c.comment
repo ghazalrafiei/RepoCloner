@@ -1,0 +1,319 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]['text':' 
+** BASIC DESIGN
+** ------------
+** 
+** The implementation of lgamma is based on the following identities:
+** 
+** 	lgamma(x) = log(Gamma(x))					(1)
+** 	Gamma(x + 1) = x*Gamma(x)					(2)
+**	lgamma(1+x) = -ln(1+x) + x*(1 - g) + P(x)			(3)
+** 	lgamma(x) ~ (x - .5)*ln(x) - x + .5*ln(2*pi) + x*phi(1/x)	(4)
+** 	lgamma(-x) = -{ ln[x*sin(pi*x)] + lgamma(x) - ln(pi) }		(5)
+** 
+** where g is Euler's constant, and
+** 
+** 	P(x)   = sum { n = 2, ... | (-x)^n*[zeta(n) - 1]/n }
+** 	phi(z) = sum { n = 1, ... | B(2n)*z^(2n)/[2n*(2n-1)] }
+** 
+** where zeta(n) is the Reimann zeta function and B(n) is the n-th Bernoulli
+** number.
+** 
+** The first step in the design is to determine where the asymptotic
+** approximation, (4), is applicable.  According to Hart et. al., the error in
+** (4) is less than and of the same sign as the first neglected term in
+** phi(1/x).  Suppose we truncate phi(1/x) to n terms.  Then the error is
+** bounded by the (n+1)st term.  Now the terms in phi(1/x) decrease to a
+** certain point, and then begin to increase.  So the trick is to truncate phi
+** just before the last decreasing term.  With this in mind, consider the ratio
+** of consecutive terms, r(n):
+** 
+** 	              B(2n+2)           2n*(2n-1)*x^(2n)
+** 	r(n) = --------------------- * -----------------
+** 	       (2n+2)*(2n+1)*x^(2n+2)       B(2n)
+** 
+** 	           B(2n+2)*n(2n-1)
+** 	     = ----------------------				(6)
+** 	       B(2n)*(n+1)*(2n+1)*x^2
+** 
+** Now the terms of phi will be decreasing in magnitude as long as |r(n)| < 1,
+** which is equivalent to
+** 
+** 		      B(2n+2)    n(2n-1)
+** 		x^2 > ------- * ----------		(7)
+** 		       B(2n)    (n+1)(2n+1)
+** 
+** Taking the smallest value of x that satisfies (7) and looking at the (n+1)-st
+** term of phi, we would like the magnitude of that term to be less than the
+** permissible total error, which we take to be 1/2^124.  So we need to solve
+** 
+** 	   B(2n+2)    / B(2n+2)    n(2n-1)    \ -(n+1)   1
+** 	------------*|  ------- * -----------  |     < -----	(8)
+** 	(2n+2)(2n+1)  \  B(2n)    (n+1)(2n+1) /        2^124
+** 
+** We could at this point convert the B(2n) terms to expressions involving the
+** zeta function and factorials, apply Sterlings approximation and take
+** limits to simplify the problem.  However, its easier and more accurate to
+** solve (8) numerically, giving n = 41 and the minimum x as 12.971.  In order
+** to simplify the screening process we will take the minimum x as 16.
+** 
+** So the basic algorithm is to apply equation (5) when x <= -16 and equation
+** (4) when x >= 16.  Otherwise we try to "reduce" the argument to the interval
+** [ b, b+1 ) where b is any convenient positive value, and apply equation (3).
+** The argument reduction scheme is based on equation (2).  In particular, for
+** x < b - 1 and x > b the following reductions can be used:
+** 
+** 	t <-- 1				t <-- 1
+** 	z <-- x				z <-- x
+** 	while (z < b)			while (z > b + 1)
+** 	    {				    {
+** 	    t <-- t*z			    z <-- z - 1
+** 	    z <-- z + 1			    t <-- t*z
+** 	    }				    }
+** 	lgamma(x) <-- -ln(t) + P(z)	lgamma(x) <-- ln(t) + P(z)
+** 
+** 
+** CHOSING b AND EVALUATING P(z)
+** -----------------------------
+** 
+** From an algorithmic point of view, the choice of the reduced argument range,
+** [b, b+1) is arbitrary.  However, from an implementation stand point, the
+** choice of b has an impact on the "shape" of polynomial or rational
+** expression used to evaluate the reduced argument.  This is particularly true
+** for the unpacked x-float routines, because the evaluation is done in fixed
+** point.
+** 
+** Because lgamma is rapidly increasing function, rational approximations are
+** much more efficient that polynomial approximations.  So we will confine are
+** remarks to the rational case.  All of the choices of b that were examined
+** produced rational coefficients that initially increased and then decreased
+** in both the numerator and denominator.  The choice of b controlled the
+** length of the increasing sequence and the size of the ratio between the
+** first term and the largest term.  For fixed point evaluations, it is most
+** desirable for all of the terms to be decreasing, however, we were unable to 
+** find a value of b for which this was true.  What follows below is a
+** description of the "best we could do".
+**
+** Before proceeding, we point out that having the coefficients decrease in
+** magnitude is a sufficient condition for having the polynomial evaluation
+** routines function correctly, but is it not necessary.  A necessary condition
+** is that in the alternating Horner's scheme iteration:
+**
+**		s(k-1) = c(k-1) - x*s(k)		(9)
+**
+** s(k-1) not be less than zero.
+** 
+** We note that gamma(n) = (n-1)! for any integer n, so that
+** 
+** 	lgamma(1) = log(gamma(1)) = log(0!) = log(1) = 0
+** 	lgamma(2) = log(gamma(2)) = log(1!) = log(1) = 0
+** 
+** So that lgamma(x) has a zeros at x = 1 and x = 2.  Consequently, on the
+** interval [1, 2) we can approximate lgamma(x) by an expression of the form
+** (x - 1)*(x - 2)*R(x), where R(x) is a rational expression.  In order to
+** minimize the sequence of increasing coefficients in R(x), we reduce the
+** argument to the interval [-.5, .5) via the substitution, z = x - 3/2.  Then
+** the approximation takes on the form (z + .5)*(z - .5)*U(z).  Using the Remes
+** algorithm to generate coefficients for U, we see that the first three
+** numerator and first two denominator coefficients are increasing.  The
+** initial sequence of binary exponents are:
+** 
+** 	coefficient	 0   1   2   3   4   5   6   7  ...
+** 	-----------	--- --- --- --- --- --- --- ---
+** 	numerator	-1   1   2   2   1   0  -1  -5
+** 	denominator	 1   3   3   3   3   3   2   0
+** 
+** Now, except when the reduced argument, z, is exactly +/- 1/2, |2*z| < 1, so
+** that we can still use the ration evaluation routine for 2*z.  In effect, we
+** can scale down each of the coefficients by a appropriate power of two,
+** giving binary exponents that look like:
+** 
+** 	coefficient	 0   1   2   3   4   5   6   7  ...
+** 	-----------	--- --- --- --- --- --- --- ---
+** 	numerator	-1   0   0  -1  -3  -5  -7  -12
+** 	denominator	 1   2   1   0  -1  -2  -4  -7
+** 
+** So that except for the first two coefficients, all the other terms are
+** decreasing.  This means that we need to handle the case of |z| = 1/2
+** separately.  However, this is not a problem since when |z| = 1/2, we know
+** that lgamma(z) = 0.  We note that (9) is also satisfied.
+**
+** One last note: the Remes iterations for obtaining U(z) are rather unstable.
+** rather than using REMES_FIND_RATIONAL_MODE, we use REMES_STATIC, with
+** numerator/denominator degree = 13/14.  This yields an approximation good
+** to slightly more that 126 bits.
+** 
+** With the above mind, the processing for |x| < 16 looks like:
+** 
+** 	t <-- 1				t <-- 1
+** 	w <-- x				w <-- x
+** 	while (w < 1)			while (z > 2)
+** 	    {				    {
+** 	    t <-- t*w			    w <-- w - 1
+** 	    w <-- w + 1			    t <-- t*w
+** 	    }				    }
+**	y <-- 2*w - 3			y <-- 2*w - 3
+**      z <-- (y-1)*(y+1)		z <-- (y-1)*(y+1)
+** 	lgamma(x) <-- -ln(t) + z*V(y)	lgamma(x) <-- ln(t) + z*V(y)
+**
+** where V(w) = U(y/2 + 3/2)/4.
+** 
+** 
+** 	NOTE: The following limits are useful for determining the
+** 	coefficients of U;
+** 
+** 		     lgamma(x)
+** 		lim  --------- = - euler_gamma
+** 		x->1  (x-1)
+** 
+** 		     lgamma(x)
+** 		lim  --------- = euler_gamma - 1
+** 		x->2   (x-2)
+** 
+**
+** LARGE ARGUMENTS:
+** ----------------
+**
+** For large argument, the evaluation of lgamma(x) is based on (4) and (5).
+** If we substitute (4) into (5) we have
+** 	lgamma(x) ~ (x - .5)*ln(x) - x + .5*ln(2*pi) + x*phi(1/x)	(4)
+**
+** 	lgamma(-x) = -{ ln[x*sin(pi*x)] + lgamma(x) - ln(pi) }
+** 	           ~ -{ ln[x*sin(pi*x)] + (x - .5)*ln(x) - x + .5*ln(2*pi) +
+**	                  x*phi(1/x) - ln(pi) }
+** 	           = -{ ln(x) + ln[sin(pi*x)] + (x - .5)*ln(x) - x +
+**	                 .5*ln(2*pi) + x*phi(1/x) - ln(pi) }
+** 	           = - { .5*ln(2/pi) + (x + .5)*ln(x) - x + x*phi(1/x) }
+**	                 - ln[sin(pi*x)]
+**
+** If we define c = .5*ln(2/pi) and s = -1, then the above can be written
+** as:
+**
+**	lgamma(-x) ~ s*{ c + [x - s*.5]*ln(x) - x + x*phi(1/x)} - ln[sin(pi*x)]
+**
+** Similarly, for positive x, if we define c = .5*ln(2*pi) and s = 1, then (4)
+** can be written as:
+**
+** 	lgamma(x) ~ s*{c + (x - s*.5)*ln(x) - x + x*phi(1/x)}
+**
+** So that negative and positive cases can share a significant portion of code.
+**
+','line_number':37,'multiline':True]['text':'
+** UX_LGAMMA is the common processing routine for computing the unpacked lgamma 
+** result from an unpacked input
+','line_number':239,'multiline':True]['text':'
+    ** For large negative arguments, we need to compute |sin(pi*x)|.  If
+    ** we compute 2*x = I + f where |f| < 1/2, then |sin(pi*x)| =
+    ** |sin[(pi/2)*f]| or |cos[(pi/2)*f| depending on the parity of I.
+    ** For small x, knowing floor(x) (or floor(2x)) makes it easier to set
+    ** signgam and perform the loop counts for the argument reduction.
+    **
+    ** Let I = nint(2*x) and f = 2x - I.  Then floor(2x) = I if f is positive
+    ** and I - 1 otherwise.
+    ','line_number':256,'multiline':True]['text':' Get floor(2x) ','line_number':273,'multiline':True]['text':'printf("DGAMMA 1\n");','line_number':278,'multiline':False]['text':'
+    ** If input was a negative integer, force "underflow" error.  By convention
+    ** signgam = 1 for these cases
+    ','line_number':279,'multiline':True]['text':' Set signgam to -1 if x < 0 and int(x) is odd, +1 otherwise ','line_number':292,'multiline':True]['text':' | x | < 16
+
+        /* Set initial product to 1 and get  ','line_number':297,'multiline':True]['text':'
+        ** Compute u = 2*unpacked_argument-1, w = (u-1)*(u+1) in
+        ** preparation for computing lgamma(u/2 + 3/2) = w*R(u)
+        ','line_number':318,'multiline':True]['text':'
+        ** If the value of w (unpacked_result) is 0, then the original
+        ** argument was an integer and lgamma(reduced_argument) is zero
+        ** and we don't need to evaluate the rational expression
+        ','line_number':328,'multiline':True]['text':'printf("DGAMMA 2: rarg=%x %x %llx %llx, tmp1=%x %x %llx %llx\n",reduced_argument.sign,reduced_argument.exponent,reduced_argument.fraction[0],reduced_argument.fraction[1],
+	tmp[1].sign,tmp[1].exponent,tmp[1].fraction[0],tmp[1].fraction[1]);','line_number':343,'multiline':True]['text':'printf("DGAMMA 2: ures=%x %x %llx %llx, tmp1=%x %x %llx %llx\n",unpacked_result->sign,unpacked_result->exponent,unpacked_result->fraction[0],unpacked_result->fraction[1],
+	tmp[1].sign,tmp[1].exponent,tmp[1].fraction[0],tmp[1].fraction[1]);','line_number':346,'multiline':True]['text':'
+        ** Now compute log(tmp) and add/sub it to/from the previous
+        ** lgamma computation.  Note that if floor_2x == cnt
+        ** at this point, tmp = 1, so we don't need to do the computation.
+        ','line_number':351,'multiline':True]['text':'printf("DGAMMA 4\n");','line_number':362,'multiline':False]['text':' use |x| from here on ','line_number':371,'multiline':True]['text':'
+        ** x is big, so use asymptotic approximation:
+        **
+        **	lgamma(x) ~ (x-s*.5)*log(x) - x + c + x*phi(1/x^2)
+        ','line_number':375,'multiline':True]['text':' unpacked_argument','line_number':396,'multiline':False]['text':' ADDSUB(unpacked_result, unpacked_argument, ADD, unpacked_result);','line_number':399,'multiline':False]['text':'
+            ** x is big and negative, so we need to negate the result
+            ** and subtract ln[x*sin(pi*x)]
+            ','line_number':404,'multiline':True]['text':'
+** C_UX_LGAMMA is the common processing routine for the 3 lgamma functions:
+** lgamma, gamma and __lgamma.  Each of the lgamma routines calls into the
+** C_LGAMMA routine, which unpacks the arguments, computes the results, and
+** processes exceptions. 
+','line_number':419,'multiline':True]['text':'
+** Currently, there are 3 flavors of the lgamma function: lgamma, gamma and 
+** __lgamma.  For the unpacked library, each of these routines calls into the
+** C_UX_LGAMMA routine, which unpacks the arguments, computes the results,
+** and processes exceptions.
+','line_number':460,'multiline':True]['text':'
+** Allocate storage for signgaml (appropriately named)
+','line_number':467,'multiline':True]['text':' new name','line_number':474,'multiline':False]['text':' The following IS_DEFINED_SIGNGAM_NAME_OLD macro to be removed in far future (see trackers 73679,73680)','line_number':475,'multiline':False]['text':'
+** C_UX_LGAMMA is the common processing routine for the 3 lgamma functions:
+** lgamma, gamma and __lgamma.  Each of the lgamma routines calls into the
+** C_LGAMMA routine, which unpacks the arguments, computes the results, and
+** processes exceptions. 
+','line_number':554,'multiline':True]['text':' Input is positive. Check for sure overflow','line_number':592,'multiline':False]['text':' If input is a negative integer, return NaN and signal an error via','line_number':602,'multiline':False]['text':' an underflow condition','line_number':603,'multiline':False]['text':' This is a negative integer, force underflow condition','line_number':611,'multiline':False]['text':' At this point the argument is not too large or a negative integer.','line_number':618,'multiline':False]['text':' Compute t = lgamma(x) and check for overflow when computing exp(t)','line_number':619,'multiline':False]['text':' Force overflow condition','line_number':623,'multiline':False]['text':' data 1 ','line_number':661,'multiline':True]['text':' data 2 ','line_number':662,'multiline':True]['text':' data 2 ','line_number':663,'multiline':True]['text':'
+    ** Get coefficients for lgamma on [1, 2).  Recall that the "reduced
+    ** argument", y, is in the interval [-1, 1) and we use the approximation
+    ** for .25*lgamma(y/2)/[(y-1)*(y+1)]
+    ','line_number':677,'multiline':True]['text':'
+    ** The Remes algorithm is quite slow for lgamma on [1,2) so we loosen
+    ** convergence criteria and fix (rather than find) the degree of the
+    ** numerator and denominator.
+    ','line_number':697,'multiline':True]['text':'
+    ** Now get the coefficients for the asymptotic range.  This is actually
+    ** quite complicated because of the structure of the function we are
+    ** trying to evaluate.  Specifically, we have to evaluate the asymptotic
+    ** expansion for lgamma(x) in a precision higher than what we need.
+    ** This means that there is a minimum x associated with the evaluations
+    ** precision for which the asymptotic expansion is valid and below which
+    ** the closed form loses significance.  Consequently, the MP function
+    ** that is evaluated for the Remes algorithm is broken up into two
+    ** subdomains.
+    **
+    ** The MP function get_bernoulli, computes the values of the Bernoulli
+    ** numbers for use in the asymptotic expansion of lgamma according to
+    ** the expansion:
+    **
+    **		sum{ C(n+1, j)*B(j) | j = 0, ... n } = 0.
+    **
+    ** It makes use of the fact that B(1) = -1/2 and that B(2k+1) = 0 for
+    ** k >= 1.
+    ','line_number':721,'multiline':True]['text':'
+    ** The function find_n_and_min_x determine the minimum value that will
+    ** converge to the given tol in the lgamma asymptotic expansion.  The
+    ** algorithm is based on the discussion around equations (6) through (8)
+    ','line_number':765,'multiline':True]['text':'
+    ** lgamma_phi computes the asymptotic approximation to lgamma(8*x)
+    ','line_number':796,'multiline':True]['text':'
+    ** initial the array of Bernoulli numbers and determine the break point
+    ** in the domain for lgamma_phi
+    ','line_number':833,'multiline':True]['text':'
+    ** Now compute the coefficients
+    ','line_number':850,'multiline':True]

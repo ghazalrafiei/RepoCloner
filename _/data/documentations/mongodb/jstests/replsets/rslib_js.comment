@@ -1,0 +1,107 @@
+['text':'*
+ * A wrapper around `replSetSyncFrom` to ensure that the desired sync source is ahead of the
+ * syncing node so that the syncing node can choose to sync from the desired sync source.
+ * It first stops replication on the syncing node so that it can do a write on the desired
+ * sync source and make sure it's ahead. When replication is restarted, the desired sync
+ * source will be a valid sync source for the syncing node.
+ ','line_number':36,'multiline':True]['text':' Ensure that 'desiredSyncSource' doesn't already have the dummy write sitting around from','line_number':46,'multiline':False]['text':' a previous syncFrom attempt.','line_number':47,'multiline':False]['text':' Wait for 'desiredSyncSource' to get the dummy write we just did so we know it's','line_number':57,'multiline':False]['text':' definitely ahead of 'syncingNode' before we call replSetSyncFrom.','line_number':58,'multiline':False]['text':'*
+ * Calls a function 'f' once a second until it returns true. Throws an exception once 'f' has
+ * been called more than 'retries' times without returning true. If 'retries' is not given,
+ * it defaults to 200. 'retries' must be an integer greater than or equal to zero.
+ ','line_number':69,'multiline':True]['text':' Set default value if 'retries' was not given.','line_number':80,'multiline':False]['text':'*
+ * Use this to do something once every 4 iterations.
+ *
+ * <pre>
+ * for (i=0; i<1000; i++) {
+ *   occasionally(function() { print("4 more iterations"); });
+ * }
+ * </pre>
+ ','line_number':98,'multiline':True]['text':'*
+ * Attempt to re-establish and re-authenticate a Mongo connection if it was dropped, with
+ * multiple retries.
+ *
+ * Returns upon successful re-connnection. If connection cannot be established after 200
+ * retries, throws an exception.
+ *
+ * @param conn - a Mongo connection object or DB object.
+ ','line_number':115,'multiline':True]['text':' Make this work with either dbs or connections.','line_number':129,'multiline':False]['text':' Run a simple command to re-establish connection.','line_number':136,'multiline':False]['text':' SERVER-4241: Shell connections don't re-authenticate on reconnect.','line_number':139,'multiline':False]['text':' Connection can get reset on replica set failover causing a socket exception','line_number':170,'multiline':False]['text':' PRIMARY','line_number':180,'multiline':False]['text':' SECONDARY','line_number':181,'multiline':False]['text':' ARBITER','line_number':182,'multiline':False]['text':'*
+ * Run a 'replSetReconfig' command with one retry on NodeNotFound and multiple retries on
+ * ConfigurationInProgress, CurrentConfigNotCommittedYet, and
+ * NewReplicaSetConfigurationIncompatible.
+ * Expect the reconfig to fail if shouldFail is set to true.
+ ','line_number':193,'multiline':True]['text':' Retry reconfig if quorum check failed because not enough voting nodes responded. One','line_number':214,'multiline':False]['text':' reason for this is if the connections used for heartbeats get closed on the destination','line_number':215,'multiline':False]['text':' node.','line_number':216,'multiline':False]['text':' Always retry on these errors, even if we already retried on NodeNotFound.','line_number':223,'multiline':False]['text':' Retry.','line_number':228,'multiline':False]['text':' Always retry on NewReplicaSetConfigurationIncompatible, if the current config version is','line_number':232,'multiline':False]['text':' higher than the requested one.','line_number':233,'multiline':False]['text':' Retry.','line_number':240,'multiline':False]['text':'*
+ * Executes an arbitrary reconfig as a sequence of non 'force' reconfigs.
+ *
+ * If this function fails for any reason, the replica set config may be left in an intermediate
+ * state i.e. neither in the original or target config.
+ *
+ * @param rst - a ReplSetTest instance.
+ * @param targetConfig - the final, desired replica set config. After this function returns, the
+ * given replica set should be in 'targetConfig', except with a higher version.
+ ','line_number':262,'multiline':True]['text':'','line_number':273,'multiline':False]['text':' The goal of this function is to transform the source config (the current config on the','line_number':274,'multiline':False]['text':' primary) into the 'targetConfig' via a sequence of non 'force' reconfigurations. Non force','line_number':275,'multiline':False]['text':' reconfigs are only permitted to add or remove a single voting node, so we need to represent','line_number':276,'multiline':False]['text':' some given, arbitrary reconfig as a sequence of single node add/remove operations. We execute','line_number':277,'multiline':False]['text':' the overall transformation in the following steps:','line_number':278,'multiline':False]['text':'','line_number':279,'multiline':False]['text':' (1) Remove members present in the source but not in the target.','line_number':280,'multiline':False]['text':' (2) Update members present in both the source and target whose vote is removed.','line_number':281,'multiline':False]['text':' (3) Update members present in both the source and target whose vote is added or unmodified.','line_number':282,'multiline':False]['text':' (4) Add members present in the target but not in the source.','line_number':283,'multiline':False]['text':'','line_number':284,'multiline':False]['text':' After executing the above steps the config member set should be equal to the target config','line_number':285,'multiline':False]['text':' member set. We then execute one last reconfig that attempts to install the given','line_number':286,'multiline':False]['text':' targetConfig directly. This serves to update any top level properties of the config and it','line_number':287,'multiline':False]['text':' also ensures that the order of the final config member list matches the order in the given','line_number':288,'multiline':False]['text':' target config.','line_number':289,'multiline':False]['text':'','line_number':290,'multiline':False]['text':' Note that the order of the steps above is important to avoid passing through invalid configs','line_number':291,'multiline':False]['text':' during the config transformation sequence. There are certain constraints imposed on replica','line_number':292,'multiline':False]['text':' set configs e.g. there must be at least 1 electable node and less than a certain number of','line_number':293,'multiline':False]['text':' maximum voting nodes. We know that the source and target configs are valid with respect to','line_number':294,'multiline':False]['text':' these constraints, but we must ensure that any sequence of reconfigs executed by this','line_number':295,'multiline':False]['text':' function never moves us to an intermediate config that violates one of these constraints.','line_number':296,'multiline':False]['text':' Since the primary, an electable node, can never be removed from the config, it is safe to do','line_number':297,'multiline':False]['text':' the removal of all voting nodes first, since we will be guaranteed to never go below the','line_number':298,'multiline':False]['text':' minimum number of electable nodes. Doing removals first similarly ensures that when adding','line_number':299,'multiline':False]['text':' nodes, we will never exceed an upper bound constraint, since we have already removed all','line_number':300,'multiline':False]['text':' necessary voting nodes.','line_number':301,'multiline':False]['text':'','line_number':302,'multiline':False]['text':' Note also that this procedure may not perform the desired config transformation in the','line_number':303,'multiline':False]['text':' minimal number of steps. For example, if the overall transformation removes 2 non-voting','line_number':304,'multiline':False]['text':' nodes from a config we could do this with a single reconfig, but the procedure implemented','line_number':305,'multiline':False]['text':' here will do it as a sequence of 2 reconfigs. We are not so worried about making this','line_number':306,'multiline':False]['text':' procedure optimal since each reconfig should be relatively quick and most reconfigs shouldn't','line_number':307,'multiline':False]['text':' take more than a few steps.','line_number':308,'multiline':False]['text':'','line_number':309,'multiline':False]['text':' Look up the index of a given member in the given array by its member id.','line_number':315,'multiline':False]['text':' All the members in the target that aren't in the source.','line_number':325,'multiline':False]['text':' All the members in the source that aren't in the target.','line_number':327,'multiline':False]['text':' All the members that appear in both the source and target and have changed.','line_number':329,'multiline':False]['text':' Sort the members to ensure that we do updates that remove a node's vote first.','line_number':334,'multiline':False]['text':' Remove members.','line_number':345,'multiline':False]['text':' Update members.','line_number':354,'multiline':False]['text':' Add members.','line_number':364,'multiline':False]['text':' Verify that the final set of members is correct.','line_number':373,'multiline':False]['text':' Do a final reconfig to update any other top level config fields. This also ensures the','line_number':378,'multiline':False]['text':' correct member order in the final config since the add/remove procedure above will result in','line_number':379,'multiline':False]['text':' a members array that has the correct set of members but the members may not be in the same','line_number':380,'multiline':False]['text':' order as the specified target config.','line_number':381,'multiline':False]['text':'*
+ * Executes a replica set reconfiguration on the given ReplSetTest instance.
+ *
+ * If this function fails for any reason while doing a non force reconfig, the replica set config
+ * may be left in an intermediate state i.e. neither in the original or target config.
+ *
+ * @param rst - a ReplSetTest instance.
+ * @param config - the desired target config. After this function returns, the
+ * given replica set should be in 'config', except with a higher version.
+ * @param force - should this be a 'force' reconfig or not.
+ * @param doNotWaitForMembers - if set, we will skip waiting for all members to be in primary,
+ *     secondary, or arbiter states
+ ','line_number':387,'multiline':True]['text':' If this is a non 'force' reconfig, execute the reconfig as a series of reconfigs. Safe','line_number':404,'multiline':False]['text':' reconfigs only allow addition/removal of a single voting node at a time, so arbitrary','line_number':405,'multiline':False]['text':' reconfigs must be carried out in multiple steps. Using safe reconfigs guarantees that we','line_number':406,'multiline':False]['text':' don't violate correctness properties of the replication protocol.','line_number':407,'multiline':False]['text':' Force reconfigs can always be executed in one step.','line_number':411,'multiline':False]['text':'*
+ * Tests that a replica set safe reconfiguration on the given ReplSetTest instance should fail.
+ *
+ * @param rst - a ReplSetTest instance.
+ * @param config - the desired target config.
+ * @param force - should this be a 'force' reconfig or not.
+ * @param errCode - if exists, we verify that the reconfig fails with this errCode.
+ * @param errMsg - if exists, we verify that the reconfig fails with error message containing this
+ * errMsg.
+ ','line_number':422,'multiline':True]['text':' shouldFail ','line_number':433,'multiline':True]['text':' The following statement extracts the timestamp field from the most recent','line_number':441,'multiline':False]['text':' element of','line_number':442,'multiline':False]['text':' the oplog, and stores it in "ts".','line_number':443,'multiline':False]['text':'*
+ * Uses the results of running replSetGetStatus against an arbitrary replset node to wait until
+ * all nodes in the set are replicated through the same optime.
+ * 'rs' is an array of connections to replica set nodes.  This function is useful when you
+ * don't have a ReplSetTest object to use, otherwise ReplSetTest.awaitReplication is preferred.
+ ','line_number':465,'multiline':True]['text':' Must be in PRIMARY or SECONDARY state.','line_number':487,'multiline':False]['text':' Fail if optimes are not equal.','line_number':493,'multiline':False]['text':'*
+ * Waits for the given node to reach the given state, ignoring network errors.  Ensures that the
+ * connection is re-connected and usable when the function returns.
+ ','line_number':509,'multiline':True]['text':' Some state transitions cause connections to be closed, but whether the connection close','line_number':519,'multiline':False]['text':' happens before or after the replSetTest command above returns is racy, so to ensure that','line_number':520,'multiline':False]['text':' the connection to 'node' is usable after this function returns, reconnect it first.','line_number':521,'multiline':False]['text':'*
+ * Performs a reInitiate() call on 'replSetTest', ignoring errors that are related to an aborted
+ * secondary member. All other errors are rethrown.
+ ','line_number':525,'multiline':True]['text':' reInitiate can throw because it tries to run a "hello" command on all secondaries,','line_number':533,'multiline':False]['text':' including the new one that may have already aborted','line_number':534,'multiline':False]['text':' Ignore these exceptions, which are indicative of an aborted node','line_number':537,'multiline':False]['text':'*
+ * Waits for the specified hosts to enter a certain state.
+ ','line_number':544,'multiline':True]['text':' Check that *all* host properties are set correctly','line_number':585,'multiline':False]['text':' Use special comparator for tags because hello can return the fields in','line_number':588,'multiline':False]['text':' different order. The fields of the tags should be treated like a set of','line_number':589,'multiline':False]['text':' strings and 2 tags should be considered the same if the set is equal.','line_number':590,'multiline':False]['text':'*
+ * Returns the last opTime of the connection based from replSetGetStatus. Can only
+ * be used on replica set nodes.
+ ','line_number':635,'multiline':True]['text':'*
+ * Returns the oldest oplog entry.
+ ','line_number':645,'multiline':True]['text':' The query plan may yield between the cursor establishment and iterating to retrieve the first','line_number':656,'multiline':False]['text':' result. During this yield it's possible for the oplog to "roll over" or shrink. This is rare,','line_number':657,'multiline':False]['text':' but if these both happen the cursor will be unable to resume after yielding and return a','line_number':658,'multiline':False]['text':' "CappedPositionLost" error. This can be safely retried.','line_number':659,'multiline':False]['text':'*
+ * Set log verbosity on all given nodes.
+ * e.g. setLogVerbosity(replTest.nodes, { "replication": {"verbosity": 3} });
+ ','line_number':675,'multiline':True]['text':'*
+ * Stop replication on secondaries, do writes and step up the node that was passed in.
+ *
+ * The old primary has extra writes that are not replicated to the other nodes yet,
+ * but the new primary steps up, getting the vote from the the third node "voter".
+ ','line_number':689,'multiline':True]['text':' Write documents that cannot be replicated to secondaries in time.','line_number':696,'multiline':False]['text':' It's possible for the old primary to be running internal writes from the PrimaryOnlyService','line_number':700,'multiline':False]['text':' at random. This means that when we halt replication on the secondaries, a race may occur','line_number':701,'multiline':False]['text':' in which one secondary may have replicated the internal write already while the other hasn't','line_number':702,'multiline':False]['text':' yet. Therefore, we ensure that the passed in 'node' is ahead of the other secondaries through','line_number':703,'multiline':False]['text':' some writes to a junk collection 'junk_coll' to guarantee that 'node' can get elected.','line_number':704,'multiline':False]['text':' Restart replication on just the selected node, and allow it to progress ahead of the other','line_number':708,'multiline':False]['text':' secondaries before stopping replication on it again.','line_number':709,'multiline':False]['text':' New primary wins immediately, but needs to catch up.','line_number':726,'multiline':False]['text':' Check this node is not writable.','line_number':730,'multiline':False]['text':'*
+ * Returns the replSetGetConfig field 'commitmentStatus', which is true or false.
+ ','line_number':743,'multiline':True]['text':'*
+ * Asserts that replica set config A is the same as replica set config B ignoring the 'version' and
+ * 'term' field.
+ ','line_number':752,'multiline':True]['text':'*
+ * Returns true if replica set config A is the same as replica set config B ignoring the 'version'
+ * and 'term' field.
+ ','line_number':760,'multiline':True]['text':' Save original versions and terms.','line_number':765,'multiline':False]['text':' Reset values so we don't modify the original objects.','line_number':773,'multiline':False]['text':'*
+ * Returns the result of 'replSetGetConfig' with the test-parameter specified that indicates to
+ * include 'newlyAdded' fields.
+ ','line_number':781,'multiline':True]['text':'*
+ * @param memberIndex is optional. If not provided, then it will return true even if
+ * a single member in the replSet config has "newlyAdded" field.
+ ','line_number':790,'multiline':True]['text':'*
+ * Returns a new ReplSetTest created based on the given 'rstArgs'. If 'retryOnRetryableErrors'
+ * is true, retries on retryable errors (e.g. errors caused by shutdown).
+ ','line_number':876,'multiline':True]['text':'*
+ * Wait until all the nodes in a replica set have the same config as the input config.
+ ','line_number':899,'multiline':True]

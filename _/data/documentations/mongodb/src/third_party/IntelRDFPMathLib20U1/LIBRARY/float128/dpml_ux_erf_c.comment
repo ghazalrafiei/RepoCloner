@@ -1,0 +1,193 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]['text':' 
+** BASIC DESIGN
+** ------------
+** 
+** The erf/erfc design is based on the following identities:
+** 
+** 	           2*x     __inf (-x^2)^k
+** 	erf(x) = --------  >     --------			(1)
+** 	         sqrt(pi) /__0   (k+1)*k!
+** 
+** 	erfc(x) = 1 - erf(x)					(2)
+** 
+** 	           exp(-x^2)   __inf     (2k)!
+** 	erfc(x) ~  ----------  >     -------------		(3)
+** 	           x*sqrt(pi) /__0   k!*(-4*x^2)^k
+** 
+** 	          exp(-x^2) /  1  1/2 2/2 3/2    \
+** 	erfc(x) = --------- | --- --- --- --- ... |		(4)
+**	          sqrt(pi)  \ x + x + x + x +    /
+** 
+** 
+** The domain of the two functions is divided into 8 subintervals, symmetrically
+** placed around 0.  For each subinterval, the general approach is to perform 
+** some primary evaluation and then adjust its sign and add or subtract a
+** constant.
+** 
+** On the first subinterval, from 0 to 1, the primary evaluation is a rational
+** approximation to erf(x) of the form x*R(x^2), based on (1).  It should be
+** noted here that the upper bound of this interval could be taken as large as
+** 2 and still have the terms of R(x^2) be decreasing. However, as the upper
+** limit increases past 1, loss of significance when computing 1 - erf(x)
+** becomes a problem, so we take the upper limit of the first interval a 1
+** because it simplifies the interval determination logic. 
+** 
+** The second subinterval spans 1 to A, where A is chosen so that if x >= A, the
+** correctly rounded value of erf(x) is 1.  On this subinterval, the primary
+** evaluation is an approximation to erfc(x), of the form exp(-x*x)*S(x), where
+** S(x) is a rational approximation based on (4).
+** 
+** The third subinterval spans A to B, where B is chosen so that if x >= B, then
+** erfc(x) underflows.  On this subinterval, the primary evaluation is an
+** approximation to erfc(x) of the form exp(-x*x)*T(1/x^2)/x, where T(1/x^2)
+** is a rational approximation based on (3).
+** 
+** The actual values of A and B are somewhat arbitrary.  For this design we take
+** B = 128, since that choice helps simplify the determination of the intervals.
+** A is chosen to be 8.75.  The reason for this choice of A is that:
+** 
+** 	o it meets the requirement that x >= A ==> erf(x) = 1,
+** 	o A has very few significant bits, so its fraction can be represented
+** 	  in one word
+** 	o For this choice of A or larger, the terms in T(1/x^2) decrease
+','line_number':37,'multiline':True]['text':' 
+** 
+** IMPLEMENTATION STRATEGY
+** -----------------------
+** 
+** Based on the above definitions and equation (2) we can construct table 1
+** which shows how erf(x) and erfc(x) are computed based on which interval
+** they lie in.  In the table we refer to the primary evaluations in the first,
+** second and third subintervals as ERF(x), MID(x) and ERFC(x) respectively.
+** 
+** 
+** 	Sub-Interval	Index	  erf(x)	  erfc(x)
+** 	------------	-----	-----------	------------
+**	(-Inf,  -128]     7	-1              2
+**	(-128, -8.75]     6	-1              2
+**	[-8.75,   -1)     5	-1 + MID(|x|)   2 - MID(|x|)
+**	(-1,       0)     4	 0 - ERF(|x|)   1 + ERF(|x|)
+**	( 0,       1)     0	 0 + ERF(|x|)   1 - ERF(|x|)
+**	[ 1,    8.75]     1	 1 - MID(|x|)	0 + MID(x)
+** 	( 8.75,  128]     2	 1         	0 + ERFC(|x|)
+** 	( 128,  +Inf]     3	 1         	underflow
+** 
+** 			    Table 1
+** 			    -------
+** 
+** Ignoring for the time being, that underflows may need to be signaled, the
+** evaluation scheme for each subinterval, for both functions, is of the form:
+** 
+** 			   c + t*F(x) 			(5)
+** where
+** 
+** 		o t is +/-1
+** 		o c is -1, 0, 1 or 2
+** 		o F(x) is ERF(x), MID(x), ERFC(x), UNDERFLOW(x) or 0
+** 
+** Based on the above, we implement erf and erfc as calls into a common
+** evaluation routine, C_UX_ERF, that determines the interval the argument
+** lies in and then dispatches to the appropriate evaluation code.
+** 
+** 
+** MAPPING INTERVALS TO EVALUATIONS
+** --------------------------------
+** 
+** The mapping from interval to evaluation function can be done via a switch
+** statement on the interval.  The cases for ERFC(x) and UNDERFLOW need to check
+** for whether an erf(x) or erfc(x) evaluation is being performed.
+** 
+** The selection of the constants, c can be accomplished by encoding the 
+** appropriate values of c for erfc(x) in a "bit string" that can be indexed
+** by the interval number.  Actually, rather then encoding the constants
+** themselves we encode the index into an unpacked constant table.  Letting
+** the index for c = -1, 0, 1 and 2 be c + 1 (i.e the indices 0, 1, 2 and
+** 3 correspond to the constants -1, 0, 1 and 2), we can create two integers,
+** defined by:
+** 
+** 		 1   1   1
+** 		 4   2   0   8   6   4   2   0: bit position
+** 	      +---+---+---+---+---+---+---+---+
+** 	erfc: | 3 | 3 | 3 | 2 | 1 | 1 | 1 | 2 |
+** 	      +---+---+---+---+---+---+---+---+
+** 	      +---+---+---+---+---+---+---+---+
+** 	erf:  | 0 | 0 | 0 | 1 | 2 | 2 | 2 | 1 |
+** 	      +---+---+---+---+---+---+---+---+
+** 
+** that map indices of the constants to the intervals. Note that given one of
+** the above integers, we can determine if an erf or erfc evaluation is being
+** performed by looking at the low bit.
+','line_number':93,'multiline':True]['text':'
+** CALCULATING MID(x)
+** -------------------
+**
+** The rational expression that needs to be evaluated for mid(x) is particularly
+** ill behaved from the point of view of the general unpacked rational
+** evaluation routine.  So ill behaved in fact, that the general routine can
+** not be used for the evaluation.  The problem is that over the range
+** [1, 8.75), the evaluation cannot be formulated in such a way that the
+** terms decrease in magnitude and at the same time have the argument be less
+** that 1 is absolute value.  Since this is the evaluation in the math library
+** that has these characteristics, the special evaluation code for this case
+** is included here.
+**
+** The solution to the problem is to use a special (less efficient) packed format for
+** the evaluation.  See dpml_ux_ops.c for at description of the format.
+','line_number':183,'multiline':True]['text':'
+** C_UX_ERF is the common erf/erfc evaluation routine
+','line_number':202,'multiline':True]['text':' Determine interval ','line_number':234,'multiline':True]['text':'
+    ** Branch to appropriate action code.
+    ','line_number':247,'multiline':True]['text':' Fall through ','line_number':257,'multiline':True]['text':' Fall through ','line_number':271,'multiline':True]['text':' Compute z*T(z^2) for z = 8/x ','line_number':288,'multiline':True]['text':' Fall through ','line_number':300,'multiline':True]['text':'
+             ** In order to avoid excessive errors in the final result, we
+             ** compute exp(-x^2) as
+             **
+             **		exp(-x^2) = exp(-(hi + lo))
+             **		          = exp(-hi)*exp(-lo)
+             **		          ~ exp(-hi)*(1 - lo)
+             **		          = exp(-hi) - lo*exp(-hi)
+             ','line_number':304,'multiline':True]['text':' Dummy up underflow result and "zero" index ','line_number':326,'multiline':True]['text':' Fall through ','line_number':330,'multiline':True]['text':' Adjust sign of the evaluation and add in constant ','line_number':338,'multiline':True]['text':'
+** The following two entry points implement erfl and erfcl by calling the
+** C_UX_ERF routine with the appropriate parameters
+','line_number':354,'multiline':True]['text':' data 1 ','line_number':423,'multiline':True]['text':' data 1 ','line_number':440,'multiline':True]['text':' data 2 ','line_number':441,'multiline':True]['text':' data 3 ','line_number':442,'multiline':True]['text':'
+    ** The remaining mphoc computes the coefficients for the various rational
+    ** evaluations.  The erf/erfc approximations are rather difficult to
+    ** compute and consequently the Remes algorithm requires a long time to
+    ** converge.  In order to speed up the process for the normal case, we
+    ** compute rational approximation of specific degrees, rather than using
+    ** the REMES_FIND_RATIONAL option.
+    ','line_number':447,'multiline':True]['text':'
+    ** Generate coefficients for erf(x) evaluation on [0,1)
+    ','line_number':460,'multiline':True]['text':'
+    ** Generate coefficients for erfc(x) evaluation on [8.75, 128)
+    ','line_number':490,'multiline':True]['text':'
+    ** Generate coefficients for mid(x) evaluation on [1,8.75).
+    ','line_number':525,'multiline':True]['text':'
+    ** Now convert numerator and denominator to "packed" form and print them out
+    ','line_number':545,'multiline':True]

@@ -1,0 +1,706 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]['text':'
+ *  Compile time information, depending on which function is compiled:
+ *     default function names and base names;  
+ *     error codes for the exception dispatcher (note that the FAST functions
+ *       do not invoke the exception dispatching mechanism);
+ *     and other function-related symbolic constants, e.g. natural log or not,
+ *       fast function or not.
+ ','line_number':88,'multiline':True]['text':'
+ * SUMMARY OF THE ALGORITHM
+ *
+ *  The algorithm uses a large table for argument reduction, and then
+ *  polynomial approximation.  Certain aspects of the algorithm were 
+ *  suggested in an article by Peter Tang, in Transactions on Mathematical 
+ *  Software, December 1990.
+ *
+ *  In general, log of x can be computed by first reducing x to a small range
+ *  near 1, and computing the log of the reduced argument.  Write x = 2^m * f,
+ *  where f is in the interval [1, 2], then  log(x) = m * log(2) + log(f).  
+ *  Chop up the interval [1,2] into tiny subintervals [F(i), F(i+1)].  
+ *  Determine which division point F(j) is closest to f; then  
+ *     x = 2^m * f =  2^m *  F(j) * ( f/F(j) ),
+ *  where the last factor is very close to 1.  Then 
+ *     log(x) =  m * log(2) +  log(F(j)) +  log(f/F(j)) .
+ *  Since w = f/F(j) is very close to 1, its log can be approximated with a 
+ *  relatively small degree polynomial in w - 1 or (1-w)/(1+w)  (details in
+ *  a following section).
+ *
+ *  When x is quite close to 1, however, the roundoff error in computing the
+ *  variable w becomes visible, and can lead to quite large relative error.
+ *  First, when x is very close to 1 (and, say x > 1), then m = 0 and F(j) = 1.
+ *  The terms m * log(2) and log(F(j)) are both zero, so we need an accurate
+ *  approximation for log(f/F(j)).  If x is a little farther from 1, so that
+ *  j is a small positive integer, then m = 0 and F(j) is about 1 + j/2^LOG_K
+ *  (depending on how F(j) is defined), and log(F(j)) is about j/2^LOG_K.
+ *  The leading term of the polynomial in w can be as large as 1/2^(LOG_K + 1),
+ *  which is not much smaller than log(F(j)) and possibly has opposite sign.
+ *
+ *  To finesse this problem, the current implementation of log uses a special
+ *  path for x "near 1".  This approach is efficient because it permits a
+ *  less stringent approximation for log(f/F(j)), provided that the cost
+ *  of a branch is not too great.  An exception: the single precision fast
+ *  logs use one path, because the error bound of the polynomial
+ *  approximation for log(f/F(j)) is within the (relaxed) error requirements
+ *  for fast functions.
+ *
+ * ONE PATH
+ *  The accurate log functions have a ONE_PATH compile option (non-shared),
+ *  which is appropriate in a situation that severely penalizes branching.
+ *  In the ONE_PATH algorithm, the variable f/F(j) - 1 is computed very
+ *  carefully in hi and lo parts, and the linear term of the polynomial
+ *  is carefully split up into hi and lo parts and added to the respective
+ *  hi and lo terms of the expression.  Unfortunately, the cost of this
+ *  additional care has to be paid even when the care is not necessary,
+ *  e.g. when x is large.
+ *
+ * TABLE CONSTANTS
+ *  Both the ONE_PATH and the two path approaches store F(j), log(F(j)), 
+ *  and 1/F(j) in a table, and index into the table using the leading
+ *  LOG_K fraction bits of f.
+ *
+ *  In order to maintain the accuracy, computations use backup precision
+ *  wherever possible.
+ *  
+ *  If no backup precision is available, log(F(j)) and (for the ONE_PATH
+ *  algorithm) 1/F(j) are stored in the table in hi and lo parts.
+ *  log(2) and, for base 2 and 10, log(e), are also given in hi and lo parts. 
+ *  The hi part of log(2) is generated to have at least F_EXP_WIDTH trailing
+ *  zero bits so that m * log(2) will be an exact product.  Similarly, 
+ *  the hi part of log(F(j)) has enough trailing zeros so that
+ *  when it is added to  m * log2_hi, no significant bits of log(F(j))_hi
+ *  will be lost.  The lo parts of log(2) and log(F) are given in full 
+ *  precision.  Any roundoff error generated in computations that involve 
+ *  the lo parts will be shifted off.
+ *
+ *  All of these constants, the coefficients for the approximation polynomials,
+ *  and the table of F(j) data are stored in the same array.
+ *
+ * LOG1P
+ *  The computation of log1p(x) is similar to that for ln(x).  If x is not
+ *  too close to zero, we compute ln(1+x) following Tang's recommendations
+ *  to avoid roundoff error in the computation of (y - Fj)/Fj.  
+ *  If x is within the interval [T1 - 1, T2 - 1], then x + 1 
+ *  will be in the small interval [T1, T2] used in this implementation.  
+ *  If x is really close to zero, return x.  The error cases are analogous 
+ *  to those for natural log.
+ *
+ * POLYNOMIAL APPROXIMATIONS
+ *  There are two standard approaches for polynomial approximation for the
+ *  natural log, ln(w), where w is close to 1.
+ *  1.  Write f = y + F, then f/F = 1 + y/F = 1 + z.  Using the Taylor's 
+ *   expansion,  
+ *       log(1 + z)  =  z - z^2/2 + z^3/3 + ... + (-1)^(n+1) * z^n / n + ...
+ *  This suggests the minmax polynomial will be of the form
+ *     Q(z)  = z +  C1*z^2 + C2*z^3 + ....
+ *  This implementation computes the variable z by taking 
+ *    z = (f-F) * (1/F),  where the reciprocal 1/F is stored in the F table.
+ *
+ *  2.  Write  z = ((f/F) - 1)/( (f/F) + 1) =  (f - F)/(f + F).
+ *   The approximation for log(1 + f/F) can be derived from the Taylor's
+ *   expansion:
+ *      log(1 + f/F) =  2z + 2* z^3/3  + 2* z^5/5 + ...
+ *   The factor 2 can be absorbed into z, so that the final form of the
+ *   polynomial is
+ *      log(1 + f/F) =  z +  z^3/12  +  z^5/80 + ...
+ *   This suggests that the minmax polynomial will be
+ *      z +  z * (C1* (z^2) + C2* (z^2)^2  + ...  =   z + z*P(z^2).
+ *  
+ *  To achieve comparable accuracy, more terms are required in the first
+ *  approach's polynomial (the "reciprocal" approach) than in the second
+ *  (the "quotient" approach), but the second approach requires a division
+ *  in computing the approximation variable.
+ *
+ *  In this implementation, both the "normal path" (x not near 1) and the
+ *  "near 1" path can be computed either with the first or second approach.
+ *  By default, both paths use the approximation that avoids the use of
+ *  floating point division.  These defaults can be overridden with compile
+ *  options:
+ *      -U USE_RECIP         for the "normal path"
+ *      -U NO_DIVISIONS      for the "near 1 path"
+ *  These choices are independent of one another.  The choices could also
+ *  be tied to architecture considerations, e.g. the relative instruction
+ *  speeds of divisions, and adds and multiplies.  In any case, coefficients
+ *  for both sets of polynomials are generated in the non-shared include files
+ *  at build time.
+ *
+ ','line_number':169,'multiline':True]['text':'
+ *  If the log base 10 or base 2 is required, since 
+ *     log_base(x) = ln(x) / ln(base) =  ln(x) * log_base(e),
+ *  each of the coefficients for the polynomial will be multiplied by
+ *  by the appropriate base log of e.  These factors will be absorbed into
+ *  the coefficients, except for the linear term z, which will be multiplied
+ *  by log_base(e) in hi and lo parts.
+ *
+ *  All constants, including coefficients of the appropriate polynomials,
+ *  are computed at build-time and are given in the shared or non-shared
+ *  include files.
+ ','line_number':298,'multiline':True]['text':'
+ * ERROR CASES
+ *  Special cases (negative input, zero, NaNs, infinity, reserved operand)
+ *  and denormalized numbers are screened out early in the routine, 
+ *  by examining the sign and exponent fields.  The accurate routines
+ *  use the DPML exception dispatching mechanism to raise the appropriate
+ *  error and return the appropriate value.  
+ *
+ *      VAX format:
+ *          x = 0   raises an error  ("log of zero")
+ *          x < 0   raises an error  ("log of negative")
+ *
+ *      IEEE format:
+ *          x = NaN  returns the NaN, without raising an error 
+ *          x = +INFINITY returns +INFINITY, without raising an error.
+ *          x = +denormal  is scaled, and the log is computed.
+ *          x = +0  returns -INFINITY, through the exception dispatcher.
+ *          x negative (including x = -INFINITY and x = -0) returns a NaN
+ *              through the exception dispatcher.
+ *
+ *  The fast routines raise a floating point overflow for error cases.
+ *  Input positive denorms are treated as zero in the fast routines (the
+ *  accurate routines compute the correct result).  If x was a NaN or
+ *  positive infinity, the fast routines return x.
+ *
+ *
+ * ACCURACY
+ *  The accuracy characteristics for this implementation (max error, in lsb):
+ *
+ * ln:        .55
+ * log2:      .58
+ * log10:     .56
+ *
+ * Fast ln and log10:   single precision < 1.0
+ *                      double precision < 4.0
+ ','line_number':319,'multiline':True]['text':'
+ *  If the table is built non-shared and ONE_PATH, the symbolic constant
+ *  DO_ONE_PATH will get defined in the include file, to access the
+ *  ONE_PATH algorithmic steps in the code.  Similarly, if the table is
+ *  built shared, the symbolic constant DO_SHARED_TABLE will be defined
+ *  in the generated include file.  These constants can be used to check
+ *  that compile-time options are consistent with built-time options.
+ ','line_number':358,'multiline':True]['text':'  
+ * MPHOC code to generate the include file.
+ *
+ *  When processed by MPHOC, this code will generate arrays and definitions
+ *  for various constants, coefficients, and the table of Fj data.
+ *
+ *  Since the coefficients and tables are different, depending on whether
+ *  ONE_PATH or two paths are required, if the one path algorithm is desired,
+ *  ONE_PATH must be specified at build-time, and non-shared tables must be
+ *  selected.  The include file generated by ONE_PATH will set another
+ *  symbolic constant, DO_ONE_PATH.
+ *
+ *  The arrays contain:
+ *    - various constants, e.g. 1.0, log(2), log(e);
+ *    - coefficients for all the approximating polynomials
+ *    - the table of Fj data, which contains Fj, 1/Fj and log(Fj) in either
+ *         hi and lo parts or in backup precision, in the appropriate base.
+ *
+ *  The endpoints for the "near 1" interval, T1 and T2, in a useful format,
+ *  are also generated.
+ *
+ *  Logarithms are given in base e by default.  The compile options 
+ *   BASE_OF_LOG = BASE_2  or BASE_10   generate the include files for the
+ *  log2 and the log10 families of functions.
+ *
+ ','line_number':398,'multiline':True]['text':'
+ *  Various constants, e.g. log(2), will be built with EXP_WIDTH trailing 
+ *  zeros, so that multiplying by the exponent will not lose any bits.
+ ','line_number':449,'multiline':True]['text':'
+ *  Print statements.
+ ','line_number':458,'multiline':True]['text':'
+ *  MPHOC function for remes approximation of log(z), using the Taylor's
+ *  series.
+ ','line_number':497,'multiline':True]['text':'
+ *  MPHOC function for remes approximation of log(z), using the variable
+ *     z = (1 + x)/(1 - x)
+ ','line_number':535,'multiline':True]['text':'
+ *  Constant log(2), either in backup precision or in hi and lo parts.
+ *
+ *  For base 2 and 10, constant log(e), either in backup precision or in
+ *  hi and lo parts.  The hi and lo parts are given in two ways:
+ *      LOGE_HI  and   LOGE_LO   are in full working precision
+ *      LOGE_HI2 and   LOGE_LO2  are in half precision ("shortened").
+ *   Note that LOGE_HI2 + LOGE_LO2 = LOGE_HI.
+ ','line_number':573,'multiline':True]['text':'
+ *  There are 3 ways to build the table of F(j) and related data:
+ *    1.  if ONE_PATH and DOUBLE_PRECISION or larger, we need to store  1/F(j)
+ *        in hi and lo parts, to preserve accuracy.  So each row 
+ *        of the table contains 5 items:
+ *
+ *          F(j)  = 1 + j/2^LOG_K     in "half" precision
+ *          hi part of log(F(j))      in "half" precision
+ *          full precision form of 1/F(j)
+ *          lo part of 1/F(j)   where (1/F)_full - (1/F)_lo is "short" 
+ *                                  (has around "half" precision - 3 bits)
+ *          lo part of log(F(j))
+ *
+ *    2.  each row contains F(j), 1/F(j), and logF(j) in hi and lo parts.
+ *        But F(j) can be
+ *          F(j) =  1 + j/2^LOG_K + 1/2^(LOG_K+1)
+ *
+ *         or
+ *
+ *    3.    F(j) =  1 + j/2^LOG_K.
+ *
+ *        The first format allows indexing to be a little simpler; this
+ *        is used in the non-shared table.  The second format allows the
+ *        table to be used for single precision fast log, which does not
+ *        have a special path near 1.  The second format is used in the
+ *        shared table.
+ ','line_number':640,'multiline':True]['text':'
+ *  This procedure generates T1 and T2 (the boundaries of the interval 
+ *  "near 1") given as "integers" in the form  sign-expon-frac.
+ *
+ *  The values of T1 and T2 depend on LOG_K.  If x > 1 is very close to 1,
+ *  say, m = 0, but j > 0, then
+ *     log(x) = log(F(j))_hi + z + poly(z) + log(F(j))_lo
+ *  where z = (x - F(j))* 1/F(j).  Although x - F(j) is exact, multiplying
+ *  by 1/F causes a rounding error (3/2 lsb in the worst case).  log(F(j)) is
+ *  approximately  j/2^LOG_K, and is given in extra precision.  If z is 
+ *  computed only to working precision, then by forcing an alignment shift
+ *  of at least 2 bits, the error in z is safely shifted off.  When using
+ *  backup precision, a smaller alignment shift will work.
+ *  The alignment shift used here is log2(SAFE_LIM) = 3  if no backup
+ *  type exists, and an alignment shift of approximately 1 if there is 
+ *  backup, leading to a max relative error of approx .56 lsb (double).  
+ *  The smallest value of F(j) used is 1 + SAFE_LIM/2^LOG_K = T2, and 
+ *  1 - SAFE_LIM/2^LOG_K for T1.  
+ *
+ *  In base 2 or 10, z is multiplied by log(e), which introduces an additional
+ *  1 bit rounding error in the variable.  If we enlarge the interval [T1,T2]
+ *  slightly, this error is also shifted off.
+ *
+ *  The size of the error is related to the alignment shift: an additional 
+ *  shift of 1 bit reduces the (error - .5) by approximately 1/2.  
+ *  This corresponds to doubling the size of the interval [T1, T2].
+ *
+ *  In the code, the hi word of input x is extracted into integer variable
+ *  hi_x, with sign, exponent, and most significant fraction bits in the
+ *  msb part of the integer.  VAX floating point will be shuffled to match
+ *  this format, if there are insufficient fraction bits in the hi word.
+ *  Then, we subtract and use unsigned integer compares
+ *  to determine whether x was in the interval [T1, T2].
+ ','line_number':717,'multiline':True]['text':'
+ *  The MPHOC code itself.
+ *
+ *  The first constant is 1.0, used in scaling x to the interval [1,2).
+ *  In the shared table, 1.0 is given in both double and single precision.
+ *  The shared table also contains a big number which, when squared,
+ *  generates an overflow.
+ ','line_number':923,'multiline':True]['text':'
+ *  The shared table includes poly coefficients, in single and double
+ *  precision, for both accurate and fast log.  Seven polynomials are
+ *  generated:
+ *      'accurate' single precision, near 1 and away from 1
+ *      'fast' single precision, away from 1 (we use one path)
+ *      'accurate' double precision, near 1 and away from 1
+ *      'fast' double precision, near 1 and away from 1
+ *
+ *  Single precision coefficients are stored in double precision.
+ *  The approximation interval for F_FLOAT is twice as large as for S_FLOAT,
+ *  because of the interaction of table size, VAX float format, and indexing.
+ *
+ *  Double precision fast coefficients are split into two polynomials,
+ *  to allow greater flexibility in adding terms, for performance.
+ ','line_number':978,'multiline':True]['text':'
+ *  The non-shared poly coefficients are all given in working precision.
+ *  They include either the ONE_PATH coefficients (one poly), or
+ *  near-1 and away-from-1 coefficients, each given in the default expansion
+ *  or the form that requires a divide (4 polys).
+ ','line_number':1047,'multiline':True]['text':'
+ *  The constants include MPLOG(2), either in backup precision or in hi and
+ *  lo parts, and MPLOG(e), in backup precision or in hi and lo parts.
+ ','line_number':1121,'multiline':True]['text':'
+ *  The table of F(j), reciprocal of F(j), and logF(j).
+ ','line_number':1128,'multiline':True]['text':'
+ *  The constants T1 and T2, which define the endpoints of the "near 1"
+ *  interval.
+ ','line_number':1143,'multiline':True]['text':'
+#define GENP(addr, name) shell(STR(GENPOLY_EXECUTABLE)" \
+      " offset=-%i  degree=%i " \
+       "define=\"" STR(macro) "(x,y) y = \" " \
+       "cn=\"" STR(table) "[%%d]\" "
+','line_number':1152,'multiline':True]['text':'
+ *   MACROS 
+ ','line_number':1211,'multiline':True]['text':'
+ *  Defines for the poly evaluations.
+ ','line_number':1216,'multiline':True]['text':'
+ *  Macros for naming the endpoints of the "near 1" interval, depending
+ *  on precision and BITS_PER_WORD.
+ ','line_number':1277,'multiline':True]['text':'
+ *  Macros for fetching data from the F table.
+ ','line_number':1317,'multiline':True]['text':'
+ *  For log1p, fetch the constant 1.0, and add it to x (provided that rounding
+ *  modes are not "round up" and x is not fmax).  For IEEE, screen out NaNs
+ *  and infinities, and also input near 0 (including denorms).
+ ','line_number':1347,'multiline':True]['text':' 
+ *  Macro GET_HI_WORD gets the sign, exponent, and hi fraction bits, of either
+ *  the original x, or (for log1p) of temp_x.
+ *
+ *  VAX F format, accurate log, is treated specially, because we don't want
+ *  to incur a penalty for using the "long" indexing, which costs 2 extra
+ *  instructions.  Otherwise, for VAX format, if INDEX_BITS_NEEDED > 
+ *  number of contiguous hi fraction bits, we do a PDP shuffle to get more
+ *  fraction bits.  The fast F format log needs the first non-contiguous 
+ *  fraction bit as "rounding" information, because it does not have a
+ *  special path near 1 and so has to be careful.
+ *
+ *  The resulting integer word is used in screening for "near 1" and in 
+ *  computing the index.  We also need to know the location of x's sign bit.
+ ','line_number':1392,'multiline':True]['text':'
+ *  Loads the constant 1.0 as early as possible, but after starting to fetch
+ *  the hi word of x (except in log1p, which loads 1.0 even earlier).
+ *  In fast log, also encourage the early loading of other constants.
+ ','line_number':1453,'multiline':True]['text':'
+       clear = CLEAR_MASK; \
+       index_mask = JMASK; \
+       rounding_bit = ROUND_BIT;
+ ','line_number':1461,'multiline':True]['text':'
+ *  Computes the index into the F_table, using the hi LOG_K fraction bits
+ *  of x (really, from the integer hi word of x, PDP shuffled for double
+ *  precision VAX).  The original hi part of x has been manipulated so that
+ *  at least INDEX_BITS_NEEDED bits lie to the right of the exponent field, 
+ *  down to (and including) the lsb of the integer.  The index is these leading
+ *  INDEX_BITS_NEEDED fraction bits, multiplied by 2^4 or 2^5 for single or 
+ *  double precision respectively (each row of the table has 4 floating point
+ *  numbers, for a total of 16 or 32 bytes).
+ *
+ *  Indexing into the table is slightly different for ONE_PATH or two-path
+ *  algorithm.  In the ONE_PATH case, F(j) = 1 + j/2^LOG_K.  So to find
+ *  the nearest F(j) to a given scaled x, we need to round the fraction to
+ *  to LOG_K bits, by clearing out the exponent field, adding 1 in the LOG_K +1
+ *  position, and examining the first LOG_K fraction bits and the low order
+ *  exponent bit.  In the two-path case, F(j) = 1 + j/2^LOG_K + 1/2^(LOG_K+1).
+ *  So to find the nearest F(j), we need only look at the first LOG_K bits.
+ ','line_number':1486,'multiline':True]['text':'
+ *  Screen out bad x.
+ *
+ *  In principle, for VAX format, we could screen with 
+ *      "if (x <= 0) goto label"
+ *  but in practice, integer compares are faster and have less impact on
+ *  code scheduling than floating compares.
+ *
+ *  Bad x: m = sign/exponent has been shifted to the right. 
+ *  For VAX double precision, if m = 0, x was zero; if m < 0, x was negative.
+ *  For VAX single precision, need to make sure any fraction bits to the
+ *    left of the exponent were zeroed out.
+ *  For IEEE, screen out negatives and MAX_EXPONENT as well.
+ ','line_number':1623,'multiline':True]['text':'
+ *  Compute the unbiased, IEEE-style exponent, in integer position.
+ ','line_number':1671,'multiline':True]['text':' 
+ *  "Shortens" a variable to half precision or so, so that products of
+ *  "short" variables will be exact.  There are two flavors of "shorten":
+ *     add and subtract a BIG number to clear out a specific number
+ *         number of bits.  the original number must be known to be in
+ *         a given range.
+ *     cast to smaller precision, so that the "shortened" number has lots
+ *         of trailing zeros, or is flushed to zero.
+ *  When backup precision is available (we assume this is the case for
+ *  single precision), no need to shorten variables.
+ ','line_number':1677,'multiline':True]['text':'
+ *  There are two approximation polynomials for log:
+ *     using reciprocal:  f/F(j) - 1 = (f - F(j))*(1/F(j))
+ *   and
+ *     using quotient:  2*(f - F(j))/(f + F(j))
+ *  where f is the scaled-down x.
+ *
+ *  The macro PREPARE_VARIABLE_FOR_POLY chooses one approach or the other,
+ *  depending on the current value of USE_RECIP.
+ *  In the first case, 
+ *     variable = (f - Fj) * (1/Fj)  where the reciprocal is fetched from
+ *         the table.
+ *  In the second case, compute 
+ *     variable = 2*(f - Fj)/(f + Fj).
+ *
+ *
+ *  In the ONE_PATH case, we do a variant of the USE_RECIP which computes
+ *  the variable in hi and lo parts.  First, the reciprocal is stored in
+ *  full precision and as a lo part, in the table.  A first approximation
+ *  to y = (f - Fj)*(1/Fj) is computed, using the full reciprocal (1/F)_full.
+ *  y is good enough to use in the polynomial, but we need something better
+ *  for the linear term.  Compute 1/F_hi = 1/F_full - 1/F_lo.
+ *
+ *  Shorten t = (f - Fj) into a hi part, and subtract to get a lo part:
+ *    t_hi = shorten(t);    t_lo = t - t_hi;
+ *  Then a better approximation to the product (f - Fj)*(1/Fj) consists of
+ *  the pieces
+ *     (t_hi * 1/F_hi)  and  ( t_lo * 1/F_hi +  (t_hi + t_lo)*1/F_lo )
+ *  
+ *
+ *  The variable for the approximation for log1p is also more complicated
+ *  than the standard variable for log, because f = the scaled (1 + x)
+ *  minus F(j) must be computed accurately.
+ *  
+ *  m is the IEEE-style exponent for  1 + x, and f = 2^(-m) * (1 + x).
+ *  Fj is the nearest division point to f, as above.  Then t is f - F(j),
+ *  computed as:
+ *  
+ *     m = -2, -3, ...:     t = f - Fj
+ *     m = -1 :             t = (2 - Fj) + 2x
+ *     m = 0 :              t = (1 - Fj) + x
+ *     m = 1, 2, ... PREC-1:   t  ((2^-m) - Fj) + (2^-m)*x
+ *     m = PREC, PREC+1:    t = ((2^-m)*x - Fj) + (2^-m)
+ *     m = PREC+2, PREC+3, ... t = f - Fj.
+ *
+ *  Once t has been computed, the approximation variable is either
+ *   t*(1/Fj)  or  2t/(t + 2Fj).
+ ','line_number':1718,'multiline':True]['text':' not LOG1P ','line_number':1801,'multiline':True]['text':'
+ *  Add the linear term or a reasonable facsimile to m*log2 + logF, to
+ *  the hi or lo parts as appropriate.
+ *
+ *  In the ONE_PATH algorithm, the linear term is split into a "hi" part
+ *  that is added to (m*log2 + log(F))_hi  -  which can range in size from
+ *  just a little larger than the linear term, to very large - and a "lo"
+ *  part which is added to (m*log2 + log(F))_lo + poly.
+ ','line_number':1826,'multiline':True]['text':'
+ *  If x was close to 1, the polynomial approximation uses either x - 1
+ *  (for LOG1P, x itself), or the quotient  z = 2*(x - 1)/(x + 1) 
+ *  (for LOG1P, x/2 + x) as the variable for the polynomial approximation.
+ *
+ *  Since the quotient will not be exact, in general, the macro
+ *  computes a rough estimate of z.  The error in this computed z is
+ *  calculated in another macro GET_ACCURATE_LO_PART_OF_QUOTIENT.
+ *  The current macro computes the quotient z, and also f = x - 1, and
+ *  x = 1/(x + 1).  Both f and x are used later in GET_ACCURATE_LO_PART macro.
+ ','line_number':1863,'multiline':True]['text':'
+ *  Shortens the "near 1" variable, in preparation for adding the linear term
+ *  carefully to the rest of the polynomial.
+ *
+ *  When backup precision is available, no need to shorten.  When using the
+ *  quotient approximation near 1, the lo part is computed much more carefully,
+ *  in the macro GET_ACCURATE_LO_PART.
+ ','line_number':1910,'multiline':True]['text':' 
+ *  This macro extends the precision of the quotient u = 2(x - 1)/(x + 1), 
+ *  where x is the original input to the log function and x is near 1.
+ *
+ *  x lies in a small interval around 1, [T1, T2] .  
+ *  f was already computed as   f = x - 1.  Because x was near 1, f is exact.
+ *  u_hi was already computed by taking a preliminary approximation to
+ *     the quotient u, and then "shortening" u to roughly half precision.
+ *  g was already computed as g = 1/(x + 1).  Clearly g is not exact.
+ *
+ *  We need to find u_lo so that u = u_hi + u_lo.
+ *  Compute  f_hi = "shortened" f, and  f_lo = f - f_hi.
+ *  Both f_hi and f_lo are exact, and u_hi is exact (at least
+ *  what there is of it).
+ *
+ *  Multiply the basic equation    u = 2(x - 1)/(x + 1)  through by (x + 1):
+ *
+ *    (x + 1) * u = (x + 1) * (u_hi + u_lo) = 2 * f .
+ *
+ *  Replace f by (f_hi + f_lo), and solve for u_lo:
+ *  
+ *   (x + 1) * u_lo = 2 * f - (x + 1) * u_hi  =  2 * f - (f + 2) * u_hi =
+ *           2 * f - ( f_hi * u_hi - f_lo * u_hi - 2 * u_hi).
+ *
+ *  All the terms on the right hand side are either exact or are products
+ *  of two "short" quantities (and are therefore exact).  Grouping the
+ *  terms in order of size, and dividing through by (x + 1):
+ *
+ *    u_lo  =  [ ( 2 * (f - u_hi) - f_hi * u_hi) - f_lo * u_hi ] * g.
+ *
+ *  This macro returns u_lo in the parameter f.
+ ','line_number':1931,'multiline':True]['text':'
+ *  Combine poly term, linear term, and the second order term (if NO_DIVISIONS)
+ *  and compute the final result.
+ *
+ *  When backup precision is available, a direct sum of the terms
+ *    z - z*z/2 + poly    is sufficient.
+ *
+ *  When using the variable z = x - 1 (or x, in LOG1P), we have shortened
+ *   z into z_hi + z_lo.  The sum of the first two terms is computed as
+ *    [ z - (z_hi * z_hi)/2 ]  +   poly - ( (z + z_lo)*z_lo)/2
+ *  where the first term is exact (note that z has (LOG_K + 1) trailing zeros).
+ *
+ *  When using the quotient variable, we add in the "fixed up" part of the
+ *  linear term in the variable "extra".  There is no square term in the 
+ *  quotient variable approximation.
+ *
+ *  In base 10 and base 2, the linear term must be multiplied carefully by
+ *  log(e) and the result added carefully to the polynomial.
+ ','line_number':1981,'multiline':True]['text':'
+ *  Looks at the exponent field of x in hi_x, to see if it is zero.
+ ','line_number':2078,'multiline':True]['text':' 
+ *  The code for logarithm.
+ ','line_number':2094,'multiline':True]['text':'
+ *  In log1p, start by getting the constant 1.0.  Check if x is really tiny,
+ *  e.g. denorm, by looking at the exponent - if so, return x.  Then, add 1
+ *  to x, provided that this won't overflow (only a danger if the rounding mode
+ *  is "round to pos infinity" and x was FMAX).
+ ','line_number':2108,'multiline':True]['text':'
+ *  Fetch the sign, exponent, and highest fraction bits as an integer
+ *  in hi_x.  VAX format numbers are massaged so that the fraction bits that
+ *  were not adjacent to the sign and exponent are either ignored (single
+ *  precision) or are swapped into the "lower" half of the integer word
+ *  (double precision).  
+ ','line_number':2116,'multiline':True]['text':'
+ *  Load the constant 1.0 as early as possible, forcing early computation
+ *  of the address of the array (in log1p, done already).
+ ','line_number':2131,'multiline':True]['text':'  
+ *  Now, screen x to see if it is in the interval [T1, T2], "near 1".
+ *  For efficiency, the comparison is done with an unsigned integer compare:  
+ *  (x - T1) < (T2 - T1).
+ ','line_number':2138,'multiline':True]['text':' 
+ *  Normalize (a copy of) the fraction field of x to have a value between 
+ *  1 and 2, by putting the exponent of 1.0 into the exponent field, 
+ *  either with COPY_SIGN_EXP or directly.  
+ ','line_number':2153,'multiline':True]['text':'
+ *  x is not in the interval [T1, T2], but it still might be negative,
+ *  zero, infinity or NaN.  On the way to screening these out, shift the
+ *  exponent and fraction field to the right to isolate the leading 
+ *  INDEX_BITS_NEEDED fraction bits, in order to get the index of the jth row.
+ ','line_number':2166,'multiline':True]['text':'
+ *  Continue shifting down, to isolate the exponent.  Screen out the special
+ *  cases with another unsigned integer compare, to see if sign = 1, or 
+ *  exponent = 0, or exponent = MAX (IEEE only).  Note that if x's exponent
+ *  was zero, subtracting 1 makes it look like a large (unsigned) integer.
+ ','line_number':2175,'multiline':True]['text':'
+ *  So x is OK.  Get the unbiased, IEEE-style exponent m.
+ ','line_number':2184,'multiline':True]['text':'
+ *  Fetch the division point F(j), which is the closest table entry to x.
+ *   abs(x - F(j) ) < 1/ 2^(LOG_K+1).
+ ','line_number':2194,'multiline':True]['text':'
+ *  The variable for the approximation polynomial is either
+ *     (scaled_x - F(j)) * 1/F(j)   where F(j) is fetched from the table
+ *  (when USE_RECIP is true)
+ *  or    
+ *     2(x - F(j))/(x + F(j)).
+ *  Use the latter only when divides are relatively fast.
+ ','line_number':2201,'multiline':True]['text':' 
+ *  Compute  m*log(2) + log(F), in hi and lo parts:
+ *    m*log(2)_lo + log(F)_lo
+ *    m*log(2)_hi + log(F)_hi
+ *
+ *  The log(F) is fetched from the F_table.  The base of these logs is 
+ *  2, 10 or e, as appropriate.
+ ','line_number':2212,'multiline':True]['text':' m*log(2)_lo + log(F)_lo   ','line_number':2226,'multiline':True]['text':' m*log(2)_hi + log(F)_hi   ','line_number':2229,'multiline':True]['text':'
+ *  The first order term of the polynomial, (loge)*y, is added to log(F).
+ *  In the ONE_PATH algorithm, this must be done very carefully, in order
+ *  not to lose accuracy.
+ ','line_number':2237,'multiline':True]['text':'  
+ *  t = poly(y)
+ ','line_number':2245,'multiline':True]['text':'
+ *  Combine the poly with log(F).
+ ','line_number':2251,'multiline':True]['text':'
+ *  So, if x = 2^m * fraction = 2^m * (F + rest) = 2^m * F * f,
+ *
+ *    log(x) = m * log(2) + log(F) + log(f) =   
+ *
+ *       (m * log(2)_hi + log(F)_hi) +
+ *           (f * log(e)_hi + ( f*log(e)_lo + poly(f) +
+ *              ( m * log(2)_lo + log(F)_lo ) ) )
+ *
+ *   where these terms are given in descending size.
+ ','line_number':2261,'multiline':True]['text':' end x not in interval ','line_number':2275,'multiline':True]['text':'  
+ *  The approximation for x near 1, in the interval (T1, T2), involves
+ *  computing the variable for approximation with PREPARE_VARIABLE_NEAR_1,
+ *  to get either z = x - 1 or  z = 2(x-1)/(x+1), and then splitting z
+ *  into hi and lo parts z_hi and z_lo using the SHORTEN macro.
+ *
+ *  In the first, NO_DIVISIONS approach, it's important to split z carefully
+ *  so that z_hi has N bits.  Because x was near 1, x - 1 is no smaller 
+ *  than 2^(-F_PRECISION + 1) (except in log1p).  
+ *  x - 1 has some trailing zeros; in fact, the smaller z is, the more 
+ *  trailing zeros.
+ *
+ *  We can perserve accuracy in the approximation 
+ *         ln(1 + z) = z - z^2/2 + z^3/3 - ....
+ *  by splitting the second term z^2/2 into
+ *    z_hi^2/2 (exact)  +  z_lo*(z + z_hi)/2.
+ *
+ *  The smaller z is, the greater the alignment shift between z_hi^2/2 and z,
+ *  but then the more trailing zeros z has.  So z - z_hi^2/2 is exact, 
+ *  provided that the number of bits is small enough ( < F_PRECISION/2 - 1).
+ *
+ *  In log1p, we use z_hi - (z_hi^2/2).  We also know that z is no smaller
+ *  than 2^(-F_PRECISION + 1).
+ *
+ *
+ *  When NO_DIVISIONS is FALSE, the quotient 2*(x-1)/(x+1) is computed
+ *  a second time, using "shortened" variables to preserve accuracy by
+ *  guaranteeing that products are exact.
+ *
+ *  Let f = x - 1  and f1 = shortened f.   f2 = f - f1 is exact.
+ *    u = 2(x-1)/(x + 1) is not exact.
+ *    Let u1 = shortened u.
+ *  The macro GET_ACCURATE_LO_PART_OF_QUOTIENT  computes u2 = u - u1, 
+ *  by reconstructing u itself in extra accuracy.
+ *
+ *
+ *  In both approaches, single precision uses double precision as a backup type
+ *  in critical steps.
+ ','line_number':2277,'multiline':True]['text':'
+ *   z =  x - 1   or  2(x-1)/(x+1).   In the second case,  x is returned
+ *   as  x/(1+x), and y is returned as x - 1.  These variables will be
+ *   used later in getting a more accurate version of the quotient.
+ ','line_number':2329,'multiline':True]['text':'
+ *  If no backup precision is available, split z into hi and lo parts.
+ ','line_number':2336,'multiline':True]['text':'
+ *  t = poly(z).  Does not include linear or square terms.
+ ','line_number':2341,'multiline':True]['text':'
+ *  An accurate estimate of the lo part of the approximation variable is
+ *  returned in y  (NO_DIVISIONS = FALSE case).
+ ','line_number':2347,'multiline':True]['text':'
+ *  Combine the first and second order terms (using hi and lo if needed)
+ *  with the remainder of the poly.
+ ','line_number':2354,'multiline':True]['text':' end of x in (T1, T2) ','line_number':2366,'multiline':True]['text':' end "good" points ','line_number':2369,'multiline':True]['text':'  "Bad" points:
+ *    1. if sign is negative but exponent is zero
+ *        could be -0  (IEEE) :   return NaN, via exception dispatcher
+ *        or -denorm (IEEE) :     return NaN and raise error
+ *        or reserved operand (VAX) :  return x and raise error
+ *    2. if sign is negative and exponent is not zero
+ *        could be NaN (IEEE) :  return NaN itself
+ *        or -infinity (IEEE) :  return NaN and raise error
+ *        or negative number :     return NaN (IEEE) and raise error
+ *    3. if sign is positive but exponent is zero
+ *        could be true zero :   return -infinity (VAX, raise error)
+ *        or pos denorm (IEEE) : a valid case!  scale x by 2^PRECISION
+ *          and subtract PRECISION from the exponent.
+ *    4. if sign is positive and exponent = EMAX (for IEEE only)
+ *        could be NaN : return NaN
+ *        or pos infinity : return x
+ ','line_number':2370,'multiline':True]['text':' Check for negative arguement ','line_number':2393,'multiline':True]['text':' sign = negative, exponent is zero 
+                                          could be -0 or -denorm ','line_number':2397,'multiline':True]['text':' sign = negative, exponent not zero ','line_number':2404,'multiline':True]['text':' -inf or negative: return NaN, error ','line_number':2407,'multiline':True]['text':'  sign = positive, expon = zero ','line_number':2428,'multiline':True]['text':'  +0: return -inf, via RAISE ','line_number':2433,'multiline':True]['text':'  if DO_LOG1P  ','line_number':2450,'multiline':True]['text':'
+ *  Push in a known exponent to check if x was zero without doing a floating
+ *  compare, and (if not) to scale x to be between 2.0 and 2^PRECISION.
+ ','line_number':2452,'multiline':True]['text':'  +0: should return -inf, via RAISE ','line_number':2459,'multiline':True]['text':' x is positive denorm - scale and compute log ','line_number':2475,'multiline':True]['text':' compute the index again ','line_number':2479,'multiline':True]['text':' sign = positive, expon = MAX ','line_number':2495,'multiline':True]['text':' pos inf or NaN: just return x, no err ','line_number':2496,'multiline':True]['text':' sign = negative. ','line_number':2504,'multiline':True]['text':' if exponent is zero, reserved operand ','line_number':2505,'multiline':True]['text':' if exponent not zero, negative number ','line_number':2506,'multiline':True]['text':'  sign = positive, expon = zero ','line_number':2512,'multiline':True]['text':'  zero:  raise error ','line_number':2513,'multiline':True]['text':' end of logarithm ','line_number':2522,'multiline':True]['text':'
+ *  Fast logarithm.  The algorithmic steps are the same as in accurate log,
+ *  but in slightly different order.
+ ','line_number':2527,'multiline':True]['text':' f - Fj ','line_number':2567,'multiline':True]['text':' y= (f - Fj)*recip ','line_number':2573,'multiline':True]['text':' m*log2_hi ','line_number':2577,'multiline':True]['text':' m*log2_lo ','line_number':2579,'multiline':True]['text':' m*log(2)_hi + log(F)_hi   ','line_number':2605,'multiline':True]['text':' m*log(2)_lo + log(F)_lo   ','line_number':2606,'multiline':True]['text':' hi sum + y ','line_number':2607,'multiline':True]['text':' m*log(2)_hi + log(F)_hi   ','line_number':2611,'multiline':True]['text':' m*log(2)_lo + log(F)_lo   ','line_number':2612,'multiline':True]['text':' hi sum + y ','line_number':2613,'multiline':True]['text':' hi sum + hi poly ','line_number':2618,'multiline':True]['text':' lo sum + lo poly ','line_number':2622,'multiline':True]['text':'
+ *  In fast log, only double precision has the near 1 code path.
+ ','line_number':2629,'multiline':True]['text':'
+ *  Error cases:
+ *    hi_x holds the sign, exponent, some fraction bits of x, and,
+ *    if VAX format and PDP-shuffle was not performed, possibly some
+ *    fraction bits to the left of the exponent.
+ *
+ *    If +Inf or NaN return x.  Otherwise signal error
+ *
+ *    We raise an error by generating an overflow in floating multiply.
+ ','line_number':2643,'multiline':True]['text':' x is NaN or Inf - Check sign for -Inf ','line_number':2663,'multiline':True]['text':' x was NaN or +Inf ','line_number':2666,'multiline':True]

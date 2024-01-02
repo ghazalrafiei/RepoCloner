@@ -1,0 +1,97 @@
+['text':'
+ *          Copyright Andrey Semashev 2007 - 2015.
+ * Distributed under the Boost Software License, Version 1.0.
+ *    (See accompanying file LICENSE_1_0.txt or copy at
+ *          http://www.boost.org/LICENSE_1_0.txt)
+ ','line_number':1,'multiline':True]['text':'!
+ * \file   async_frontend.hpp
+ * \author Andrey Semashev
+ * \date   14.07.2009
+ *
+ * The header contains implementation of asynchronous sink frontend.
+ ','line_number':7,'multiline':True]['text':' std::terminate','line_number':18,'multiline':False]['text':' BOOST_LOG_DOXYGEN_PASS','line_number':113,'multiline':False]['text':'!
+ * \brief Asynchronous logging sink frontend
+ *
+ * The frontend starts a separate thread on construction. All logging records are passed
+ * to the backend in this dedicated thread.
+ *
+ * The user can prevent spawning the internal thread by specifying \c start_thread parameter
+ * with the value of \c false on construction. In this case log records will be buffered
+ * in the internal queue until the user calls \c run, \c feed_records or \c flush in his own
+ * thread. Log record queueing strategy is specified in the \c QueueingStrategyT template
+ * parameter.
+ ','line_number':115,'multiline':True]['text':'! Backend synchronization mutex type','line_number':136,'multiline':False]['text':'! Frontend synchronization mutex type','line_number':138,'multiline':False]['text':'! Operation bit mask','line_number':141,'multiline':False]['text':'! Function object to run the log record feeding thread','line_number':149,'multiline':False]['text':'! A scope guard that implements active operation management','line_number':169,'multiline':False]['text':'! Initializing constructor','line_number':176,'multiline':False]['text':'! Destructor','line_number':180,'multiline':False]['text':'! A scope guard that resets a flag on destructor','line_number':190,'multiline':False]['text':'! Sink implementation type','line_number':221,'multiline':False]['text':'! \cond','line_number':223,'multiline':False]['text':'! \endcond','line_number':225,'multiline':False]['text':'! A pointer type that locks the backend until it's destroyed','line_number':229,'multiline':False]['text':' BOOST_LOG_DOXYGEN_PASS','line_number':232,'multiline':False]['text':'! A pointer type that locks the backend until it's destroyed','line_number':234,'multiline':False]['text':' BOOST_LOG_DOXYGEN_PASS','line_number':237,'multiline':False]['text':'! Synchronization mutex','line_number':240,'multiline':False]['text':'! Pointer to the backend','line_number':242,'multiline':False]['text':'! Dedicated record feeding thread','line_number':245,'multiline':False]['text':'! Condition variable to implement blocking operations','line_number':247,'multiline':False]['text':'! Currently active operation','line_number':250,'multiline':False]['text':'! The flag indicates that the feeding loop has to be stopped','line_number':252,'multiline':False]['text':'! The flag indicates that queue flush has been requested','line_number':254,'multiline':False]['text':'!
+     * Default constructor. Constructs the sink backend instance.
+     * Requires the backend to be default-constructible.
+     *
+     * \param start_thread If \c true, the frontend creates a thread to feed
+     *                     log records to the backend. Otherwise no thread is
+     *                     started and it is assumed that the user will call
+     *                     \c run, \c feed_records or \c flush himself.
+     ','line_number':258,'multiline':True]['text':'!
+     * Constructor attaches user-constructed backend instance
+     *
+     * \param backend Pointer to the backend instance.
+     * \param start_thread If \c true, the frontend creates a thread to feed
+     *                     log records to the backend. Otherwise no thread is
+     *                     started and it is assumed that the user will call
+     *                     \c run, \c feed_records or \c flush himself.
+     *
+     * \pre \a backend is not \c NULL.
+     ','line_number':277,'multiline':True]['text':'!
+     * Constructor that passes arbitrary named parameters to the interprocess sink backend constructor.
+     * Refer to the backend documentation for the list of supported parameters.
+     *
+     * The frontend uses the following named parameters:
+     *
+     *   \li start_thread - If \c true, the frontend creates a thread to feed
+     *                      log records to the backend. Otherwise no thread is
+     *                      started and it is assumed that the user will call
+     *                      \c run, \c feed_records or \c flush himself.
+     ','line_number':299,'multiline':True]['text':'!
+     * Destructor. Implicitly stops the dedicated feeding thread, if one is running.
+     ','line_number':317,'multiline':True]['text':'!
+     * Locking accessor to the attached backend
+     ','line_number':333,'multiline':True]['text':'!
+     * Enqueues the log record to the backend
+     ','line_number':341,'multiline':True]['text':' Wait until flush is done','line_number':349,'multiline':False]['text':'!
+     * The method attempts to pass logging record to the backend
+     ','line_number':356,'multiline':True]['text':'!
+     * The method starts record feeding loop and effectively blocks until either of this happens:
+     *
+     * \li the thread is interrupted due to either standard thread interruption or a call to \c stop
+     * \li an exception is thrown while processing a log record in the backend, and the exception is
+     *     not terminated by the exception handler, if one is installed
+     *
+     * \pre The sink frontend must be constructed without spawning a dedicated thread
+     ','line_number':369,'multiline':True]['text':' First check that no other thread is running','line_number':380,'multiline':False]['text':' Now start the feeding loop','line_number':389,'multiline':False]['text':' Block until new record is available','line_number':395,'multiline':False]['text':'!
+     * The method softly interrupts record feeding loop. This method must be called when \c run,
+     * \c feed_records or \c flush method execution has to be interrupted. Unlike regular thread
+     * interruption, calling \c stop will not interrupt the record processing in the middle.
+     * Instead, the sink frontend will attempt to finish its business with the record in progress
+     * and return afterwards. This method can be called either if the sink was created with
+     * an internal dedicated thread, or if the feeding loop was initiated by user.
+     *
+     * If no record feeding operation is in progress, calling \c stop marks the sink frontend
+     * so that the next feeding operation stops immediately.
+     *
+     * \note Returning from this method does not guarantee that there are no records left buffered
+     *       in the sink frontend. It is possible that log records keep coming during and after this
+     *       method is called. At some point of execution of this method log records stop being processed,
+     *       and all records that come after this point are put into the queue. These records will be
+     *       processed upon further calls to \c run or \c feed_records.
+     *
+     * \note If the record feeding loop is being run in a user's thread (i.e. \c start_thread was specified
+     *       as \c false on frontend construction), this method does not guarantee that upon return the thread
+     *       has returned from the record feeding loop or that it won't enter it in the future. The method
+     *       only ensures that the record feeding thread will eventually return from the feeding loop. It is
+     *       user's responsibility to synchronize with the user's record feeding thread.
+     ','line_number':405,'multiline':True]['text':'!
+     * The method feeds log records that may have been buffered to the backend and returns
+     *
+     * \pre The sink frontend must be constructed without spawning a dedicated thread
+     ','line_number':444,'multiline':True]['text':' First check that no other thread is running','line_number':451,'multiline':False]['text':' Now start the feeding loop','line_number':460,'multiline':False]['text':'!
+     * The method feeds all log records that may have been buffered to the backend and returns.
+     * Unlike \c feed_records, in case of ordering queueing the method also feeds records
+     * that were enqueued during the ordering window, attempting to drain the queue completely.
+     ','line_number':464,'multiline':True]['text':' There is already a thread feeding records, let it do the job','line_number':475,'multiline':False]['text':' The condition may have been signalled when the feeding operation was finishing.','line_number':481,'multiline':False]['text':' In that case records may not have been flushed, and we do the flush ourselves.','line_number':482,'multiline':False]['text':'! The method spawns record feeding thread','line_number':498,'multiline':False]['text':'! Starts record feeding operation. The method blocks or throws if another feeding operation is in progress.','line_number':504,'multiline':False]['text':'! Completes record feeding operation','line_number':526,'multiline':False]['text':'! The record feeding loop','line_number':541,'multiline':False]['text':' BOOST_LOG_DOXYGEN_PASS','line_number':565,'multiline':False]['text':' namespace sinks','line_number':572,'multiline':False]['text':' namespace log','line_number':574,'multiline':False]['text':' namespace boost','line_number':576,'multiline':False]['text':' BOOST_LOG_SINKS_ASYNC_FRONTEND_HPP_INCLUDED_','line_number':580,'multiline':False]

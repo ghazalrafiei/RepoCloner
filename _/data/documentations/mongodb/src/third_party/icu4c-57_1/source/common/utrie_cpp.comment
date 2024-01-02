@@ -1,0 +1,116 @@
+['text':'
+******************************************************************************
+*
+*   Copyright (C) 2001-2012, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+******************************************************************************
+*   file name:  utrie.cpp
+*   encoding:   US-ASCII
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 2001oct20
+*   created by: Markus W. Scherer
+*
+*   This is a common implementation of a "folded" trie.
+*   It is a kind of compressed, serializable table of 16- or 32-bit values associated with
+*   Unicode code points (0..0x10ffff).
+','line_number':1,'multiline':True]['text':' miscellaneous ------------------------------------------------------------ ','line_number':29,'multiline':True]['text':' Building a trie ----------------------------------------------------------','line_number':44,'multiline':True]['text':' preallocate and reset the first data block (block index 0) ','line_number':83,'multiline':True]['text':' preallocate and reset the first block (number 0) and Latin-1 (U+0000..U+00ff) after that ','line_number':87,'multiline':True]['text':' made sure above that maxDataLength>=1024 ','line_number':88,'multiline':True]['text':' set indexes to point to consecutive data blocks ','line_number':90,'multiline':True]['text':' do this at least for trie->index[0] even if that block is only partly used for Latin-1 ','line_number':93,'multiline':True]['text':' reset the initially allocated blocks to the initial value ','line_number':99,'multiline':True]['text':' do not clone if other is not valid or already compacted ','line_number':118,'multiline':True]['text':' clone data ','line_number':123,'multiline':True]['text':' out of memory in the data array ','line_number':180,'multiline':True]['text':'*
+ * No error checking for illegal arguments.
+ *
+ * @return -1 if no new data block available (out of memory in data array)
+ * @internal
+ ','line_number':187,'multiline':True]['text':' allocate a new data block ','line_number':203,'multiline':True]['text':' out of memory in the data array ','line_number':206,'multiline':True]['text':' copy-on-write for a block from a setRange() ','line_number':211,'multiline':True]['text':'*
+ * @return TRUE if the value was successfully set
+ ','line_number':216,'multiline':True]['text':' valid, uncompacted trie and valid c? ','line_number':223,'multiline':True]['text':' valid, uncompacted trie and valid c? ','line_number':241,'multiline':True]['text':'*
+ * @internal
+ ','line_number':257,'multiline':True]['text':'
+     * repeat value in [start..limit[
+     * mark index values for repeat-data blocks by setting bit 31 of the index values
+     * fill around existing values if any, if(overwrite)
+     ','line_number':283,'multiline':True]['text':' valid, uncompacted trie and valid indexes? ','line_number':291,'multiline':True]['text':' nothing to do ','line_number':298,'multiline':True]['text':' set partial block at [start..following block boundary[ ','line_number':305,'multiline':True]['text':' number of positions in the last, partial block ','line_number':323,'multiline':True]['text':' round down limit to a block boundary ','line_number':326,'multiline':True]['text':' iterate over all-value blocks ','line_number':329,'multiline':True]['text':' get index value ','line_number':336,'multiline':True]['text':' already allocated, fill in value ','line_number':339,'multiline':True]['text':' set the repeatBlock instead of the current block 0 or range block ','line_number':342,'multiline':True]['text':' create and set and fill the repeatBlock ','line_number':346,'multiline':True]['text':' set the negative block number to indicate that it is a repeat block ','line_number':352,'multiline':True]['text':' set partial block at [last block boundary..limit[ ','line_number':362,'multiline':True]['text':'
+ * Fold the normalization data for supplementary code points into
+ * a compact area on top of the BMP-part of the trie index,
+ * with the lead surrogates indexing this compact area.
+ *
+ * Duplicate the index values for lead surrogates:
+ * From inside the BMP area, where some may be overridden with folded values,
+ * to just after the BMP area, where they can be retrieved for
+ * code point lookups.
+ ','line_number':392,'multiline':True]['text':' copy the lead surrogate indexes into a temporary array ','line_number':415,'multiline':True]['text':'
+     * set all values for lead surrogate code *units* to leadUnitValue
+     * so that, by default, runtime lookups will find no data for associated
+     * supplementary code points, unless there is data for such code points
+     * which will result in a non-zero folding value below that is set for
+     * the respective lead units
+     *
+     * the above saved the indexes for surrogate code *points*
+     * fill the indexes with simplified code from utrie_setRange32()
+     ','line_number':418,'multiline':True]['text':' leadUnitValue==initialValue, use all-initial-value block ','line_number':429,'multiline':True]['text':' create and fill the repeatBlock ','line_number':431,'multiline':True]['text':' data table overflow ','line_number':434,'multiline':True]['text':' negative block number to indicate that it is a repeat block ','line_number':439,'multiline':True]['text':'
+     * Fold significant index values into the area just after the BMP indexes.
+     * In case the first lead surrogate has significant data,
+     * its index block must be used first (in which case the folding is a no-op).
+     * Later all folded index blocks are moved up one to insert the copied
+     * lead surrogate indexes.
+     ','line_number':445,'multiline':True]['text':' search for any index (stage 1) entries for supplementary code points ','line_number':454,'multiline':True]['text':' there is data, treat the full block for a lead surrogate ','line_number':457,'multiline':True]['text':' printf("supplementary data for lead surrogate U+%04lx\n", (long)(0xd7c0+(c>>10))); ','line_number':462,'multiline':True]['text':' is there an identical index block? ','line_number':465,'multiline':True]['text':'
+             * get a folded value for [c..c+0x400[ and,
+             * if different from the value for the lead surrogate code point,
+             * set it for the lead surrogate code unit
+             ','line_number':468,'multiline':True]['text':' data table overflow ','line_number':476,'multiline':True]['text':' if we did not find an identical index block... ','line_number':481,'multiline':True]['text':' move the actual index (stage 1) entries from the supplementary position to the new one ','line_number':483,'multiline':True]['text':'
+     * index array overflow?
+     * This is to guarantee that a folding offset is of the form
+     * UTRIE_BMP_INDEX_LENGTH+n*UTRIE_SURROGATE_BLOCK_COUNT with n=0..1023.
+     * If the index is too large, then n>=1024 and more than 10 bits are necessary.
+     *
+     * In fact, it can only ever become n==1024 with completely unfoldable data and
+     * the additional block of duplicated values for lead surrogates.
+     ','line_number':501,'multiline':True]['text':'
+     * make space for the lead surrogate index block and
+     * insert it between the BMP indexes and the folded ones
+     ','line_number':515,'multiline':True]['text':'
+ * Set a value in the trie index map to indicate which data block
+ * is referenced and which one is not.
+ * utrie_compact() will remove data blocks that are not used at all.
+ * Set
+ * - 0 if it is used
+ * - -1 if it is not used
+ ','line_number':535,'multiline':True]['text':' fill the entire map with "not used" ','line_number':547,'multiline':True]['text':' mark each block that _is_ used with 0 ','line_number':550,'multiline':True]['text':' never move the all-initial-value block 0 ','line_number':555,'multiline':True]['text':' ensure that we do not even partially get past dataLength ','line_number':564,'multiline':True]['text':'
+ * Compact a folded build-time trie.
+ *
+ * The compaction
+ * - removes blocks that are identical with earlier ones
+ * - overlaps adjacent blocks as much as possible (if overlap==TRUE)
+ * - moves blocks in steps of the data granularity
+ * - moves and overlaps blocks that overlap with multiple values in the overlap region
+ *
+ * It does not
+ * - try to move and overlap blocks that are not already adjacent
+ ','line_number':575,'multiline':True]['text':' valid, uncompacted trie? ','line_number':595,'multiline':True]['text':' nothing left to do ','line_number':601,'multiline':True]['text':' compaction ','line_number':604,'multiline':True]['text':' initialize the index map with "block is used/unused" flags ','line_number':606,'multiline':True]['text':' if Latin-1 is preallocated and linear, then do not compact Latin-1 data ','line_number':609,'multiline':True]['text':'
+         * start: index of first entry of current block
+         * newStart: index where the current block is to be moved
+         *           (right after current end of already-compacted data)
+         ','line_number':618,'multiline':True]['text':' skip blocks that are not used ','line_number':624,'multiline':True]['text':' advance start to the next block ','line_number':626,'multiline':True]['text':' leave newStart with the previous block! ','line_number':629,'multiline':True]['text':' search for an identical block ','line_number':633,'multiline':True]['text':' found an identical block, set the other block's index value for the current block ','line_number':639,'multiline':True]['text':' advance start to the next block ','line_number':642,'multiline':True]['text':' leave newStart with the previous block! ','line_number':645,'multiline':True]['text':' see if the beginning of this block can be overlapped with the end of the previous block ','line_number':649,'multiline':True]['text':' look for maximum overlap (modulo granularity) with the previous, adjacent block ','line_number':651,'multiline':True]['text':' some overlap ','line_number':660,'multiline':True]['text':' move the non-overlapping indexes to their new positions ','line_number':663,'multiline':True]['text':' no overlap, just move the indexes to their new positions ','line_number':669,'multiline':True]['text':' no overlap && newStart==start ','line_number':674,'multiline':True]['text':' now adjust the index (stage 1) table ','line_number':681,'multiline':True]['text':' we saved some space ','line_number':687,'multiline':True]['text':' serialization ------------------------------------------------------------ ','line_number':695,'multiline':True]['text':'
+ * Default function for the folding value:
+ * Just store the offset (16 bits) if there is any non-initial-value entry.
+ *
+ * The offset parameter is never 0.
+ * Returning the offset itself is safe for UTRIE_SHIFT>=5 because
+ * for UTRIE_SHIFT==5 the maximum index length is UTRIE_MAX_INDEX_LENGTH==0x8800
+ * which fits into 16-bit trie values;
+ * for higher UTRIE_SHIFT, UTRIE_MAX_INDEX_LENGTH decreases.
+ *
+ * Theoretically, it would be safer for all possible UTRIE_SHIFT including
+ * those of 4 and lower to return offset>>UTRIE_SURROGATE_BLOCK_BITS
+ * which would always result in a value of 0x40..0x43f
+ * (start/end 1k blocks of supplementary Unicode code points).
+ * However, this would be uglier, and would not work for some existing
+ * binary data file formats.
+ *
+ * Also, we do not plan to change UTRIE_SHIFT because it would change binary
+ * data file formats, and we would probably not make it smaller because of
+ * the then even larger BMP index length even for empty tries.
+ ','line_number':697,'multiline':True]['text':' argument check ','line_number':750,'multiline':True]['text':' fold and compact if necessary, also checks that indexLength is within limits ','line_number':764,'multiline':True]['text':' compact once without overlap to improve folding ','line_number':766,'multiline':True]['text':' fold the supplementary part of the index array ','line_number':769,'multiline':True]['text':' compact again with overlap for minimum data array length ','line_number':772,'multiline':True]['text':' is dataLength within limits? ','line_number':781,'multiline':True]['text':' preflighting ','line_number':794,'multiline':True]['text':' set the header fields ','line_number':802,'multiline':True]['text':' "Trie" ','line_number':806,'multiline':True]['text':' write the index (stage 1) array and the 16/32-bit data (stage 2) array ','line_number':819,'multiline':True]['text':' write 16-bit index values shifted right by UTRIE_INDEX_SHIFT, after adding indexLength ','line_number':821,'multiline':True]['text':' write 16-bit data values ','line_number':828,'multiline':True]['text':' write 16-bit index values shifted right by UTRIE_INDEX_SHIFT ','line_number':834,'multiline':True]['text':' write 32-bit data values ','line_number':841,'multiline':True]['text':' inverse to defaultGetFoldedValue() ','line_number':848,'multiline':True]['text':' enough data for a trie header? ','line_number':864,'multiline':True]['text':' check the signature ','line_number':870,'multiline':True]['text':' get the options and check the shift values ','line_number':877,'multiline':True]['text':' get the length values ','line_number':887,'multiline':True]['text':' enough data for the index? ','line_number':893,'multiline':True]['text':' get the data ','line_number':903,'multiline':True]['text':' the "data16" data is used via the index pointer ','line_number':918,'multiline':True]['text':' calculate the actual size of the dummy trie data ','line_number':943,'multiline':True]['text':' max(Latin-1, block 0) ','line_number':945,'multiline':True]['text':'UTRIE_SHIFT<=8 ? 256 : UTRIE_DATA_BLOCK_LENGTH;','line_number':946,'multiline':True]['text':' enough space for the dummy trie? ','line_number':961,'multiline':True]['text':' fill the index and data arrays ','line_number':970,'multiline':True]['text':' indexes to block 0 ','line_number':975,'multiline':True]['text':' indexes for lead surrogate code units to the block after Latin-1 ','line_number':983,'multiline':True]['text':' Latin-1 data ','line_number':994,'multiline':True]['text':' data for lead surrogate code units ','line_number':1000,'multiline':True]['text':' i=latin1Length ','line_number':1003,'multiline':True]['text':' indexes to block 0 ','line_number':1010,'multiline':True]['text':' indexes for lead surrogate code units to the block after Latin-1 ','line_number':1014,'multiline':True]['text':' Latin-1 data ','line_number':1025,'multiline':True]['text':' data for lead surrogate code units ','line_number':1030,'multiline':True]['text':' i=latin1Length ','line_number':1033,'multiline':True]['text':' enumeration -------------------------------------------------------------- ','line_number':1044,'multiline':True]['text':' default UTrieEnumValue() returns the input value itself ','line_number':1046,'multiline':True]['text':'context','line_number':1048,'multiline':True]['text':'*
+ * Enumerate all ranges of code points with the same relevant values.
+ * The values are transformed from the raw trie entries by the enumValue function.
+ ','line_number':1052,'multiline':True]['text':' check arguments ','line_number':1066,'multiline':True]['text':' get the enumeration value that corresponds to an initial-value trie data entry ','line_number':1077,'multiline':True]['text':' set variables for previous range ','line_number':1086,'multiline':True]['text':' enumerate BMP - the main loop enumerates data blocks ','line_number':1091,'multiline':True]['text':' skip lead surrogate code _units_, go to lead surr. code _points_ ','line_number':1094,'multiline':True]['text':' go back to regular BMP code points ','line_number':1097,'multiline':True]['text':' the block is the same as the previous one, and filled with value ','line_number':1103,'multiline':True]['text':' this is the all-initial-value block ','line_number':1106,'multiline':True]['text':' the block is not filled with all the same value ','line_number':1129,'multiline':True]['text':' enumerate supplementary code points ','line_number':1140,'multiline':True]['text':' lead surrogate access ','line_number':1142,'multiline':True]['text':' no entries for a whole block of lead surrogates ','line_number':1145,'multiline':True]['text':' enumerate trail surrogates for this lead surrogate ','line_number':1164,'multiline':True]['text':' no data for this lead surrogate ','line_number':1167,'multiline':True]['text':' nothing else to do for the supplementary code points for this lead surrogate ','line_number':1179,'multiline':True]['text':' enumerate code points for this lead surrogate ','line_number':1182,'multiline':True]['text':' copy of most of the body of the BMP loop ','line_number':1186,'multiline':True]['text':' the block is the same as the previous one, and filled with value ','line_number':1189,'multiline':True]['text':' this is the all-initial-value block ','line_number':1192,'multiline':True]['text':' the block is not filled with all the same value ','line_number':1215,'multiline':True]['text':' deliver last range ','line_number':1230,'multiline':True]

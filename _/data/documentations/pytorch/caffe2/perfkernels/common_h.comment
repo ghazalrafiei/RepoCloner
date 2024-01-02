@@ -1,0 +1,40 @@
+['text':' !!!! PLEASE READ !!!!','line_number':1,'multiline':False]['text':' Minimize (transitively) included headers from _avx*.cc because some of the','line_number':2,'multiline':False]['text':' functions defined in the headers compiled with platform dependent compiler','line_number':3,'multiline':False]['text':' options can be reused by other translation units generating illegal','line_number':4,'multiline':False]['text':' instruction run-time error.','line_number':5,'multiline':False]['text':' Common utilities for writing performance kernels and easy dispatching of','line_number':7,'multiline':False]['text':' different backends.','line_number':8,'multiline':False]['text':'
+The general workflow shall be as follows, say we want to
+implement a functionality called void foo(int a, float b).
+
+In foo.h, do:
+   void foo(int a, float b);
+
+In foo_avx512.cc, do:
+   void foo__avx512(int a, float b) {
+     [actual avx512 implementation]
+   }
+
+In foo_avx2.cc, do:
+   void foo__avx2(int a, float b) {
+     [actual avx2 implementation]
+   }
+
+In foo_avx.cc, do:
+   void foo__avx(int a, float b) {
+     [actual avx implementation]
+   }
+
+In foo.cc, do:
+   // The base implementation should *always* be provided.
+   void foo__base(int a, float b) {
+     [base, possibly slow implementation]
+   }
+   decltype(foo__base) foo__avx512;
+   decltype(foo__base) foo__avx2;
+   decltype(foo__base) foo__avx;
+   void foo(int a, float b) {
+     // You should always order things by their preference, faster
+     // implementations earlier in the function.
+     AVX512_DO(foo, a, b);
+     AVX2_DO(foo, a, b);
+     AVX_DO(foo, a, b);
+     BASE_DO(foo, a, b);
+   }
+
+','line_number':9,'multiline':True]['text':' Details: this functionality basically covers the cases for both build time','line_number':49,'multiline':False]['text':' and run time architecture support.','line_number':50,'multiline':False]['text':'','line_number':51,'multiline':False]['text':' During build time:','line_number':52,'multiline':False]['text':'    The build system should provide flags CAFFE2_PERF_WITH_AVX512,','line_number':53,'multiline':False]['text':'    CAFFE2_PERF_WITH_AVX2, and CAFFE2_PERF_WITH_AVX that corresponds to the','line_number':54,'multiline':False]['text':'    __AVX512F__, __AVX512DQ__, __AVX512VL__, __AVX2__, and __AVX__ flags the','line_number':55,'multiline':False]['text':'    compiler provides. Note that we do not use the compiler flags but rely on','line_number':56,'multiline':False]['text':'    the build system flags, because the common files (like foo.cc above) will','line_number':57,'multiline':False]['text':'    always be built without __AVX512F__, __AVX512DQ__, __AVX512VL__, __AVX2__','line_number':58,'multiline':False]['text':'    and __AVX__.','line_number':59,'multiline':False]['text':' During run time:','line_number':60,'multiline':False]['text':'    we use cpuinfo to identify cpu support and run the proper functions.','line_number':61,'multiline':False]['text':' DO macros: these should be used in your entry function, similar to foo()','line_number':70,'multiline':False]['text':' above, that routes implementations based on CPU capability.','line_number':71,'multiline':False]['text':' CAFFE2_PERF_WITH_AVX512','line_number':85,'multiline':False]['text':' CAFFE2_PERF_WITH_AVX512','line_number':87,'multiline':False]['text':' CAFFE2_PERF_WITH_AVX2','line_number':105,'multiline':False]['text':' CAFFE2_PERF_WITH_AVX2','line_number':108,'multiline':False]['text':' CAFFE2_PERF_WITH_AVX','line_number':126,'multiline':False]['text':' CAFFE2_PERF_WITH_AVX','line_number':129,'multiline':False]

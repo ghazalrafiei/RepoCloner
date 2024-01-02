@@ -1,0 +1,124 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]['text':'
+ * hashtab.c: Handling of a hashtable with Vim-specific properties.
+ *
+ * Each item in a hashtable has a NUL terminated string key.  A key can appear
+ * only once in the table.
+ *
+ * A hash number is computed from the key for quick lookup.  When the hashes
+ * of two different keys point to the same entry an algorithm is used to
+ * iterate over other entries in the table until the right one is found.
+ * To make the iteration work removed keys are different from entries where a
+ * key was never present.
+ *
+ * The mechanism has been partly based on how Python Dictionaries are
+ * implemented.  The algorithm is from Knuth Vol. 3, Sec. 6.4.
+ *
+ * The hashtable grows to accommodate more entries when needed.  At least 1/3
+ * of the entries is empty to keep the lookup efficient (at the cost of extra
+ * memory).
+ ','line_number':10,'multiline':True]['text':' extra checks for table consistency  and statistics','line_number':33,'multiline':False]['text':' count number of hashtab lookups','line_number':35,'multiline':False]['text':' count number of "misses"','line_number':36,'multiline':False]['text':' Magic value for algorithm that walks through the array.','line_number':39,'multiline':False]['text':' currently not used','line_number':44,'multiline':False]['text':'
+ * Create an empty hash table.
+ * Returns NULL when out of memory.
+ ','line_number':45,'multiline':True]['text':'
+ * Initialize an empty hash table.
+ ','line_number':61,'multiline':True]['text':' This zeroes all "ht_" entries and all the "hi_key" in "ht_smallarray".','line_number':67,'multiline':False]['text':'
+ * If "ht->ht_flags" has HTFLAGS_FROZEN then give an error message using
+ * "command" and return TRUE.
+ ','line_number':73,'multiline':True]['text':'
+ * Free the array of a hash table.  Does not free the items it contains!
+ * If "ht" is not freed then you should call hash_init() next!
+ ','line_number':87,'multiline':True]['text':'
+ * Free the array of a hash table and all the keys it contains.  The keys must
+ * have been allocated.  "off" is the offset from the start of the allocate
+ * memory to the location of the key (it's always positive).
+ ','line_number':99,'multiline':True]['text':'
+ * Find "key" in hashtable "ht".  "key" must not be NULL.
+ * Always returns a pointer to a hashitem.  If the item was not found then
+ * HASHITEM_EMPTY() is TRUE.  The pointer is then the place where the key
+ * would be added.
+ * WARNING: The returned pointer becomes invalid when the hashtable is changed
+ * (adding, setting or removing an item)!
+ ','line_number':123,'multiline':True]['text':'
+ * Like hash_find(), but caller computes "hash".
+ ','line_number':137,'multiline':True]['text':'
+     * Quickly handle the most common situations:
+     * - return if there is no item at all
+     * - skip over a removed item
+     * - return if the item matches
+     ','line_number':152,'multiline':True]['text':'
+     * Need to search through the table to find the key.  The algorithm
+     * to step through the table starts with large steps, gradually becoming
+     * smaller down to (1/4 table size + 1).  This means it goes through all
+     * table entries in the end.
+     * When we run into a NULL key it's clear that the key isn't there.
+     * Return the first available slot found (can be a slot of a removed
+     * item).
+     ','line_number':170,'multiline':True]['text':' count a "miss" for hashtab lookup','line_number':182,'multiline':False]['text':'
+ * Print the efficiency of hashtable lookups.
+ * Useful when trying different hash algorithms.
+ * Called when exiting.
+ ','line_number':198,'multiline':True]['text':'
+ * Add item with key "key" to hashtable "ht".
+ * "command" is used for the error message when the hashtab if frozen.
+ * Returns FAIL when out of memory or the key is already present.
+ ','line_number':216,'multiline':True]['text':'
+ * Add item "hi" with "key" to hashtable "ht".  "key" must not be NULL and
+ * "hi" must have been obtained with hash_lookup() and point to an empty item.
+ * "hi" is invalid after this!
+ * Returns OK or FAIL (out of memory).
+ ','line_number':238,'multiline':True]['text':' If resizing failed before and it fails again we can't add an item.','line_number':251,'multiline':False]['text':' When the space gets low may resize the array.','line_number':262,'multiline':False]['text':' not used','line_number':266,'multiline':False]['text':'
+ * Overwrite hashtable item "hi" with "key".  "hi" must point to the item that
+ * is to be overwritten.  Thus the number of items in the hashtable doesn't
+ * change.
+ * Although the key must be identical, the pointer may be different, thus it's
+ * set anyway (the key is part of an item with that key).
+ * The caller must take care of freeing the old item.
+ * "hi" is invalid after this!
+ ','line_number':267,'multiline':True]['text':'
+ * Remove item "hi" from  hashtable "ht".  "hi" must have been obtained with
+ * hash_lookup().
+ * "command" is used for the error message when the hashtab if frozen.
+ * The caller must take care of freeing the item itself.
+ ','line_number':283,'multiline':True]['text':'
+ * Lock a hashtable: prevent that ht_array changes.
+ * Don't use this when items are to be added!
+ * Must call hash_unlock() later.
+ ','line_number':301,'multiline':True]['text':'
+ * Lock a hashtable at the specified number of entries.
+ * Caller must make sure no more than "size" entries will be added.
+ * Must call hash_unlock() later.
+ ','line_number':313,'multiline':True]['text':'
+ * Unlock a hashtable: allow ht_array changes again.
+ * Table will be resized (shrink) when necessary.
+ * This must balance a call to hash_lock().
+ ','line_number':326,'multiline':True]['text':'
+ * Shrink a hashtable when there is too much empty space.
+ * Grow a hashtable when there is not enough empty space.
+ * Returns OK or FAIL (out of memory).
+ ','line_number':338,'multiline':True]['text':' minimal number of items','line_number':346,'multiline':False]['text':' Don't resize a locked table.','line_number':358,'multiline':False]['text':' Return quickly for small tables with at least two NULL items.  NULL','line_number':372,'multiline':False]['text':' items are required for the lookup to decide a key isn't there.','line_number':373,'multiline':False]['text':'
+	 * Grow or refill the array when it's more than 2/3 full (including
+	 * removed items, so that they get cleaned up).
+	 * Shrink the array when it's less than 1/5 full.  When growing it is
+	 * at least 1/4 full (avoids repeated grow-shrink operations)
+	 ','line_number':378,'multiline':True]['text':' it's big, don't make too much room','line_number':388,'multiline':False]['text':' make plenty of room','line_number':390,'multiline':False]['text':' Use specified size.','line_number':394,'multiline':False]['text':' just in case...','line_number':395,'multiline':False]['text':' array is up to 2/3 full','line_number':397,'multiline':False]['text':' make sure it's always a power of 2','line_number':403,'multiline':False]['text':' overflow','line_number':405,'multiline':False]['text':' Use the small array inside the hashdict structure.','line_number':410,'multiline':False]['text':' Moving from ht_smallarray to ht_smallarray!  Happens when there','line_number':414,'multiline':False]['text':' are many removed items.  Copy the items to be able to clean up','line_number':415,'multiline':False]['text':' removed items.','line_number':416,'multiline':False]['text':' The hashtab is already at the desired size, and there are not too','line_number':427,'multiline':False]['text':' many removed items, bail out.','line_number':428,'multiline':False]['text':' Allocate an array.','line_number':434,'multiline':False]['text':' Out of memory.  When there are NULL items still return OK.','line_number':438,'multiline':False]['text':' Otherwise set ht_flags to HTFLAGS_ERROR, because lookup may','line_number':439,'multiline':False]['text':' result in a hang if we add another item.','line_number':440,'multiline':False]['text':'
+     * Move all the items from the old array to the new one, placing them in
+     * the right spot.  The new array won't have any removed items, thus this
+     * is also a cleanup action.
+     ','line_number':449,'multiline':True]['text':'
+	     * The algorithm to find the spot to add the item is identical to
+	     * the algorithm to find an item in hash_lookup().  But we only
+	     * need to search for a NULL key, thus it's simpler.
+	     ','line_number':459,'multiline':True]['text':'
+ * Get the hash number for a key.
+ * If you think you know a better hash function: Compile with HT_DEBUG set and
+ * run a script that uses hashtables a lot.  Vim will then print statistics
+ * when exiting.  Try that with the current hash algorithm and yours.  The
+ * lower the percentage the better.
+ ','line_number':490,'multiline':True]['text':' A simplistic algorithm that appears to do very well.','line_number':507,'multiline':False]['text':' Suggested by George Reilly.','line_number':508,'multiline':False]

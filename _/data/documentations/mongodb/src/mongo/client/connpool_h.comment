@@ -1,0 +1,152 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':' namespace executor','line_number':64,'multiline':False]['text':'*
+ * The PoolForHost is responsible for storing a maximum of _maxPoolSize connections to a particular
+ * host. It is not responsible for creating new connections; instead, when DBConnectionPool is asked
+ * for a connection to a particular host, DBConnectionPool will check if any connections are
+ * available in the PoolForHost for that host. If so, DBConnectionPool will check out a connection
+ * from PoolForHost, and if not, DBConnectionPool will create a new connection itself, if we are
+ * below the maximum allowed number of connections. If we have already created _maxPoolSize
+ * connections, the calling thread will block until a new connection can be made for it.
+ *
+ * Once the connection is released back to DBConnectionPool, DBConnectionPool will attempt to
+ * release the connection to PoolForHost. This is how connections enter PoolForHost for the first
+ * time. If PoolForHost is below the _maxPoolSize limit, PoolForHost will take ownership of the
+ * connection, otherwise PoolForHost will clean up and destroy the connection.
+ *
+ * Additionally, PoolForHost knows how to purge itself of stale connections (since a connection can
+ * go stale while it is just sitting in the pool), but does not decide when to do so. Instead,
+ * DBConnectionPool tells PoolForHost to purge stale connections periodically.
+ *
+ * PoolForHost is not thread-safe; thread safety is handled by DBConnectionPool.
+ ','line_number':66,'multiline':True]['text':' Sentinel value indicating pool has no cleanup limit','line_number':91,'multiline':False]['text':'*
+     * Returns the number of connections in this pool that went bad.
+     ','line_number':99,'multiline':True]['text':'*
+     * Returns the maximum number of connections stored in the pool
+     ','line_number':106,'multiline':True]['text':'*
+     * Sets the maximum number of connections stored in the pool
+     ','line_number':113,'multiline':True]['text':'*
+     * Sets the maximum number of in-use connections for this pool.
+     ','line_number':120,'multiline':True]['text':'*
+     * Sets the socket timeout on this host, in seconds, for reporting purposes only.
+     ','line_number':127,'multiline':True]['text':'*
+     * Returns the number of open connections in this pool.
+     ','line_number':142,'multiline':True]['text':'*
+     * gets a connection or return NULL
+     ','line_number':159,'multiline':True]['text':' Deletes all connections in the pool','line_number':164,'multiline':False]['text':'*
+     * A concrete statement about the health of a DBClientBase connection
+     ','line_number':167,'multiline':True]['text':'*
+     * Attempt to reclaim the underlying connection behind the DBClientBase
+     ','line_number':176,'multiline':True]['text':'*
+     * Sets the lower bound for creation times that can be considered as
+     *     good connections.
+     ','line_number':185,'multiline':True]['text':'*
+     * @return true if the given creation time is considered to be not
+     *     good for use.
+     ','line_number':191,'multiline':True]['text':'*
+     * Sets the host name to a new one, only if it is currently empty.
+     ','line_number':197,'multiline':True]['text':'*
+     * If this pool has more than _maxPoolSize connections in use, blocks
+     * the calling thread until a connection is returned to the pool or
+     * is destroyed. If a non-zero timeout is given, this method will
+     * throw if a free connection cannot be acquired within that amount of
+     * time. Timeout is in seconds.
+     ','line_number':202,'multiline':True]['text':'*
+     * Notifies any waiters that there are new connections available.
+     ','line_number':211,'multiline':True]['text':'*
+     * Records the connection waittime in the connAcquisitionWaitTime histogram
+     ','line_number':216,'multiline':True]['text':'*
+     * Returns the connAcquisitionWaitTime histogram
+     ','line_number':223,'multiline':True]['text':'*
+     * Shuts down this pool, notifying all waiters.
+     ','line_number':230,'multiline':True]['text':'*
+         * Returns true if this connection was added before the given time.
+         ','line_number':241,'multiline':True]['text':' The time when this connection was added to the pool. Will','line_number':248,'multiline':False]['text':' be reset if the connection is checked out and re-added.','line_number':249,'multiline':False]['text':' The maximum number of connections we'll save in the pool','line_number':261,'multiline':False]['text':' The maximum number of connections allowed to be in-use in this pool','line_number':264,'multiline':False]['text':' The number of currently active connections from this pool','line_number':267,'multiline':False]['text':' The number of connections that we did not reuse because they went bad.','line_number':270,'multiline':False]['text':' Whether our parent DBConnectionPool object is in destruction','line_number':273,'multiline':False]['text':'* Database connection pool.
+
+    Generally, use ScopedDbConnection and do not call these directly.
+
+    This class, so far, is suitable for use with unauthenticated connections.
+    Support for authenticated connections requires some adjustments: please
+    request...
+
+    Usage:
+
+    {
+       ScopedDbConnection c("myserver");
+       c.conn()...
+    }
+','line_number':292,'multiline':True]['text':'* right now just controls some asserts.  defaults to "dbconnectionpool" ','line_number':312,'multiline':True]['text':'*
+     * Returns the maximum number of connections pooled per-host
+     *
+     * This setting only applies to new host connection pools, previously-pooled host pools are
+     * unaffected.
+     ','line_number':317,'multiline':True]['text':'*
+     * Returns the number of connections to the given host pool.
+     ','line_number':327,'multiline':True]['text':'*
+     * Sets the maximum number of connections pooled per-host.
+     *
+     * This setting only applies to new host connection pools, previously-pooled host pools are
+     * unaffected.
+     ','line_number':332,'multiline':True]['text':'*
+     * Sets the maximum number of in-use connections per host.
+     ','line_number':342,'multiline':True]['text':'*
+     * Sets the timeout value for idle connections, after which we will remove them
+     * from the pool. This value is in minutes.
+     ','line_number':349,'multiline':True]['text':'*
+     * Gets a connection to the given host with the given timeout, in seconds.
+     ','line_number':364,'multiline':True]['text':'*
+     * Gets the number of connections available in the pool.
+     ','line_number':371,'multiline':True]['text':' we take ownership','line_number':380,'multiline':False]['text':'*
+     * Clears all connections for all host.
+     ','line_number':383,'multiline':True]['text':'*
+     * Checks whether the connection for a given host is deny listed or not.
+     *
+     * @param hostName the name of the host the connection connects to.
+     * @param conn the connection to check.
+     *
+     * @return true if the connection is not bad, meaning, it is good to keep it for
+     *     future use.
+     ','line_number':388,'multiline':True]['text':' Removes and deletes all connections from the pool for the host (regardless of timeout)','line_number':399,'multiline':False]['text':'* compares server namees, but is smart about replica set names ','line_number':402,'multiline':True]['text':'*
+     * Shuts down the connection pool, unblocking any waiters on connections.
+     ','line_number':412,'multiline':True]['text':' servername -> pool','line_number':439,'multiline':False]['text':' The maximum number of connections we'll save in the pool per-host','line_number':445,'multiline':False]['text':' PoolForHost::kPoolSizeUnlimited is a sentinel value meaning "no limit"','line_number':446,'multiline':False]['text':' 0 effectively disables the pool','line_number':447,'multiline':False]['text':' pointers owned by me, right now they leak on shutdown','line_number':457,'multiline':False]['text':' _hooks itself also leaks because it creates a shutdown race condition','line_number':458,'multiline':False]['text':'*
+     * @return true iff this has a connection to the db
+     ','line_number':478,'multiline':True]['text':'*
+     * @return total number of current instances of AScopedConnection
+     ','line_number':483,'multiline':True]['text':'* Use to get a connection from the pool.  On exceptions things
+   clean up nicely (i.e. the socket gets closed automatically when the
+   scopeddbconnection goes out of scope).
+','line_number':494,'multiline':True]['text':'* the main constructor you want to use
+        throws AssertionException if can't connect
+        ','line_number':500,'multiline':True]['text':' @param conn - bind to an existing connection ','line_number':509,'multiline':True]['text':'* get the associated connection object ','line_number':519,'multiline':True]['text':'* get the associated connection object ','line_number':525,'multiline':True]['text':'* get the associated connection object ','line_number':531,'multiline':True]['text':'* Force closure of the connection.  You should call this if you leave it in
+        a bad state.  Destructor will do this too, but it is verbose.
+    ','line_number':545,'multiline':True]['text':'* Call this when you are done with the connection.
+
+        If you do not call done() before this object goes out of scope,
+        we can't be sure we fully read all expected data of a reply on the socket.  so
+        we don't try to reuse the connection in that situation.
+    ','line_number':550,'multiline':True]['text':' namespace mongo','line_number':566,'multiline':False]

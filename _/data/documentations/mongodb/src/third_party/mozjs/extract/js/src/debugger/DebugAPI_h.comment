@@ -1,0 +1,102 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':' This file contains the API which SpiderMonkey should use to interact with any','line_number':17,'multiline':False]['text':' active Debuggers.','line_number':18,'multiline':False]['text':'*
+ * DebugAPI::onNativeCall allows the debugger to call callbacks just before
+ * some native functions are to be executed. It also allows the hooks
+ * themselves to affect the result of the call. This enum represents the
+ * various affects that DebugAPI::onNativeCall may perform.
+ ','line_number':24,'multiline':True]['text':'*
+   * If the debugger hook did not return a value to manipulate the result of
+   * the native call, execution can continue unchanged.
+   *
+   * Continue indicates that the native function should execute normally.
+   ','line_number':31,'multiline':True]['text':'*
+   * If the debugger hook returned an explicit return value that is meant to
+   * take the place of the native call's result, execution of the native
+   * function needs to be skipped in favor of the explicit result.
+   *
+   * Override indicates that the native function should be skipped and that
+   * the debugger has already stored the return value into the CallArgs.
+   ','line_number':39,'multiline':True]['text':'*
+   * If the debugger hook returns an explicit termination or an explicit
+   * thrown exception, execution of the native function needs to be skipped
+   * in favor of handling the error condition.
+   *
+   * Abort indicates that the native function should be skipped and that
+   * execution should be terminated. The debugger may or may not have set a
+   * pending exception.
+   ','line_number':49,'multiline':True]['text':'** Methods for interaction with the GC. **********************************','line_number':68,'multiline':True]['text':'
+   * Trace (inferred) owning edges from stack frames to Debugger.Frames, as part
+   * of root marking.
+   *
+   * Even if a Debugger.Frame for a live stack frame is entirely unreachable
+   * from JS, if it has onStep or onPop hooks set, then collecting it would have
+   * observable side effects - namely, the hooks would fail to run. The effect
+   * is the same as if the stack frame held an owning edge to its
+   * Debugger.Frame.
+   *
+   * Debugger.Frames must also be retained if the Debugger to which they belong
+   * is reachable, even if they have no hooks set, but we handle that elsewhere;
+   * this function is only concerned with the inferred roots from stack frames
+   * to Debugger.Frames that have hooks set.
+   ','line_number':70,'multiline':True]['text':'
+   * Trace (inferred) owning edges from generator objects to Debugger.Frames.
+   *
+   * Even if a Debugger.Frame for a live suspended generator object is entirely
+   * unreachable from JS, if it has onStep or onPop hooks set, then collecting
+   * it would have observable side effects - namely, the hooks would fail to run
+   * if the generator is resumed. The effect is the same as if the generator
+   * object held an owning edge to its Debugger.Frame.
+   ','line_number':87,'multiline':True]['text':' Trace cross compartment edges in all debuggers relevant to the current GC.','line_number':99,'multiline':False]['text':' Trace all debugger-owned GC things unconditionally, during a moving GC.','line_number':102,'multiline':False]['text':' Trace the debug script map.  Called as part of tracing a zone's roots.','line_number':105,'multiline':False]['text':' The garbage collector calls this after everything has been marked, but','line_number':110,'multiline':False]['text':' before anything has been finalized. We use this to clear Debugger /','line_number':111,'multiline':False]['text':' debuggee edges at a point where the parties concerned are all still','line_number':112,'multiline':False]['text':' initialized.','line_number':113,'multiline':False]['text':' Add sweep group edges due to the presence of any debuggers.','line_number':116,'multiline':False]['text':' Remove the debugging information associated with a script.','line_number':119,'multiline':False]['text':' Delete a Zone's debug script map. Called when a zone is destroyed.','line_number':122,'multiline':False]['text':' Validate the debugging information in a script after a moving GC>','line_number':125,'multiline':False]['text':'** Methods for querying script breakpoint state. *************************','line_number':135,'multiline':True]['text':' Query information about whether any debuggers are observing a script.','line_number':137,'multiline':False]['text':'** Methods for interacting with the JITs. ********************************','line_number':142,'multiline':True]['text':' Update Debugger frames when an interpreter frame is replaced with a','line_number':144,'multiline':False]['text':' baseline frame.','line_number':145,'multiline':False]['text':' Update Debugger frames when an Ion frame bails out and is replaced with a','line_number':150,'multiline':False]['text':' baseline frame.','line_number':151,'multiline':False]['text':' Detach any Debugger frames from an Ion frame after an error occurred while','line_number':156,'multiline':False]['text':' it bailed out.','line_number':157,'multiline':False]['text':' When doing on-stack-replacement of a debuggee interpreter frame with a','line_number':161,'multiline':False]['text':' baseline frame, ensure that the resulting frame can be observed by the','line_number':162,'multiline':False]['text':' debugger.','line_number':163,'multiline':False]['text':' Describes a set of scripts or frames whose execution observability can','line_number':167,'multiline':False]['text':' change due to debugger activity.','line_number':168,'multiline':False]['text':' This enum is converted to and compare with bool values; NotObserving','line_number':183,'multiline':False]['text':' must be 0 and Observing must be 1.','line_number':184,'multiline':False]['text':'** Methods for calling installed debugger handlers. **********************','line_number':187,'multiline':True]['text':' Called when a new script becomes accessible to debuggers.','line_number':189,'multiline':False]['text':' Called when a new wasm instance becomes accessible to debuggers.','line_number':192,'multiline':False]['text':'
+   * Announce to the debugger that the context has entered a new JavaScript
+   * frame, |frame|. Call whatever hooks have been registered to observe new
+   * frames.
+   ','line_number':196,'multiline':True]['text':'
+   * Like onEnterFrame, but for resuming execution of a generator or async
+   * function. `frame` is a new baseline or interpreter frame, but abstractly
+   * it can be identified with a particular generator frame that was
+   * suspended earlier.
+   *
+   * There is no separate user-visible Debugger.onResumeFrame hook; this
+   * fires .onEnterFrame (again, since we're re-entering the frame).
+   *
+   * Unfortunately, the interpreter and the baseline JIT arrange for this to
+   * be called in different ways. The interpreter calls it from JSOp::Resume,
+   * immediately after pushing the resumed frame; the JIT calls it from
+   * JSOp::AfterYield, just after the generator resumes. The difference
+   * should not be user-visible.
+   ','line_number':204,'multiline':True]['text':'
+   * Announce to the debugger a |debugger;| statement on has been
+   * encountered on the youngest JS frame on |cx|. Call whatever hooks have
+   * been registered to observe this.
+   *
+   * Note that this method is called for all |debugger;| statements,
+   * regardless of the frame's debuggee-ness.
+   ','line_number':226,'multiline':True]['text':'
+   * Announce to the debugger that an exception has been thrown and propagated
+   * to |frame|. Call whatever hooks have been registered to observe this.
+   ','line_number':237,'multiline':True]['text':'
+   * Announce to the debugger that the thread has exited a JavaScript frame,
+   * |frame|. If |ok| is true, the frame is returning normally; if |ok| is
+   * false, the frame is throwing an exception or terminating.
+   *
+   * Change cx's current exception and |frame|'s return value to reflect the
+   * changes in behavior the hooks request, if any. Return the new error/success
+   * value.
+   *
+   * This function may be called twice for the same outgoing frame; only the
+   * first call has any effect. (Permitting double calls simplifies some
+   * cases where an onPop handler's resumption value changes a return to a
+   * throw, or vice versa: we can redirect to a complete copy of the
+   * alternative path, containing its own call to onLeaveFrame.)
+   ','line_number':244,'multiline':True]['text':' Call any breakpoint handlers for the current scripted location.','line_number':263,'multiline':False]['text':' Call any stepping handlers for the current scripted location.','line_number':266,'multiline':False]['text':' Notify any Debugger instances observing this promise's global that a new','line_number':269,'multiline':False]['text':' promise was allocated.','line_number':270,'multiline':False]['text':' Notify any Debugger instances observing this promise's global that the','line_number':274,'multiline':False]['text':' promise has settled (ie, it has either been fulfilled or rejected). Note','line_number':275,'multiline':False]['text':' that this is *not* equivalent to the promise resolution (ie, the promise's','line_number':276,'multiline':False]['text':' fate getting locked in) because you can resolve a promise with another','line_number':277,'multiline':False]['text':' pending promise, in which case neither promise has settled yet.','line_number':278,'multiline':False]['text':'','line_number':279,'multiline':False]['text':' This should never be called on the same promise more than once, because a','line_number':280,'multiline':False]['text':' promise can only make the transition from unsettled to settled once.','line_number':281,'multiline':False]['text':' Notify any Debugger instances that a new global object has been created.','line_number':285,'multiline':False]['text':'** Methods for querying installed debugger handlers. *********************','line_number':289,'multiline':True]['text':' Whether any debugger is observing execution in a global.','line_number':291,'multiline':False]['text':' Whether any debugger is observing JS execution coverage in a global.','line_number':294,'multiline':False]['text':' Whether any Debugger is observing asm.js execution in a global.','line_number':297,'multiline':False]['text':'
+   * Return true if the given global is being observed by at least one
+   * Debugger that is tracking allocations.
+   ','line_number':300,'multiline':True]['text':' If any debuggers are tracking allocations for a global, return the','line_number':307,'multiline':False]['text':' probability that a given allocation should be tracked. Nothing otherwise.','line_number':308,'multiline':False]['text':' Whether any debugger is observing exception unwinds in a realm.','line_number':312,'multiline':False]['text':' Whether any debugger is observing debugger statements in a realm.','line_number':315,'multiline':False]['text':'** Assorted methods for interacting with the runtime. ********************','line_number':318,'multiline':True]['text':' Checks if the current compartment is allowed to execute code.','line_number':320,'multiline':False]['text':'
+   * Announce to the debugger that a generator object has been created,
+   * via JSOp::Generator.
+   *
+   * This does not fire user hooks, but it's needed for debugger bookkeeping.
+   ','line_number':324,'multiline':True]['text':' If necessary, record an object that was just allocated for any observing','line_number':334,'multiline':False]['text':' debuggers.','line_number':335,'multiline':False]['text':' Announce to the debugger that a global object is being collected by the','line_number':341,'multiline':False]['text':' specified major GC.','line_number':342,'multiline':False]['text':' Suppresses all debuggee NX checks, i.e., allow all execution. Used to allow','line_number':386,'multiline':False]['text':' certain whitelisted operations to execute code.','line_number':387,'multiline':False]['text':'','line_number':388,'multiline':False]['text':' WARNING','line_number':389,'multiline':False]['text':' WARNING Do not use this unless you know what you are doing!','line_number':390,'multiline':False]['text':' WARNING','line_number':391,'multiline':False]['text':' namespace js ','line_number':409,'multiline':True]['text':' debugger_DebugAPI_h ','line_number':411,'multiline':True]

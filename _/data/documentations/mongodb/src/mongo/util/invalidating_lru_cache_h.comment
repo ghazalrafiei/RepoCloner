@@ -1,0 +1,115 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * Type indicating that the specific cache instance does not support causal consistency. To be used
+ * as the default 'Time' parameter to the 'InvalidatingLRUCache' template, indicating that the cache
+ * is not causally consistent.
+ ','line_number':59,'multiline':True]['text':'*
+ * Helper for determining if a given type is CacheNotCausallyConsistent or not.
+ ','line_number':89,'multiline':True]['text':'*
+ * Specifies the desired causal consistency for calls to 'get' (and 'acquire', respectively in the
+ * ReadThroughCache, which is its main consumer).
+ ','line_number':101,'multiline':True]['text':' Provides the fastest acquire semantics, where if the cache already contains a','line_number':106,'multiline':False]['text':' (non-invalidated) value cached, it will be immediately returned. Otherwise, the 'acquire'','line_number':107,'multiline':False]['text':' call will block.','line_number':108,'multiline':False]['text':' Provides a causally-consistent semantics with respect to a previous call to','line_number':111,'multiline':False]['text':' 'advanceTimeInStore', where if the cache's (non-invalidated) value has time == timeInStore,','line_number':112,'multiline':False]['text':' the value will be immediately returned. Otherwise, the 'acquire' call will block.','line_number':113,'multiline':False]['text':'*
+ * Extension built on top of 'LRUCache', which provides thread-safety, introspection and most
+ * importantly the ability to invalidate each entry and/or associate a logical timestamp in order to
+ * indicate to potential callers that the entry should not be used anymore.
+ *
+ * The type for 'Time' must support 'operator <' and its default constructor 'Time()' must provide
+ * the lowest possible value for the time.
+ ','line_number':139,'multiline':True]['text':'*
+     * Data structure representing the values stored in the cache.
+     ','line_number':149,'multiline':True]['text':'*
+         * The 'owningCache' and 'key' values can be nullptr/boost::none in order to support the
+         * detached mode of ValueHandle below.
+         ','line_number':153,'multiline':True]['text':' The lookup above can encounter the following cases:','line_number':181,'multiline':False]['text':'','line_number':182,'multiline':False]['text':' 1) The 'key' is not on the evictedCheckedOutValues map, because a second value for it','line_number':183,'multiline':False]['text':' was inserted, which was also evicted and all its handles expired (so it got removed)','line_number':184,'multiline':False]['text':' 2) There are no more references to 'key', but it is stil on the map, which means','line_number':188,'multiline':False]['text':' either we are running its destrutor, or some other thread is running the destructor','line_number':189,'multiline':False]['text':' of a different epoch. In either case it is fine to remove the 'it' because we are','line_number':190,'multiline':False]['text':' under a mutex.','line_number':191,'multiline':False]['text':' 3) The value for 'key' is for a different epoch, in which case we must dereference','line_number':197,'multiline':False]['text':' the '.lock()'ed storedValue outside of the mutex in order to avoid reentrancy while','line_number':198,'multiline':False]['text':' holding a mutex.','line_number':199,'multiline':False]['text':' Copy and move constructors need to be deleted in order to avoid having to make the','line_number':203,'multiline':False]['text':' destructor to account for the object having been moved','line_number':204,'multiline':False]['text':' The cache which stores this key/value pair','line_number':210,'multiline':False]['text':' Identity associated with this value. See the destructor for its usage.','line_number':213,'multiline':False]['text':' The key/value pair. See the comments on the constructor about why the key is optional.','line_number':216,'multiline':False]['text':' Timestamp associated with the current 'value'. The semantics of the time is entirely up','line_number':220,'multiline':False]['text':' to the user of the cache, but it must be monotonically increasing for the same key.','line_number':221,'multiline':False]['text':' Timestamp which the store has indicated as available for 'key' (through a call to','line_number':224,'multiline':False]['text':' 'advanceTimeInStore'). Starts as equal to 'time' and always moves forward, under','line_number':225,'multiline':False]['text':' '_mutex'.','line_number':226,'multiline':False]['text':' Can be read without synchronisation. Transitions to false only once, under `_mutex` in','line_number':229,'multiline':False]['text':' order to mark the entry as invalid either as a result of 'invalidate' or','line_number':230,'multiline':False]['text':' 'advanceTimeInStore'.','line_number':231,'multiline':False]['text':'*
+     * The 'cacheSize' parameter specifies the maximum size of the cache before the least recently
+     * used entries start getting evicted. It is allowed to be zero, in which case no entries will
+     * actually be cached, which is only meaningful for the behaviour of `insertOrAssignAndGet`.
+     ','line_number':242,'multiline':True]['text':'*
+     * Wraps the entries returned from the cache.
+     ','line_number':253,'multiline':True]['text':' The three constructors below are present in order to offset the fact that the cache','line_number':258,'multiline':False]['text':' doesn't support pinning items. Their only usage must be in the authorization mananager','line_number':259,'multiline':False]['text':' for the internal authentication user.','line_number':260,'multiline':False]['text':'*
+     * Inserts or updates a key with a new value. If 'key' was checked-out at the time this method
+     * was called, it will become invalidated.
+     *
+     * The 'time' parameter is mandatory for causally-consistent caches, but not needed otherwise
+     * (since the time never changes).
+     ','line_number':319,'multiline':True]['text':' Since the cache had the only reference to the evicted value, there could be','line_number':361,'multiline':False]['text':' nobody who has that key checked out who might be interested in listening for it','line_number':362,'multiline':False]['text':' getting invalidated, so we can safely discard it without adding it to the','line_number':363,'multiline':False]['text':' _evictedCheckedOutValues map','line_number':364,'multiline':False]['text':' evictedValue must always be handed-off to guard so that the destructor never runs run','line_number':367,'multiline':False]['text':' while the mutex is held','line_number':368,'multiline':False]['text':'*
+     * Same as 'insertOrAssign' above, but also immediately checks-out the newly inserted value and
+     * returns it. See the 'get' method below for the semantics of checking-out a value.
+     *
+     * For caches of size zero, this method will not cache the passed-in value, but it will be
+     * returned and the `get` method will continue returning it until all returned handles are
+     * destroyed.
+     *
+     * The 'time' parameter is mandatory for causally-consistent caches, but not needed otherwise
+     * (since the time never changes).
+     ','line_number':373,'multiline':True]['text':' This handles the zero cache size case where the inserted value was','line_number':421,'multiline':False]['text':' immediately evicted. Because it still needs to be tracked for invalidation','line_number':422,'multiline':False]['text':' purposes, we need to add it to the _evictedCheckedOutValues map.','line_number':423,'multiline':False]['text':' Since the cache had the only reference to the evicted value, there could be','line_number':427,'multiline':False]['text':' nobody who has that key checked out who might be interested in listening for','line_number':428,'multiline':False]['text':' it getting invalidated, so we can safely discard it without adding it to the','line_number':429,'multiline':False]['text':' _evictedCheckedOutValues map','line_number':430,'multiline':False]['text':' evictedValue must always be handed-off to guard so that the destructor never runs','line_number':434,'multiline':False]['text':' while the mutex is held','line_number':435,'multiline':False]['text':'*
+     * Returns the specified key, if found in the cache. Checking-out the value does not pin it and
+     * it could still get evicted if the cache is under pressure. The returned handle must be
+     * destroyed before the owning cache object itself is destroyed.
+     ','line_number':444,'multiline':True]['text':'*
+     * Returns a vector of the latest values from the cache which satisfy the predicate. Uses the
+     * 'kLatestCached' causal consistency model.
+     ','line_number':468,'multiline':True]['text':'*
+     * Indicates to the cache that the backing store contains a new value for the specified key,
+     * with a timestamp of 'newTimeInStore'.
+     *
+     * Any already returned ValueHandles will start returning isValid = false. Subsequent calls to
+     * 'get' with a causal consistency of 'kLatestCached' will continue to return the value, which
+     * is currently cached, but with isValid = false. Calls to 'get' with a causal consistency of
+     * 'kLatestKnown' will return no value. It is up to the caller to this function to subsequently
+     * either 'insertOrAssign' a new value for the 'key', or to call 'invalidate'.
+     *
+     * Returns true if the passed 'newTimeInStore' is grater than the time of the currently cached
+     * value or if no value is cached for 'key'.
+     ','line_number':495,'multiline':True]['text':'*
+     * If 'key' is in the store, returns its currently cached value and its latest 'timeInStore',
+     * which can either be from the time of insertion or from the latest call to
+     * 'advanceTimeInStore'. Otherwise, returns a nullptr ValueHandle and Time().
+     ','line_number':533,'multiline':True]['text':'*
+     * Marks 'key' as invalid if it is found in the cache (whether checked-out or not).
+     *
+     * Any already returned ValueHandles will start returning isValid = false. Subsequent calls to
+     * 'get' will *not* return value for 'key' until the next call to 'insertOrAssign'.
+     ','line_number':558,'multiline':True]['text':'*
+     * Performs the same logic as 'invalidate' above of all items in the cache, which match the
+     * predicate.
+     ','line_number':571,'multiline':True]['text':' The key of the item in the cache','line_number':601,'multiline':False]['text':' The number of callers of 'get', which still have the item checked-out','line_number':602,'multiline':False]['text':'*
+     * Returns a vector of info about the valid items in the cache for reporting purposes. Any
+     * entries, which have been invalidated will not be included, even if they are currently
+     * checked-out.
+     ','line_number':605,'multiline':True]['text':'*
+     * Used as means to ensure that any objects which are scheduled to be released from '_cache' or
+     * the '_evictedCheckedOutValues' map will be destroyed outside of the cache's mutex. This is
+     * necessary, because the destructor function also acquires '_mutex'.
+     ','line_number':630,'multiline':True]['text':' Must be destroyed after '_ul' is destroyed so that any StoredValue destructors execute','line_number':644,'multiline':False]['text':' outside of the cache's mutex','line_number':645,'multiline':False]['text':'*
+     * Invalidates the item in the cache pointed to by 'it' and, if 'key' is on the
+     * '_evictedCheckedOutValues' map, invalidates it as well. The iterator may be _cache.end() and
+     * the key may not exist, and after this call will no longer be valid and will not be in either
+     * of the maps.
+     ','line_number':651,'multiline':True]['text':' Locking the evicted pointer value could fail if the last shared reference is concurrently','line_number':680,'multiline':False]['text':' released and drops to zero','line_number':681,'multiline':False]['text':' Protects the state below','line_number':694,'multiline':False]['text':' This map is used to track any values, which were evicted from the LRU cache below, while they','line_number':697,'multiline':False]['text':' were checked out (i.e., their use_count > 1, where the 1 comes from the ownership by','line_number':698,'multiline':False]['text':' '_cache'). The same key may only be in one of the maps - either '_cache' or here, but never','line_number':699,'multiline':False]['text':' on both.','line_number':700,'multiline':False]['text':'','line_number':701,'multiline':False]['text':' It must be destroyed after the entries in '_cache' are destroyed, because their destructors','line_number':702,'multiline':False]['text':' look-up into that map.','line_number':703,'multiline':False]['text':' An always-incrementing counter from which to obtain "identities" for each value stored in the','line_number':708,'multiline':False]['text':' cache, so that different instantiations for the same key can be differentiated','line_number':709,'multiline':False]['text':' namespace mongo','line_number':715,'multiline':False]

@@ -1,0 +1,326 @@
+['text':' Upstream: https://github.com/openresty/lua-cjson/blob/master/lua_cjson.c','line_number':1,'multiline':False]['text':' Lua CJSON - JSON support for Lua
+ *
+ * Copyright (c) 2010-2012  Mark Pulford <mark@kyne.com.au>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':3,'multiline':True]['text':' Caveats:
+ * - JSON "null" values are represented as lightuserdata since Lua
+ *   tables cannot contain "nil". Compare with cjson.null.
+ * - Invalid UTF-8 characters are not detected and will be passed
+ *   untouched. If required, UTF-8 error checking should be done
+ *   outside this library.
+ * - Javascript comments are not part of the JSON spec, and are not
+ *   currently supported.
+ *
+ * Note: Decoding is slower than encoding. Lua spends significant
+ *       time (30%) managing tables when parsing JSON since it is
+ *       difficult to know object/array sizes ahead of time.
+ ','line_number':27,'multiline':True]['text':' Workaround for Solaris platforms missing isinf() ','line_number':73,'multiline':True]['text':' Microsoft C compiler lacks strncasecmp and strcasecmp. ','line_number':97,'multiline':True]['text':' Decoding ','line_number':154,'multiline':True]['text':' encode_buf is only allocated and used when
+     * encode_keep_buffer is set ','line_number':156,'multiline':True]['text':' 2 => Encode as "null" ','line_number':164,'multiline':True]['text':' convert null in json objects to lua nil instead of vim.NIL ','line_number':176,'multiline':True]['text':' convert null in json arrays to lua nil instead of vim.NIL ','line_number':178,'multiline':True]['text':' Temporary storage for strings ','line_number':185,'multiline':True]['text':' ===== CONFIGURATION ===== ','line_number':241,'multiline':True]['text':' Ensure the correct number of arguments have been provided.
+ * Pad with nil to allow other functions to simply check arg[i]
+ * to find whether an argument was provided ','line_number':254,'multiline':True]['text':'
+static json_config_t *json_arg_init(lua_State *l, int args)
+{
+    luaL_argcheck(l, lua_gettop(l) <= args, args + 1,
+                  "found too many arguments");
+
+    while (lua_gettop(l) < args)
+        lua_pushnil(l);
+
+    return json_fetch_config(l);
+}
+','line_number':257,'multiline':True]['text':' Process integer options for configuration functions ','line_number':270,'multiline':True]['text':'
+static int json_integer_option(lua_State *l, int optindex, int *setting,
+                               int min, int max)
+{
+    char errmsg[64];
+    int value;
+
+    if (!lua_isnil(l, optindex)) {
+        value = luaL_checkinteger(l, optindex);
+        snprintf(errmsg, sizeof(errmsg), "expected integer between %d and %d", min, max);
+        luaL_argcheck(l, min <= value && value <= max, 1, errmsg);
+        *setting = value;
+    }
+
+    lua_pushinteger(l, *setting);
+
+    return 1;
+}
+','line_number':271,'multiline':True]['text':' Process enumerated arguments for a configuration function ','line_number':291,'multiline':True]['text':'
+static int json_enum_option(lua_State *l, int optindex, int *setting,
+                            const char **options, int bool_true)
+{
+    static const char *bool_options[] = { "off", "on", NULL };
+
+    if (!options) {
+        options = bool_options;
+        bool_true = 1;
+    }
+
+    if (!lua_isnil(l, optindex)) {
+        if (bool_true && lua_isboolean(l, optindex))
+            *setting = lua_toboolean(l, optindex) * bool_true;
+        else
+            *setting = luaL_checkoption(l, optindex, NULL, options);
+    }
+
+    if (bool_true && (*setting == 0 || *setting == bool_true))
+        lua_pushboolean(l, *setting);
+    else
+        lua_pushstring(l, options[*setting]);
+
+    return 1;
+}
+','line_number':292,'multiline':True]['text':' Configures handling of extremely sparse arrays:
+ * convert: Convert extremely sparse arrays into objects? Otherwise error.
+ * ratio: 0: always allow sparse; 1: never allow sparse; >1: use ratio
+ * safe: Always use an array when the max index <= safe ','line_number':319,'multiline':True]['text':'
+static int json_cfg_encode_sparse_array(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 3);
+
+    json_enum_option(l, 1, &cfg->encode_sparse_convert, NULL, 1);
+    json_integer_option(l, 2, &cfg->encode_sparse_ratio, 0, INT_MAX);
+    json_integer_option(l, 3, &cfg->encode_sparse_safe, 0, INT_MAX);
+
+    return 3;
+}
+','line_number':323,'multiline':True]['text':' Configures the maximum number of nested arrays/objects allowed when
+ * encoding ','line_number':336,'multiline':True]['text':'
+static int json_cfg_encode_max_depth(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    return json_integer_option(l, 1, &cfg->encode_max_depth, 1, INT_MAX);
+}
+','line_number':338,'multiline':True]['text':' Configures the maximum number of nested arrays/objects allowed when
+ * encoding ','line_number':347,'multiline':True]['text':'
+static int json_cfg_decode_max_depth(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    return json_integer_option(l, 1, &cfg->decode_max_depth, 1, INT_MAX);
+}
+','line_number':349,'multiline':True]['text':' Configures number precision when converting doubles to text ','line_number':358,'multiline':True]['text':'
+static int json_cfg_encode_number_precision(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    return json_integer_option(l, 1, &cfg->encode_number_precision, 1, 16);
+}
+','line_number':359,'multiline':True]['text':' Configures how to treat empty table when encode lua table ','line_number':368,'multiline':True]['text':'
+static int json_cfg_encode_empty_table_as_object(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    return json_enum_option(l, 1, &cfg->encode_empty_table_as_object, NULL, 1);
+}
+','line_number':369,'multiline':True]['text':' Configures how to decode arrays ','line_number':378,'multiline':True]['text':'
+static int json_cfg_decode_array_with_array_mt(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    json_enum_option(l, 1, &cfg->decode_array_with_array_mt, NULL, 1);
+
+    return 1;
+}
+','line_number':379,'multiline':True]['text':' Configures JSON encoding buffer persistence ','line_number':390,'multiline':True]['text':'
+static int json_cfg_encode_keep_buffer(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 1);
+    int old_value;
+
+    old_value = cfg->encode_keep_buffer;
+
+    json_enum_option(l, 1, &cfg->encode_keep_buffer, NULL, 1);
+
+    // Init / free the buffer if the setting has changed
+    if (old_value ^ cfg->encode_keep_buffer) {
+        if (cfg->encode_keep_buffer)
+            strbuf_init(&cfg->encode_buf, 0);
+        else
+            strbuf_free(&cfg->encode_buf);
+    }
+
+    return 1;
+}
+','line_number':391,'multiline':True]['text':'
+static int json_cfg_encode_invalid_numbers(lua_State *l)
+{
+    static const char *options[] = { "off", "on", "null", NULL };
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    json_enum_option(l, 1, &cfg->encode_invalid_numbers, options, 1);
+
+    json_verify_invalid_number_setting(l, &cfg->encode_invalid_numbers);
+
+    return 1;
+}
+','line_number':425,'multiline':True]['text':'
+static int json_cfg_decode_invalid_numbers(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    json_enum_option(l, 1, &cfg->decode_invalid_numbers, NULL, 1);
+
+    json_verify_invalid_number_setting(l, &cfg->encode_invalid_numbers);
+
+    return 1;
+}
+','line_number':439,'multiline':True]['text':'
+static int json_cfg_encode_escape_forward_slash(lua_State *l)
+{
+    int            ret;
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    ret = json_enum_option(l, 1, &cfg->encode_escape_forward_slash, NULL, 1);
+    if (cfg->encode_escape_forward_slash) {
+        char2escape['/'] = "\\/";
+    } else {
+        char2escape['/'] = NULL;
+    }
+    return ret;
+}
+','line_number':452,'multiline':True]['text':' Create GC method to clean up strbuf ','line_number':487,'multiline':True]['text':' Decoding init ','line_number':510,'multiline':True]['text':' Tag all characters as an error ','line_number':512,'multiline':True]['text':' Set tokens that require no further processing ','line_number':516,'multiline':True]['text':' Update characters that require further processing ','line_number':529,'multiline':True]['text':' false? ','line_number':530,'multiline':True]['text':' inf, ininity? ','line_number':531,'multiline':True]['text':' null, nan? ','line_number':533,'multiline':True]['text':' true? ','line_number':535,'multiline':True]['text':' string? ','line_number':536,'multiline':True]['text':' number? ','line_number':537,'multiline':True]['text':' Lookup table for parsing escape characters ','line_number':542,'multiline':True]['text':' String error ','line_number':544,'multiline':True]['text':' Unicode parsing required ','line_number':553,'multiline':True]['text':' ===== ENCODING ===== ','line_number':556,'multiline':True]['text':' json_append_string args:
+ * - lua_State
+ * - JSON strbuf
+ * - String (Lua stack index)
+ *
+ * Returns nothing. Doesn't remove string from Lua stack ','line_number':567,'multiline':True]['text':' Worst case is len * 6 (all unicode escapes).
+     * This buffer is reused constantly for small strings
+     * If there are any excess pages, they won't be hit anyway.
+     * This gains ~5% speedup. ','line_number':582,'multiline':True]['text':' Find the size of the array on the top of the Lua stack
+ * -1   object (not a pure array)
+ * >=0  elements in array
+ ','line_number':599,'multiline':True]['text':' table, startkey ','line_number':613,'multiline':True]['text':' table, key, value ','line_number':615,'multiline':True]['text':' Integer >= 1 ? ','line_number':618,'multiline':True]['text':' Must not be an array (non integer key) ','line_number':628,'multiline':True]['text':' Encode excessively sparse arrays as objects (if enabled) ','line_number':633,'multiline':True]['text':' Ensure there are enough slots free to traverse a table (key,
+     * value) and push a string for a potential error message.
+     *
+     * Unlike "decode", the key and value are still on the stack when
+     * lua_checkstack() is called.  Hence an extra slot for luaL_error()
+     * below is required just in case the next check to lua_checkstack()
+     * fails.
+     *
+     * While this won't cause a crash due to the EXTRA_STACK reserve
+     * slots, it would still be an improper use of the API. ','line_number':649,'multiline':True]['text':' json_append_array args:
+ * - lua_State
+ * - JSON strbuf
+ * - Size of passwd Lua array (top of stack) ','line_number':672,'multiline':True]['text':' Prevent encoding invalid numbers ','line_number':705,'multiline':True]['text':' Encode NaN/Infinity separately to ensure Javascript compatible
+         * values are used. ','line_number':710,'multiline':True]['text':' Encode invalid numbers as "null" ','line_number':724,'multiline':True]['text':' Object ','line_number':741,'multiline':True]['text':' table, startkey ','line_number':745,'multiline':True]['text':' table, key, value ','line_number':753,'multiline':True]['text':' never returns ','line_number':765,'multiline':True]['text':' table, key, value ','line_number':768,'multiline':True]['text':' table, key ','line_number':771,'multiline':True]['text':' Serialise Lua data into JSON string. ','line_number':777,'multiline':True]['text':' pop pointer + metatable ','line_number':834,'multiline':True]['text':' Remaining types (LUA_TFUNCTION, LUA_TUSERDATA, LUA_TTHREAD,
+         * and LUA_TLIGHTUSERDATA) cannot be serialised ','line_number':863,'multiline':True]['text':' never returns ','line_number':866,'multiline':True]['text':' Use private buffer ','line_number':881,'multiline':True]['text':' Reuse existing buffer ','line_number':885,'multiline':True]['text':' ===== DECODING ===== ','line_number':901,'multiline':True]['text':' Force lowercase ','line_number':911,'multiline':True]['text':' Convert ASCII hex digit to numeric digit
+     * Note: this returns an error for invalid hex digits, including
+     *       NULL ','line_number':924,'multiline':True]['text':' Converts a Unicode codepoint to UTF-8.
+ * Returns UTF-8 string length, and up to 4 bytes in *utf8 ','line_number':940,'multiline':True]['text':' 0xxxxxxx ','line_number':944,'multiline':True]['text':' 110xxxxx 10xxxxxx ','line_number':950,'multiline':True]['text':' 1110xxxx 10xxxxxx 10xxxxxx ','line_number':957,'multiline':True]['text':' 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx ','line_number':965,'multiline':True]['text':' Called when index pointing to beginning of UTF-16 code escape: \uXXXX
+ * \u is guaranteed to exist, but the remaining hex characters may be
+ * missing.
+ * Translate to UTF-8 and append to temporary token string.
+ * Must advance index to the next character to be processed.
+ * Returns: 0   success
+ *          -1  error
+ ','line_number':978,'multiline':True]['text':' Surrogate pairs require 4 UTF-8 bytes ','line_number':988,'multiline':True]['text':' Fetch UTF-16 code unit ','line_number':994,'multiline':True]['text':' UTF-16 surrogate pairs take the following 2 byte form:
+     *      11011 x yyyyyyyyyy
+     * When x = 0: y is the high 10 bits of the codepoint
+     *      x = 1: y is the low 10 bits of the codepoint
+     *
+     * Check for a surrogate pair (high or low) ','line_number':999,'multiline':True]['text':' Error if the 1st surrogate is not high ','line_number':1006,'multiline':True]['text':' Ensure the next code is a unicode escape ','line_number':1010,'multiline':True]['text':' Fetch the next codepoint ','line_number':1016,'multiline':True]['text':' Error if the 2nd code is not a low surrogate ','line_number':1021,'multiline':True]['text':' Calculate Unicode codepoint ','line_number':1025,'multiline':True]['text':' Convert codepoint to UTF-8 ','line_number':1032,'multiline':True]['text':' Append bytes and advance parse index ','line_number':1037,'multiline':True]['text':' Caller must ensure a string is next ','line_number':1057,'multiline':True]['text':' Skip " ','line_number':1060,'multiline':True]['text':' json->tmp is the temporary strbuf used to accumulate the
+     * decoded string value.
+     * json->tmp is sized to handle JSON containing only a string value.
+     ','line_number':1063,'multiline':True]['text':' Premature end of the string ','line_number':1071,'multiline':True]['text':' Handle escapes ','line_number':1076,'multiline':True]['text':' Fetch escape character ','line_number':1078,'multiline':True]['text':' Translate escape code and append to tmp string ','line_number':1081,'multiline':True]['text':' Skip '\' ','line_number':1096,'multiline':True]['text':' Append normal character or translated single character
+         * Unicode escapes are handled above ','line_number':1099,'multiline':True]['text':' Eat final quote (") ','line_number':1104,'multiline':True]['text':' JSON numbers should take the following form:
+ *      -?(0|[1-9]|[1-9][0-9]+)(.[0-9]+)?([eE][-+]?[0-9]+)?
+ *
+ * json_next_number_token() uses strtod() which allows other forms:
+ * - numbers starting with '+'
+ * - NaN, -NaN, infinity, -infinity
+ * - hexadecimal numbers
+ * - numbers with leading zeros
+ *
+ * json_is_invalid_number() detects "numbers" which may pass strtod()'s
+ * error checking, but should not be allowed with strict JSON.
+ *
+ * json_is_invalid_number() may pass numbers which cause strtod()
+ * to generate an error.
+ ','line_number':1112,'multiline':True]['text':' Reject numbers starting with + ','line_number':1131,'multiline':True]['text':' Skip minus sign if it exists ','line_number':1135,'multiline':True]['text':' Reject numbers starting with 0x, or leading zeros ','line_number':1139,'multiline':True]['text':' Hex ','line_number':1143,'multiline':True]['text':' Leading zero ','line_number':1144,'multiline':True]['text':' Ordinary number ','line_number':1149,'multiline':True]['text':' Reject inf/nan ','line_number':1152,'multiline':True]['text':' Pass all other numbers which may still be invalid, but
+     * strtod() will catch them. ','line_number':1158,'multiline':True]['text':' Skip the processed number ','line_number':1172,'multiline':True]['text':' Fills in the token struct.
+ * T_STRING will return a pointer to the json_parse_t temporary string
+ * T_ERROR will leave the json->ptr pointer at the error.
+ ','line_number':1177,'multiline':True]['text':' Eat whitespace. ','line_number':1186,'multiline':True]['text':' Store location of new token. Required when throwing errors
+     * for unexpected tokens (syntax errors). ','line_number':1195,'multiline':True]['text':' Don't advance the pointer for an error or the end ','line_number':1199,'multiline':True]['text':' Found a known single character token, advance index and return ','line_number':1209,'multiline':True]['text':' Process characters which triggered T_UNKNOWN
+     *
+     * Must use strncmp() to match the front of the JSON string.
+     * JSON identifier must be lowercase.
+     * When strict_numbers if disabled, either case is allowed for
+     * Infinity/NaN (since we are no longer following the spec..) ','line_number':1215,'multiline':True]['text':' When decode_invalid_numbers is enabled, only attempt to process
+         * numbers we know are invalid JSON (Inf, NaN, hex)
+         * This is required to generate an appropriate token error,
+         * otherwise all bad tokens will register as "invalid number"
+         ','line_number':1247,'multiline':True]['text':' Token starts with t/f/n but isn't recognised above. ','line_number':1256,'multiline':True]['text':' This function does not return.
+ * DO NOT CALL WITH DYNAMIC MEMORY ALLOCATED.
+ * The only supported exception is the temporary parser string
+ * json->tmp struct.
+ * json and token should exist on the stack somewhere.
+ * luaL_error() will long_jmp and release the stack ','line_number':1260,'multiline':True]['text':' Note: token->index is 0 based, display starting from 1 ','line_number':1278,'multiline':True]['text':' 3 slots required:
+     * .., table, key, value ','line_number':1306,'multiline':True]['text':' Handle empty objects ','line_number':1314,'multiline':True]['text':' Push key ','line_number':1326,'multiline':True]['text':' Fetch value ','line_number':1333,'multiline':True]['text':' Set key = value ','line_number':1337,'multiline':True]['text':' Handle the array context ','line_number':1354,'multiline':True]['text':' 2 slots required:
+     * .., table, value ','line_number':1360,'multiline':True]['text':' set array_mt on the table at the top of the stack ','line_number':1366,'multiline':True]['text':' Handle empty arrays ','line_number':1375,'multiline':True]['text':' arr[i] = value ','line_number':1383,'multiline':True]['text':' Handle the "value" context ','line_number':1399,'multiline':True]['text':' We only handle the luanil option for now ','line_number':1447,'multiline':True]['text':' Also pop the luanil table ','line_number':1465,'multiline':True]['text':' Detect Unicode other than UTF-8 (see RFC 4627, Sec 3)
+     *
+     * CJSON can support any simple data type, hence only the first
+     * character is guaranteed to be ASCII (at worst: '"'). This is
+     * still enough to detect whether the wrong encoding is in use. ','line_number':1478,'multiline':True]['text':' Ensure the temporary buffer can hold the entire string.
+     * This means we no longer need to do length checks since the decoded
+     * string must be smaller than the entire json string ','line_number':1486,'multiline':True]['text':' Ensure there is no more input left ','line_number':1494,'multiline':True]['text':' ===== INITIALISATION ===== ','line_number':1505,'multiline':True]['text':' Compatibility for Lua 5.1 and older LuaJIT.
+ *
+ * compat_luaL_setfuncs() is used to create a module table where the functions
+ * have json_config_t as their first upvalue. Code borrowed from Lua 5.2
+ * source's luaL_setfuncs().
+ ','line_number':1508,'multiline':True]['text':' fill the table with given functions ','line_number':1519,'multiline':True]['text':' copy upvalues to the top ','line_number':1520,'multiline':True]['text':' closure with those upvalues ','line_number':1522,'multiline':True]['text':' remove upvalues ','line_number':1525,'multiline':True]['text':' Call target function in protected mode with all supplied args.
+ * Assumes target function only returns a single non-nil value.
+ * Convert and return thrown errors as: nil, "error message" ','line_number':1531,'multiline':True]['text':' Deliberately throw an error for invalid arguments ','line_number':1538,'multiline':True]['text':' pcall() the function stored as upvalue(1) ','line_number':1541,'multiline':True]['text':' Since we are not using a custom error handler, the only remaining
+     * errors are memory related ','line_number':1554,'multiline':True]['text':' Return cjson module table ','line_number':1559,'multiline':True]['text':' Nvim: don't expose options which cause global side-effects.','line_number':1565,'multiline':False]['text':'
+        { "encode_empty_table_as_object", json_cfg_encode_empty_table_as_object },
+        { "decode_array_with_array_mt", json_cfg_decode_array_with_array_mt },
+        { "encode_sparse_array", json_cfg_encode_sparse_array },
+        { "encode_max_depth", json_cfg_encode_max_depth },
+        { "decode_max_depth", json_cfg_decode_max_depth },
+        { "encode_number_precision", json_cfg_encode_number_precision },
+        { "encode_keep_buffer", json_cfg_encode_keep_buffer },
+        { "encode_invalid_numbers", json_cfg_encode_invalid_numbers },
+        { "decode_invalid_numbers", json_cfg_decode_invalid_numbers },
+        { "encode_escape_forward_slash", json_cfg_encode_escape_forward_slash },
+        ','line_number':1566,'multiline':True]['text':' Initialise number conversions ','line_number':1582,'multiline':True]['text':' Since fpconv_init does not need to be called multiple times and is not','line_number':1587,'multiline':False]['text':' thread safe, it should only be called in the main thread.','line_number':1588,'multiline':False]['text':' Test if array metatables are in registry ','line_number':1593,'multiline':True]['text':' Create array metatables.
+         *
+         * If multiple calls to lua_cjson_new() are made,
+         * this prevents overriding the tables at the given
+         * registry's index with a new one.
+         ','line_number':1597,'multiline':True]['text':' empty_array_mt ','line_number':1605,'multiline':True]['text':' array_mt ','line_number':1610,'multiline':True]['text':' cjson module table ','line_number':1616,'multiline':True]['text':' Register functions with config data as upvalue ','line_number':1619,'multiline':True]['text':' Nvim: don't expose "null", it is identical to vim.NIL.','line_number':1623,'multiline':False]['text':'
+    nlua_pushref(l, nlua_get_nil_ref(l));
+    lua_setfield(l, -2, "null");
+    ','line_number':1624,'multiline':True]['text':' Nvim: don't expose empty_array_mt.','line_number':1629,'multiline':False]['text':'
+    lua_pushlightuserdata(l, json_lightudata_mask(&json_empty_array));
+    lua_rawget(l, LUA_REGISTRYINDEX);
+    lua_setfield(l, -2, "empty_array_mt");
+    ','line_number':1630,'multiline':True]['text':' Nvim: don't expose array_mt.','line_number':1636,'multiline':False]['text':'
+    lua_pushlightuserdata(l, json_lightudata_mask(&json_array));
+    lua_rawget(l, LUA_REGISTRYINDEX);
+    lua_setfield(l, -2, "array_mt");
+    ','line_number':1637,'multiline':True]['text':' Nvim: don't expose empty_array.','line_number':1643,'multiline':False]['text':'
+    lua_pushlightuserdata(l, json_lightudata_mask(&json_array));
+    lua_setfield(l, -2, "empty_array");
+    ','line_number':1644,'multiline':True]['text':' Set module name / version fields ','line_number':1649,'multiline':True]['text':' Return cjson.safe module table ','line_number':1658,'multiline':True]['text':' Fix new() method ','line_number':1666,'multiline':True]['text':' Register a global "cjson" table. ','line_number':1684,'multiline':True]['text':' Return cjson table ','line_number':1689,'multiline':True]['text':' Return cjson.safe table ','line_number':1697,'multiline':True]['text':' vi:ai et sw=4 ts=4:
+ ','line_number':1701,'multiline':True]

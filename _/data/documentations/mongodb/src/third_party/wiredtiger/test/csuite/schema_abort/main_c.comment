@@ -1,0 +1,303 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]['text':' Program working dir ','line_number':34,'multiline':True]['text':'
+ * Create three tables that we will write the same data to and verify that
+ * all the types of usage have the expected data in them after a crash and
+ * recovery.  We want:
+ * 1. A table that is logged and is not involved in timestamps.  This table
+ * simulates a user local table.
+ * 2. A table that is logged and involved in timestamps.  This simulates
+ * the oplog.
+ * 3. A table that is not logged and involved in timestamps.  This simulates
+ * a typical collection file.
+ *
+ * We also have most threads perform schema operations such as create/drop.
+ *
+ * We also create several files that are not WiredTiger tables.  The checkpoint
+ * thread creates a file indicating that a checkpoint has completed.  The parent
+ * process uses this to know when at least one checkpoint is done and it can
+ * start the timer to abort.
+ *
+ * Each worker thread creates its own records file that records the data it
+ * inserted and it records the timestamp that was used for that insertion.
+ ','line_number':36,'multiline':True]['text':' Maximum interval between checkpoints ','line_number':58,'multiline':True]['text':' Set large, some slow I/O systems take tens of seconds to fsync. ','line_number':59,'multiline':True]['text':' Seconds to start up and set stable ','line_number':60,'multiline':True]['text':' Number of threads. ','line_number':81,'multiline':True]['text':' stable timestamp. ','line_number':82,'multiline':True]['text':' stop condition for threads. ','line_number':83,'multiline':True]['text':'
+ * We reserve timestamps for each thread for the entire run. The timestamp for the i-th key that a
+ * thread writes is given by the macro below.
+ ','line_number':84,'multiline':True]['text':'
+ * A minimum width of 10, along with zero filling, means that all the keys sort according to their
+ * integer value, making each thread's key space distinct. For column-store we just use the integer
+ * values and that has the same effect.
+ ','line_number':111,'multiline':True]['text':' Last absent key ','line_number':119,'multiline':True]['text':' First existing key after miss ','line_number':120,'multiline':True]['text':' First key in range ','line_number':121,'multiline':True]['text':' First missing key ','line_number':122,'multiline':True]['text':' Last key in range ','line_number':123,'multiline':True]['text':'
+ * usage --
+ *     Display usage statement and exit failure.
+ ','line_number':148,'multiline':True]['text':'
+ * subtest_error_handler --
+ *     Error event handler.
+ ','line_number':177,'multiline':True]['text':' Filter out errors about bulk load usage - they are annoying ','line_number':189,'multiline':True]['text':' Message handler ','line_number':196,'multiline':True]['text':' Progress handler ','line_number':197,'multiline':True]['text':' Close handler ','line_number':198,'multiline':True]['text':' General handler ','line_number':199,'multiline':True]['text':'
+ * The following are various schema-related functions to have some threads performing during the
+ * test. The goal is to make sure that after a random abort, the database is left in a recoverable
+ * state. Yield during the schema operations to increase chance of abort during them.
+ *
+ * TODO: Currently only verifies insert data, it would be ideal to modify the schema operations so
+ * that we can verify the state of the schema too.
+ ','line_number':202,'multiline':True]['text':'
+ * dump_ts --
+ *     TODO: Add a comment describing this function.
+ ','line_number':211,'multiline':True]['text':'
+ * test_bulk --
+ *     Test creating a bulk cursor.
+ ','line_number':224,'multiline':True]['text':' If create fails, rollback else will commit.','line_number':255,'multiline':True]['text':'
+ * test_bulk_unique --
+ *     Test creating a bulk cursor with a unique name.
+ ','line_number':269,'multiline':True]['text':'
+     * Generate a unique object name. Use the iteration count provided by the caller. The caller
+     * ensures it to be unique.
+     ','line_number':283,'multiline':True]['text':'
+     * Opening a bulk cursor may have raced with a forced checkpoint which created a checkpoint of
+     * the empty file, and triggers an EINVAL.
+     ','line_number':294,'multiline':True]['text':' For testing we want to remove objects too. ','line_number':304,'multiline':True]['text':'
+ * test_cursor --
+ *     Open a cursor on a data source.
+ ','line_number':316,'multiline':True]['text':'
+ * set_flush_tier_delay --
+ *     Set up a random delay for the next flush_tier.
+ ','line_number':344,'multiline':True]['text':'
+     * We are checkpointing with a random interval up to MAX_CKPT_INVL seconds, and we'll do a flush
+     * tier randomly every 0-10 seconds.
+     ','line_number':351,'multiline':True]['text':'
+ * test_create --
+ *     Create a table.
+ ','line_number':358,'multiline':True]['text':'
+ * test_create_unique --
+ *     Create a uniquely named table.
+ ','line_number':381,'multiline':True]['text':'
+     * Generate a unique object name. Use the iteration count provided by the caller. The caller
+     * ensures it to be unique.
+     ','line_number':394,'multiline':True]['text':' For testing we want to remove objects too. ','line_number':411,'multiline':True]['text':'
+ * test_drop --
+ *     Test dropping a table.
+ ','line_number':423,'multiline':True]['text':' For testing we want to remove objects too. ','line_number':439,'multiline':True]['text':'
+         * As the operations are being performed concurrently, return value can be ENOENT or EBUSY
+         * will set error to transaction opened by session. In these cases the transaction has to be
+         * aborted.
+         ','line_number':447,'multiline':True]['text':'
+ * test_upgrade --
+ *     Upgrade a tree.
+ ','line_number':462,'multiline':True]['text':' FIXME-WT-11366 Remove this return when tiered storage supports upgrade. ','line_number':472,'multiline':True]['text':'
+ * test_verify --
+ *     Verify a tree.
+ ','line_number':484,'multiline':True]['text':' FIXME-WT-10520 Remove this return when tiered storage supports verify. ','line_number':494,'multiline':True]['text':'
+ * get_all_committed_ts --
+ *     Returns the least of commit timestamps across all the threads. Returns UINT64_MAX if one of
+ *     the threads has not yet started.
+ ','line_number':506,'multiline':True]['text':'
+ * thread_ts_run --
+ *     Runner function for a timestamp thread.
+ ','line_number':527,'multiline':True]['text':'
+     * Every N records we will record our stable timestamp into the stable table. That will define
+     * our threshold where we expect to find records after recovery.
+     ','line_number':543,'multiline':True]['text':' Don't let the stable or oldest timestamp advance beyond the stop timestamp. ','line_number':550,'multiline':True]['text':'
+             * Set both the oldest and stable timestamp so that we don't need to maintain read
+             * availability at older timestamps.
+             ','line_number':556,'multiline':True]['text':' NOTREACHED ','line_number':572,'multiline':True]['text':'
+ * thread_ckpt_run --
+ *     Runner function for the checkpoint thread.
+ ','line_number':575,'multiline':True]['text':'
+     * Keep a separate file with the records we wrote for checking.
+     ','line_number':592,'multiline':True]['text':'
+     * Keep writing checkpoints until killed by parent.
+     ','line_number':609,'multiline':True]['text':'
+             * If we're using timestamps wait for the stable timestamp to get set the first time.
+             ','line_number':617,'multiline':True]['text':' Determine if we're flushing once we know we're actually doing the checkpoint. ','line_number':634,'multiline':True]['text':' Set the configuration based on whether we're flushing. ','line_number':638,'multiline':True]['text':'
+         * If we have a stop timestamp, we are ready if the stable has reached the requested stop
+         * timestamp. If we don't have a stop timestamp, then we're ready to be killed after the
+         * first checkpoint, or if tiered storage, after the first flush_tier has been initiated.
+         ','line_number':641,'multiline':True]['text':'
+         * If we've met the kill condition and we haven't created the ready file, do so now. The
+         * ready file lets the parent process knows that it can start its timer. Start the timer for
+         * stable after the first checkpoint completes because a slow I/O lag during the checkpoint
+         * can cause a false positive for a timeout.
+         ','line_number':658,'multiline':True]['text':'
+             * FIXME: when we change the API to notify that a flush_tier has completed, we'll need
+             * to set up a general event handler and catch that notification, so we can pass the
+             * flush_tier "cookie" to the test utility function.
+             ','line_number':670,'multiline':True]['text':' NOTREACHED ','line_number':681,'multiline':True]['text':'
+ * thread_run --
+ *     Runner function for the worker threads.
+ ','line_number':684,'multiline':True]['text':'
+     * Set up the separate file for checking.
+     ','line_number':707,'multiline':True]['text':'
+     * Set to line buffering. But that is advisory only. We've seen cases where the result files end
+     * up with partial lines.
+     ','line_number':713,'multiline':True]['text':'
+     * Have half the threads use prepared transactions if timestamps are in use.
+     ','line_number':719,'multiline':True]['text':'
+     * We may have two sessions so that the oplog session can have its own transaction in parallel
+     * with the collection session for threads that are going to be using prepared transactions. We
+     * need this because prepared transactions cannot have any operations that modify a table that
+     * is logged. But we also want to test mixed logged and not-logged transactions.
+     ','line_number':723,'multiline':True]['text':'
+     * Open a cursor to each table.
+     ','line_number':730,'multiline':True]['text':'
+     * Write our portion of the key space until we're killed.
+     ','line_number':743,'multiline':True]['text':' Give other threads a chance to run and move their timestamps forward. ','line_number':749,'multiline':True]['text':'
+         * Extract a unique timestamp value based on the thread number and the iteration count. This
+         * unique number is also used to generate the names if required for the schema operations.
+         ','line_number':753,'multiline':True]['text':'
+             * At this point, we've run to the stop timestamp and have been asked to go no further.
+             * Set our timestamp to the stop timestamp to indicate we are done. Just stay in the
+             * loop, waiting to be killed.
+             ','line_number':760,'multiline':True]['text':'
+         * Allow some threads to skip schema operations so that they are generating sufficient dirty
+         * data.
+         ','line_number':770,'multiline':True]['text':'
+             * Do a schema operation about 50% of the time by having a case for only about half the
+             * possible mod values.
+             ','line_number':776,'multiline':True]['text':'
+         * Put an informative string into the value so that it can be viewed well in a binary dump.
+         ','line_number':830,'multiline':True]['text':'
+             * Run with prepare every once in a while. And also yield after prepare sometimes too.
+             * This is only done on the regular session.
+             ','line_number':848,'multiline':True]['text':'
+                 * Durable timestamp should not be passed as oplog transaction is a non-prepared
+                 * transaction.
+                 ','line_number':865,'multiline':True]['text':'
+             * Update the thread's last-committed timestamp. Don't let the compiler re-order this
+             * statement, if we were to race with the timestamp thread, it might see our thread
+             * update before the commit.
+             ','line_number':872,'multiline':True]['text':'
+         * Insert into the local table outside the timestamp txn.
+         ','line_number':883,'multiline':True]['text':'
+         * Save the timestamp and key separately for checking later.
+         ','line_number':891,'multiline':True]['text':' NOTREACHED ','line_number':897,'multiline':True]['text':'
+ * init_thread_data --
+ *     Initialize the thread data struct.
+ ','line_number':900,'multiline':True]['text':'
+ * run_workload --
+ *     Child process creates the database and table, and then creates worker threads to add data
+ *     until it is killed by the parent.
+ ','line_number':916,'multiline':True]['text':' Open WiredTiger without recovery. ','line_number':944,'multiline':True]['text':'
+     * Create all the tables.
+     ','line_number':949,'multiline':True]['text':'
+     * Don't log the stable timestamp table so that we know what timestamp was stored at the
+     * checkpoint.
+     ','line_number':959,'multiline':True]['text':'
+     * The checkpoint thread and the timestamp threads are added at the end.
+     ','line_number':974,'multiline':True]['text':'
+     * The threads never exit, so the child will just wait here until it is killed.
+     ','line_number':992,'multiline':True]['text':'
+     * NOTREACHED
+     ','line_number':998,'multiline':True]['text':'
+ * initialize_rep --
+ *     Initialize a report structure. Since zero is a valid key we cannot just clear it.
+ ','line_number':1009,'multiline':True]['text':'
+ * print_missing --
+ *     Print out information if we detect missing records in the middle of the data of a report
+ *     structure.
+ ','line_number':1020,'multiline':True]['text':'
+ * sig_handler --
+ *     Signal handler to catch if the child died unexpectedly.
+ ','line_number':1035,'multiline':True]['text':'
+     * The core file will indicate why the child exited. Choose EINVAL here.
+     ','line_number':1046,'multiline':True]['text':'
+ * main --
+ *     TODO: Add a comment describing this function.
+ ','line_number':1052,'multiline':True]['text':' The working directory when we started ','line_number':1074,'multiline':True]['text':'
+     * Setting this to false forces us to use internal library code. Allow an override but default
+     * to using that code.
+     ','line_number':1082,'multiline':True]['text':' Variable-length columns only; fixed would require considerable changes ','line_number':1100,'multiline':True]['text':' The option is either one that we're asking testutil to support, or illegal. ','line_number':1138,'multiline':True]['text':' Among other things, this initializes the random number generators in the option structure. ','line_number':1150,'multiline':True]['text':'
+     * If the user wants to verify they need to tell us how many threads there were so we can find
+     * the old record files.
+     ','line_number':1155,'multiline':True]['text':' Remember the current working directory. ','line_number':1164,'multiline':True]['text':' Create the database, run the test, and fail. ','line_number':1167,'multiline':True]['text':' Create the test's home directory. ','line_number':1169,'multiline':True]['text':' Set up the test subdirectories. ','line_number':1172,'multiline':True]['text':' Set up LazyFS. ','line_number':1178,'multiline':True]['text':'
+         * We unconditionally grab a random value to be used for the thread count to keep the RNG in
+         * sync for all runs. If we are run first without having a thread count or random seed
+         * argument, then when we rerun (with the thread count and random seed that was output),
+         * we'll have the same results.
+         *
+         * We use the data random generator because the number of threads affects the data for this
+         * test.
+         ','line_number':1193,'multiline':True]['text':'
+         * Fork a child to insert as many items. We will then randomly kill the child, run recovery
+         * and make sure all items we wrote exist after recovery runs.
+         ','line_number':1220,'multiline':True]['text':' child ','line_number':1229,'multiline':True]['text':' NOTREACHED ','line_number':1231,'multiline':True]['text':' parent ','line_number':1234,'multiline':True]['text':'
+         * Sleep for the configured amount of time before killing the child. Start the timeout from
+         * the time we notice that the file has been created. That allows the test to run correctly
+         * on really slow machines.
+         *
+         * If we have a stop timestamp, the ready file is created when the child threads have all
+         * reached the stop point, so there's no reason to sleep.
+         ','line_number':1235,'multiline':True]['text':'
+         * !!! It should be plenty long enough to make sure more than
+         * one log file exists.  If wanted, that check would be added
+         * here.
+         ','line_number':1251,'multiline':True]['text':'
+     * !!! If we wanted to take a copy of the directory before recovery,
+     * this is the place to do it. Don't do it all the time because
+     * it can use a lot of disk space, which can cause test machine
+     * issues.
+     ','line_number':1260,'multiline':True]['text':' Copy the data to a separate folder for debugging purpose. ','line_number':1269,'multiline':True]['text':'
+     * Clear the cache, if we are using LazyFS. Do this after we save the data for debugging
+     * purposes, so that we can see what we might have lost. If we are using LazyFS, the underlying
+     * directory shows the state that we'd get after we clear the cache.
+     ','line_number':1272,'multiline':True]['text':'
+     * Open the connection which forces recovery to be run.
+     ','line_number':1282,'multiline':True]['text':'
+     * Open a cursor on all the tables.
+     ','line_number':1288,'multiline':True]['text':'
+     * Find the biggest stable timestamp value that was saved.
+     ','line_number':1295,'multiline':True]['text':'
+         * For every key in the saved file, verify that the key exists in the table after recovery.
+         * If we're doing in-memory log buffering we never expect a record missing in the middle,
+         * but records may be missing at the end. If we did write-no-sync, we expect every key to
+         * have been recovered.
+         ','line_number':1316,'multiline':True]['text':'
+                 * If we find a partial line, consider it like an EOF.
+                 ','line_number':1330,'multiline':True]['text':'
+             * If we're unlucky, the last line may be a partially written key at the end that can
+             * result in a false negative error for a missing record. Detect it.
+             ','line_number':1339,'multiline':True]['text':'
+             * The collection table should always only have the data as of the checkpoint.
+             ','line_number':1358,'multiline':True]['text':'
+                 * If we don't find a record, the stable timestamp written to our file better be
+                 * larger than the saved one.
+                 ','line_number':1364,'multiline':True]['text':'
+                 * If we get here we found a record that exists after absent records, a hole in our
+                 * data.
+                 ','line_number':1378,'multiline':True]['text':'
+                 * If we found a record, the stable timestamp written to our file better be no
+                 * larger than the checkpoint one.
+                 ','line_number':1385,'multiline':True]['text':'
+             * The local table should always have all data.
+             ','line_number':1394,'multiline':True]['text':'
+                 * We should never find an existing key after we have detected one missing.
+                 ','line_number':1407,'multiline':True]['text':'
+             * The oplog table should always have all data.
+             ','line_number':1413,'multiline':True]['text':'
+                 * We should never find an existing key after we have detected one missing.
+                 ','line_number':1426,'multiline':True]['text':'
+     * Clean up.
+     ','line_number':1461,'multiline':True]['text':' Clean up the test directory. ','line_number':1465,'multiline':True]['text':' At this point, we are inside `home`, which we intend to delete. cd to the parent dir. ','line_number':1469,'multiline':True]['text':' Clean up LazyFS. ','line_number':1473,'multiline':True]['text':' Delete the work directory. ','line_number':1477,'multiline':True]

@@ -1,0 +1,140 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':' js::GetErrorMessage, JSMSG_NEWREGEXP_FLAGGED','line_number':16,'multiline':False]['text':' JS::RegExpFlag, JS::RegExpFlags','line_number':18,'multiline':False]['text':' js_*_str','line_number':24,'multiline':False]['text':' Allocate an object for the |.groups| or |.indices.groups| property','line_number':42,'multiline':False]['text':' of a regexp match result.','line_number':43,'multiline':False]['text':' The groups template object is stored in RegExpShared, which is shared','line_number':50,'multiline':False]['text':' across compartments and realms. So watch out for the case when the template','line_number':51,'multiline':False]['text':' object's realm is different from the current realm.','line_number':52,'multiline':False]['text':'
+ * Implements RegExpBuiltinExec: Steps 18-35
+ * https://tc39.es/ecma262/#sec-regexpbuiltinexec
+ ','line_number':67,'multiline':True]['text':'
+   * Create the (slow) result array for a match.
+   *
+   * Array contents:
+   *  0:              matched string
+   *  1..pairCount-1: paren matches
+   *  input:          input string
+   *  index:          start index for the match
+   *  groups:         named capture groups for the match
+   *  indices:        capture indices for the match, if required
+   ','line_number':77,'multiline':True]['text':' Get the templateObject that defines the shape and type of the output','line_number':91,'multiline':False]['text':' object.','line_number':92,'multiline':False]['text':' Steps 18-19','line_number':102,'multiline':False]['text':' Steps 20-21: Allocate the match result object.','line_number':106,'multiline':False]['text':' Steps 28-29 and 33 a-d: Initialize the elements of the match result.','line_number':113,'multiline':False]['text':' Store a Value for each match pair.','line_number':114,'multiline':False]['text':' Since we had a match, first pair must be present.','line_number':119,'multiline':False]['text':' Step 34a (reordered): Allocate and initialize the indices object if needed.','line_number':133,'multiline':False]['text':' This is an inlined implementation of MakeIndicesArray:','line_number':134,'multiline':False]['text':' https://tc39.es/ecma262/#sec-makeindicesarray','line_number':135,'multiline':False]['text':' MakeIndicesArray: step 8','line_number':139,'multiline':False]['text':' MakeIndicesArray: steps 10-12','line_number':149,'multiline':False]['text':' MakeIndicesArray: step 13 a-d. (Step 13.e is implemented below.)','line_number':162,'multiline':False]['text':' Since we had a match, first pair must be present.','line_number':167,'multiline':False]['text':' Steps 30-31 (reordered): Allocate the groups object (if needed).','line_number':186,'multiline':False]['text':' Step 33 e-f: Initialize the properties of |groups| and |indices.groups|.','line_number':198,'multiline':False]['text':' The groups template object stores the names of the named captures','line_number':199,'multiline':False]['text':' in the the order in which they are defined. The named capture','line_number':200,'multiline':False]['text':' indices vector stores the corresponding capture indices. In','line_number':201,'multiline':False]['text':' dictionary mode, we have to define the properties explicitly. If','line_number':202,'multiline':False]['text':' we are not in dictionary mode, we simply fill in the slots with','line_number':203,'multiline':False]['text':' the correct values.','line_number':204,'multiline':False]['text':' MakeIndicesArray: Step 13.e (reordered)','line_number':221,'multiline':False]['text':' MakeIndicesArray: Step 13.e (reordered)','line_number':235,'multiline':False]['text':' Step 22 (reordered).','line_number':242,'multiline':False]['text':' Set the |index| property.','line_number':243,'multiline':False]['text':' Step 23 (reordered).','line_number':247,'multiline':False]['text':' Set the |input| property.','line_number':248,'multiline':False]['text':' Step 32 (reordered)','line_number':251,'multiline':False]['text':' Set the |groups| property.','line_number':252,'multiline':False]['text':' Step 34b','line_number':256,'multiline':False]['text':' Set the |indices| property.','line_number':257,'multiline':False]['text':' Step 35.','line_number':277,'multiline':False]['text':' Fit the start and limit of match into a int32_t. ','line_number':283,'multiline':True]['text':'
+ * ES 2017 draft rev 6a13789aa9e7c6de4e96b7d3e24d9e6eba6584ad 21.2.5.2.2
+ * steps 3, 9-14, except 12.a.i, 12.c.i.1.
+ ','line_number':291,'multiline':True]['text':' Out of spec: Update RegExpStatics. ','line_number':303,'multiline':True]['text':' Legacy ExecuteRegExp behavior is baked into the JSAPI. ','line_number':312,'multiline':True]['text':' ExecuteRegExp() previously returned an array or null. ','line_number':331,'multiline':True]['text':' Forbid an array, as an optimization. ','line_number':339,'multiline':True]['text':' If we already have a RegExpShared for this pattern/flags, we can','line_number':357,'multiline':False]['text':' avoid the much slower CheckPatternSyntaxSlow call.','line_number':358,'multiline':False]['text':' Assert the pattern is valid.','line_number':363,'multiline':False]['text':' Allocate and return a new RegExpShared so we will hit the fast path','line_number':376,'multiline':False]['text':' next time.','line_number':377,'multiline':False]['text':'
+ * ES 2016 draft Mar 25, 2016 21.2.3.2.2.
+ *
+ * Steps 14-15 set |obj|'s "lastIndex" property to zero.  Some of
+ * RegExpInitialize's callers have a fresh RegExp not yet exposed to script:
+ * in these cases zeroing "lastIndex" is infallible.  But others have a RegExp
+ * whose "lastIndex" property might have been made non-writable: here, zeroing
+ * "lastIndex" can fail.  We efficiently solve this problem by completely
+ * removing "lastIndex" zeroing from the provided function.
+ *
+ * CALLERS MUST HANDLE "lastIndex" ZEROING THEMSELVES!
+ *
+ * Because this function only ever returns a user-provided |obj| in the spec,
+ * we omit it and just return the usual success/failure.
+ ','line_number':381,'multiline':True]['text':' Step 1. ','line_number':402,'multiline':True]['text':' Step 2. ','line_number':405,'multiline':True]['text':' Step 3. ','line_number':412,'multiline':True]['text':' Step 4. ','line_number':415,'multiline':True]['text':' Step 5. ','line_number':421,'multiline':True]['text':' Steps 7-8. ','line_number':427,'multiline':True]['text':' Steps 9-12. ','line_number':433,'multiline':True]['text':' ES 2016 draft Mar 25, 2016 21.2.3.2.3. ','line_number':441,'multiline':True]['text':' Step 1. ','line_number':444,'multiline':True]['text':' Step 2. ','line_number':450,'multiline':True]['text':' ES6 draft rc3 7.2.8. ','line_number':465,'multiline':True]['text':' Step 1. ','line_number':467,'multiline':True]['text':' Steps 2-3. ','line_number':474,'multiline':True]['text':' Step 4. ','line_number':481,'multiline':True]['text':' Steps 5-6. ','line_number':487,'multiline':True]['text':' ES6 B.2.5.1. ','line_number':497,'multiline':True]['text':' Step 3.','line_number':504,'multiline':False]['text':' Step 3a.','line_number':511,'multiline':False]['text':' Beware!  |patternObj| might be a proxy into another compartment, so','line_number':518,'multiline':False]['text':' don't assume |patternObj.is<RegExpObject>()|.  For the same reason,','line_number':519,'multiline':False]['text':' don't reuse the RegExpShared below.','line_number':520,'multiline':False]['text':' Step 3b.','line_number':526,'multiline':False]['text':' Step 5, minus lastIndex zeroing.','line_number':536,'multiline':False]['text':' Step 4.','line_number':539,'multiline':False]['text':' Step 5, minus lastIndex zeroing.','line_number':543,'multiline':False]['text':' The final niggling bit of step 5.','line_number':549,'multiline':False]['text':'','line_number':550,'multiline':False]['text':' |regexp| is user-exposed, but if its "lastIndex" property hasn't been','line_number':551,'multiline':False]['text':' made non-writable, we can still use a fast path to zero it.','line_number':552,'multiline':False]['text':' Steps 1-2. ','line_number':569,'multiline':True]['text':'
+ * ES 2017 draft rev 6a13789aa9e7c6de4e96b7d3e24d9e6eba6584ad 21.2.3.1.
+ ','line_number':573,'multiline':True]['text':' Steps 1.','line_number':579,'multiline':False]['text':' We can delay step 3 and step 4a until later, during','line_number':585,'multiline':False]['text':' GetPrototypeFromBuiltinConstructor calls. Accessing the new.target','line_number':586,'multiline':False]['text':' and the callee from the stack is unobservable.','line_number':587,'multiline':False]['text':' Step 3.b.','line_number':589,'multiline':False]['text':' Step 3.b.i.','line_number':593,'multiline':False]['text':' Step 3.b.ii.','line_number':600,'multiline':False]['text':' Step 4.','line_number':611,'multiline':False]['text':' Beware!  |patternObj| might be a proxy into another compartment, so','line_number':617,'multiline':False]['text':' don't assume |patternObj.is<RegExpObject>()|.','line_number':618,'multiline':False]['text':' Step 4.a.','line_number':625,'multiline':False]['text':' Step 4.b.','line_number':632,'multiline':False]['text':' Get original flags in all cases, to compare with passed flags.','line_number':633,'multiline':False]['text':' If the RegExpShared is in another Zone, don't reuse it.','line_number':636,'multiline':False]['text':' Step 7.','line_number':642,'multiline':False]['text':' Step 8.','line_number':653,'multiline':False]['text':' Step 4.c / 21.2.3.2.2 RegExpInitialize step 4.','line_number':655,'multiline':False]['text':' Don't reuse the RegExpShared if we have different flags.','line_number':665,'multiline':False]['text':' Have to check syntax again when adding 'u' flag.','line_number':671,'multiline':False]['text':' ES 2017 draft rev 9b49a888e9dfe2667008a01b2754c3662059ae56','line_number':673,'multiline':False]['text':' 21.2.3.2.2 step 7.','line_number':674,'multiline':False]['text':' Step 5.','line_number':696,'multiline':False]['text':' Step 5.a.','line_number':700,'multiline':False]['text':' Step 5.b.','line_number':705,'multiline':False]['text':' Steps 6.a-b.','line_number':713,'multiline':False]['text':' Step 7.','line_number':718,'multiline':False]['text':' Step 8.','line_number':729,'multiline':False]['text':'
+ * ES 2017 draft rev 6a13789aa9e7c6de4e96b7d3e24d9e6eba6584ad 21.2.3.1
+ * steps 4, 7-8.
+ ','line_number':739,'multiline':True]['text':' Step 4.a.','line_number':748,'multiline':False]['text':' Step 4.c.','line_number':754,'multiline':False]['text':' Step 7.','line_number':757,'multiline':False]['text':' Step 8.','line_number':763,'multiline':False]['text':' This is a specialized implementation of "UnwrapAndTypeCheckThis" for RegExp','line_number':769,'multiline':False]['text':' getters that need to return a special value for same-realm','line_number':770,'multiline':False]['text':' %RegExp.prototype%.','line_number':771,'multiline':False]['text':' Step 4ff','line_number':789,'multiline':False]['text':' Step 3.a. "If SameValue(R, %RegExp.prototype%) is true, return','line_number':794,'multiline':False]['text':' undefined."','line_number':795,'multiline':False]['text':' Or `return "(?:)"` for get RegExp.prototype.source.','line_number':796,'multiline':False]['text':' fall-through','line_number':802,'multiline':False]['text':' Step 2. and Step 3.b.','line_number':805,'multiline':False]['text':' ES2021 draft rev 0b3a808af87a9123890767152a26599cc8fde161','line_number':820,'multiline':False]['text':' 21.2.5.5 get RegExp.prototype.global','line_number':821,'multiline':False]['text':' ES2021 draft rev 0b3a808af87a9123890767152a26599cc8fde161','line_number':830,'multiline':False]['text':' 21.2.5.6 get RegExp.prototype.ignoreCase','line_number':831,'multiline':False]['text':' ES2021 draft rev 0b3a808af87a9123890767152a26599cc8fde161','line_number':840,'multiline':False]['text':' 21.2.5.9 get RegExp.prototype.multiline','line_number':841,'multiline':False]['text':' ES2021 draft rev 0b3a808af87a9123890767152a26599cc8fde161','line_number':850,'multiline':False]['text':' 21.2.5.12 get RegExp.prototype.source','line_number':851,'multiline':False]['text':' Step 3.a. Return "(?:)" for %RegExp.prototype%.','line_number':854,'multiline':False]['text':' Mark potentially cross-compartment JSAtom.','line_number':861,'multiline':False]['text':' Step 7.','line_number':864,'multiline':False]['text':' ES2021 draft rev 0b3a808af87a9123890767152a26599cc8fde161','line_number':876,'multiline':False]['text':' 21.2.5.3 get RegExp.prototype.dotAll','line_number':877,'multiline':False]['text':' ES2021 draft rev 0b3a808af87a9123890767152a26599cc8fde161','line_number':886,'multiline':False]['text':' 21.2.5.14 get RegExp.prototype.sticky','line_number':887,'multiline':False]['text':' ES2021 draft rev 0b3a808af87a9123890767152a26599cc8fde161','line_number':896,'multiline':False]['text':' 21.2.5.17 get RegExp.prototype.unicode','line_number':897,'multiline':False]['text':'
+ * RegExp static properties.
+ *
+ * RegExp class static properties and their Perl counterparts:
+ *
+ *  RegExp.input                $_
+ *  RegExp.lastMatch            $&
+ *  RegExp.lastParen            $+
+ *  RegExp.leftContext          $`
+ *  RegExp.rightContext         $'
+ ','line_number':937,'multiline':True]['text':'
+ * ES 2017 draft rev 6a13789aa9e7c6de4e96b7d3e24d9e6eba6584ad 21.2.5.2.2
+ * steps 3, 9-14, except 12.a.i, 12.c.i.1.
+ ','line_number':1053,'multiline':True]['text':'
+   * WARNING: Despite the presence of spec step comment numbers, this
+   *          algorithm isn't consistent with any ES6 version, draft or
+   *          otherwise.  YOU HAVE BEEN WARNED.
+   ','line_number':1060,'multiline':True]['text':' Steps 1-2 performed by the caller. ','line_number':1066,'multiline':True]['text':' Handled by caller ','line_number':1084,'multiline':True]['text':' Steps 4-8 performed by the caller. ','line_number':1087,'multiline':True]['text':' Step 10. ','line_number':1089,'multiline':True]['text':'
+     * ES 2017 draft rev 6a13789aa9e7c6de4e96b7d3e24d9e6eba6584ad
+     * 21.2.2.2 step 2.
+     *   Let listIndex be the index into Input of the character that was
+     *   obtained from element index of str.
+     *
+     * In the spec, pattern match is performed with decoded Unicode code
+     * points, but our implementation performs it with UTF-16 encoded
+     * string.  In step 2, we should decrement lastIndex (index) if it
+     * points the trail surrogate that has corresponding lead surrogate.
+     *
+     *   var r = /\uD83D\uDC38/ug;
+     *   r.lastIndex = 1;
+     *   var str = "\uD83D\uDC38";
+     *   var result = r.exec(str); // pattern match starts from index 0
+     *   print(result.index);      // prints 0
+     *
+     * Note: this doesn't match the current spec text and result in
+     * different values for `result.index` under certain conditions.
+     * However, the spec will change to match our implementation's
+     * behavior. See https://github.com/tc39/ecma262/issues/128.
+     ','line_number':1091,'multiline':True]['text':' Steps 3, 11-14, except 12.a.i, 12.c.i.1. ','line_number':1118,'multiline':True]['text':' Steps 12.a.i, 12.c.i.i, 15 are done by Self-hosted function. ','line_number':1125,'multiline':True]['text':'
+ * ES 2017 draft rev 6a13789aa9e7c6de4e96b7d3e24d9e6eba6584ad 21.2.5.2.2
+ * steps 3, 9-25, except 12.a.i, 12.c.i.1, 15.
+ ','line_number':1130,'multiline':True]['text':' Execute regular expression and gather matches. ','line_number':1137,'multiline':True]['text':' Steps 3, 9-14, except 12.a.i, 12.c.i.1. ','line_number':1140,'multiline':True]['text':' Steps 12.a, 12.c. ','line_number':1147,'multiline':True]['text':' Steps 16-25 ','line_number':1153,'multiline':True]['text':'
+ * ES 2017 draft rev 6a13789aa9e7c6de4e96b7d3e24d9e6eba6584ad 21.2.5.2.2
+ * steps 3, 9-25, except 12.a.i, 12.c.i.1, 15.
+ ','line_number':1158,'multiline':True]['text':' Steps 3, 9-25, except 12.a.i, 12.c.i.1, 15. ','line_number':1175,'multiline':True]['text':'
+ * Separate interface for use by the JITs.
+ * This code cannot re-enter JIT code.
+ ','line_number':1179,'multiline':True]['text':' RegExp execution was successful only if the pairs have actually been','line_number':1186,'multiline':False]['text':' filled in. Note that IC code always passes a nullptr maybeMatches.','line_number':1187,'multiline':False]['text':' |maybeLastIndex| only contains a valid value when the RegExp execution','line_number':1193,'multiline':False]['text':' was not successful.','line_number':1194,'multiline':False]['text':'
+ * ES 2017 draft rev 6a13789aa9e7c6de4e96b7d3e24d9e6eba6584ad 21.2.5.2.2
+ * steps 3, 9-25, except 12.a.i, 12.c.i.1, 15.
+ * This code is inlined in CodeGenerator.cpp generateRegExpSearcherStub,
+ * changes to this code need to get reflected in there too.
+ ','line_number':1199,'multiline':True]['text':' Execute regular expression and gather matches. ','line_number':1208,'multiline':True]['text':' Steps 3, 9-14, except 12.a.i, 12.c.i.1. ','line_number':1211,'multiline':True]['text':' Steps 12.a, 12.c. ','line_number':1218,'multiline':True]['text':' Steps 16-25 ','line_number':1224,'multiline':True]['text':'
+ * ES 2017 draft rev 6a13789aa9e7c6de4e96b7d3e24d9e6eba6584ad 21.2.5.2.2
+ * steps 3, 9-25, except 12.a.i, 12.c.i.1, 15.
+ ','line_number':1229,'multiline':True]['text':' Steps 3, 9-25, except 12.a.i, 12.c.i.1, 15. ','line_number':1246,'multiline':True]['text':'
+ * Separate interface for use by the JITs.
+ * This code cannot re-enter JIT code.
+ ','line_number':1256,'multiline':True]['text':' RegExp execution was successful only if the pairs have actually been','line_number':1265,'multiline':False]['text':' filled in. Note that IC code always passes a nullptr maybeMatches.','line_number':1266,'multiline':False]['text':'
+ * ES 2017 draft rev 6a13789aa9e7c6de4e96b7d3e24d9e6eba6584ad 21.2.5.2.2
+ * steps 3, 9-14, except 12.a.i, 12.c.i.1.
+ ','line_number':1274,'multiline':True]['text':' Steps 3, 9-14, except 12.a.i, 12.c.i.1. ','line_number':1291,'multiline':True]['text':'
+ * Separate interface for use by the JITs.
+ * This code cannot re-enter JIT code.
+ ','line_number':1309,'multiline':True]['text':' If there is only a dollar, bail now. ','line_number':1375,'multiline':True]['text':' ES 2021 Table 52','line_number':1380,'multiline':False]['text':' https://tc39.es/ecma262/#table-45 (sic)','line_number':1381,'multiline':False]['text':' $n, $nn ','line_number':1384,'multiline':True]['text':' The result is implementation-defined. Do not substitute.','line_number':1387,'multiline':False]['text':' If num > captures.length(), the result is implementation-defined.','line_number':1396,'multiline':False]['text':' Consume next character only if num <= captures.length().','line_number':1397,'multiline':False]['text':' The result is implementation-defined. Do not substitute.','line_number':1406,'multiline':False]['text':' '$<': Named Captures','line_number':1418,'multiline':False]['text':' Step 1.','line_number':1420,'multiline':False]['text':' Step 2.b','line_number':1425,'multiline':False]['text':' Step 2.c','line_number':1429,'multiline':False]['text':' Step 2.d','line_number':1434,'multiline':False]['text':' We precompute named capture replacements in InitNamedCaptures.','line_number':1435,'multiline':False]['text':' They are stored in the order in which we will need them, so here','line_number':1436,'multiline':False]['text':' we can just take the next one in the list.','line_number':1437,'multiline':False]['text':' $<...>','line_number':1439,'multiline':False]['text':' Steps 2.d.iii-iv','line_number':1441,'multiline':False]['text':' SpiderMonkey extension','line_number':1457,'multiline':False]['text':'
+ * Precondition: |sb| already has necessary growth space reserved (as
+ * derived from FindReplaceLength), and has been inflated to TwoByte if
+ * necessary.
+ ','line_number':1536,'multiline':True]['text':' Move one of the constant portions of the replacement value. ','line_number':1557,'multiline':True]['text':'
+ * This function finds the list of named captures of the form
+ * "$<name>" in a replacement string and converts them into jsids, for
+ * use in InitNamedReplacements.
+ ','line_number':1581,'multiline':True]['text':' https://tc39.es/ecma262/#table-45, "$<" section','line_number':1597,'multiline':False]['text':' Step 2.b','line_number':1600,'multiline':False]['text':' Step 2.c','line_number':1604,'multiline':False]['text':' Step 2.d.i','line_number':1609,'multiline':False]['text':'
+ * When replacing named captures, the spec requires us to perform
+ * `Get(match.groups, name)` for each "$<name>". These `Get`s can be
+ * script-visible; for example, RegExp can be extended with an `exec`
+ * method that wraps `groups` in a proxy. To make sure that we do the
+ * right thing, if a regexp has named captures, we find the named
+ * capture replacements before beginning the actual replacement.
+ * This guarantees that we will call GetProperty once and only once for
+ * each "$<name>" in the replacement string, in the correct order.
+ *
+ * This function precomputes the results of step 2 of the '$<' case
+ * here: https://tc39.es/proposal-regexp-named-groups/#table-45, so
+ * that when we need to access the nth named capture in InterpretDollar,
+ * we can just use the nth value stored in namedCaptures.
+ ','line_number':1624,'multiline':True]['text':' https://tc39.es/ecma262/#table-45, "$<" section','line_number':1653,'multiline':False]['text':' Step 2.d.i','line_number':1657,'multiline':False]['text':' Step 2.d.ii','line_number':1660,'multiline':False]['text':' Step 2.d.iii','line_number':1665,'multiline':False]['text':' Step 2.d.iv','line_number':1671,'multiline':False]['text':' ES 2021 21.1.3.17.1 ','line_number':1725,'multiline':True]['text':' https://tc39.es/ecma262/#sec-getsubstitution','line_number':1726,'multiline':False]['text':' Step 1 (skipped).','line_number':1734,'multiline':False]['text':' Step 10 (reordered).','line_number':1736,'multiline':False]['text':' Step 2.','line_number':1747,'multiline':False]['text':' Steps 3-5 (skipped).','line_number':1750,'multiline':False]['text':' Step 6.','line_number':1752,'multiline':False]['text':' Step 7.','line_number':1761,'multiline':False]['text':' Step 8 (skipped).','line_number':1788,'multiline':False]['text':' Step 9.','line_number':1790,'multiline':False]['text':' Step 11.','line_number':1800,'multiline':False]['text':' Step 12.','line_number':1827,'multiline':False]['text':' Should be handled in different path.','line_number':1842,'multiline':False]['text':' This can only be called from self-hosted code.','line_number':1888,'multiline':False]['text':' Check if @@match, @@search, and exec are own data properties,','line_number':1995,'multiline':False]['text':' those values should be tested in selfhosted JS.','line_number':1996,'multiline':False]['text':' This can only be called from self-hosted code.','line_number':2026,'multiline':False]['text':'
+ * Pattern match the script to check if it is is indexing into a particular
+ * object, e.g. 'function(a) { return b[a]; }'. Avoid calling the script in
+ * such cases, which are used by javascript packers (particularly the popular
+ * Dean Edwards packer) to efficiently encode large scripts. We only handle the
+ * code patterns generated by such packers here.
+ ','line_number':2063,'multiline':True]['text':' This can only be called from self-hosted code.','line_number':2072,'multiline':False]['text':'
+   * JSOp::GetAliasedVar tells us exactly where to find the base object 'b'.
+   * Rule out the (unlikely) possibility of a function with environment
+   * objects since it would make our environment walk off.
+   ','line_number':2095,'multiline':True]['text':' Look for 'a' to be the lambda's first argument. ','line_number':2111,'multiline':True]['text':' 'b[a]' ','line_number':2117,'multiline':True]['text':' 'return b[a]' ','line_number':2123,'multiline':True]['text':' 'b' must behave like a normal object. ','line_number':2128,'multiline':True]['text':'
+ * Emulates `b[a]` property access, that is detected in GetElemBaseForLambda.
+ * It returns the property value only if the property is data property and the
+ * property value is a string.  Otherwise it returns undefined.
+ ','line_number':2144,'multiline':True]['text':' The object is already checked to be native in GetElemBaseForLambda,','line_number':2156,'multiline':False]['text':' but it can be swapped to another class that is non-native.','line_number':2157,'multiline':False]['text':' Return undefined to mark failure to get the property.','line_number':2158,'multiline':False]

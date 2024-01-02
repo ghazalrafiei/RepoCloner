@@ -1,0 +1,146 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * OpMsg packets are made up of the following sequence of possible fields.
+ *
+ * ----------------------------
+ * uint32_t           flags;     // One or more of the flags fields defined below
+ *                               // Bits 0-15 MUST be supported by the receiving peer
+ *                               // Bits 16-31 are OPTIONAL and may be ignored
+ * DocumentSequence[] docs;      // Zero or more name/BSON pairs describing the message
+ * optional<uint32_t> checksum;  // CRC-32C checksum for the preceeding data.
+ * ----------------------------
+ ','line_number':61,'multiline':True]['text':' Flags','line_number':78,'multiline':False]['text':'*
+     * Returns the unvalidated flags for the given message if it is an OP_MSG message.
+     * Returns 0 for other message kinds since they are the equivalent of no flags set.
+     * Throws if the message is too small to hold flags.
+     ','line_number':83,'multiline':True]['text':'*
+     * Replaces the flags in message with the supplied flags.
+     * Only legal on an otherwise valid OP_MSG message.
+     ','line_number':93,'multiline':True]['text':'*
+     * Adds flag to the list of set flags in message.
+     * Only legal on an otherwise valid OP_MSG message.
+     ','line_number':99,'multiline':True]['text':'*
+     * Removes a flag from the list of set flags in message.
+     * Only legal on an otherwise valid OP_MSG message.
+     ','line_number':107,'multiline':True]['text':'*
+     * Retrieves the checksum stored at the end of the message.
+     ','line_number':115,'multiline':True]['text':'*
+     * Add a checksum at the end of the message. Call this after setting size, requestId, and
+     * responseTo. The checksumPresent flag must *not* already be set.
+     ','line_number':120,'multiline':True]['text':'*
+     * If the checksum is present, unsets the checksumPresent flag and shrinks message by 4 bytes.
+     ','line_number':126,'multiline':True]['text':'*
+     * Parses and returns an OpMsg containing unowned BSON.
+     ','line_number':138,'multiline':True]['text':'*
+     * Parses and returns an OpMsg containing owned BSON.
+     ','line_number':143,'multiline':True]['text':'*
+     * Like serialize() but doesn't enforce max BSON size limits. This is almost never what you
+     * want. Prefer serialize() unless there's a good reason to skip the size check.
+     ','line_number':154,'multiline':True]['text':'*
+     * Makes all BSONObjs in this object share ownership with buffer.
+     ','line_number':160,'multiline':True]['text':'*
+     * Returns a pointer to the sequence with the given name or nullptr if there are none.
+     ','line_number':165,'multiline':True]['text':' Getting N sequences is technically O(N**2) but because there currently is at most 2','line_number':169,'multiline':False]['text':' sequences, this does either 1 or 2 comparisons. Consider making sequences a StringMap if','line_number':170,'multiline':False]['text':' there will be many sequences. This problem may also just go away with the IDL project.','line_number':171,'multiline':False]['text':'*
+ * An OpMsg that represents a request. This is a separate type from OpMsg only to provide better
+ * type-safety along with a place to hang request-specific methods.
+ ','line_number':190,'multiline':True]['text':' TODO in C++17 remove constructors so we can use aggregate initialization.','line_number':195,'multiline':False]['text':' There are no valid reasons for which a database name should not be a string, but','line_number':211,'multiline':False]['text':' some autogenerated tests can create invalid entries, and some areas of the codebase','line_number':212,'multiline':False]['text':' are required never to throw an exception; these functions should use this version','line_number':213,'multiline':False]['text':' of the getDatabase API.','line_number':214,'multiline':False]['text':' DO NOT ADD MEMBERS!  Since this type is essentially a strong typedef (see the class comment),','line_number':238,'multiline':False]['text':' it should not hold more data than an OpMsg. It should be freely interconvertible with OpMsg','line_number':239,'multiline':False]['text':' without issues like slicing.','line_number':240,'multiline':False]['text':'*
+ * Builds an OP_MSG message in-place in a Message buffer.
+ *
+ * While the OP_MSG format imposes no ordering of sections, in order to efficiently support our
+ * usage patterns, this class requires that all document sequences (if any) are built before the
+ * body. This allows repeatedly appending fields to the body until right before it is ready to be
+ * sent.
+ ','line_number':243,'multiline':True]['text':'*
+     * See the documentation for DocSequenceBuilder below.
+     ','line_number':260,'multiline':True]['text':'*
+     * Returns an empty builder for the body.
+     * It is an error to call this if a body has already been begun.  You must destroy or call
+     * done() on the returned builder before calling any methods on this object.
+     ','line_number':266,'multiline':True]['text':'*
+     * Returns a builder that can be used to append new fields to the body.
+     * It is an error to call this if beginBody() hasn't been called yet. It is an error to append
+     * elements with field names that already exist in the body. You must destroy or call done() on
+     * the returned builder before calling any methods on this object.
+     *
+     * TODO decide if it is worth keeping the begin/resume distinction in the public API.
+     ','line_number':276,'multiline':True]['text':'*
+     * Finish building and return a Message ready to give to the networking layer for transmission.
+     * It is illegal to call any methods on this object after calling this.
+     * Can throw BSONObjectTooLarge if the internal buffer has grown too large to be converted
+     * to a Message within the BSON size limit.
+     ','line_number':291,'multiline':True]['text':'*
+     * Like finish() but doesn't enforce max BSON size limits. This is almost never what you want.
+     * Prefer finish() unless there's a good reason to skip the size check.
+     ','line_number':299,'multiline':True]['text':'*
+     * Reset this object to its initial empty state. All previously appended data is lost.
+     ','line_number':305,'multiline':True]['text':'*
+     * Set to true in tests that need to be able to generate duplicate top-level fields to see how
+     * the server handles them. Is false by default, although the check only happens in debug
+     * builds.
+     ','line_number':318,'multiline':True]['text':'*
+     * Similar to finish, any calls on this object after are illegal.
+     ','line_number':325,'multiline':True]['text':'*
+     * Returns whether or not this builder is already building a body.
+     ','line_number':330,'multiline':True]['text':'*
+     * Reserves and claims the bytes requested in the internal BufBuilder.
+     ','line_number':337,'multiline':True]['text':' This is filled in by finish().','line_number':358,'multiline':False]['text':' flags (currently always 0).','line_number':359,'multiline':False]['text':' When adding members, remember to update reset().','line_number':362,'multiline':False]['text':'*
+ * Builds a document sequence in an OpMsgBuilder.
+ *
+ * Example:
+ *
+ * auto docSeq = msgBuilder.beginDocSequence("some.sequence");
+ *
+ * docSeq.append(BSON("a" << 1)); // Copy an obj into the sequence
+ *
+ * auto bob = docSeq.appendBuilder(); // Build an obj in-place
+ * bob.append("a", 2);
+ * bob.doneFast();
+ *
+ * docSeq.done(); // Or just let it go out of scope.
+ ','line_number':369,'multiline':True]['text':'*
+     * Indicates that the caller is done with this stream prior to destruction.
+     * Following this call, it is illegal to call any methods on this object.
+     ','line_number':399,'multiline':True]['text':'*
+     * Appends a single document to this sequence.
+     ','line_number':409,'multiline':True]['text':'*
+     * Returns a BSONObjBuilder that appends a single document to this sequence in place.
+     * It is illegal to call any methods on this DocSequenceBuilder until the returned builder
+     * is destroyed or done()/doneFast() is called on it.
+     ','line_number':416,'multiline':True]['text':'*
+ * Builds an OpMsgRequest object.
+ ','line_number':440,'multiline':True]['text':'*
+     * Creates an OpMsgRequest object.
+     * If tenant id exists in db name, then a "$tenant" will be appended to the OpMsgRequest
+     * object's body.
+     * Do not use if creating an OpMsgRequest in order to run a command directly (i.e.
+     * CommandHelpers::runCommandDirectly). This function does not set a ValidatedTenancyScope on
+     * the request itself, which will lead to the request being parsed incorrectly.
+     ','line_number':445,'multiline':True]['text':'*
+     * Creates an OpMsgRequest object and directly sets a validated tenancy scope on it.
+     ','line_number':459,'multiline':True]['text':' namespace mongo','line_number':469,'multiline':False]

@@ -1,0 +1,137 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * WT_REC_KV--
+ *	An on-page key/value item we're building.
+ ','line_number':9,'multiline':True]['text':' Data ','line_number':14,'multiline':True]['text':' Cell and cell's length ','line_number':15,'multiline':True]['text':' Total length of cell + data ','line_number':17,'multiline':True]['text':'
+ * WT_REC_DICTIONARY --
+ *  We optionally build a dictionary of values for leaf pages. Where
+ * two value cells are identical, only write the value once, the second
+ * and subsequent copies point to the original cell. The dictionary is
+ * fixed size, but organized in a skip-list to make searches faster.
+ ','line_number':20,'multiline':True]['text':' Hash value ','line_number':28,'multiline':True]['text':' Matching cell ','line_number':29,'multiline':True]['text':' Skiplist ','line_number':31,'multiline':True]['text':'
+ * WT_REC_CHUNK --
+ *	Reconciliation split chunk.
+ ','line_number':35,'multiline':True]['text':'
+     * The recno and entries fields are the starting record number of the split chunk (for
+     * column-store splits), and the number of entries in the split chunk.
+     *
+     * The key for a row-store page; no column-store key is needed because the page's recno, stored
+     * in the recno field, is the column-store key.
+     ','line_number':40,'multiline':True]['text':' Saved minimum split-size boundary information. ','line_number':52,'multiline':True]['text':' byte offset ','line_number':58,'multiline':True]['text':' disk-image ','line_number':60,'multiline':True]['text':' For fixed-length column store, track where the time windows start and how many we have. ','line_number':62,'multiline':True]['text':'
+ * WT_DELETE_HS_UPD --
+ *	Update that needs to be deleted from the history store.
+ ','line_number':67,'multiline':True]['text':' Insert list reference ','line_number':72,'multiline':True]['text':' Original on-page reference ','line_number':73,'multiline':True]['text':'
+ * Reconciliation is the process of taking an in-memory page, walking each entry
+ * in the page, building a backing disk image in a temporary buffer representing
+ * that information, and writing that buffer to disk.  What could be simpler?
+ *
+ * WT_RECONCILE --
+ *	Information tracking a single page reconciliation.
+ ','line_number':78,'multiline':True]['text':' Page being reconciled ','line_number':87,'multiline':True]['text':' Caller's configuration ','line_number':89,'multiline':True]['text':'
+     * Track start/stop checkpoint generations to decide if history store table records are correct.
+     ','line_number':91,'multiline':True]['text':' Track the oldest running transaction. ','line_number':97,'multiline':True]['text':' Track the oldest running id. This one doesn't consider checkpoint. ','line_number':100,'multiline':True]['text':' Track the pinned timestamp at the time reconciliation started. ','line_number':103,'multiline':True]['text':' Track the page's maximum transaction/timestamp. ','line_number':106,'multiline':True]['text':'
+     * When we do not find any update to be written for the whole page, we would like to mark
+     * eviction failed in the case of update-restore. There is no progress made by eviction in such
+     * a case, the page size stays the same and considering it a success could force the page
+     * through eviction repeatedly.
+     ','line_number':110,'multiline':True]['text':'
+     * When we can't mark the page clean after reconciliation (for example, checkpoint or eviction
+     * found some uncommitted updates), there's a leave-dirty flag.
+     ','line_number':118,'multiline':True]['text':'
+     * Track if reconciliation has seen any overflow items. If a leaf page with no overflow items is
+     * written, the parent page's address cell is set to the leaf-no-overflow type. This means we
+     * can delete the leaf page without reading it because we don't have to discard any overflow
+     * items it might reference.
+     *
+     * The test is per-page reconciliation, that is, once we see an overflow item on the page, all
+     * subsequent leaf pages written for the page will not be leaf-no-overflow type, regardless of
+     * whether or not they contain overflow items. In other words, leaf-no-overflow is not
+     * guaranteed to be set on every page that doesn't contain an overflow item, only that if it is
+     * set, the page contains no overflow items. XXX This was originally done because raw
+     * compression couldn't do better, now that raw compression has been removed, we should do
+     * better.
+     ','line_number':124,'multiline':True]['text':'
+     * Track if reconciliation of a row-store leaf page has seen empty (zero length) values. We
+     * don't write out anything for empty values, so if there are empty values on a page, we have to
+     * make two passes over the page when it's read to figure out how many keys it has, expensive in
+     * the common case of no empty values and (entries / 2) keys. Likewise, a page with only empty
+     * values is another common data set, and keys on that page will be equal to the number of
+     * entries. In both cases, set a flag in the page's on-disk header.
+     *
+     * The test is per-page reconciliation as described above for the overflow-item test.
+     ','line_number':140,'multiline':True]['text':'
+     * Reconciliation gets tricky if we have to split a page, which happens when the disk image we
+     * create exceeds the page type's maximum disk image size.
+     *
+     * First, the target size of the page we're building. In FLCS, this is the size of both the
+     * primary and auxiliary portions.
+     ','line_number':152,'multiline':True]['text':' Page size ','line_number':159,'multiline':True]['text':'
+     * Second, the split size: if we're doing the page layout, split to a smaller-than-maximum page
+     * size when a split is required so we don't repeatedly split a packed page.
+     ','line_number':161,'multiline':True]['text':' Split page size ','line_number':165,'multiline':True]['text':' Minimum split page size ','line_number':166,'multiline':True]['text':'
+     * We maintain two split chunks in the memory during reconciliation to be written out as pages.
+     * As we get to the end of the data, if the last one turns out to be smaller than the minimum
+     * split size, we go back into the penultimate chunk and split at this minimum split size
+     * boundary. This moves some data from the penultimate chunk to the last chunk, hence increasing
+     * the size of the last page written without decreasing the penultimate page size beyond the
+     * minimum split size. For this reason, we maintain an expected split percentage boundary and a
+     * minimum split percentage boundary.
+     *
+     * Chunks are referenced by current and previous pointers. In case of a split, previous
+     * references the first chunk and current switches to the second chunk. If reconciliation
+     * generates more split chunks, the previous chunk is written to the disk and current and
+     * previous swap.
+     ','line_number':168,'multiline':True]['text':' Base size needed for a chunk memory image ','line_number':184,'multiline':True]['text':'
+     * We track current information about the current record number, the number of entries copied
+     * into the disk image buffer, where we are in the buffer, how much memory remains, and the
+     * current min/max of the timestamps. Those values are packaged here rather than passing
+     * pointers to stack locations around the code.
+     ','line_number':186,'multiline':True]['text':' Current record number ','line_number':192,'multiline':True]['text':' Current number of entries ','line_number':193,'multiline':True]['text':' Current first free byte ','line_number':194,'multiline':True]['text':' Remaining space in this chunk ','line_number':195,'multiline':True]['text':' Remaining space in this chunk to put a minimum size boundary ','line_number':196,'multiline':True]['text':'
+     * Fixed-length column store divides the disk image into two sections, primary and auxiliary,
+     * and we need to track both of them.
+     ','line_number':198,'multiline':True]['text':' First auxiliary byte ','line_number':202,'multiline':True]['text':' Current number of auxiliary entries ','line_number':203,'multiline':True]['text':' Current first free auxiliary byte ','line_number':204,'multiline':True]['text':' Current remaining auxiliary space ','line_number':205,'multiline':True]['text':'
+     * Counters tracking how much time information is included in reconciliation for each page that
+     * is written to disk. The number of entries on a page is limited to a 32 bit number so these
+     * counters can be too.
+     ','line_number':207,'multiline':True]['text':' AUTOMATIC FLAG VALUE GENERATION START 0 ','line_number':220,'multiline':True]['text':' AUTOMATIC FLAG VALUE GENERATION STOP 16 ','line_number':228,'multiline':True]['text':'
+     * Saved update list, supporting WT_REC_HS configurations. While reviewing updates for each
+     * page, we save WT_UPDATE lists here, and then move them to per-block areas as the blocks are
+     * defined.
+     ','line_number':231,'multiline':True]['text':' Saved updates ','line_number':236,'multiline':True]['text':' Size of saved update structures ','line_number':239,'multiline':True]['text':'
+     * List of updates to be deleted from the history store. While reviewing updates for each page,
+     * we save the updates that needs to be deleted from history store here, and then delete them
+     * after we have built the disk image.
+     ','line_number':241,'multiline':True]['text':' Updates to delete from history store ','line_number':246,'multiline':True]['text':' List of pages we've written so far. ','line_number':250,'multiline':True]['text':'
+     * Root pages are written when wrapping up the reconciliation, remember the image we're going to
+     * write.
+     ','line_number':255,'multiline':True]['text':'
+     * We don't need to keep the 0th key around on internal pages, the search code ignores them as
+     * nothing can sort less by definition. There's some trickiness here, see the code for comments
+     * on how these fields work.
+     ','line_number':262,'multiline':True]['text':' Row-store internal page 0th key ','line_number':267,'multiline':True]['text':' Dictionary ','line_number':269,'multiline':True]['text':' Next, max entries ','line_number':270,'multiline':True]['text':' Skiplist head. ','line_number':271,'multiline':True]['text':' Key/Value being built ','line_number':274,'multiline':True]['text':' Key/Value being built ','line_number':276,'multiline':True]['text':' Last key/value built ','line_number':277,'multiline':True]['text':' Don't increase key prefix-compression unless there's a significant gain. ','line_number':279,'multiline':True]['text':' Last prefix compression ','line_number':281,'multiline':True]['text':' If can prefix-compress next key ','line_number':283,'multiline':True]['text':' If prefix compression configured ','line_number':284,'multiline':True]['text':' If can suffix-compress next key ','line_number':285,'multiline':True]['text':' If suffix compression configured ','line_number':286,'multiline':True]['text':' If it's a bulk load ','line_number':288,'multiline':True]['text':' If it's a salvage operation ','line_number':290,'multiline':True]['text':' Used the history store table ','line_number':292,'multiline':True]['text':' Used update/restoration ','line_number':293,'multiline':True]['text':' Debugging information ','line_number':295,'multiline':True]['text':'
+     * XXX In the case of a modified update, we may need a copy of the current value as a set of
+     * bytes. We call back into the btree code using a fake cursor to do that work. This a layering
+     * violation and fragile, we need a better solution.
+     ','line_number':297,'multiline':True]['text':'
+     * Variables to track reconciliation calls for pages containing cells with time window values
+     * and prepared transactions.
+     ','line_number':304,'multiline':True]['text':'
+     * When removing a key due to a tombstone with a durable timestamp of "none", we also remove the
+     * history store contents associated with that key. Keep the pertinent state here: a flag to say
+     * whether this is appropriate, and a cached history store cursor for doing it.
+     ','line_number':312,'multiline':True]['text':' Update to write (or NULL) ','line_number':322,'multiline':True]['text':' The tombstone to write (or NULL) ','line_number':323,'multiline':True]['text':' An element on the row's update chain was saved ','line_number':327,'multiline':True]['text':' Tombstone without a timestamp ','line_number':328,'multiline':True]['text':'
+ * WT_CHILD_RELEASE, WT_CHILD_RELEASE_ERR --
+ *	Macros to clean up during internal-page reconciliation, releasing the hazard pointer we're
+ * holding on a child page.
+ ','line_number':331,'multiline':True]['text':'
+ * WT_CHILD_MODIFY_STATE --
+ *	We review child pages (while holding the child page's WT_REF lock), during internal-page
+ * reconciliation. This structure encapsulates the child page's returned information/state.
+ ','line_number':349,'multiline':True]['text':' Ignored child ','line_number':356,'multiline':True]['text':' Modified child ','line_number':357,'multiline':True]['text':' Original child ','line_number':358,'multiline':True]['text':' Deleted child: proxy ','line_number':359,'multiline':True]['text':' Returned child state ','line_number':360,'multiline':True]['text':' WT_CHILD_PROXY state fast-truncate information ','line_number':362,'multiline':True]['text':' If currently holding a child hazard pointer ','line_number':364,'multiline':True]['text':'
+ * Macros from fixed-length entries to/from bytes.
+ ','line_number':367,'multiline':True]

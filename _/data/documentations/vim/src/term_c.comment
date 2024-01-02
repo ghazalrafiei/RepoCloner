@@ -1,0 +1,783 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]['text':'
+ *
+ * term.c: functions for controlling the terminal
+ *
+ * primitive termcap support for Amiga and Win32 included
+ *
+ * NOTE: padding and variable substitution is not performed,
+ * when compiling without HAVE_TGETENT, we use tputs() and tgoto() dummies.
+ ','line_number':9,'multiline':True]['text':'
+ * Some systems have a prototype for tgetstr() with (char *) instead of
+ * (char **). This define removes that prototype. We include our own prototype
+ * below.
+ ','line_number':19,'multiline':True]['text':' seems to be required for some Linux','line_number':30,'multiline':False]['text':'
+ * A few linux systems define outfuntype in termcap.h to be used as the third
+ * argument for tputs().
+ ','line_number':36,'multiline':True]['text':' start of keys that are not directly used by Vim but can be mapped','line_number':53,'multiline':False]['text':' Change this to "if 1" to debug what happens with termresponse.','line_number':70,'multiline':False]['text':'','line_number':76,'multiline':True]['text':'
+ * Here is our own prototype for tgetstr(), any prototypes from the include
+ * files have been disabled by the define at the start of this file.
+ ','line_number':82,'multiline':True]['text':' send request when switching to RAW mode','line_number':90,'multiline':False]['text':' did send request, checking for response','line_number':91,'multiline':False]['text':' received response','line_number':92,'multiline':False]['text':' timed out','line_number':93,'multiline':False]['text':' when request was sent, -1 for never','line_number':98,'multiline':False]['text':' Request Terminal Version status:','line_number':103,'multiline':False]['text':' Request Cursor position report:','line_number':106,'multiline':False]['text':' Request xterm compatibility check:','line_number':109,'multiline':False]['text':' Request foreground color report:','line_number':114,'multiline':False]['text':' Request background color report:','line_number':124,'multiline':False]['text':' Request cursor blinking mode report:','line_number':127,'multiline':False]['text':' Request cursor style report:','line_number':130,'multiline':False]['text':' Request window's position report:','line_number':133,'multiline':False]['text':' The t_8u code may default to a value but get reset when the term response is','line_number':150,'multiline':False]['text':' received.  To avoid redrawing too often, only redraw when t_8u is not reset','line_number':151,'multiline':False]['text':' and it was supposed to be written.  Unless t_8u was set explicitly.','line_number':152,'multiline':False]['text':' FALSE -> don't output t_8u yet','line_number':153,'multiline':False]['text':' MAYBE -> tried outputting t_8u while FALSE','line_number':154,'multiline':False]['text':' OK    -> can write t_8u','line_number':155,'multiline':False]['text':'
+ * Don't declare these variables if termcap.h contains them.
+ * Autoconf checks if these variables should be declared extern (not all
+ * systems have them).
+ * Some versions define ospeed to be speed_t, but that is incompatible with
+ * BSD, where ospeed is short and speed_t is long.
+ ','line_number':160,'multiline':True]['text':' HAVE_TGETENT','line_number':185,'multiline':False]['text':' detected 8-bit terminal','line_number':187,'multiline':False]['text':' TRUE if the Vim window has focus','line_number':190,'multiline':False]['text':' When the cursor shape was detected these values are used:','line_number':194,'multiline':False]['text':' 1: block, 2: underline, 3: vertical bar','line_number':195,'multiline':False]['text':' The blink flag from the style response may be inverted from the actual','line_number':198,'multiline':False]['text':' blinking state, xterm XORs the flags.','line_number':199,'multiline':False]['text':' The blink flag from the blinking-cursor mode response','line_number':202,'multiline':False]['text':'
+ * The builtin termcap entries.
+ *
+ * The entries are also included when HAVE_TGETENT is defined, the system
+ * termcap may be incomplete and a few Vim-specific entries are added.
+ *
+ * When HAVE_TGETENT is defined, the builtin entries can be accessed with
+ * "builtin_amiga", "builtin_ansi", "builtin_debug", etc.
+ *
+ * Each termcap is a list of tcap_entry_T.  See parse_builtin_tcap() for all
+ * details.
+ *
+ * Entries marked with "guessed" may be wrong.
+ ','line_number':206,'multiline':True]['text':' either a KS_xxx code (>= 0), or a K_xxx code.','line_number':222,'multiline':False]['text':' value','line_number':223,'multiline':False]['text':'
+ * Standard ANSI terminal, default for Unix.
+ ','line_number':226,'multiline':True]['text':' guessed','line_number':247,'multiline':False]['text':' end marker','line_number':260,'multiline':False]['text':'
+ * VT320 is working as an ANSI terminal compatible DEC terminal.
+ * (it covers VT1x0, VT2x0 and VT3x0 up to VT320 on VMS as well)
+ * TODO:- rewrite ESC[ codes to CSI
+ *      - keyboard languages (CSI ? 26 n)
+ ','line_number':263,'multiline':True]['text':' allow 8 colors','line_number':285,'multiline':False]['text':' bold mode','line_number':288,'multiline':False]['text':' normal mode','line_number':289,'multiline':False]['text':' exit underscore mode','line_number':290,'multiline':False]['text':' underscore mode','line_number':291,'multiline':False]['text':' italic mode: blue text on yellow','line_number':292,'multiline':False]['text':' italic mode end','line_number':293,'multiline':False]['text':' set background color (ANSI)','line_number':294,'multiline':False]['text':' set foreground color (ANSI)','line_number':295,'multiline':False]['text':' set screen background color','line_number':296,'multiline':False]['text':' set screen foreground color','line_number':297,'multiline':False]['text':' Note: cursor key sequences for application cursor mode are omitted,','line_number':316,'multiline':False]['text':' because they interfere with typed commands: <Esc>OA.','line_number':317,'multiline':False]['text':' Help','line_number':332,'multiline':False]['text':' Select','line_number':333,'multiline':False]['text':' These sequences starting with <Esc> O may interfere with what the user','line_number':344,'multiline':False]['text':' is typing.  Remove these if that bothers you.','line_number':345,'multiline':False]['text':' keypad plus','line_number':346,'multiline':False]['text':' keypad minus','line_number':347,'multiline':False]['text':' keypad /','line_number':348,'multiline':False]['text':' keypad *','line_number':349,'multiline':False]['text':' keypad Enter','line_number':350,'multiline':False]['text':' keypad 0','line_number':351,'multiline':False]['text':' keypad 1','line_number':352,'multiline':False]['text':' keypad 2','line_number':353,'multiline':False]['text':' keypad 3','line_number':354,'multiline':False]['text':' keypad 4','line_number':355,'multiline':False]['text':' keypad 5','line_number':356,'multiline':False]['text':' keypad 6','line_number':357,'multiline':False]['text':' keypad 7','line_number':358,'multiline':False]['text':' keypad 8','line_number':359,'multiline':False]['text':' keypad 9','line_number':360,'multiline':False]['text':' for some reason 0177 doesn't work','line_number':361,'multiline':False]['text':' end marker','line_number':363,'multiline':False]['text':'
+ * Ordinary vt52
+ ','line_number':366,'multiline':True]['text':' end marker','line_number':391,'multiline':False]['text':'
+ * Builtin xterm with Vim-specific entries.
+ ','line_number':394,'multiline':True]['text':' These are now under control of the 'keyprotocol' option, see','line_number':456,'multiline':False]['text':' "builtin_mok2".','line_number':457,'multiline':False]['text':' {(int)KS_CTI,	"\033[>4;2m"},','line_number':458,'multiline':False]['text':' {(int)KS_CRK,	"\033[?4m"},','line_number':459,'multiline':False]['text':' {(int)KS_CTE,	"\033[>4;m"},','line_number':460,'multiline':False]['text':' An extra set of cursor keys for vt100 mode','line_number':497,'multiline':False]['text':' Esc [ A or Esc [ 1 ; A','line_number':498,'multiline':False]['text':' Esc [ B or Esc [ 1 ; B','line_number':499,'multiline':False]['text':' Esc [ C or Esc [ 1 ; C','line_number':500,'multiline':False]['text':' Esc [ D or Esc [ 1 ; D','line_number':501,'multiline':False]['text':' An extra set of function keys for vt100 mode','line_number':502,'multiline':False]['text':' Esc [ H  or Esc 1 ; H','line_number':523,'multiline':False]['text':' {K_S_HOME,		"\033O2H"},','line_number':524,'multiline':False]['text':' {K_C_HOME,		"\033O5H"},','line_number':525,'multiline':False]['text':' other Home','line_number':527,'multiline':False]['text':' other Home','line_number':528,'multiline':False]['text':' Esc [ F or Esc 1 ; F','line_number':529,'multiline':False]['text':' {K_S_END,		"\033O2F"},','line_number':530,'multiline':False]['text':' {K_C_END,		"\033O5F"},','line_number':531,'multiline':False]['text':' other End','line_number':533,'multiline':False]['text':' keypad plus','line_number':537,'multiline':False]['text':' keypad minus','line_number':538,'multiline':False]['text':' keypad /','line_number':539,'multiline':False]['text':' keypad *','line_number':540,'multiline':False]['text':' keypad Enter','line_number':541,'multiline':False]['text':' keypad .','line_number':542,'multiline':False]['text':' keypad 0','line_number':543,'multiline':False]['text':' keypad 1','line_number':544,'multiline':False]['text':' keypad 2','line_number':545,'multiline':False]['text':' keypad 3','line_number':546,'multiline':False]['text':' keypad 4','line_number':547,'multiline':False]['text':' keypad 5','line_number':548,'multiline':False]['text':' keypad 6','line_number':549,'multiline':False]['text':' keypad 7','line_number':550,'multiline':False]['text':' keypad 8','line_number':551,'multiline':False]['text':' keypad 9','line_number':552,'multiline':False]['text':' keypad Del','line_number':553,'multiline':False]['text':' paste start','line_number':554,'multiline':False]['text':' paste end','line_number':555,'multiline':False]['text':' F0','line_number':558,'multiline':False]['text':' F13','line_number':559,'multiline':False]['text':' F14 and F15 are missing, because they send the same codes as the undo','line_number':560,'multiline':False]['text':' and help key, although they don't work on all keyboards.','line_number':561,'multiline':False]['text':' F16','line_number':562,'multiline':False]['text':' F17','line_number':563,'multiline':False]['text':' F18','line_number':564,'multiline':False]['text':' F19','line_number':565,'multiline':False]['text':' F20','line_number':566,'multiline':False]['text':' F21','line_number':568,'multiline':False]['text':' F22','line_number':569,'multiline':False]['text':' F23','line_number':570,'multiline':False]['text':' F24','line_number':571,'multiline':False]['text':' F25','line_number':572,'multiline':False]['text':' F26','line_number':573,'multiline':False]['text':' F27','line_number':574,'multiline':False]['text':' F28','line_number':575,'multiline':False]['text':' F29','line_number':576,'multiline':False]['text':' F30','line_number':577,'multiline':False]['text':' F31','line_number':579,'multiline':False]['text':' F32','line_number':580,'multiline':False]['text':' F33','line_number':581,'multiline':False]['text':' F34','line_number':582,'multiline':False]['text':' F35','line_number':583,'multiline':False]['text':' F36','line_number':584,'multiline':False]['text':' F37','line_number':585,'multiline':False]['text':' end marker','line_number':587,'multiline':False]['text':'
+ * Additions for using modifyOtherKeys level 2.  Same as what is used for
+ * xterm.
+ ','line_number':590,'multiline':True]['text':' t_TI enables modifyOtherKeys level 2','line_number':595,'multiline':False]['text':' XTQMODKEYS was added in xterm version 377: "CSI ? 4 m" which should','line_number':598,'multiline':False]['text':' return "{lead} > 4 ; Pv m".  Before version 377 we expect it to have no','line_number':599,'multiline':False]['text':' effect.','line_number':600,'multiline':False]['text':' t_TE disables modifyOtherKeys','line_number':603,'multiline':False]['text':' end marker','line_number':606,'multiline':False]['text':'
+ * Additions for using the Kitty keyboard protocol.
+ ','line_number':609,'multiline':True]['text':' t_TI enables the kitty keyboard protocol.','line_number':613,'multiline':False]['text':' t_RK requests the kitty keyboard protocol state','line_number':616,'multiline':False]['text':' t_TE also disables modifyOtherKeys, because t_TI from xterm may already','line_number':619,'multiline':False]['text':' have been used.','line_number':620,'multiline':False]['text':' end marker','line_number':623,'multiline':False]['text':'
+ * Additions for using the RGB colors
+ ','line_number':627,'multiline':True]['text':' These are printf strings, not terminal codes.','line_number':631,'multiline':False]['text':' end marker','line_number':636,'multiline':False]['text':'
+ * iris-ansi for Silicon Graphics machines.
+ ','line_number':640,'multiline':True]['text':' The scroll region is not working as Vim expects.','line_number':658,'multiline':False]['text':' These aren't documented','line_number':666,'multiline':False]['text':' These aren't documented','line_number':667,'multiline':False]['text':' allow 8 colors','line_number':675,'multiline':False]['text':' italic mode on','line_number':676,'multiline':False]['text':' italic mode off','line_number':677,'multiline':False]['text':' underline on','line_number':678,'multiline':False]['text':' underline off','line_number':679,'multiline':False]['text':' set background color (ANSI)','line_number':681,'multiline':False]['text':' set foreground color (ANSI)','line_number':682,'multiline':False]['text':' set screen background color','line_number':683,'multiline':False]['text':' set screen foreground color','line_number':684,'multiline':False]['text':' set background color (ANSI)','line_number':686,'multiline':False]['text':' set foreground color (ANSI)','line_number':687,'multiline':False]['text':' set screen background color','line_number':688,'multiline':False]['text':' set screen foreground color','line_number':689,'multiline':False]['text':' guessed','line_number':691,'multiline':False]['text':' guessed','line_number':692,'multiline':False]['text':' ST "String Terminator"','line_number':706,'multiline':False]['text':' ST "String Terminator"','line_number':708,'multiline':False]['text':' end marker','line_number':754,'multiline':False]['text':'
+ * These codes are valid when nansi.sys or equivalent has been installed.
+ * Function keys on a PC are preceded with a NUL. These are converted into
+ * K_NUL '\316' in mch_inchar(), because we cannot handle NULs in key codes.
+ * CTRL-arrow is used instead of SHIFT-arrow.
+ ','line_number':757,'multiline':True]['text':' reverse: black on lightgrey','line_number':769,'multiline':False]['text':' bold: white text','line_number':770,'multiline':False]['text':' standout end','line_number':771,'multiline':False]['text':' standout: white on blue','line_number':772,'multiline':False]['text':' italic mode: blue text on yellow','line_number':773,'multiline':False]['text':' italic mode end','line_number':774,'multiline':False]['text':' underscore mode: cyan text on red','line_number':775,'multiline':False]['text':' underscore mode end','line_number':776,'multiline':False]['text':' allow 8 colors','line_number':777,'multiline':False]['text':' set background color','line_number':779,'multiline':False]['text':' set foreground color','line_number':780,'multiline':False]['text':' set background color','line_number':782,'multiline':False]['text':' set foreground color','line_number':783,'multiline':False]['text':' reset colors','line_number':785,'multiline':False]['text':' guessed','line_number':787,'multiline':False]['text':' guessed','line_number':815,'multiline':False]['text':' guessed','line_number':816,'multiline':False]['text':' guessed','line_number':827,'multiline':False]['text':' guessed','line_number':828,'multiline':False]['text':' end marker','line_number':836,'multiline':False]['text':'
+ * These codes are valid for the Win32 Console.  The entries that start with
+ * ESC | are translated into console calls in os_win32.c.  The function keys
+ * are also translated in os_win32.c.
+ ','line_number':839,'multiline':True]['text':' clear to end of line','line_number':845,'multiline':False]['text':' add new blank line','line_number':846,'multiline':False]['text':' add number of new blank lines','line_number':848,'multiline':False]['text':' add number of new blank lines','line_number':850,'multiline':False]['text':' delete line','line_number':852,'multiline':False]['text':' delete number of lines','line_number':854,'multiline':False]['text':' delete number of lines','line_number':857,'multiline':False]['text':' clear screen','line_number':860,'multiline':False]['text':' clear to end of display','line_number':861,'multiline':False]['text':' cursor invisible','line_number':862,'multiline':False]['text':' cursor visible','line_number':863,'multiline':False]['text':' normal','line_number':865,'multiline':False]['text':' reverse: black on lightgray','line_number':866,'multiline':False]['text':' bold: white on black','line_number':867,'multiline':False]['text':' standout: white on blue','line_number':869,'multiline':False]['text':' standout end','line_number':870,'multiline':False]['text':' standout: high intensity','line_number':872,'multiline':False]['text':' standout end','line_number':873,'multiline':False]['text':' italic: blue text on yellow','line_number':875,'multiline':False]['text':' italic end','line_number':876,'multiline':False]['text':' underscore: cyan text on red','line_number':877,'multiline':False]['text':' underscore end','line_number':878,'multiline':False]['text':' allow 16 colors','line_number':879,'multiline':False]['text':' set background color','line_number':881,'multiline':False]['text':' set foreground color','line_number':882,'multiline':False]['text':' set background color','line_number':884,'multiline':False]['text':' set foreground color','line_number':885,'multiline':False]['text':' save to move cur in reverse mode','line_number':888,'multiline':False]['text':' cursor motion','line_number':893,'multiline':False]['text':' cursor motion','line_number':895,'multiline':False]['text':' visual bell','line_number':897,'multiline':False]['text':' put terminal in termcap mode','line_number':898,'multiline':False]['text':' out of termcap mode','line_number':899,'multiline':False]['text':' scroll region','line_number':901,'multiline':False]['text':' scroll region','line_number':903,'multiline':False]['text':' end marker','line_number':967,'multiline':False]['text':'
+ * GUI uses made-up codes, only used inside Vim.
+ ','line_number':971,'multiline':True]['text':' attributes switched on with 'h', off with * 'H'','line_number':993,'multiline':False]['text':' HL_ALL','line_number':994,'multiline':False]['text':' HL_INVERSE','line_number':995,'multiline':False]['text':' HL_BOLD','line_number':996,'multiline':False]['text':' HL_STANDOUT','line_number':997,'multiline':False]['text':' HL_STANDOUT','line_number':998,'multiline':False]['text':' HL_UNDERLINE','line_number':999,'multiline':False]['text':' HL_UNDERLINE','line_number':1000,'multiline':False]['text':' HL_UNDERCURL','line_number':1001,'multiline':False]['text':' HL_UNDERCURL','line_number':1002,'multiline':False]['text':' HL_STRIKETHROUGH','line_number':1003,'multiline':False]['text':' HL_STRIKETHROUGH','line_number':1004,'multiline':False]['text':' HL_ITALIC','line_number':1005,'multiline':False]['text':' HL_ITALIC','line_number':1006,'multiline':False]['text':' cursor-left = BS','line_number':1011,'multiline':False]['text':' cursor-right = CTRL-L','line_number':1012,'multiline':False]['text':' there are no key sequences here, the GUI sequences are recognized','line_number':1018,'multiline':False]['text':' in check_termcode()','line_number':1019,'multiline':False]['text':' end marker','line_number':1021,'multiline':False]['text':'
+ * Amiga console window, default for Amiga.
+ ','line_number':1025,'multiline':True]['text':' allow 8 colors','line_number':1056,'multiline':False]['text':' set background color','line_number':1058,'multiline':False]['text':' set foreground color','line_number':1059,'multiline':False]['text':' set background color','line_number':1061,'multiline':False]['text':' set foreground color','line_number':1062,'multiline':False]['text':' reset colors','line_number':1064,'multiline':False]['text':' guessed','line_number':1067,'multiline':False]['text':' some compilers don't dig "\2330"','line_number':1091,'multiline':False]['text':' 101 key keyboard','line_number':1112,'multiline':False]['text':' 101 key keyboard','line_number':1113,'multiline':False]['text':' 101 key keyboard','line_number':1114,'multiline':False]['text':' 101 key keyboard','line_number':1115,'multiline':False]['text':' 101 key keyboard','line_number':1116,'multiline':False]['text':' shifted home key','line_number':1119,'multiline':False]['text':' shifted insert key','line_number':1120,'multiline':False]['text':' shifted end key','line_number':1121,'multiline':False]['text':' end marker','line_number':1123,'multiline':False]['text':'
+ * The most minimal terminal: only clear screen and cursor positioning.
+ ','line_number':1126,'multiline':True]['text':' end marker','line_number':1137,'multiline':False]['text':'
+ * Terminal used for debugging.
+ ','line_number':1140,'multiline':True]['text':' end marker','line_number':1327,'multiline':False]['text':'
+ * List of builtin terminals.
+ ','line_number':1330,'multiline':True]['text':' name, such as "xterm"','line_number':1334,'multiline':False]['text':' table with entries for bitc_name','line_number':1335,'multiline':False]['text':' Unix and Generic','line_number':1339,'multiline':False]['text':' MS-Windows','line_number':1346,'multiline':False]['text':' Other systems','line_number':1350,'multiline':False]['text':' end marker','line_number':1358,'multiline':False]['text':'
+ * DEFAULT_TERM is used, when no terminal is specified with -T option or $TERM.
+ ','line_number':1389,'multiline':True]['text':'
+ * Term_strings contains currently used terminal output strings.
+ * It is initialized with the default values by parse_builtin_tcap().
+ * The values can be changed by setting the option with the same name.
+ ','line_number':1417,'multiline':True]['text':' need to fill termleader[]','line_number':1424,'multiline':False]['text':' for check_termcode()','line_number':1425,'multiline':False]['text':' check for key code response','line_number':1427,'multiline':False]['text':'
+ * Structure and table to store terminal features that can be detected by
+ * querying the terminal.  Either by inspecting the termresponse or a more
+ * specific request.  Besides this there are:
+ * t_colors - number of colors supported
+ ','line_number':1430,'multiline':True]['text':' Values for tpr_status.','line_number':1442,'multiline':False]['text':' use "xterm" for 'ttymouse'','line_number':1446,'multiline':False]['text':' use "xterm2" for 'ttymouse'','line_number':1447,'multiline':False]['text':' use "sgr" for 'ttymouse'','line_number':1448,'multiline':False]['text':' can request the cursor style without messing up the display','line_number':1450,'multiline':False]['text':' can request the cursor blink mode without messing up the display','line_number':1452,'multiline':False]['text':' can set the underline color with t_8u without resetting other colors','line_number':1454,'multiline':False]['text':' mouse support - TPR_MOUSE_XTERM, TPR_MOUSE_XTERM2 or TPR_MOUSE_SGR','line_number':1456,'multiline':False]['text':' term response indicates kitty','line_number':1458,'multiline':False]['text':' table size','line_number':1460,'multiline':False]['text':'
+ * Initialize the term_props table.
+ * When "all" is FALSE only set those that are detected from the version
+ * response.
+ ','line_number':1465,'multiline':True]['text':'
+ * Find the builtin termcap entries for "term".
+ * This also recognizes similar names.  E.g. "xterm-256color" finds the "xterm"
+ * entry.
+ * Returns NULL when "term" is not found.
+ ','line_number':1514,'multiline':True]['text':' end marker','line_number':1526,'multiline':False]['text':'
+ * Apply entries from a builtin termcap.
+ ','line_number':1544,'multiline':True]['text':' KS_xx entry','line_number':1555,'multiline':False]['text':' Only set the value if it wasn't set yet or "overwrite" is TRUE.','line_number':1557,'multiline':False]['text':' 8bit terminal: use CSI instead of <Esc>[','line_number':1565,'multiline':False]['text':'
+ * Apply builtin termcap entries for a given keyprotocol.
+ ','line_number':1610,'multiline':True]['text':' Some function keys may accept modifiers even though the','line_number':1622,'multiline':False]['text':' terminfo/termcap entry does not indicate this.','line_number':1623,'multiline':False]['text':'
+ * Parsing of the builtin termcap entries.
+ * Caller should check if "term" is a valid builtin terminal name.
+ * The terminal's name is not set, as this is already done in termcapinit().
+ ','line_number':1627,'multiline':True]['text':'
+ * Set number of colors.
+ * Store it as a number in t_colors.
+ * Store it as a string in T_CCO (using nr_colors[]).
+ ','line_number':1640,'multiline':True]['text':' string for number of colors','line_number':1648,'multiline':False]['text':'
+ * Set the color count to "val" and redraw if it changed.
+ ','line_number':1658,'multiline':True]['text':' Nr of colors changed, initialize highlighting and redraw everything.','line_number':1667,'multiline':False]['text':' This causes a redraw, which usually clears the message.  Try keeping','line_number':1668,'multiline':False]['text':' the message if it might work.','line_number':1669,'multiline':False]['text':' Do this one first, it may cause a screen redraw.','line_number':1688,'multiline':False]['text':'
+ * Return TRUE if "term_strings[idx]" was not set.
+ ','line_number':1703,'multiline':True]['text':'
+ * Get the termcap entries we need with tgetstr(), tgetflag() and tgetnum().
+ * "invoke_tgetent()" must have been called before.
+ * If "*height" or "*width" are not zero then use the "li" and "col" entries to
+ * get their value.
+ ','line_number':1714,'multiline':True]['text':' index in term_strings[]','line_number':1724,'multiline':False]['text':' termcap name for string','line_number':1725,'multiline':False]['text':'
+     * get output strings
+     ','line_number':1763,'multiline':True]['text':' tgetflag() returns 1 if the flag is present, 0 if not and','line_number':1777,'multiline':False]['text':' possibly -1 if the flag doesn't exist.','line_number':1778,'multiline':False]['text':'
+     * get key codes
+     ','line_number':1792,'multiline':True]['text':' if cursor-left == backspace, ignore it (televideo 925)','line_number':1800,'multiline':False]['text':'
+     * Get number of colors (if not done already).
+     ','line_number':1813,'multiline':True]['text':'
+ * Report "term" is not found and list the ones we do know about.
+ ','line_number':1834,'multiline':True]['text':' end marker','line_number':1854,'multiline':False]['text':' Do not mention the "gui" entry, the user won't need to type it.','line_number':1856,'multiline':False]['text':' Output extra 'cmdheight' line breaks to avoid that the following error','line_number':1868,'multiline':False]['text':' message overwrites the last terminal name.','line_number':1869,'multiline':False]['text':' don't know where cursor is now','line_number':1882,'multiline':False]['text':'
+ * Parse the 'keyprotocol' option, match against "term" and return the protocol
+ * for the first matching entry.
+ * When "term" is NULL then compile all patterns to check for any errors.
+ * Returns KEYPROTOCOL_FAIL if a pattern cannot be compiled.
+ * Returns KEYPROTOCOL_NONE if there is no match.
+ ','line_number':1889,'multiline':True]['text':' Isolate one comma separated item.','line_number':1908,'multiline':False]['text':' Note: Keep this in sync with p_kpc_protocol_values.','line_number':1916,'multiline':False]['text':' No match found, use "none".','line_number':1943,'multiline':False]['text':'
+ * Set terminal options for terminal "term".
+ * Return OK if terminal 'term' was found in a termcap, FAIL otherwise.
+ *
+ * While doing this, until ttest(), some options may be NULL, be careful.
+ ','line_number':1951,'multiline':True]['text':' In silect mode (ex -s) we don't use the 'term' option.','line_number':1969,'multiline':False]['text':' reset 8-bit detection','line_number':1973,'multiline':False]['text':'
+ * If HAVE_TGETENT is not defined, only the builtin termcap is used, otherwise:
+ *   If builtin_first is TRUE:
+ *     0. try builtin termcap
+ *     1. try external termcap
+ *     2. if both fail default to a builtin terminal
+ *   If builtin_first is FALSE:
+ *     1. try external termcap
+ *     2. try builtin termcap, if both fail default to a builtin terminal
+ ','line_number':1983,'multiline':True]['text':'
+	 * Use external termcap
+	 ','line_number':1996,'multiline':True]['text':'
+	     * If the external termcap does not have a matching entry, try the
+	     * builtin ones.
+	     ','line_number':2003,'multiline':True]['text':' clear old options','line_number':2011,'multiline':False]['text':' try == 0 || try == 2','line_number':2018,'multiline':False]['text':' HAVE_TGETENT','line_number':2019,'multiline':False]['text':'
+	 * Use builtin termcap
+	 ','line_number':2020,'multiline':True]['text':'
+	     * If builtin termcap was already used, there is no need to search
+	     * for the builtin termcap again, quit now.
+	     ','line_number':2025,'multiline':True]['text':'
+	     * Search for 'term' in builtin_terminals[].
+	     ','line_number':2032,'multiline':True]['text':' did not find it','line_number':2036,'multiline':False]['text':'
+		 * If try == 0, first try the external termcap. If that is not
+		 * found we'll get back here with try == 2.
+		 * If termcap_cleared is set we used the external termcap,
+		 * don't complain about not finding the term in the builtin
+		 * termcap.
+		 ','line_number':2039,'multiline':True]['text':' try external one','line_number':2046,'multiline':False]['text':' found in external termcap','line_number':2048,'multiline':False]['text':' when user typed :set term=xxx, quit here','line_number':2053,'multiline':False]['text':' don't know where cursor is now','line_number':2056,'multiline':False]['text':' clear old options','line_number':2071,'multiline':False]['text':' If starting the GUI failed, don't do any of the other','line_number':2083,'multiline':False]['text':' things for this terminal','line_number':2084,'multiline':False]['text':' don't try using external termcap','line_number':2088,'multiline':False]['text':' FEAT_GUI','line_number':2091,'multiline':False]['text':' Use the 'keyprotocol' option to adjust the t_TE and t_TI','line_number':2101,'multiline':False]['text':' termcap entries if there is an entry matching "term".','line_number':2102,'multiline':False]['text':' There is no good way to detect that the terminal supports RGB','line_number':2107,'multiline':False]['text':' colors.  Since these termcap entries are non-standard anyway and','line_number':2108,'multiline':False]['text':' only used when the user sets 'termguicolors' we might as well add','line_number':2109,'multiline':False]['text':' them.  But not when one of them was already set.','line_number':2110,'multiline':False]['text':'
+ * special: There is no info in the termcap about whether the cursor
+ * positioning is relative to the start of the screen or to the start of the
+ * scrolling region.  We just guess here. Only msdos pcterm is known to do it
+ * relative.
+ ','line_number':2118,'multiline':True]['text':' Special case: "kitty" may not have a "RV" entry in terminfo, but we need','line_number':2129,'multiline':False]['text':' to request the version for several other things to work.','line_number':2130,'multiline':False]['text':'
+ * Any "stty" settings override the default for t_kb from the termcap.
+ * This is in os_unix.c, because it depends a lot on the version of unix that
+ * is being used.
+ * Don't do this when the GUI is active, it uses "t_kb" and "t_kD" directly.
+ ','line_number':2136,'multiline':True]['text':'
+ * If the termcap has no entry for 'bs' and/or 'del' and the ioctl() also
+ * didn't work, use the default CTRL-H
+ * The default for t_kD is DEL, unless t_kb is DEL.
+ * The vim_strsave'd strings are probably lost forever, well it's only two
+ * bytes.  Don't do this when the GUI is active, it uses "t_kb" and "t_kD"
+ * directly.
+ ','line_number':2148,'multiline':True]['text':' Reset terminal properties that are set based on the termresponse, which','line_number':2173,'multiline':False]['text':' will be sent out soon.','line_number':2174,'multiline':False]['text':' If the first number in t_XM is 1006 then the terminal will support SGR','line_number':2179,'multiline':False]['text':' mouse reporting.','line_number':2180,'multiline':False]['text':'
+     * For Unix, set the 'ttymouse' option to the type of mouse to be used.
+     * The termcode for the mouse is added as a side effect in option.c.
+     ','line_number':2195,'multiline':True]['text':' keep existing value, might be "xterm2"','line_number':2206,'multiline':False]['text':' Reset the WAS_SET flag, 'ttymouse' can be set to "sgr" or','line_number':2214,'multiline':False]['text':' "xterm2" in check_termcode().','line_number':2215,'multiline':False]['text':' set mouse termcode anyway','line_number':2223,'multiline':False]['text':' Focus reporting is supported by xterm compatible terminals and tmux.','line_number':2230,'multiline':False]['text':' We hard-code the received escape sequences here.  There are the terminfo','line_number':2231,'multiline':False]['text':' entries kxIN and kxOUT, but they are rarely used and do hot have a','line_number':2232,'multiline':False]['text':' two-letter termcap name.','line_number':2233,'multiline':False]['text':' This used to be done only for xterm-like terminals, but some others also','line_number':2234,'multiline':False]['text':' may produce these codes.  Always recognize them, as the chance of them','line_number':2235,'multiline':False]['text':' being used for something else is very small.','line_number':2236,'multiline':False]['text':' handle focus in event','line_number':2240,'multiline':False]['text':' handle focus out event','line_number':2246,'multiline':False]['text':' First time after setting 'term' a focus event is always reported.','line_number':2254,'multiline':False]['text':' DEFAULT_TERM indicates that it is the machine console.','line_number':2259,'multiline':False]['text':' enable window resizing reports','line_number':2266,'multiline':False]['text':' make sure we have a valid set of terminal codes','line_number':2271,'multiline':False]['text':' we can use termcap codes from now on','line_number':2273,'multiline':False]['text':' use current values as defaults','line_number':2274,'multiline':False]['text':' Get terminal version later','line_number':2277,'multiline':False]['text':'
+     * Initialize the terminal with the appropriate termcap codes.
+     * Set the mouse and window title if possible.
+     * Don't do this when starting, need to parse the .vimrc first, because it
+     * may redefine t_TI etc.
+     ','line_number':2281,'multiline':True]['text':' may change terminal mode','line_number':2289,'multiline':False]['text':' may start using the mouse','line_number':2290,'multiline':False]['text':' may display window title','line_number':2291,'multiline':False]['text':' display initial screen after ttest() checking. jw.','line_number':2294,'multiline':False]['text':' termcap failed to report size','line_number':2297,'multiline':False]['text':' set defaults, in case ui_get_shellsize() also fails','line_number':2298,'multiline':False]['text':' console is often 25 lines','line_number':2301,'multiline':False]['text':' most terminals are 24 lines','line_number':2303,'multiline':False]['text':' may change Rows','line_number':2306,'multiline':False]['text':' In case Rows changed','line_number':2310,'multiline':False]['text':' check mappings for terminal codes used','line_number':2311,'multiline':False]['text':'
+	     * Execute the TermChanged autocommands for each buffer that is
+	     * loaded.
+	     ','line_number':2317,'multiline':True]['text':' restore curwin/curbuf and a few other things','line_number':2330,'multiline':False]['text':' declares cur_term','line_number':2348,'multiline':False]['text':'
+ * If supported, delete "cur_term", which caches terminal related entries.
+ * Avoids that valgrind reports possibly lost memory.
+ ','line_number':2351,'multiline':True]['text':'
+ * Call tgetent()
+ * Return error message if it fails, NULL if it's OK.
+ ','line_number':2367,'multiline':True]['text':' Note: Valgrind may report a leak here, because the library keeps one','line_number':2376,'multiline':False]['text':' buffer around that we can't ever free.','line_number':2377,'multiline':False]['text':' -1 is always an error','line_number':2379,'multiline':False]['text':' sometimes zero is also an error','line_number':2381,'multiline':False]['text':' On FreeBSD tputs() gets a SEGV after a tgetent() which fails.  Call','line_number':2385,'multiline':False]['text':' tgetent() with the always existing "dumb" entry to avoid a crash or','line_number':2386,'multiline':False]['text':' hang.','line_number':2387,'multiline':False]['text':'
+ * Some versions of tgetstr() have been reported to return -1 instead of NULL.
+ * Fix that here.
+ ','line_number':2404,'multiline':True]['text':' HAVE_TGETENT','line_number':2418,'multiline':False]['text':'
+ * Get Columns and Rows from the termcap. Used after a window signal if the
+ * ioctl() fails. It doesn't make sense to call tgetent each time if the "co"
+ * and "li" entries never change. But on some systems this works.
+ * Errors while getting the entries are ignored.
+ ','line_number':2421,'multiline':True]['text':' pointer to columns','line_number':2429,'multiline':False]['text':' pointer to rows','line_number':2430,'multiline':False]['text':' defined(HAVE_TGETENT) && defined(UNIX)','line_number':2443,'multiline':False]['text':'
+ * Get a string entry from the termcap and add it to the list of termcodes.
+ * Used for <t_xx> special keys.
+ * Give an error message for failure when not sourcing.
+ * If force given, replace an existing entry.
+ * Return FAIL if the entry was not found, OK if the entry was added.
+ ','line_number':2445,'multiline':True]['text':'
+ * If the GUI is running or will start in a moment, we only support the keys
+ * that the GUI can produce.
+ ','line_number':2467,'multiline':True]['text':' it's already there','line_number':2476,'multiline':False]['text':' 'term' not defined yet','line_number':2480,'multiline':False]['text':' name starts with "builtin_"','line_number':2483,'multiline':False]['text':'
+ * We can get the entry from the builtin termcap and from the external one.
+ * If 'ttybuiltin' is on or the terminal name starts with "builtin_", try
+ * builtin termcap first.
+ * If 'ttybuiltin' is off, try external termcap first.
+ ','line_number':2496,'multiline':True]['text':'
+	 * Search in builtin termcaps
+	 ','line_number':2506,'multiline':True]['text':' found it','line_number':2511,'multiline':False]['text':'
+	 * Search in external termcap
+	 ','line_number':2529,'multiline':True]['text':'
+ * Return TRUE if terminal "name" uses CSI instead of <Esc>[.
+ * Assume that the terminal is using 8-bit controls when the name contains
+ * "8bit", like in "xterm-8bit".
+ ','line_number':2565,'multiline':True]['text':'
+ * Translate terminal control chars from 7-bit to 8-bit:
+ * <Esc>[ -> CSI  <M_C_[>
+ * <Esc>] -> OSC  <M-C-]>
+ * <Esc>O -> <M-C-O>
+ ','line_number':2576,'multiline':True]['text':'
+ * minimal tgoto() implementation.
+ * no padding and we only parse for %i %d and %+char
+ ','line_number':2628,'multiline':True]['text':' HAVE_TGETENT','line_number':2675,'multiline':False]['text':'
+ * Set the terminal name and initialize the terminal options.
+ * If "name" is NULL or empty, get the terminal name from the environment.
+ * If that fails, use the default terminal name.
+ ','line_number':2677,'multiline':True]['text':' empty name is equal to no name','line_number':2688,'multiline':False]['text':' Set the default terminal name.','line_number':2698,'multiline':False]['text':' Avoid using "term" here, because the next mch_getenv() may overwrite it.','line_number':2702,'multiline':False]['text':'
+ * The number of calls to ui_write is reduced by using "out_buf".
+ ','line_number':2706,'multiline':True]['text':' add one to allow mch_write() in os_win32.c to append a NUL','line_number':2711,'multiline':False]['text':' number of chars in out_buf','line_number':2714,'multiline':False]['text':' Since the maximum number of SGR parameters shown as a normal value range is','line_number':2716,'multiline':False]['text':' 16, the escape sequence length can be 4 * 16 + lead + tail.','line_number':2717,'multiline':False]['text':'
+ * out_flush(): flush the output buffer
+ ','line_number':2720,'multiline':True]['text':' set out_pos to 0 before ui_write, to avoid recursiveness','line_number':2731,'multiline':False]['text':' only log once','line_number':2746,'multiline':False]['text':'
+ * out_flush_cursor(): flush the output buffer and redraw the cursor.
+ * Does not flush recursively in the GUI to avoid slow drawing.
+ ','line_number':2751,'multiline':True]['text':' when TRUE, update cursor even when not moved','line_number':2757,'multiline':False]['text':' clear selection under cursor','line_number':2758,'multiline':False]['text':'
+ * Sometimes a byte out of a multi-byte character is written with out_char().
+ * To avoid flushing half of the character, call this function first.
+ ','line_number':2773,'multiline':True]['text':'
+ * out_trash(): Throw away the contents of the output buffer
+ ','line_number':2785,'multiline':True]['text':'
+ * out_char(c): put a byte into the output buffer.
+ *		Flush it if it becomes full.
+ * This should not be used for outputting text on the screen (use functions
+ * like msg_puts() and screen_putchar() for that).
+ ','line_number':2795,'multiline':True]['text':' turn LF into CR-LF (CRMOD doesn't seem to do this)','line_number':2805,'multiline':False]['text':' For testing we flush each time.','line_number':2811,'multiline':False]['text':'
+ * Output "c" like out_char(), but don't flush when p_wd is set.
+ ','line_number':2816,'multiline':True]['text':'
+ * A never-padding out_str().
+ * Use this whenever you don't want to run the string through tputs().
+ * tputs() above is harmless, but tputs() from the termcap library
+ * is likely to strip off leading digits, that it mistakes for padding
+ * information, and "%i", "%d", etc.
+ * This should only be used for writing terminal codes, not for outputting
+ * normal text (use functions like msg_puts() and screen_putchar() for that).
+ ','line_number':2829,'multiline':True]['text':' avoid terminal strings being split up','line_number':2841,'multiline':False]['text':' For testing we write one string at a time.','line_number':2848,'multiline':False]['text':'
+ * A conditional-flushing out_str, mainly for visualbell.
+ * Handles a delay internally, because termlib may not respect the delay or do
+ * it at the wrong time.
+ * Note: Only for terminal strings.
+ ','line_number':2853,'multiline':True]['text':' Don't use tputs() when GUI is used, ncurses crashes.','line_number':2870,'multiline':False]['text':' flush just before delay command','line_number':2882,'multiline':False]['text':' Only sleep here if we can limit this happening in','line_number':2893,'multiline':False]['text':' vim_beep().','line_number':2894,'multiline':False]['text':' can't parse the time, don't sleep here','line_number':2898,'multiline':False]['text':' Rely on the terminal library to sleep.','line_number':2907,'multiline':False]['text':' For testing we write one string at a time.','line_number':2919,'multiline':False]['text':'
+ * out_str(s): Put a character string a byte at a time into the output buffer.
+ * If HAVE_TGETENT is defined use tputs(), the termcap parser. (jw)
+ * This should only be used for writing terminal codes, not for outputting
+ * normal text (use functions like msg_puts() and screen_putchar() for that).
+ ','line_number':2924,'multiline':True]['text':' Don't use tputs() when GUI is used, ncurses crashes.','line_number':2937,'multiline':False]['text':' avoid terminal strings being split up','line_number':2944,'multiline':False]['text':' For testing we write one string at a time.','line_number':2954,'multiline':False]['text':'
+ * cursor positioning using termcap parser. (jw)
+ ','line_number':2959,'multiline':True]['text':' Can't handle a negative value here','line_number':2999,'multiline':False]['text':'
+ * Return TRUE if we can request the terminal for a response.
+ ','line_number':3008,'multiline':True]['text':'
+ * Set "status" to STATUS_SENT.
+ ','line_number':3022,'multiline':True]['text':'
+ * Return TRUE if any of the requests are in STATUS_SENT.
+ ','line_number':3032,'multiline':True]['text':' Sent the request more than 2 seconds ago and didn't get a','line_number':3047,'multiline':False]['text':' response, assume it failed.','line_number':3048,'multiline':False]['text':'
+ * Try getting the Vim window position from the terminal.
+ * Returns OK or FAIL.
+ ','line_number':3062,'multiline':True]['text':' Try reading the result for "timeout" msec.','line_number':3082,'multiline':False]['text':' Do not reset "did_request_winpos", if we timed out the response might','line_number':3094,'multiline':False]['text':' still come later and we must consume it.','line_number':3095,'multiline':False]['text':' Polling: return previous values if we have them.','line_number':3101,'multiline':False]['text':' index in s[] just after <Esc>[ or CSI','line_number':3124,'multiline':False]['text':' Special handling of 16 colors, because termcap can't handle it','line_number':3126,'multiline':False]['text':' Also accept "\e[3%dm" for TERMINFO, it is sometimes used','line_number':3127,'multiline':False]['text':' Also accept CSI instead of <Esc>[','line_number':3128,'multiline':False]['text':' Use "AF" termcap entry if present, "Sf" entry otherwise','line_number':3163,'multiline':False]['text':' Use "AB" termcap entry if present, "Sb" entry otherwise','line_number':3173,'multiline':False]['text':'
+ * Return "dark" or "light" depending on the kind of terminal.
+ * This is just guessing!  Recognized are:
+ * "linux"	    Linux console
+ * "screen.linux"   Linux console with screen
+ * "cygwin.*"	    Cygwin shell
+ * "putty.*"	    Putty program
+ * We also check the COLORFGBG environment variable, which is set by
+ * rxvt and derivatives. This variable contains either two or three
+ * values separated by semicolons; we want the last value in either
+ * case. If this value is 0-6 or 8, our background is dark.
+ ','line_number':3187,'multiline':True]['text':' DOS console is nearly always black','line_number':3203,'multiline':False]['text':' If the user explicitly sets t_8u then use it.  Otherwise wait for','line_number':3267,'multiline':False]['text':' termresponse to be received, which is when t_8u would be set and a','line_number':3268,'multiline':False]['text':' redraw is needed if it was used.','line_number':3269,'multiline':False]['text':'
+ * Generic function to set window title, using t_ts and t_fs.
+ ','line_number':3279,'multiline':True]['text':' t_ts takes one argument: column in status line','line_number':3287,'multiline':False]['text':' set title start','line_number':3288,'multiline':False]['text':' set title end','line_number':3290,'multiline':False]['text':'
+ * Tell the terminal to push (save) the title and/or icon, so that it can be
+ * popped (restored) later.
+ ','line_number':3294,'multiline':True]['text':'
+ * Tell the terminal to pop the title and/or icon.
+ ','line_number':3314,'multiline':True]['text':'
+ * Make sure we have a valid set or terminal options.
+ * Replace all entries that are NULL by empty_option
+ ','line_number':3334,'multiline':True]['text':' make sure no options are NULL','line_number':3343,'multiline':False]['text':'
+     * MUST have "cm": cursor motion.
+     ','line_number':3345,'multiline':True]['text':'
+     * if "cs" defined, use a scroll region, it's faster.
+     ','line_number':3351,'multiline':True]['text':'
+	 * optional pairs
+	 ','line_number':3361,'multiline':True]['text':' TP goes to normal mode for TI (invert) and TB (bold)','line_number':3364,'multiline':False]['text':' T_VE is needed even though T_VI is not defined','line_number':3374,'multiline':False]['text':' if 'mr' or 'me' is not defined use 'so' and 'se'','line_number':3378,'multiline':False]['text':' if 'so' or 'se' is not defined use 'mr' and 'me'','line_number':3386,'multiline':False]['text':' if 'ZH' or 'ZR' is not defined use 'mr' and 'me'','line_number':3396,'multiline':False]['text':' "Sb" and "Sf" come in pairs','line_number':3406,'multiline':False]['text':' "AB" and "AF" come in pairs','line_number':3413,'multiline':False]['text':' if 'Sb' and 'AB' are not defined, reset "Co"','line_number':3420,'multiline':False]['text':' Set 'weirdinvert' according to value of 't_xs'','line_number':3424,'multiline':False]['text':' Set t_colors to the value of $COLORS or t_Co.  Ignore $COLORS in the','line_number':3429,'multiline':False]['text':' GUI.','line_number':3430,'multiline':False]['text':'
+ * Represent the given long_u as individual bytes, with the most significant
+ * byte first, and store them in dst.
+ ','line_number':3449,'multiline':True]['text':'
+ * Interpret the next string of bytes in buf as a long integer, with the most
+ * significant byte first.  Note that it is assumed that buf has been through
+ * inchar(), so that NUL and K_SPECIAL will be represented as three bytes each.
+ * Puts result in val, and returns the number of bytes read from buf
+ * (between sizeof(long_u) and 2 * sizeof(long_u)), or -1 if not enough bytes
+ * were present.
+ ','line_number':3466,'multiline':True]['text':'
+ * Read the next num_bytes bytes from buf, and store them in bytes.  Assume
+ * that buf has been through inchar().	Returns the actual number of bytes used
+ * from buf (between num_bytes and num_bytes*2), or -1 if not enough bytes were
+ * available.
+ ','line_number':3495,'multiline':True]['text':' cannot happen?','line_number':3514,'multiline':False]['text':' else it should be KS_SPECIAL; when followed by KE_FILLER c is','line_number':3518,'multiline':False]['text':' K_SPECIAL, or followed by KE_CSI and c must be CSI.','line_number':3519,'multiline':False]['text':' CSI is stored as CSI KS_SPECIAL KE_CSI to avoid confusion with','line_number':3525,'multiline':False]['text':' the start of a special key, see add_to_input_buf_csi().','line_number':3526,'multiline':False]['text':'
+ * Check if the new shell size is valid, correct it if it's too small or way
+ * too big.
+ ','line_number':3533,'multiline':True]['text':' need room for one window and command line','line_number':3540,'multiline':False]['text':' make sure these values are not invalid','line_number':3544,'multiline':False]['text':'
+ * Limit Rows and Columns to avoid an overflow in Rows * Columns.
+ ','line_number':3551,'multiline':True]['text':'
+ * Invoked just before the screen structures are going to be (re)allocated.
+ ','line_number':3565,'multiline':True]['text':' If 'window' uses the whole screen, keep it using that.','line_number':3578,'multiline':False]['text':' Don't change it when set with "-w size" on the command line.','line_number':3579,'multiline':False]['text':' update window sizes','line_number':3584,'multiline':False]['text':' update window sizes','line_number':3589,'multiline':False]['text':'
+ * Call this function when the Vim shell has been resized in any way.
+ * Will obtain the current size and redraw (also when size didn't change).
+ ','line_number':3593,'multiline':True]['text':'
+ * Check if the shell size changed.  Handle a resize.
+ * When the size didn't change, nothing happens.
+ ','line_number':3603,'multiline':True]['text':' Do not get the size when executing a shell command during','line_number':3615,'multiline':False]['text':' startup.','line_number':3616,'multiline':False]['text':'
+ * Set size of the Vim shell.
+ * If 'mustset' is TRUE, we must set Rows and Columns, do not get the real
+ * window size (this is used for the :win command).
+ * If 'mustset' is FALSE, we may try to get the real window size and if
+ * it fails use 'width' and 'height'.
+ ','line_number':3628,'multiline':True]['text':' resizing while in update_screen() may cause a crash','line_number':3639,'multiline':False]['text':' curwin->w_buffer can be NULL when we are closing a window and the','line_number':3642,'multiline':False]['text':' buffer (or window) has already been closed and removing a scrollbar','line_number':3643,'multiline':False]['text':' causes a resize event. Don't resize then, it will happen after entering','line_number':3644,'multiline':False]['text':' another buffer.','line_number':3645,'multiline':False]['text':' must do this before mch_get_shellsize() for','line_number':3650,'multiline':False]['text':' some obscure reason','line_number':3651,'multiline':False]['text':' The window layout used to be adjusted here, but it now happens in','line_number':3664,'multiline':False]['text':' screenalloc() (also invoked from screenclear()).  That is because the','line_number':3665,'multiline':False]['text':' "busy" check above may skip this, but not screenalloc().','line_number':3666,'multiline':False]['text':' don't know where cursor is now','line_number':3672,'multiline':False]['text':'
+	 * We only redraw when it's needed:
+	 * - While at the more prompt or executing an external command, don't
+	 *   redraw, but position the cursor.
+	 * - While editing the command line, only redraw that.
+	 * - in Ex mode, don't redraw anything.
+	 * - Otherwise, redraw right now, and position the cursor.
+	 * Always need to call update_screen() or screenalloc(), to make
+	 * sure Rows/Columns and the size of ScreenLines[] is correct!
+	 ','line_number':3681,'multiline':True]['text':' redrawing may have switched it off','line_number':3719,'multiline':False]['text':' just checking...','line_number':3730,'multiline':False]['text':' postpone the resizing','line_number':3735,'multiline':False]['text':' Avoid recursiveness.  This can happen when setting the window size','line_number':3740,'multiline':False]['text':' causes another window-changed signal or when two SIGWINCH signals come','line_number':3741,'multiline':False]['text':' very close together.  There needs to be another run then after the','line_number':3742,'multiline':False]['text':' current one is done to pick up the latest size.','line_number':3743,'multiline':False]['text':'
+ * Output T_CTE, the t_TE termcap entry, and handle expected effects.
+ * The code possibly disables modifyOtherKeys and the Kitty keyboard protocol.
+ ','line_number':3757,'multiline':True]['text':' The seenModifyOtherKeys flag is not reset here.  We do expect t_TE to','line_number':3766,'multiline':False]['text':' disable modifyOtherKeys, but until Xterm version 377 there is no way to','line_number':3767,'multiline':False]['text':' detect it's enabled again after the following t_TI.  We assume that when','line_number':3768,'multiline':False]['text':' seenModifyOtherKeys was set before it will still be valid.','line_number':3769,'multiline':False]['text':' When the modifyOtherKeys level is detected to be 2 we expect t_TE to','line_number':3771,'multiline':False]['text':' disable it.  Remembering that it was detected to be enabled is useful in','line_number':3772,'multiline':False]['text':' some situations.','line_number':3773,'multiline':False]['text':' The following t_TI is expected to request the state and then','line_number':3774,'multiline':False]['text':' modify_otherkeys_state will be set again.','line_number':3775,'multiline':False]['text':' When the kitty keyboard protocol is enabled we expect t_TE to disable','line_number':3782,'multiline':False]['text':' it.  Remembering that it was detected to be enabled is useful in some','line_number':3783,'multiline':False]['text':' situations.','line_number':3784,'multiline':False]['text':' The following t_TI is expected to request the state and then','line_number':3785,'multiline':False]['text':' kitty_protocol_state will be set again.','line_number':3786,'multiline':False]['text':'
+ * Output T_TI and setup for what follows.
+ ','line_number':3796,'multiline':True]['text':' Send t_RK when there is no more work to do.','line_number':3804,'multiline':False]['text':'
+ * Output T_BE, but only when t_PS and t_PE are set.
+ ','line_number':3808,'multiline':True]['text':'
+ * If t_TI was recently sent and there is no typeahead or work to do, now send
+ * t_RK.  This is postponed to avoid the response arriving in a shell command
+ * or after Vim exits.
+ ','line_number':3823,'multiline':True]['text':'
+ * Set the terminal to TMODE_RAW (for Normal mode) or TMODE_COOK (for external
+ * commands and Ex mode).
+ ','line_number':3845,'multiline':True]['text':' don't set the term where gvim was started to any mode','line_number':3853,'multiline':False]['text':'
+     * When returning after calling a shell cur_tmode is TMODE_UNKNOWN,
+     * set the terminal to raw mode, even though we think it already is,
+     * because the shell program may have reset the terminal mode.
+     * When we think the terminal is normal, don't try to set it to
+     * normal again, because that causes problems (logout!) on some
+     * machines.
+     ','line_number':3861,'multiline':True]['text':' May need to check for T_CRV response and termcodes, it','line_number':3876,'multiline':False]['text':' doesn't work in Cooked mode, an external program may get','line_number':3877,'multiline':False]['text':' them.','line_number':3878,'multiline':False]['text':' switch mouse off','line_number':3885,'multiline':False]['text':' Disable bracketed paste and modifyOtherKeys in cooked mode.','line_number':3887,'multiline':False]['text':' Avoid doing this too often, on some terminals the codes are not','line_number':3888,'multiline':False]['text':' handled properly.','line_number':3889,'multiline':False]['text':' disable bracketed paste mode','line_number':3897,'multiline':False]['text':' possibly disables modifyOtherKeys','line_number':3898,'multiline':False]['text':' enable bracketed paste mode (should','line_number':3902,'multiline':False]['text':' be before mch_settmode().','line_number':3903,'multiline':False]['text':' possibly enables modifyOtherKeys','line_number':3904,'multiline':False]['text':' machine specific function','line_number':3908,'multiline':False]['text':' may switch mouse on','line_number':3911,'multiline':False]['text':' start termcap mode','line_number':3927,'multiline':False]['text':' start "raw" mode','line_number':3928,'multiline':False]['text':' start "keypad transmit" mode','line_number':3929,'multiline':False]['text':' enable bracketed paste mode','line_number':3930,'multiline':False]['text':' Enable xterm's focus reporting mode when 'esckeys' is set.','line_number':3933,'multiline':False]['text':' don't know where cursor is now','line_number':3940,'multiline':False]['text':' Immediately check for a response.  If t_Co changes, we don't','line_number':3947,'multiline':False]['text':' want to redraw with wrong colors first.','line_number':3948,'multiline':False]['text':' May need to discard T_CRV, T_U7 or T_RBG response.','line_number':3969,'multiline':False]['text':' Give the terminal a chance to respond.','line_number':3973,'multiline':False]['text':' Discard data received but not read.','line_number':3977,'multiline':False]['text':' Check for termcodes first, otherwise an external program may','line_number':3982,'multiline':False]['text':' get them.','line_number':3983,'multiline':False]['text':' Disable xterm's focus reporting mode if 'esckeys' is set.','line_number':3990,'multiline':False]['text':' disable bracketed paste mode','line_number':3995,'multiline':False]['text':' stop "keypad transmit" mode','line_number':3996,'multiline':False]['text':' Output t_te before t_TE, t_te may switch between main and alternate','line_number':4000,'multiline':False]['text':' screen and following codes may work on the active screen only.','line_number':4001,'multiline':False]['text':'','line_number':4002,'multiline':False]['text':' When using the Kitty keyboard protocol the main and alternate screen','line_number':4003,'multiline':False]['text':' use a separate state.  If we are (or were) using the Kitty keyboard','line_number':4004,'multiline':False]['text':' protocol and t_te is not empty (possibly switching screens) then','line_number':4005,'multiline':False]['text':' output t_TE both before and after outputting t_te.','line_number':4006,'multiline':False]['text':' probably disables the kitty keyboard','line_number':4009,'multiline':False]['text':' protocol','line_number':4010,'multiline':False]['text':' stop termcap mode','line_number':4012,'multiline':False]['text':' just in case it is still off','line_number':4013,'multiline':False]['text':' stop "raw" mode, modifyOtherKeys and','line_number':4014,'multiline':False]['text':' Kitty keyboard protocol','line_number':4015,'multiline':False]['text':' don't know where cursor is now','line_number':4016,'multiline':False]['text':'
+ * Request version string (for xterm) when needed.
+ * Only do this after switching to raw mode, otherwise the result will be
+ * echoed.
+ * Only do this after startup has finished, to avoid that the response comes
+ * while executing "-c !cmd" or even after "-c quit".
+ * Only do this after termcap mode has been started, otherwise the codes for
+ * the cursor keys may be wrong.
+ * Only do this when 'esckeys' is on, otherwise the response causes trouble in
+ * Insert mode.
+ * On Unix only do it when both output and input are a tty (avoid writing
+ * request to terminal while reading from a file).
+ * The result is caught in check_termcode().
+ ','line_number':4021,'multiline':True]['text':' check for the characters now, otherwise they might be eaten by','line_number':4047,'multiline':False]['text':' get_keystroke()','line_number':4048,'multiline':False]['text':'
+ * Send sequences to the terminal and check with t_u7 how the cursor moves, to
+ * find out properties of the terminal.
+ * Note that this goes out before T_CRV, so that the result can be used when
+ * the termresponse arrives.
+ ','line_number':4054,'multiline':True]['text':' Ambiguous width check.','line_number':4073,'multiline':False]['text':' Check how the terminal treats ambiguous character width (UAX #11).','line_number':4074,'multiline':False]['text':' First, we move the cursor to (1, 0) and print a test ambiguous','line_number':4075,'multiline':False]['text':' character \u25bd (WHITE DOWN-POINTING TRIANGLE) and then query','line_number':4076,'multiline':False]['text':' the current cursor position.  If the terminal treats \u25bd as','line_number':4077,'multiline':False]['text':' single width, the position is (1, 1), or if it is treated as double','line_number':4078,'multiline':False]['text':' width, that will be (1, 2).  This function has the side effect that','line_number':4079,'multiline':False]['text':' changes cursor position, so it must be called immediately after','line_number':4080,'multiline':False]['text':' entering termcap mode.','line_number':4081,'multiline':False]['text':' Do this in the second row.  In the first row the returned sequence','line_number':4084,'multiline':False]['text':' may be CSI 1;2R, which is the same as <S-F3>.','line_number':4085,'multiline':False]['text':' This overwrites a few characters on the screen, a redraw is needed','line_number':4094,'multiline':False]['text':' after this. Clear them out for now.','line_number':4095,'multiline':False]['text':' 2. Check compatibility with xterm.','line_number':4104,'multiline':False]['text':' We move the cursor to (2, 0), print a test sequence and then query','line_number':4105,'multiline':False]['text':' the current cursor position.  If the terminal properly handles','line_number':4106,'multiline':False]['text':' unknown DCS string and CSI sequence with intermediate byte, the test','line_number':4107,'multiline':False]['text':' sequence is ignored and the cursor does not move.  If the terminal','line_number':4108,'multiline':False]['text':' handles test sequence incorrectly, a garbage string is displayed and','line_number':4109,'multiline':False]['text':' the cursor does move.','line_number':4110,'multiline':False]['text':' Do this in the third row.  Second row is used by ambiguous','line_number':4113,'multiline':False]['text':' character width check.','line_number':4114,'multiline':False]['text':' send the test DCS string.','line_number':4116,'multiline':False]['text':' send the test CSI sequence with intermediate byte.','line_number':4118,'multiline':False]['text':' If the terminal handles test sequence incorrectly, garbage text is','line_number':4125,'multiline':False]['text':' displayed. Clear them out for now.','line_number':4126,'multiline':False]['text':' Need to reset the known cursor position.','line_number':4137,'multiline':False]['text':' check for the characters now, otherwise they might be eaten by','line_number':4140,'multiline':False]['text':' get_keystroke()','line_number':4141,'multiline':False]['text':'
+ * Similar to requesting the version string: Request the terminal background
+ * color when it is the right moment.
+ ','line_number':4147,'multiline':True]['text':' Only request foreground if t_RF is set.','line_number':4159,'multiline':False]['text':' Only request background if t_RB is set.','line_number':4170,'multiline':False]['text':' check for the characters now, otherwise they might be eaten by','line_number':4182,'multiline':False]['text':' get_keystroke()','line_number':4183,'multiline':False]['text':'
+ * Return TRUE when saving and restoring the screen.
+ ','line_number':4218,'multiline':True]['text':'
+ * By outputting the 'cursor very visible' termcap code, for some windowed
+ * terminals this makes the screen scrolled to the correct position.
+ * Used when starting Vim or returning from a shell.
+ ','line_number':4227,'multiline':True]['text':' don't know where cursor is now','line_number':4241,'multiline':False]['text':' True if cursor is not visible','line_number':4244,'multiline':False]['text':' True if cursor is not visible due to an ongoing cursor-less sleep','line_number':4247,'multiline':False]['text':'
+ * Enable the cursor without checking if it's already enabled.
+ ','line_number':4250,'multiline':True]['text':'
+ * Enable the cursor if it's currently off.
+ ','line_number':4261,'multiline':True]['text':'
+ * Disable the cursor.
+ ','line_number':4271,'multiline':True]['text':' disable cursor','line_number':4279,'multiline':False]['text':'
+ * Check whether the cursor is invisible due to an ongoing cursor-less sleep
+ ','line_number':4285,'multiline':True]['text':'
+ * Disable the cursor and mark it disabled by cursor-less sleep
+ ','line_number':4295,'multiline':True]['text':'
+ * Enable the cursor and mark it not disabled by cursor-less sleep
+ ','line_number':4305,'multiline':True]['text':'
+ * Set cursor shape to match Insert or Replace mode.
+ ','line_number':4316,'multiline':True]['text':' Only do something when redrawing the screen and we can restore the','line_number':4325,'multiline':False]['text':' mode.','line_number':4326,'multiline':False]['text':' Restore to initial values.','line_number':4331,'multiline':False]['text':' Replace mode cursor','line_number':4342,'multiline':False]['text':' fall back to Insert mode cursor','line_number':4344,'multiline':False]['text':' Insert mode cursor','line_number':4356,'multiline':False]['text':' non-Insert mode cursor','line_number':4362,'multiline':False]['text':' set cursor color start','line_number':4374,'multiline':False]['text':' set cursor color end','line_number':4376,'multiline':False]['text':'
+ * "shape": 1 = block, 2 = underline, 3 = vertical bar
+ ','line_number':4393,'multiline':True]['text':' t_SH is empty: try setting just the blink state.','line_number':4408,'multiline':False]['text':' The blink flags are XORed together, if the initial blinking from','line_number':4409,'multiline':False]['text':' style and shape differs, we need to invert the flag here.','line_number':4410,'multiline':False]['text':'
+ * Set scrolling region for window 'wp'.
+ * The region starts 'off' lines from the start of the window.
+ * Also set the vertical scroll region for a vertically split window.  Always
+ * the full width of the window, excluding the vertical separator.
+ ','line_number':4428,'multiline':True]['text':' don't know where cursor is now','line_number':4442,'multiline':False]['text':'
+ * Reset scrolling region to the whole screen.
+ ','line_number':4445,'multiline':True]['text':' don't know where cursor is now','line_number':4454,'multiline':False]['text':'
+ * List of terminal codes that are currently recognized.
+ ','line_number':4458,'multiline':True]['text':' termcap name of entry','line_number':4464,'multiline':False]['text':' terminal code (in allocated memory)','line_number':4465,'multiline':False]['text':' STRLEN(code)','line_number':4466,'multiline':False]['text':' length of part before ";*~".','line_number':4467,'multiline':False]['text':' number of entries that termcodes[] can hold','line_number':4470,'multiline':False]['text':' current number of entries in termcodes[]','line_number':4471,'multiline':False]['text':' set pad character to NUL','line_number':4486,'multiline':False]['text':' need to fill termleader[]','line_number':4490,'multiline':False]['text':'
+ * For xterm we recognize special codes like "ESC[42;*X" and "ESC O*X" that
+ * accept modifiers.
+ * Set "termcodes[idx].modlen".
+ ','line_number':4495,'multiline':True]['text':' For "CSI[@;X" the "@" is not included in "modlen".','line_number':4509,'multiline':False]['text':'
+ * Add a new entry for "name[2]" to the list of terminal codes.
+ * Note that "name" may not have a terminating NUL.
+ * The list is kept alphabetical for ":set termcap"
+ * "flags" is TRUE when replacing 7-bit by 8-bit controls is desired.
+ * "flags" can also be ATC_FROM_TERM for got_code_from_term().
+ ','line_number':4514,'multiline':True]['text':' Change leading <Esc>[ to CSI, change <Esc>O to <M-O>.','line_number':4551,'multiline':False]['text':' need to fill termleader[]','line_number':4573,'multiline':False]['text':'
+     * need to make space for more entries
+     ','line_number':4575,'multiline':True]['text':'
+     * Look for existing entry with the same name, it is replaced.
+     * Look for an existing entry that is alphabetical higher, the new entry
+     * is inserted in front of it.
+     ','line_number':4594,'multiline':True]['text':'
+	     * Exact match: May replace old code.
+	     ','line_number':4607,'multiline':True]['text':' Don't replace ESC[123;*X or ESC O*X with another when','line_number':4615,'multiline':False]['text':' invoked from got_code_from_term().','line_number':4616,'multiline':False]['text':' They are equal but for the ";*": don't add it.','line_number':4622,'multiline':False]['text':' Replace old code.','line_number':4633,'multiline':False]['text':'
+	 * Found alphabetical larger entry, move rest to insert new entry
+	 ','line_number':4644,'multiline':True]['text':'
+ * Some function keys may include modifiers, but the terminfo/termcap entries
+ * do not indicate that.  Insert ";*" where we expect modifiers might appear.
+ ','line_number':4667,'multiline':True]['text':' skip PasteStart and PasteEnd','line_number':4684,'multiline':False]['text':'
+ * Check termcode "code[len]" for ending in ;*X or *X.
+ * The "X" can be any character.
+ * Return 0 if not found, 2 for ;*X and 1 for *X.
+ ','line_number':4709,'multiline':True]['text':' Shortest is <M-O>*X.  With ; shortest is <CSI>@;*X','line_number':4717,'multiline':False]['text':'
+ * Returns the length of the terminal code at index 'idx'.
+ ','line_number':4747,'multiline':True]['text':' nothing there yet','line_number':4761,'multiline':False]['text':' need to fill termleader[]','line_number':4764,'multiline':False]['text':' not found. Give error message?','line_number':4772,'multiline':False]['text':'
+ * Called when detected that the terminal sends 8-bit codes.
+ * Convert all 7-bit codes to their 8-bit equivalent.
+ ','line_number':4786,'multiline':True]['text':' Only need to do something when not already using 8-bit codes.','line_number':4796,'multiline':False]['text':' need to fill termleader[]','line_number':4808,'multiline':False]['text':'
+ * Checking for double-clicks ourselves.
+ * "orig_topline" is used to avoid detecting a double-click when the window
+ * contents scrolled (e.g., when 'scrolloff' is non-zero).
+ ','line_number':4821,'multiline':True]['text':'
+ * Set orig_topline.  Used when jumping to another window, so that a double
+ * click still works.
+ ','line_number':4826,'multiline':True]['text':'
+ * Returns TRUE if the top line and top fill of window 'wp' matches the saved
+ * topline and topfill.
+ ','line_number':4839,'multiline':True]['text':'
+ * If "buf" is NULL put "string[new_slen]" in typebuf; "buflen" is not used.
+ * If "buf" is not NULL put "string[new_slen]" in "buf[bufsize]" and adjust
+ * "buflen".
+ * Remove "slen" bytes.
+ * Returns FAIL for error.
+ ','line_number':4854,'multiline':True]['text':' remove matched chars, taking care of noremap','line_number':4877,'multiline':False]['text':' insert the extra space we need','line_number':4880,'multiline':False]['text':' Careful: del_typebuf() and ins_typebuf() may have reallocated','line_number':4885,'multiline':False]['text':' typebuf.tb_buf[]!','line_number':4886,'multiline':False]['text':' remove matched characters','line_number':4893,'multiline':False]['text':' Insert the extra space we need.  If there is insufficient','line_number':4898,'multiline':False]['text':' space return -1.','line_number':4899,'multiline':False]['text':'
+ * Decode a modifier number as xterm provides it into MOD_MASK bits.
+ ','line_number':4911,'multiline':True]['text':' Any further modifiers are silently dropped.','line_number':4928,'multiline':False]['text':' Some keys have the modifier included.  Need to handle that here to','line_number':4941,'multiline':False]['text':' make mappings work.  This may result in a special key, such as','line_number':4942,'multiline':False]['text':' K_S_TAB.','line_number':4943,'multiline':False]['text':'
+ * Handle a cursor position report.
+ ','line_number':4954,'multiline':True]['text':' Setting the option causes a screen redraw. Do','line_number':4973,'multiline':False]['text':' that right away if possible, keeping any','line_number':4974,'multiline':False]['text':' messages.','line_number':4975,'multiline':False]['text':' Third row: xterm compatibility test.','line_number':4998,'multiline':False]['text':' If the cursor is on the first column then the terminal can handle','line_number':4999,'multiline':False]['text':' the request for cursor style and blinking.','line_number':5000,'multiline':False]['text':'
+ * Handle a response to T_CRV: {lead}{first}{x};{vers};{y}c
+ * Xterm and alike use '>' for {first}.
+ * Rxvt sends "{lead}?1;2c".
+ ','line_number':5007,'multiline':True]['text':' The xterm version.  It is set to zero when it can't be an actual xterm','line_number':5015,'multiline':False]['text':' version.','line_number':5016,'multiline':False]['text':' Reset terminal properties that are set based on the termresponse.','line_number':5023,'multiline':False]['text':' Mainly useful for tests that send the termresponse multiple times.','line_number':5024,'multiline':False]['text':' For testing all props can be reset.','line_number':5025,'multiline':False]['text':' If this code starts with CSI, you can bet that the','line_number':5034,'multiline':False]['text':' terminal uses 8-bit codes.','line_number':5035,'multiline':False]['text':' Screen sends 40500.','line_number':5039,'multiline':False]['text':' rxvt sends its version number: "20703" is 2.7.3.','line_number':5040,'multiline':False]['text':' Ignore it for when the user has set 'term' to xterm,','line_number':5041,'multiline':False]['text':' even though it's an rxvt.','line_number':5042,'multiline':False]['text':' Figure out more if the response is CSI > 99 ; 99 ; 99 c','line_number':5046,'multiline':False]['text':' mintty 2.9.5 sends 77;20905;0c.','line_number':5049,'multiline':False]['text':' (77 is ASCII 'M' for mintty.)','line_number':5050,'multiline':False]['text':' mintty can do SGR mouse reporting','line_number':5053,'multiline':False]['text':' If xterm version >= 141 try to get termcap codes.  For other','line_number':5058,'multiline':False]['text':' terminals the request should be ignored.','line_number':5059,'multiline':False]['text':' libvterm sends 0;100;0','line_number':5069,'multiline':False]['text':' Konsole sends 0;115;0 and works the same way','line_number':5070,'multiline':False]['text':' If run from Vim $COLORS is set to the number of','line_number':5073,'multiline':False]['text':' colors the terminal supports.  Otherwise assume','line_number':5074,'multiline':False]['text':' 256, libvterm supports even more.','line_number':5075,'multiline':False]['text':' Libvterm can handle SGR mouse reporting.','line_number':5078,'multiline':False]['text':' Mac Terminal.app sends 1;95;0','line_number':5084,'multiline':False]['text':' iTerm2 sends 0;95;0','line_number':5090,'multiline':False]['text':' iTerm2 can do SGR mouse reporting','line_number':5093,'multiline':False]['text':' old iTerm2 sends 0;95;','line_number':5096,'multiline':False]['text':' screen sends 83;40500;0 83 is 'S' in ASCII.','line_number':5101,'multiline':False]['text':' screen supports SGR mouse codes since 4.7.0','line_number':5104,'multiline':False]['text':' If no recognized terminal has set mouse behavior, assume xterm.','line_number':5111,'multiline':False]['text':' Xterm version 277 supports SGR.','line_number':5114,'multiline':False]['text':' Xterm version >= 95 supports mouse dragging.','line_number':5115,'multiline':False]['text':' Detect terminals that set $TERM to something like','line_number':5122,'multiline':False]['text':' "xterm-256color" but are not fully xterm compatible.','line_number':5123,'multiline':False]['text':'','line_number':5124,'multiline':False]['text':' Gnome terminal sends 1;3801;0, 1;4402;0 or 1;2501;0.','line_number':5125,'multiline':False]['text':' Newer Gnome-terminal sends 65;6001;1.','line_number':5126,'multiline':False]['text':' xfce4-terminal sends 1;2802;0.','line_number':5127,'multiline':False]['text':' screen sends 83;40500;0','line_number':5128,'multiline':False]['text':' Assuming any version number over 2500 is not an','line_number':5129,'multiline':False]['text':' xterm (without the limit for rxvt and screen).','line_number':5130,'multiline':False]['text':' PuTTY sends 0;136;0','line_number':5138,'multiline':False]['text':' supports sgr-like mouse reporting.','line_number':5141,'multiline':False]['text':' vandyke SecureCRT sends 1;136;0','line_number':5144,'multiline':False]['text':' Konsole sends 0;115;0 - but t_u8 does not actually work, therefore','line_number':5147,'multiline':False]['text':' commented out.','line_number':5148,'multiline':False]['text':' else if (version == 115 && arg[0] == 0 && arg[2] == 0)','line_number':5149,'multiline':False]['text':'     term_props[TPR_UNDERLINE_RGB].tpr_status = TPR_YES;','line_number':5150,'multiline':False]['text':' Kitty up to 9.x sends 1;400{version};{secondary-version}','line_number':5152,'multiline':False]['text':' Kitty can handle SGR mouse reporting.','line_number':5158,'multiline':False]['text':' GNU screen sends 83;30600;0, 83;40500;0, etc.','line_number':5162,'multiline':False]['text':' 30600/40500 is a version number of GNU screen. DA2 support is added','line_number':5163,'multiline':False]['text':' on 3.6.  DCS string has a special meaning to GNU screen, but xterm','line_number':5164,'multiline':False]['text':' compatibility checking does not detect GNU screen.','line_number':5165,'multiline':False]['text':' Xterm first responded to this request at patch level','line_number':5172,'multiline':False]['text':' 95, so assume anything below 95 is not xterm and hopefully supports','line_number':5173,'multiline':False]['text':' the underline RGB color sequence.','line_number':5174,'multiline':False]['text':' Getting the cursor style is only supported properly by xterm since','line_number':5178,'multiline':False]['text':' version 279 (otherwise it returns 0x18).','line_number':5179,'multiline':False]['text':'
+	 * Take action on the detected properties.
+	 ','line_number':5183,'multiline':True]['text':' Unless the underline RGB color is expected to work, disable "t_8u".','line_number':5187,'multiline':False]['text':' It does not work for the real Xterm, it resets the background color.','line_number':5188,'multiline':False]['text':' This may cause some flicker.  Alternative would be to set "t_8u"','line_number':5189,'multiline':False]['text':' here if the terminal is expected to support it, but that might','line_number':5190,'multiline':False]['text':' conflict with what was set in the .vimrc.','line_number':5191,'multiline':False]['text':' Did skip writing t_8u, a complete redraw is needed.','line_number':5201,'multiline':False]['text':' can output t_8u now','line_number':5203,'multiline':False]['text':' Only set 'ttymouse' automatically if it was not set','line_number':5206,'multiline':False]['text':' by the user already.','line_number':5207,'multiline':False]['text':' Only request the cursor style if t_SH and t_RS are','line_number':5220,'multiline':False]['text':' set. Only supported properly by xterm since version','line_number':5221,'multiline':False]['text':' 279 (otherwise it returns 0x18).','line_number':5222,'multiline':False]['text':' Only when getting the cursor style was detected to work.','line_number':5223,'multiline':False]['text':' Not for Terminal.app, it can't handle t_RS, it','line_number':5224,'multiline':False]['text':' echoes the characters to the screen.','line_number':5225,'multiline':False]['text':' Only request the cursor blink mode if t_RC set. Not','line_number':5238,'multiline':False]['text':' for Gnome terminal, it can't handle t_RC, it','line_number':5239,'multiline':False]['text':' echoes the characters to the screen.','line_number':5240,'multiline':False]['text':' Only when getting the cursor style was detected to work.','line_number':5241,'multiline':False]['text':'
+ * Add "key" to "buf" and return the number of bytes used.
+ * Handles special keys and multi-byte characters.
+ ','line_number':5259,'multiline':True]['text':'
+ * Shared between handle_key_with_modifier() and handle_csi_function_key().
+ ','line_number':5281,'multiline':True]['text':' Some keys need adjustment when the Ctrl modifier is used.','line_number':5297,'multiline':False]['text':' May remove the shift modifier if it's already included in the key.','line_number':5300,'multiline':False]['text':' Produce modifiers with K_SPECIAL KS_MODIFIER {mod}','line_number':5303,'multiline':False]['text':' Add the bytes for the key.','line_number':5307,'multiline':False]['text':'
+ * Handle a sequence with key and modifier, one of:
+ *	{lead}27;{modifier};{key}~
+ *	{lead}{key};{modifier}u
+ * Returns the difference in length.
+ ','line_number':5317,'multiline':True]['text':' Only set seenModifyOtherKeys for the "{lead}27;" code to avoid setting','line_number':5333,'multiline':False]['text':' it for terminals using the kitty keyboard protocol.  Xterm sends','line_number':5334,'multiline':False]['text':' the form ending in "u" when the formatOtherKeys resource is set.  We do','line_number':5335,'multiline':False]['text':' not support this.','line_number':5336,'multiline':False]['text':'','line_number':5337,'multiline':False]['text':' Do not set seenModifyOtherKeys if there was a positive response at any','line_number':5338,'multiline':False]['text':' time from requesting the kitty keyboard protocol state, these are not','line_number':5339,'multiline':False]['text':' expected to support modifyOtherKeys level 2.','line_number':5340,'multiline':False]['text':'','line_number':5341,'multiline':False]['text':' Do not set seenModifyOtherKeys for kitty, it does send some sequences','line_number':5342,'multiline':False]['text':' like this but does not have the modifyOtherKeys feature.','line_number':5343,'multiline':False]['text':' Some terminals do not apply the Shift modifier to the key.  To make','line_number':5359,'multiline':False]['text':' mappings consistent we do it here.  TODO: support more keys.','line_number':5360,'multiline':False]['text':' Putting Esc in the buffer creates ambiguity, it can be the start of an','line_number':5364,'multiline':False]['text':' escape sequence.  Use K_ESC to avoid that.','line_number':5365,'multiline':False]['text':'
+ * Handle a sequence with key without a modifier:
+ *	{lead}{key}u
+ * Returns the difference in length.
+ ','line_number':5373,'multiline':True]['text':' Putting Esc in the buffer creates ambiguity, it can be the start of','line_number':5392,'multiline':False]['text':' an escape sequence.  Use K_ESC to avoid that.','line_number':5393,'multiline':False]['text':'
+ * CSI function key without or with modifiers:
+ *	{lead}[ABCDEFHPQRS]
+ *	{lead}1;{modifier}[ABCDEFHPQRS]
+ * Returns zero when nog recognized, a positive number when recognized.
+ ','line_number':5408,'multiline':True]['text':' K_UP','line_number':5429,'multiline':False]['text':' K_DOWN','line_number':5430,'multiline':False]['text':' K_RIGHT','line_number':5431,'multiline':False]['text':' K_LEFT','line_number':5432,'multiline':False]['text':' case 'E': keypad BEGIN - not supported','line_number':5434,'multiline':False]['text':' K_END','line_number':5435,'multiline':False]['text':' K_HOME','line_number':5436,'multiline':False]['text':' K_F1','line_number':5438,'multiline':False]['text':' K_F2','line_number':5439,'multiline':False]['text':' K_F3','line_number':5440,'multiline':False]['text':' K_F4','line_number':5441,'multiline':False]['text':' not recognized','line_number':5443,'multiline':False]['text':'
+ * Handle a CSI escape sequence.
+ * - Xterm version string.
+ *
+ * - Response to XTQMODKEYS: "{lead} > 4 ; Pv m".
+ *
+ * - Cursor position report: {lead}{row};{col}R
+ *   The final byte must be 'R'. It is used for checking the
+ *   ambiguous-width character state.
+ *
+ * - window position reply: {lead}3;{x};{y}t
+ *
+ * - key with modifiers when modifyOtherKeys is enabled or the Kitty keyboard
+ *   protocol is used:
+ *	    {lead}27;{modifier};{key}~
+ *	    {lead}{key};{modifier}u
+ *
+ * - function key with or without modifiers:
+ *	{lead}[ABCDEFHPQRS]
+ *	{lead}1;{modifier}[ABCDEFHPQRS]
+ *
+ * Return 0 for no match, -1 for partial match, > 0 for full match.
+ ','line_number':5453,'multiline':True]['text':' optional char right after {lead}','line_number':5488,'multiline':False]['text':' char that ends CSI sequence','line_number':5489,'multiline':False]['text':' argument numbers','line_number':5490,'multiline':False]['text':' number of arguments','line_number':5491,'multiline':False]['text':' Check for non-digit after CSI.','line_number':5495,'multiline':False]['text':' If "first" is in [ABCDEFHPQRS] then it is actually the "trail" and','line_number':5501,'multiline':False]['text':' no argument follows.','line_number':5502,'multiline':False]['text':' Find up to three argument numbers.','line_number':5509,'multiline':False]['text':' omitted number','line_number':5515,'multiline':False]['text':' mrxvt has been reported to have "+" in the version. Assume','line_number':5536,'multiline':False]['text':' the escape sequence ends with a letter or one of "{|}~".','line_number':5537,'multiline':False]['text':' Response to XTQMODKEYS: "CSI > 4 ; Pv m" where Pv indicates the','line_number':5549,'multiline':False]['text':' modifyOtherKeys level.  Drop similar responses.','line_number':5550,'multiline':False]['text':' Function key starting with CSI:','line_number':5561,'multiline':False]['text':'	{lead}[ABCDEFHPQRS]','line_number':5562,'multiline':False]['text':'	{lead}1;{modifier}[ABCDEFHPQRS]','line_number':5563,'multiline':False]['text':' Cursor position report: {lead}{row};{col}R','line_number':5572,'multiline':False]['text':' Eat it when there are 2 arguments and it ends in 'R'.','line_number':5573,'multiline':False]['text':' Also when u7_status is not "sent", it may be from a previous Vim that','line_number':5574,'multiline':False]['text':' just exited.  But not for <S-F3>, it sends something similar, check for','line_number':5575,'multiline':False]['text':' row and column to make sense.','line_number':5576,'multiline':False]['text':' Version string: Eat it when there is at least one digit and','line_number':5586,'multiline':False]['text':' it ends in 'c'','line_number':5587,'multiline':False]['text':' Check blinking cursor from xterm:','line_number':5603,'multiline':False]['text':' {lead}?12;1$y       set','line_number':5604,'multiline':False]['text':' {lead}?12;2$y       not set','line_number':5605,'multiline':False]['text':'','line_number':5606,'multiline':False]['text':' {lead} can be <Esc>[ or CSI','line_number':5607,'multiline':False]['text':' Kitty keyboard protocol status response: CSI ? flags u','line_number':5627,'multiline':False]['text':' The protocol has various "progressive enhancement flags" values, but','line_number':5630,'multiline':False]['text':' we only check for zero and non-zero here.','line_number':5631,'multiline':False]['text':' Reset seenModifyOtherKeys just in case some key combination has','line_number':5640,'multiline':False]['text':' been seen that set it before we get the status response.','line_number':5641,'multiline':False]['text':' Check for a window position response from the terminal:','line_number':5654,'multiline':False]['text':'       {lead}3;{x};{y}t','line_number':5655,'multiline':False]['text':' got finished code: consume it','line_number':5661,'multiline':False]['text':' Key with modifier:','line_number':5671,'multiline':False]['text':'	{lead}27;{modifier};{key}~','line_number':5672,'multiline':False]['text':'	{lead}{key};{modifier}u','line_number':5673,'multiline':False]['text':' Even though we only handle four modifiers and the {modifier} value','line_number':5674,'multiline':False]['text':' should be 16 or lower, we accept all modifier values to avoid the raw','line_number':5675,'multiline':False]['text':' sequence to be passed through.','line_number':5676,'multiline':False]['text':' Key without modifier (Kitty sends this for Esc):','line_number':5684,'multiline':False]['text':'	{lead}{key}u','line_number':5685,'multiline':False]['text':' else: Unknown CSI sequence.  We could drop it, but then the','line_number':5692,'multiline':False]['text':' user can't create a map for it.','line_number':5693,'multiline':False]['text':'
+ * Handle an OSC sequence, fore/background color response from the terminal:
+ *
+ *       {lead}{code};rgb:{rrrr}/{gggg}/{bbbb}{tail}
+ * or    {lead}{code};rgb:{rr}/{gg}/{bb}{tail}
+ *
+ * {code} is 10 for foreground, 11 for background
+ * {lead} can be <Esc>] or OSC
+ * {tail} can be '\007', <Esc>\ or STERM.
+ *
+ * Consume any code that starts with "{lead}11;", it's also
+ * possible that "rgba" is following.
+ ','line_number':5697,'multiline':True]['text':' no match','line_number':5719,'multiline':False]['text':' value differs, apply it','line_number':5760,'multiline':False]['text':' got finished code: consume it','line_number':5779,'multiline':False]['text':'
+ * Check for key code response from xterm:
+ * {lead}{flag}+r<hex bytes><{tail}
+ *
+ * {lead} can be <Esc>P or DCS
+ * {flag} can be '0' or '1'
+ * {tail} can be Esc>\ or STERM
+ *
+ * Check for resource response from xterm (and drop it):
+ * {lead}{flag}+R<hex bytes>=<value>{tail}
+ *
+ * Check for cursor shape response from xterm:
+ * {lead}1$r<digit> q{tail}
+ *
+ * {lead} can be <Esc>P or DCS
+ * {tail} can be <Esc>\ or STERM
+ *
+ * Consume any code that starts with "{lead}.+r" or "{lead}.$r".
+ ','line_number':5797,'multiline':True]['text':' need more chars','line_number':5823,'multiline':False]['text':' no match','line_number':5826,'multiline':False]['text':' key code response','line_number':5828,'multiline':False]['text':' handle a key code response, drop a resource response','line_number':5835,'multiline':False]['text':' Probably the cursor shape response.  Make sure that "i"','line_number':5847,'multiline':False]['text':' is equal to "len" when there are not sufficient','line_number':5848,'multiline':False]['text':' characters.','line_number':5849,'multiline':False]['text':' 0, 1 = block blink, 2 = block','line_number':5866,'multiline':False]['text':' 3 = underline blink, 4 = underline','line_number':5867,'multiline':False]['text':' 5 = vertical bar blink, 6 = vertical bar','line_number':5868,'multiline':False]['text':' The blink flag is actually inverted, compared to','line_number':5871,'multiline':False]['text':' the value set with T_SH.','line_number':5872,'multiline':False]['text':' These codes arrive many together, each code can be','line_number':5892,'multiline':False]['text':' truncated at any point.','line_number':5893,'multiline':False]['text':'
+ * Check if typebuf.tb_buf[] contains a terminal key code.
+ * Check from typebuf.tb_buf[typebuf.tb_off] to typebuf.tb_buf[typebuf.tb_off
+ * + "max_offset"].
+ * Return 0 for no match, -1 for partial match, > 0 for full match.
+ * Return KEYLEN_REMOVED when a key code was deleted.
+ * With a match, the match is removed, the replacement code is inserted in
+ * typebuf.tb_buf[] and the number of characters in typebuf.tb_buf[] is
+ * returned.
+ * When "buf" is not NULL, buf[bufsize] is used instead of typebuf.tb_buf[].
+ * "buflen" is then the length of the string in buf[] and is updated for
+ * inserts and deletes.
+ ','line_number':5900,'multiline':True]['text':' init for GCC','line_number':5922,'multiline':False]['text':' Length of what will replace the termcode','line_number':5931,'multiline':False]['text':'
+     * Speed up the checks for terminal codes by gathering all first bytes
+     * used in termleader[].  Often this is just a single <Esc>.
+     ','line_number':5939,'multiline':True]['text':'
+     * Check at several positions in typebuf.tb_buf[], to catch something like
+     * "x<Up>" that can be mapped. Stop at max_offset, because characters
+     * after that cannot be used for mapping, and with @r commands
+     * typebuf.tb_buf[] can become very long.
+     * This is used often, KEEP IT FAST!
+     ','line_number':5946,'multiline':True]['text':' length of the input','line_number':5960,'multiline':False]['text':'
+	 * Don't check characters after K_SPECIAL, those are already
+	 * translated terminal chars (avoid translating ~@^Hx).
+	 ','line_number':5970,'multiline':True]['text':' there are always 2 extra characters','line_number':5976,'multiline':False]['text':'
+	 * Skip this position if the character does not appear as the first
+	 * character in term_strings. This speeds up a lot, since most
+	 * termcodes start with the same character (ESC or CSI).
+	 ','line_number':5980,'multiline':True]['text':'
+	 * Skip this position if p_ek is not set and tp[0] is an ESC and we
+	 * are in Insert mode.
+	 ','line_number':5991,'multiline':True]['text':' no key name found yet','line_number':5999,'multiline':False]['text':' no key name found yet','line_number':6000,'multiline':False]['text':' no modifiers yet','line_number':6001,'multiline':False]['text':'
+	     * GUI special key codes are all of the form [CSI xx].
+	     ','line_number':6006,'multiline':True]['text':' Special key from GUI','line_number':6009,'multiline':False]['text':' Shouldn't happen','line_number':6012,'multiline':False]['text':' FEAT_GUI','line_number':6019,'multiline':False]['text':' MS-Windows console sends mouse scroll events encoded:','line_number':6027,'multiline':False]['text':' - CSI','line_number':6028,'multiline':False]['text':' - KS_EXTRA','line_number':6029,'multiline':False]['text':' - {KE_MOUSE[UP|DOWN|LEFT|RIGHT]}','line_number':6030,'multiline':False]['text':'
+		 * Ignore the entry if we are not at the start of
+		 * typebuf.tb_buf[]
+		 * and there are not enough characters to make a match.
+		 * But only when the 'K' flag is in 'cpoptions'.
+		 ','line_number':6042,'multiline':True]['text':' got a partial sequence','line_number':6057,'multiline':False]['text':' need to get more chars','line_number':6058,'multiline':False]['text':'
+		     * When found a keypad key, check if there is another key
+		     * that matches and use that one.  This makes <Home> to be
+		     * found instead of <kHome> when they produce the same
+		     * key code.
+		     ','line_number':6060,'multiline':True]['text':' The mouse termcode "ESC [" is also the prefix of','line_number':6083,'multiline':False]['text':' "ESC [ I" (focus gained) and other keys.  Check some','line_number':6084,'multiline':False]['text':' more bytes to find out.','line_number':6085,'multiline':False]['text':' ESC [ without number following: Only use it when','line_number':6088,'multiline':False]['text':' there is no other match.','line_number':6089,'multiline':False]['text':' If a digit is following it could be a key with','line_number':6097,'multiline':False]['text':' modifier, e.g., ESC [ 1;2P.  Can be confused','line_number':6098,'multiline':False]['text':' with DEC_MOUSE, which requires four numbers','line_number':6099,'multiline':False]['text':' following.  If not then it can't be a DEC_MOUSE','line_number':6100,'multiline':False]['text':' code.','line_number':6101,'multiline':False]['text':' partial sequence','line_number':6107,'multiline':False]['text':' partial sequence','line_number':6112,'multiline':False]['text':' no match','line_number':6115,'multiline':False]['text':' Only use it when there is no other match.','line_number':6120,'multiline':False]['text':'
+		 * Check for code with modifier, like xterm uses:
+		 * <Esc>[123;*X  (modslen == slen - 3)
+		 * <Esc>[@;*X    (matches <Esc>[X and <Esc>[1;9X )
+		 * Also <Esc>O*X and <M-O>*X (modslen == slen - 2).
+		 * When there is a modifier the * matches a number.
+		 * When there is no modifier the ;* or * is omitted.
+		 ','line_number':6132,'multiline':True]['text':' got a partial sequence','line_number':6150,'multiline':False]['text':' need to get more chars','line_number':6151,'multiline':False]['text':' no modifiers','line_number':6154,'multiline':False]['text':' no match for "code;*X" with "code;"','line_number':6157,'multiline':False]['text':' no match for "<Esc>[@" with "<Esc>[1;"','line_number':6162,'multiline':False]['text':' Skip over the digits, the final char must','line_number':6166,'multiline':False]['text':' follow. URXVT can use a negative value, thus','line_number':6167,'multiline':False]['text':' also accept '-'.','line_number':6168,'multiline':False]['text':' got a partial sequence','line_number':6173,'multiline':False]['text':' need to get more chars','line_number':6174,'multiline':False]['text':' no match','line_number':6176,'multiline':False]['text':' Match!  Convert modifier bits.','line_number':6180,'multiline':False]['text':' Mouse codes of DEC and pterm start with <ESC>[.  When','line_number':6200,'multiline':False]['text':' detecting the start of these mouse codes they might as well be','line_number':6201,'multiline':False]['text':' another key code or terminal response.','line_number':6202,'multiline':False]['text':'
+	     * Check for responses from the terminal starting with {lead}:
+	     * "<Esc>[" or CSI followed by [0-9>?].
+	     * Also for function keys without a modifier:
+	     * "<Esc>[" or CSI followed by [ABCDEFHPQRS].
+	     *
+	     * - Xterm version string: {lead}>{x};{vers};{y}c
+	     *   Also eat other possible responses to t_RV, rxvt returns
+	     *   "{lead}?1;2c".
+	     *
+	     * - Response to XTQMODKEYS: "{lead} > 4 ; Pv m".
+	     *
+	     * - Cursor position report: {lead}{row};{col}R
+	     *   The final byte must be 'R'. It is used for checking the
+	     *   ambiguous-width character state.
+	     *
+	     * - window position reply: {lead}3;{x};{y}t
+	     *
+	     * - key with modifiers when modifyOtherKeys is enabled:
+	     *	    {lead}27;{modifier};{key}~
+	     *	    {lead}{key};{modifier}u
+	     ','line_number':6213,'multiline':True]['text':' Check for fore/background color response from the terminal,','line_number':6252,'multiline':False]['text':' starting} with <Esc>] or OSC','line_number':6253,'multiline':False]['text':' Check for key code response from xterm,','line_number':6262,'multiline':False]['text':' starting with <Esc>P or DCS','line_number':6263,'multiline':False]['text':' It would only be needed with this condition:','line_number':6264,'multiline':False]['text':'	    (check_for_codes || rcs_status.tr_progress == STATUS_SENT)','line_number':6265,'multiline':False]['text':' Now this is always done so that DCS codes don't mess up things.','line_number':6266,'multiline':False]['text':' No match at this position, try next one','line_number':6275,'multiline':False]['text':' We only get here when we have a complete termcode match','line_number':6277,'multiline':False]['text':'
+	 * For scroll events from the GUI or MS-Windows console, fetch the
+	 * pointer coordinates so that we know which window to scroll later.
+	 ','line_number':6280,'multiline':True]['text':' not enough coordinates','line_number':6300,'multiline':False]['text':' equal to K_MOUSEMOVE','line_number':6305,'multiline':False]['text':'
+	 * If it is a mouse click, get the coordinates.
+	 ','line_number':6311,'multiline':True]['text':'
+	 * If using the GUI, then we get menu and scrollbar events.
+	 *
+	 * A menu event is encoded as K_SPECIAL, KS_MENU, KE_FILLER followed by
+	 * four bytes which are to be taken as a pointer to the vimmenu_T
+	 * structure.
+	 *
+	 * A tab line event is encoded as K_SPECIAL KS_TABLINE nr, where "nr"
+	 * is one byte with the tab index.
+	 *
+	 * A scrollbar event is K_SPECIAL, KS_VER_SCROLLBAR, KE_FILLER followed
+	 * by one byte representing the scrollbar number, and then four bytes
+	 * representing a long_u which is the new value of the scrollbar.
+	 *
+	 * A horizontal scrollbar event is K_SPECIAL, KS_HOR_SCROLLBAR,
+	 * KE_FILLER followed by four bytes representing a long_u which is the
+	 * new value of the scrollbar.
+	 ','line_number':6342,'multiline':True]['text':' The menu may have been deleted right after it was used, check','line_number':6371,'multiline':False]['text':' for that.','line_number':6372,'multiline':False]['text':' Selecting tabline tab or using its menu.','line_number':6383,'multiline':False]['text':' -1 in a byte gives 255','line_number':6390,'multiline':False]['text':' Selecting tabline tab or using its menu.','line_number':6396,'multiline':False]['text':' Get the last scrollbar event in the queue of the same type','line_number':6414,'multiline':False]['text':' not enough characters to make one','line_number':6435,'multiline':False]['text':' Get the last horiz. scrollbar event in the queue','line_number':6443,'multiline':False]['text':' not enough characters to make one','line_number':6456,'multiline':False]['text':' !USE_ON_FLY_SCROLL','line_number':6459,'multiline':False]['text':' FEAT_GUI','line_number':6460,'multiline':False]['text':'
+	 * Handle FocusIn/FocusOut event sequences reported by XTerm.
+	 * (CSI I/CSI O)
+	 ','line_number':6463,'multiline':True]['text':'
+	 * Change <xHome> to <Home>, <xUp> to <Up>, etc.
+	 ','line_number':6496,'multiline':True]['text':'
+	 * Add any modifier codes to our string.
+	 ','line_number':6501,'multiline':True]['text':' Finally, add the special key code to our string','line_number':6506,'multiline':False]['text':' from ":set <M-b>=xx"','line_number':6511,'multiline':False]['text':' Do not put K_IGNORE into the buffer, do return KEYLEN_REMOVED','line_number':6520,'multiline':False]['text':' to indicate what happened.','line_number':6521,'multiline':False]['text':' no match found','line_number':6540,'multiline':False]['text':'
+ * Get the text foreground color, if known.
+ ','line_number':6544,'multiline':True]['text':'
+ * Get the text background color, if known.
+ ','line_number':6558,'multiline':True]['text':'
+ * Replace any terminal code strings in from[] with the equivalent internal
+ * vim representation.	This is used for the "from" and "to" part of a
+ * mapping, and the "to" part of a menu command.
+ * Any strings like "<C-UP>" are also replaced, unless 'cpoptions' contains
+ * '<'.
+ * K_SPECIAL by itself is replaced by K_SPECIAL KS_SPECIAL KE_FILLER.
+ *
+ * The replacement is done in result[] and finally copied into allocated
+ * memory. If this all works well *bufp is set to the allocated memory and a
+ * pointer to it is returned. If something fails *bufp is set to NULL and from
+ * is returned.
+ *
+ * CTRL-V characters are removed.  When "flags" has REPTERM_FROM_PART, a
+ * trailing CTRL-V is included, otherwise it is removed (for ":map xx ^V", maps
+ * xx to nothing).  When 'cpoptions' does not contain 'B', a backslash can be
+ * used instead of a CTRL-V.
+ *
+ * Flags:
+ *  REPTERM_FROM_PART	see above
+ *  REPTERM_DO_LT	also translate <lt>
+ *  REPTERM_SPECIAL	always accept <key> notation
+ *  REPTERM_NO_SIMPLIFY	do not simplify <C-H> to 0x08 and set 8th bit for <A-x>
+ *
+ * "did_simplify" is set when some <C-H> or <A-x> code was simplified, unless
+ * it is NULL.
+ ','line_number':6573,'multiline':True]['text':' script ID to use for <SID>,','line_number':6604,'multiline':False]['text':' or 0 to use current_sctx','line_number':6605,'multiline':False]['text':' backslash is a special character','line_number':6614,'multiline':False]['text':' recognize <> key codes','line_number':6615,'multiline':False]['text':' recognize raw key codes','line_number':6616,'multiline':False]['text':' buffer for resulting string','line_number':6617,'multiline':False]['text':'
+     * Allocate space for the translation.  Worst case a single character is
+     * replaced by 6 bytes (shifted special key), plus a NUL at the end.
+     * In the rare case more might be needed ga_grow() must be called again.
+     ','line_number':6626,'multiline':True]['text':' out of memory','line_number':6632,'multiline':False]['text':'
+     * Check for #n at start only: function key n
+     ','line_number':6639,'multiline':True]['text':' #0 is F10 is "k;"','line_number':6647,'multiline':False]['text':' #3 is F3 is "k3"','line_number':6649,'multiline':False]['text':'
+     * Copy each byte from *from to result[dlen]
+     ','line_number':6653,'multiline':True]['text':'
+	 * If 'cpoptions' does not contain '<', check for special key codes,
+	 * like "<C-S-LeftMouse>"
+	 ','line_number':6658,'multiline':True]['text':'
+	     * Change <SID>Func to K_SNR <script-nr> _Func.  This name is used
+	     * for script-local user functions.
+	     * (room: 5 * 6 = 30 bytes; needed: 3 + <nr> + 1 <= 14)
+	     * Also change <SID>name.Func to K_SNR <import-script-nr> _Func.
+	     * Only if "name" is recognized as an import.
+	     ','line_number':6666,'multiline':True]['text':' Turn "<SID>name.Func"','line_number':6696,'multiline':False]['text':' into "scriptname#Func".','line_number':6697,'multiline':False]['text':'
+	 * If 'cpoptions' does not contain 'k', see if it's an actual key-code.
+	 * Note that this is also checked after replacing the <> form.
+	 * Single character codes are NOT replaced (e.g. ^H or DEL), because
+	 * it could be a character in the file.
+	 ','line_number':6737,'multiline':True]['text':' If terminal code matched, continue after it.','line_number':6752,'multiline':False]['text':'
+	     * Replace <Leader> by the value of "mapleader".
+	     * Replace <LocalLeader> by the value of "maplocalleader".
+	     * If "mapleader" or "maplocalleader" isn't set use a backslash.
+	     ','line_number':6762,'multiline':True]['text':' Allow up to 8 * 6 characters for "mapleader".','line_number':6784,'multiline':False]['text':'
+	 * Remove CTRL-V and ignore the next character.
+	 * For "from" side the CTRL-V at the end is included, for the "to"
+	 * part it is removed.
+	 * If 'cpoptions' does not contain 'B', also accept a backslash.
+	 ','line_number':6797,'multiline':True]['text':' skip CTRL-V or backslash','line_number':6806,'multiline':False]['text':' skip multibyte char correctly','line_number':6815,'multiline':False]['text':'
+	     * If the character is K_SPECIAL, replace it with K_SPECIAL
+	     * KS_SPECIAL KE_FILLER.
+	     * If compiled with the GUI replace CSI with K_CSI.
+	     ','line_number':6818,'multiline':True]['text':'
+     * Copy the new string to allocated memory.
+     * If this fails, just return from.
+     ','line_number':6844,'multiline':True]['text':'
+ * Find a termcode with keys 'src' (must be NUL terminated).
+ * Return the index in termcodes[], or -1 if not found.
+ ','line_number':6854,'multiline':True]['text':'
+ * Gather the first characters in the terminal key codes into a string.
+ * Used to speed up check_termcode().
+ ','line_number':6873,'multiline':True]['text':' the GUI codes are not in termcodes[]','line_number':6885,'multiline':False]['text':' the termcode response starts with DCS','line_number':6889,'multiline':False]['text':' in 8-bit mode','line_number':6890,'multiline':False]['text':'
+ * Show all termcodes (for ":set termcap")
+ * This code looks a lot like showoptions(), but is different.
+ * "flags" can have OPT_ONECOLUMN.
+ ','line_number':6904,'multiline':True]['text':' try to make three columns','line_number':6921,'multiline':False]['text':' try to make two columns','line_number':6922,'multiline':False]['text':' spaces between columns','line_number':6923,'multiline':False]['text':' no terminal codes (must be GUI)','line_number':6925,'multiline':False]['text':' Highlight title','line_number':6931,'multiline':False]['text':'
+     * Do the loop three times:
+     * 1. display the short items (non-strings and short strings)
+     * 2. display the medium items (medium length strings)
+     * 3. display the long items (remaining strings)
+     * When "flags" has OPT_ONECOLUMN do everything in 3.
+     ','line_number':6934,'multiline':True]['text':'
+	 * collect the items in items[]
+	 ','line_number':6943,'multiline':True]['text':'
+	 * display the items
+	 ','line_number':6958,'multiline':True]['text':' run == 3','line_number':6968,'multiline':False]['text':' go to next line','line_number':6972,'multiline':False]['text':' 'q' typed in more','line_number':6973,'multiline':False]['text':' make columns','line_number':6978,'multiline':False]['text':'
+ * Show one termcode entry.
+ * Output goes into IObuff[]
+ ','line_number':6993,'multiline':True]['text':'
+ * For Xterm >= 140 compiled with OPT_TCAP_QUERY: Obtain the actually used
+ * termcap codes from the terminal itself.
+ * We get them one by one to avoid a very long response string.
+ ','line_number':7046,'multiline':True]['text':' extra size to shut up LGTM','line_number':7065,'multiline':False]['text':' Don't do anything when going to exit.','line_number':7068,'multiline':False]['text':' Send up to 10 more requests out than we received.  Avoid sending too','line_number':7072,'multiline':False]['text':' many, there can be a buffer overflow somewhere.','line_number':7073,'multiline':False]['text':' Send the codes out right away.','line_number':7085,'multiline':False]['text':'
+ * Decode key code response from xterm: '<Esc>P1+r<name>=<string><Esc>\'.
+ * A "0" instead of the "1" indicates a code that isn't supported.
+ * Both <name> and <string> are encoded in hex.
+ * "code" points to the "0" or "1".
+ ','line_number':7090,'multiline':True]['text':' A '1' means the code is supported, a '0' means it isn't.','line_number':7106,'multiline':False]['text':' When half the length is > XT_LEN we can't use it.','line_number':7107,'multiline':False]['text':' Our names are currently all 2 characters.','line_number':7108,'multiline':False]['text':' Get the name from the response and find it in the table.','line_number':7111,'multiline':False]['text':' Color count is not a key code.','line_number':7133,'multiline':False]['text':' Existing entry with the same name and code - skip.','line_number':7151,'multiline':False]['text':' Delete an existing entry using the same code.','line_number':7161,'multiline':False]['text':' May request more codes now that we received one.','line_number':7179,'multiline':False]['text':'
+ * Check if there are any unanswered requests and deal with them.
+ * This is called before starting an external program or getting direct
+ * keyboard input.  We don't want responses to be send to that program or
+ * handled as typed text.
+ ','line_number':7184,'multiline':True]['text':' If no codes requested or all are answered, no need to wait.','line_number':7195,'multiline':False]['text':' Vgetc() will check for and handle any response.','line_number':7199,'multiline':False]['text':' Keep calling vpeekc() until we don't get any responses.','line_number':7200,'multiline':False]['text':' nothing available','line_number':7206,'multiline':False]['text':' If a response is recognized it's replaced with K_IGNORE, must read','line_number':7209,'multiline':False]['text':' it from the input stream.  If there is no K_IGNORE we can't do','line_number':7210,'multiline':False]['text':' anything, break here (there might be some responses further on, but','line_number':7211,'multiline':False]['text':' we don't want to throw away any typed chars).','line_number':7212,'multiline':False]['text':'
+ * For Win32 console: update termcap codes for existing console attributes.
+ ','line_number':7232,'multiline':True]['text':' FOREGROUND_INTENSITY','line_number':7239,'multiline':False]['text':' did not find it','line_number':7243,'multiline':False]['text':' Use cmd.exe 4bit palette.','line_number':7262,'multiline':False]['text':' Use 24bit RGB colors using VTP.','line_number':7263,'multiline':False]['text':' Emulate xterm's 256-color palette using VTP.','line_number':7264,'multiline':False]['text':' value of KS_','line_number':7270,'multiline':False]['text':' code in RGB mode','line_number':7271,'multiline':False]['text':' code in 256color mode','line_number':7272,'multiline':False]['text':' real buffer','line_number':7273,'multiline':False]['text':' normal','line_number':7278,'multiline':False]['text':' reverse','line_number':7279,'multiline':False]['text':' bold','line_number':7280,'multiline':False]['text':' standout: bright red text','line_number':7281,'multiline':False]['text':' standout end: default color','line_number':7282,'multiline':False]['text':' italic','line_number':7283,'multiline':False]['text':' italic end','line_number':7284,'multiline':False]['text':' underscore','line_number':7285,'multiline':False]['text':' underscore end','line_number':7286,'multiline':False]['text':' set background color','line_number':7288,'multiline':False]['text':' set foreground color','line_number':7289,'multiline':False]['text':' set background color','line_number':7293,'multiline':False]['text':' set foreground color','line_number':7294,'multiline':False]['text':' colors','line_number':7298,'multiline':False]['text':' terminator','line_number':7299,'multiline':False]['text':'
+ * Find the first entry for "code" in the builtin termcap for "name".
+ * Returns NULL when not found.
+ ','line_number':7302,'multiline':True]['text':'
+ * For Win32 console: replace the sequence immediately after termguicolors.
+ ','line_number':7324,'multiline':True]['text':' Preserve the original value.','line_number':7343,'multiline':False]['text':'   R    G    B','line_number':7391,'multiline':False]['text':' black','line_number':7392,'multiline':False]['text':' dark red','line_number':7393,'multiline':False]['text':' dark green','line_number':7394,'multiline':False]['text':' dark yellow / brown','line_number':7395,'multiline':False]['text':' dark blue','line_number':7396,'multiline':False]['text':' dark magenta','line_number':7397,'multiline':False]['text':' dark cyan','line_number':7398,'multiline':False]['text':' light grey','line_number':7399,'multiline':False]['text':' dark grey','line_number':7401,'multiline':False]['text':' light red','line_number':7402,'multiline':False]['text':' light green','line_number':7403,'multiline':False]['text':' yellow','line_number':7404,'multiline':False]['text':' light blue','line_number':7405,'multiline':False]['text':' light magenta','line_number':7406,'multiline':False]['text':' light cyan','line_number':7407,'multiline':False]['text':' white','line_number':7408,'multiline':False]['text':' Mapping between cterm indices < 16 and their counterpart in the ANSI palette.','line_number':7412,'multiline':False]['text':' 216 color cube','line_number':7458,'multiline':False]['text':' 24 grey scale ramp','line_number':7467,'multiline':False]['text':'
+ * Replace K_BS by <BS> and K_DEL by <DEL>.
+ * Include any modifiers into the key and drop them.
+ * Returns "len" adjusted for replaced codes.
+ ','line_number':7484,'multiline':True]['text':' Try to use the modifier to modify the key.  In any case drop the','line_number':7503,'multiline':False]['text':' modifier.','line_number':7504,'multiline':False]

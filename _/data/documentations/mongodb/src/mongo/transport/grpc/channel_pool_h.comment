@@ -1,0 +1,67 @@
+['text':'*
+ *    Copyright (C) 2023-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ * Allows maintaining a pool of `Channel` objects and using them to create instances of `Stub`.
+ * `Channel` and `Stub` are defined as template types to facilitate unit-testing.
+ * This type is oblivious to how gRPC channels and stubs are created, and relies on the factory
+ * functions (`ChannelFactory` and `StubFactory`) to handle that.
+ ','line_number':51,'multiline':True]['text':'*
+     * Maintains state for an individual `Channel`: allows deferred creation of `Channel` as well as
+     * tracking its last-used-time.
+     * All public APIs for this type are thread-safe.
+     ','line_number':64,'multiline':True]['text':'*
+     * RAII type for `Stub` that helps with identifying idle channels.
+     * In terms of thread-safety, this type follows the semantics of `Stub`.
+     ','line_number':112,'multiline':True]['text':'*
+     * Constructs a new instance of `ChannelPool` and accepts the following:
+     * - `clockSource` is used to record last-used-time for channels (doesn't need much accuracy).
+     * - `sslModeResolver` translates `ConnectSSLMode` into a boolean that decides if an encrypted
+     *   channel should be used to create new stubs.
+     * - `channelFactory` is the factory for creating new channels.
+     * - `stubFactory` is the factory for creating new stubs.
+     ','line_number':134,'multiline':True]['text':'*
+     * Creates a new stub to `remote` that uses `sslMode`. Internally, an existing channel is used
+     * to create the new stub, if available. Otherwise, a new channel is created.
+     ','line_number':151,'multiline':True]['text':'*
+     * Drops all idle channels that are not used for the past `sinceLastUsed` minutes. An idle
+     * channel is one that is not referenced by any instance of `StubHandle`. Returns the number of
+     * dropped channels.
+     * Internally, this will iterate through all channels in the pool. This should not have any
+     * performance implications since we drop idle channels infrequently (e.g., every 30 minutes)
+     * and expect the maximum number of open channels to be a two digit number.
+     ','line_number':182,'multiline':True]['text':' There are stubs referencing this channel, or it's recently used.','line_number':193,'multiline':False]['text':'*
+     * Drops all channels and returns the number of dropped channels. May only be called when all
+     * stub handles (i.e., instances of `StubHandle`) created by this pool are released. Otherwise,
+     * it will terminate the process.
+     ','line_number':209,'multiline':True]['text':'*
+     * Iterates through all channels, calls into `shouldKeep` for each channel with a reference to
+     * its `ChannelState`, and decides if the channel should be dropped based on the return value.
+     * A channel cannot be dropped so long as it's being referenced by a `Stub`. Attempting to do
+     * so is a process fatal event.
+     * Returns a vector containing the only reference to the dropped channels.
+     ','line_number':231,'multiline':True]['text':' NOLINT','line_number':259,'multiline':False]['text':' namespace mongo::transport::grpc','line_number':265,'multiline':False]

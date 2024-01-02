@@ -1,0 +1,73 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':' js::DumpObject','line_number':23,'multiline':False]['text':'
+ * Write barrier verification
+ *
+ * The next few functions are for write barrier verification.
+ *
+ * The VerifyBarriers function is a shorthand. It checks if a verification phase
+ * is currently running. If not, it starts one. Otherwise, it ends the current
+ * phase and starts a new one.
+ *
+ * The user can adjust the frequency of verifications, which causes
+ * VerifyBarriers to be a no-op all but one out of N calls. However, if the
+ * |always| parameter is true, it starts a new phase no matter what.
+ *
+ * Pre-Barrier Verifier:
+ *   When StartVerifyBarriers is called, a snapshot is taken of all objects in
+ *   the GC heap and saved in an explicit graph data structure. Later,
+ *   EndVerifyBarriers traverses the heap again. Any pointer values that were in
+ *   the snapshot and are no longer found must be marked; otherwise an assertion
+ *   triggers. Note that we must not GC in between starting and finishing a
+ *   verification phase.
+ ','line_number':50,'multiline':True]['text':'
+ * The verifier data structures are simple. The entire graph is stored in a
+ * single block of memory. At the beginning is a VerifyNode for the root
+ * node. It is followed by a sequence of EdgeValues--the exact number is given
+ * in the node. After the edges come more nodes and their edges.
+ *
+ * The edgeptr and term fields are used to allocate out of the block of memory
+ * for the graph. If we run out of memory (i.e., if edgeptr goes beyond term),
+ * we just abandon the verification.
+ *
+ * The nodemap field is a hashtable that maps from the address of the GC thing
+ * to the VerifyNode that represents it.
+ ','line_number':86,'multiline':True]['text':' The gcNumber when the verification began. ','line_number':105,'multiline':True]['text':' This counts up to gcZealFrequency to decide whether to verify. ','line_number':108,'multiline':True]['text':' This graph represents the initial GC "snapshot". ','line_number':111,'multiline':True]['text':' We don't care about weak edges here. Since they are not marked they','line_number':128,'multiline':False]['text':' cannot cause the problem that the pre-write barrier protects against.','line_number':129,'multiline':False]['text':'
+ * This function builds up the heap snapshot by adding edges to the current
+ * node.
+ ','line_number':135,'multiline':True]['text':' Skip things in other runtimes.','line_number':142,'multiline':False]['text':' Create the root node. ','line_number':230,'multiline':True]['text':' Make all the roots be edges emanating from the root node. ','line_number':236,'multiline':True]['text':' For each edge, make a node for it if one doesn't already exist. ','line_number':245,'multiline':True]['text':'
+ * This function is called by EndVerifyBarriers for every heap edge. If the edge
+ * already existed in the original snapshot, we "cancel it out" by overwriting
+ * it with nullptr. EndVerifyBarriers later asserts that the remaining
+ * non-nullptr edges (i.e., the ones from the original snapshot that must have
+ * been modified) must point to marked objects.
+ ','line_number':293,'multiline':True]['text':' Skip things in other runtimes.','line_number':301,'multiline':False]['text':' Avoid n^2 behavior. ','line_number':306,'multiline':True]['text':' Permanent atoms and well-known symbols aren't marked during graph','line_number':324,'multiline':False]['text':' traversal.','line_number':325,'multiline':False]['text':' Flush the barrier tracer's buffer to ensure the pre-barrier has marked','line_number':347,'multiline':False]['text':' everything it's going to. This usually happens as part of GC.','line_number':348,'multiline':False]['text':' Now that barrier marking has finished, prepare the heap to allow this','line_number':352,'multiline':False]['text':' method to trace cells and discover their outgoing edges.','line_number':353,'multiline':False]['text':' We need to disable barriers before tracing, which may invoke barriers. ','line_number':358,'multiline':True]['text':' Start after the roots. ','line_number':374,'multiline':True]['text':'** Barrier Verifier Scheduling **','line_number':407,'multiline':True]['text':'
+   * Strip zeros for better distribution after multiplying by the golden
+   * ratio.
+   ','line_number':458,'multiline':True]['text':'
+   * Perform a non-incremental mark for all collecting zones and record
+   * the results for later comparison.
+   *
+   * Currently this does not validate gray marking.
+   ','line_number':493,'multiline':True]['text':' Wait for off-thread parsing which can allocate. ','line_number':505,'multiline':True]['text':' Save existing mark bits. ','line_number':511,'multiline':True]['text':'
+   * Temporarily clear the weakmaps' mark flags for the compartments we are
+   * collecting.
+   ','line_number':531,'multiline':True]['text':'
+   * For saving, smush all of the keys into one big table and split them back
+   * up into per-zone tables when restoring.
+   ','line_number':538,'multiline':True]['text':'
+   * After this point, the function should run to completion, so we shouldn't
+   * do anything fallible.
+   ','line_number':567,'multiline':True]['text':' Re-do all the marking, but non-incrementally. ','line_number':573,'multiline':True]['text':' Update zone state for gray marking. ','line_number':614,'multiline':True]['text':' Restore zone state. ','line_number':626,'multiline':True]['text':' Take a copy of the non-incremental mark state and restore the original. ','line_number':633,'multiline':True]['text':'
+   * Validates the incremental marking for a single compartment by comparing
+   * the mark bits to those previously recorded for a non-incremental mark.
+   ','line_number':674,'multiline':True]['text':' Allocated after we did the non-incremental mark. ','line_number':691,'multiline':True]['text':'
+         * If a non-incremental GC wouldn't have collected a cell, then
+         * an incremental GC won't collect it.
+         ','line_number':715,'multiline':True]['text':'
+         * If the cycle collector isn't allowed to collect an object
+         * after a non-incremental GC has run, then it isn't allowed to
+         * collected it after an incremental GC.
+         ','line_number':723,'multiline':True]['text':' JS_GC_ZEAL ','line_number':760,'multiline':True]['text':' Don't trace into GC things owned by another runtime.','line_number':824,'multiline':False]['text':' Don't trace into GC in zones being used by helper threads.','line_number':829,'multiline':False]['text':' The analysis thinks that traceRuntime might GC by calling a GC callback.','line_number':842,'multiline':False]['text':' Moving','line_number':911,'multiline':False]['text':' Weak gray->black edges are allowed.','line_number':958,'multiline':False]['text':' Ignore failure.','line_number':990,'multiline':False]['text':' Debugger weak maps can have keys in different zones.','line_number':1030,'multiline':False]['text':' Values belonging to other runtimes or in uncollected zones are treated as','line_number':1045,'multiline':False]['text':' black.','line_number':1046,'multiline':False]['text':' defined(JS_GC_ZEAL) || defined(DEBUG)','line_number':1097,'multiline':False]['text':' Return whether an arbitrary pointer is within a cell with the given','line_number':1100,'multiline':False]['text':' traceKind. Only for assertions.','line_number':1101,'multiline':False]['text':' DEBUG','line_number':1118,'multiline':False]

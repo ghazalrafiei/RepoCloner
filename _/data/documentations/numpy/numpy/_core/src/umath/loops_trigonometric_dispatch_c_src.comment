@@ -1,0 +1,68 @@
+['text':'@targets
+ ** $maxopt baseline
+ ** (avx2 fma3) avx512f
+ ** vsx2 vsx3 vsx4
+ ** neon_vfpv4
+ ** vxe vxe2
+ *','line_number':1,'multiline':True]['text':'
+ * TODO:
+ * - use vectorized version of Payne-Hanek style reduction for large elements or
+ *   when there's no native FUSED support instead of fallback to libc
+ ','line_number':13,'multiline':True]['text':' native support','line_number':18,'multiline':False]['text':'*begin repeat
+ *  #check = F64, F32#
+ *  #sfx  = f64, f32#
+ ','line_number':19,'multiline':True]['text':'
+ * Vectorized Cody-Waite range reduction technique
+ * Performs the reduction step x* = x - y*C in three steps:
+ * 1) x* = x - y*c1
+ * 2) x* = x - y*c2
+ * 3) x* = x - y*c3
+ * c1, c2 are exact floating points, c3 = C - c1 - c2 simulates higher precision
+ ','line_number':24,'multiline':True]['text':'*end repeat*','line_number':41,'multiline':True]['text':'*begin repeat
+ *  #op = cos, sin#
+ ','line_number':44,'multiline':True]['text':' MSVC doesn't compile with direct vector access, so we copy it here','line_number':54,'multiline':False]['text':' as we have no npyv_get_lane/npyv_set_lane intrinsics','line_number':55,'multiline':False]['text':'*end repeat*','line_number':67,'multiline':True]['text':'
+ * Approximate sine algorithm for x \in [-pi/2, pi/2]
+ * worst-case error is 3.5 ulp.
+ * abs error: 0x1.be222a58p-53 in [-pi/2, pi/2].
+ ','line_number':69,'multiline':True]['text':' r = |x| - n*pi  (range reduction into -pi/2 .. pi/2).  ','line_number':97,'multiline':True]['text':' top12 (asuint64 (0x1p-509)).  ','line_number':108,'multiline':True]['text':' top12 (asuint64 (RangeVal)) - SIMD_TINY_BOUND.  ','line_number':109,'multiline':True]['text':' n = rint((|x|+pi/2)/pi) - 0.5.  ','line_number':127,'multiline':True]['text':' r = |x| - n*pi  (range reduction into -pi/2 .. pi/2).  ','line_number':133,'multiline':True]['text':' sin(r) poly approx.  ','line_number':136,'multiline':True]['text':' sign.  ','line_number':139,'multiline':True]['text':' n = rint(|x|/pi).  ','line_number':149,'multiline':True]['text':' r = |x| - n*pi  (range reduction into -pi/2 .. pi/2).  ','line_number':154,'multiline':True]['text':' sin(r) poly approx.  ','line_number':157,'multiline':True]['text':' sign.  ','line_number':160,'multiline':True]['text':'*begin repeat
+ *  #op = cos, sin#
+ ','line_number':164,'multiline':True]['text':' If fenv exceptions are to be triggered correctly, set any special lanes
+        to 1 (which is neutral w.r.t. fenv). These lanes will be fixed by
+        scalar loop later.  ','line_number':188,'multiline':True]['text':' Some in range, at least one calculation is useful','line_number':193,'multiline':False]['text':'*end repeat*','line_number':211,'multiline':True]['text':' NPY_SIMD_F64','line_number':212,'multiline':False]['text':'
+ * Approximate cosine algorithm for x \in [-PI/4, PI/4]
+ * Maximum ULP across all 32-bit floats = 0.875
+ ','line_number':215,'multiline':True]['text':'
+ * Approximate sine algorithm for x \in [-PI/4, PI/4]
+ * Maximum ULP across all 32-bit floats = 0.647
+ * Polynomial approximation based on unpublished work by T. Myklebust
+ ','line_number':234,'multiline':True]['text':'
+ * Vectorized approximate sine/cosine algorithms: The following code is a
+ * vectorized version of the algorithm presented here:
+ * https://stackoverflow.com/questions/30463616/payne-hanek-algorithm-implementation-in-c/30465751#30465751
+ * (1) Load data in registers and generate mask for elements that are
+ * within range [-71476.0625f, 71476.0625f] for cosine and [-117435.992f,
+ * 117435.992f] for sine.
+ * (2) For elements within range, perform range reduction using Cody-Waite's
+ * method: x* = x - y*PI/2, where y = rint(x*2/PI). x* \in [-PI/4, PI/4].
+ * (3) Map cos(x) to (+/-)sine or (+/-)cosine of x* based on the quadrant k =
+ * int(y).
+ * (4) For elements outside that range, Cody-Waite reduction performs poorly
+ * leading to catastrophic cancellation. We compute cosine by calling glibc in
+ * a scalar fashion.
+ * (5) Vectorized implementation has a max ULP of 1.49 and performs at least
+ * 5-7x(x86) - 2.5-3x(Power) - 1-2x(Arm) faster than scalar implementations
+ * when magnitude of all elements in the array < 71476.0625f (117435.992f for sine).
+ * Worst case performance is when all the elements are large leading to about 1-2% reduction in
+ * performance.
+ ','line_number':254,'multiline':True]['text':' Load up frequently used constants','line_number':284,'multiline':False]['text':' Cody-Waite's range','line_number':293,'multiline':False]['text':' Eliminate NaN to avoid FP invalid exception','line_number':310,'multiline':False]['text':'
+         * For elements outside of this range, Cody-Waite's range reduction
+         * becomes inaccurate and we will call libc to compute cosine for
+         * these numbers
+         ','line_number':315,'multiline':True]['text':' round to nearest, -0.0f -> +0.0f, and |a| must be <= 0x1.0p+22','line_number':324,'multiline':False]['text':' Cody-Waite's range reduction algorithm','line_number':328,'multiline':False]['text':' compute cosine and sine','line_number':334,'multiline':False]['text':' blend sin and cos based on the quadrant','line_number':342,'multiline':False]['text':' multiply by -1 for appropriate elements','line_number':346,'multiline':False]['text':' process elements using libc for large elements','line_number':361,'multiline':False]['text':' NPY_SIMD_FP32','line_number':382,'multiline':False]['text':' NYP_SIMD_FMA3','line_number':383,'multiline':False]['text':'*begin repeat
+ *  #func = cos, sin#
+ ','line_number':385,'multiline':True]['text':' Disable SIMD code and revert to libm: see
+     * https://mail.python.org/archives/list/numpy-discussion@python.org/thread/C6EYZZSR4EWGVKHAZXLE7IBILRMNVK7L/
+     * for detailed discussion on this','line_number':391,'multiline':True]['text':'#if NPY_SIMD_F64 && NPY_SIMD_FMA3','line_number':394,'multiline':False]['text':'*end repeat*','line_number':420,'multiline':True]['text':'*begin repeat
+ *  #func = sin, cos#
+ *  #enum = SIMD_COMPUTE_SIN, SIMD_COMPUTE_COS#
+ ','line_number':422,'multiline':True]['text':'*end repeat*','line_number':454,'multiline':True]

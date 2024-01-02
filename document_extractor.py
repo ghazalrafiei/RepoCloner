@@ -1,7 +1,8 @@
 import os
 import shutil
-from config import GITHUB_REPOS_LINKS, DATA_DIR, DOCS_DIR
+from config import GITHUB_REPOS_LINKS, DATA_DIR, DOCS_DIR, DOC_FILE_FORMATS
 from utils import recursive_file_finder
+from comment_parser import comment_parser
 
 def copy_files_with_same_structure(src_dir, dst_dir, file_format):
     """
@@ -14,7 +15,6 @@ def copy_files_with_same_structure(src_dir, dst_dir, file_format):
         dest = src.replace(src_dir, dst_dir)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copy2(src, dest)
-
 
 def naive_document_extractor(repo_dir):
     """
@@ -29,13 +29,40 @@ def naive_document_extractor(repo_dir):
     if not os.path.exists(doc_dir):
         os.mkdir(doc_dir)
     
-    copy_files_with_same_structure(repo_dir, doc_dir, '.md')
+    for file_format in DOC_FILE_FORMATS:
+        copy_files_with_same_structure(repo_dir, doc_dir, file_format)
+
+def raw_comment_extractor(repo_dir):
+    """
+    src_dir: str
+    dst_dir: str
+    """
+
+    files = recursive_file_finder(repo_dir,'.**')
+    for src in files:
+        repo_name = repo_dir.split('/')[-1]
+        doc_dir = os.path.join(DOCS_DIR, repo_name)
+        dest = src.replace(repo_dir, doc_dir)
+        comments = []
+        try:
+            comments = comment_parser.extract_comments(src)
+        except Exception as e:
+            print('ERROR: ', src.split('.')[-1], e, src, dest)
         
+        if len(comments):
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            dest = dest.replace('.','_')+'.comment'
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(dest, 'w') as f:
+                for c in comments:
+                    f.write(f"['text':'{c._text}','line_number':{c._line_number},'multiline':{c._multiline}]\n".strip())
 
 def main():
     for repo in GITHUB_REPOS_LINKS.keys():
         repo_dir = os.path.join(DATA_DIR, repo)
         naive_document_extractor(repo_dir)
+        raw_comment_extractor(repo_dir)
 
 if __name__ == '__main__':
     main()
+    # './data/datasets/bazel/src/main/cpp/archive_utils.cc'

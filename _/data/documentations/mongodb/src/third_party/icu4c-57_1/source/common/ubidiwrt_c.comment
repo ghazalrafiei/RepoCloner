@@ -1,0 +1,91 @@
+['text':'
+******************************************************************************
+*
+*   Copyright (C) 2000-2015, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+******************************************************************************
+*   file name:  ubidiwrt.c
+*   encoding:   US-ASCII
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 1999aug06
+*   created by: Markus W. Scherer, updated by Matitiahu Allouche
+*
+* This file contains implementations for BiDi functions that use
+* the core algorithm and core API to write reordered text.
+','line_number':1,'multiline':True]['text':'
+ * The function implementations in this file are designed
+ * for UTF-16 and UTF-32, not for UTF-8.
+ *
+ * Assumptions that are not true for UTF-8:
+ * - Any code point always needs the same number of code units
+ *   ("minimum-length-problem" of UTF-8)
+ * - The BiDi control characters need only one code unit each
+ *
+ * Further assumptions for all UTFs:
+ * - u_charMirror(c) needs the same number of code units as c
+ ','line_number':29,'multiline':True]['text':'
+ * When we have UBIDI_OUTPUT_REVERSE set on ubidi_writeReordered(), then we
+ * semantically write RTL runs in reverse and later reverse them again.
+ * Instead, we actually write them in forward order to begin with.
+ * However, if the RTL run was to be mirrored, we need to mirror here now
+ * since the implicit second reversal must not do it.
+ * It looks strange to do mirroring in LTR output, but it is only because
+ * we are writing RTL output in reverse.
+ ','line_number':47,'multiline':True]['text':' optimize for several combinations of options ','line_number':61,'multiline':True]['text':' simply copy the LTR run to the destination ','line_number':64,'multiline':True]['text':' do mirroring ','line_number':76,'multiline':True]['text':' copy the LTR run and remove any BiDi control characters ','line_number':92,'multiline':True]['text':' preflight the length ','line_number':101,'multiline':True]['text':' remove BiDi control characters and do mirroring ','line_number':116,'multiline':True]['text':' preflight the length ','line_number':130,'multiline':True]['text':' end of switch ','line_number':146,'multiline':True]['text':'
+     * RTL run -
+     *
+     * RTL runs need to be copied to the destination in reverse order
+     * of code points, not code units, to keep Unicode characters intact.
+     *
+     * The general strategy for this is to read the source text
+     * in backward order, collect all code units for a code point
+     * (and optionally following combining characters, see below),
+     * and copy all these code units in ascending order
+     * to the destination for this run.
+     *
+     * Several options request whether combining characters
+     * should be kept after their base characters,
+     * whether BiDi control characters should be removed, and
+     * whether characters should be replaced by their mirror-image
+     * equivalent Unicode characters.
+     ','line_number':154,'multiline':True]['text':' optimize for several combinations of options ','line_number':175,'multiline':True]['text':'
+         * With none of the "complicated" options set, the destination
+         * run will have the same length as the source run,
+         * and there is no mirroring and no keeping combining characters
+         * with their base characters.
+         ','line_number':178,'multiline':True]['text':' preserve character integrity ','line_number':190,'multiline':True]['text':' i is always after the last code unit known to need to be kept in this segment ','line_number':192,'multiline':True]['text':' collect code units for one base character ','line_number':195,'multiline':True]['text':' copy this base character ','line_number':198,'multiline':True]['text':'
+         * Here, too, the destination
+         * run will have the same length as the source run,
+         * and there is no mirroring.
+         * We do need to keep combining characters with their base characters.
+         ','line_number':206,'multiline':True]['text':' preserve character integrity ','line_number':218,'multiline':True]['text':' i is always after the last code unit known to need to be kept in this segment ','line_number':220,'multiline':True]['text':' collect code units and modifier letters for one base character ','line_number':223,'multiline':True]['text':' copy this "user character" ','line_number':228,'multiline':True]['text':'
+         * With several "complicated" options set, this is the most
+         * general and the slowest copying of an RTL run.
+         * We will do mirroring, remove BiDi controls, and
+         * keep combining characters with their base characters
+         * as requested.
+         ','line_number':236,'multiline':True]['text':' we need to find out the destination length of the run,
+               which will not include the BiDi control characters ','line_number':246,'multiline':True]['text':' preserve character integrity ','line_number':267,'multiline':True]['text':' i is always after the last code unit known to need to be kept in this segment ','line_number':269,'multiline':True]['text':' collect code units for one base character ','line_number':272,'multiline':True]['text':' collect modifier letters for this base character ','line_number':275,'multiline':True]['text':' do not copy this BiDi control character ','line_number':282,'multiline':True]['text':' copy this "user character" ','line_number':286,'multiline':True]['text':' mirror only the base character ','line_number':289,'multiline':True]['text':' end of switch ','line_number':301,'multiline':True]['text':' more error checking ','line_number':317,'multiline':True]['text':' do input and output overlap? ','line_number':325,'multiline':True]['text':' nothing to do ','line_number':340,'multiline':True]['text':' more error checking ','line_number':361,'multiline':True]['text':' do input and output overlap? ','line_number':370,'multiline':True]['text':' nothing to do ','line_number':380,'multiline':True]['text':' destSize shrinks, later destination length=destCapacity-destSize ','line_number':389,'multiline':True]['text':'
+     * Option "insert marks" implies UBIDI_INSERT_LRM_FOR_NUMERIC if the
+     * reordering mode (checked below) is appropriate.
+     ','line_number':393,'multiline':True]['text':'
+     * Option "remove controls" implies UBIDI_REMOVE_BIDI_CONTROLS
+     * and cancels UBIDI_INSERT_LRM_FOR_NUMERIC.
+     ','line_number':401,'multiline':True]['text':'
+     * If we do not perform the "inverse BiDi" algorithm, then we
+     * don't need to insert any LRMs, and don't need to test for it.
+     ','line_number':409,'multiline':True]['text':'
+     * Iterate through all visual runs and copy the run text segments to
+     * the destination, according to the options.
+     *
+     * The tests for where to insert LRMs ignore the fact that there may be
+     * BN codes or non-BMP code points at the beginning and end of a run;
+     * they may insert LRMs unnecessarily but the tests are faster this way
+     * (this would have to be improved for UTF-8).
+     *
+     * Note that the only errors that are set by doWriteXY() are buffer overflow
+     * errors. Ignore them until the end, and continue for preflighting.
+     ','line_number':419,'multiline':True]['text':' forward output ','line_number':432,'multiline':True]['text':' do not insert BiDi controls ','line_number':434,'multiline':True]['text':' insert BiDi controls for "inverse BiDi" ','line_number':451,'multiline':True]['text':' check if something relevant in insertPoints ','line_number':461,'multiline':True]['text':' BiDi controls count ','line_number':463,'multiline':True]['text':'run>0 &&','line_number':469,'multiline':True]['text':'run<runCount-1 &&','line_number':495,'multiline':True]['text':' RTL run ','line_number':511,'multiline':True]['text':'run>0 &&','line_number':513,'multiline':True]['text':'run<runCount-1 &&','line_number':539,'multiline':True]['text':' reverse output ','line_number':559,'multiline':True]['text':' do not insert BiDi controls ','line_number':561,'multiline':True]['text':' insert BiDi controls for "inverse BiDi" ','line_number':578,'multiline':True]['text':' reverse output ','line_number':584,'multiline':True]['text':'run<runCount-1 &&','line_number':589,'multiline':True]['text':'run>0 &&','line_number':604,'multiline':True]['text':'run<runCount-1 &&','line_number':611,'multiline':True]['text':'run>0 &&','line_number':626,'multiline':True]

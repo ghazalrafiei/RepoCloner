@@ -1,0 +1,152 @@
+['text':'
+*******************************************************************************
+* Copyright (C) 2013-2014, International Business Machines
+* Corporation and others.  All Rights Reserved.
+*******************************************************************************
+* collationbuilder.h
+*
+* created on: 2013may06
+* created by: Markus W. Scherer
+','line_number':1,'multiline':True]['text':'* Implements CollationRuleParser::Sink. ','line_number':56,'multiline':True]['text':'*
+     * Returns the secondary or tertiary weight preceding the current node's weight.
+     * node=nodes[index].
+     ','line_number':59,'multiline':True]['text':'* Implements CollationRuleParser::Sink. ','line_number':68,'multiline':True]['text':'*
+     * Picks one of the current CEs and finds or inserts a node in the graph
+     * for the CE + strength.
+     ','line_number':73,'multiline':True]['text':'* Finds or inserts the node for a root CE's primary weight. ','line_number':80,'multiline':True]['text':'* Finds or inserts the node for a secondary or tertiary weight. ','line_number':82,'multiline':True]['text':'*
+     * Makes and inserts a new tailored node into the list, after the one at index.
+     * Skips over nodes of weaker strength to maintain collation order
+     * ("postpone insertion").
+     * @return the new node's index
+     ','line_number':86,'multiline':True]['text':'*
+     * Inserts a new node into the list, between list-adjacent items.
+     * The node's previous and next indexes must not be set yet.
+     * @return the new node's index
+     ','line_number':94,'multiline':True]['text':'*
+     * Finds the node which implies or contains a common=05 weight of the given strength
+     * (secondary or tertiary), if the current node is stronger.
+     * Skips weaker nodes and tailored nodes if the current node is stronger
+     * and is followed by an explicit-common-weight node.
+     * Always returns the input index if that node is no stronger than the given strength.
+     ','line_number':102,'multiline':True]['text':'* Implements CollationRuleParser::Sink. ','line_number':114,'multiline':True]['text':'* Implements CollationRuleParser::Sink. ','line_number':118,'multiline':True]['text':'*
+     * Adds the mapping and its canonical closure.
+     * Takes ce32=dataBuilder->encodeCEs(...) so that the data builder
+     * need not re-encode the CEs multiple times.
+     ','line_number':122,'multiline':True]['text':'*
+     * Walks the tailoring graph and overwrites tailored nodes with new CEs.
+     * After this, the graph is destroyed.
+     * The nodes array can then be used only as a source of tailored CEs.
+     ','line_number':152,'multiline':True]['text':'*
+     * Counts the tailored nodes of the given strength up to the next node
+     * which is either stronger or has an explicit weight of this strength.
+     ','line_number':158,'multiline':True]['text':'* Replaces temporary CEs with the final CEs they point to. ','line_number':164,'multiline':True]['text':'*
+     * Encodes "temporary CE" data into a CE that fits into the CE32 data structure,
+     * with 2-byte primary, 1-byte secondary and 6-bit tertiary,
+     * with valid CE byte values.
+     *
+     * The index must not exceed 20 bits (0xfffff).
+     * The strength must fit into 2 bits (UCOL_PRIMARY..UCOL_QUATERNARY).
+     *
+     * Temporary CEs are distinguished from real CEs by their use of
+     * secondary weights 06..45 which are otherwise reserved for compressed sort keys.
+     *
+     * The case bits are unused and available.
+     ','line_number':167,'multiline':True]['text':' CE byte offsets, to ensure valid CE bytes, and case bits 11','line_number':182,'multiline':False]['text':' index bits 19..13 -> primary byte 1 = CE bits 63..56 (byte values 40..BF)','line_number':184,'multiline':False]['text':' index bits 12..6 -> primary byte 2 = CE bits 55..48 (byte values 40..BF)','line_number':186,'multiline':False]['text':' index bits 5..0 -> secondary byte 1 = CE bits 31..24 (byte values 06..45)','line_number':188,'multiline':False]['text':' strength bits 1..0 -> tertiary byte 1 = CE bits 13..8 (byte values 20..23)','line_number':190,'multiline':False]['text':' not a long-primary/long-secondary CE32','line_number':217,'multiline':False]['text':'* At most 1M nodes, limited by the 20 bits in node bit fields. ','line_number':223,'multiline':True]['text':'*
+     * Node bit 6 is set on a primary node if there are nodes
+     * with secondary values below the common secondary weight (05).
+     ','line_number':225,'multiline':True]['text':'*
+     * Node bit 5 is set on a primary or secondary node if there are nodes
+     * with tertiary values below the common tertiary weight (05).
+     ','line_number':230,'multiline':True]['text':'*
+     * Node bit 3 distinguishes a tailored node, which has no weight value,
+     * from a node with an explicit (root or default) weight.
+     ','line_number':235,'multiline':True]['text':'*
+     * Indexes of nodes with root primary weights, sorted by primary.
+     * Compact form of a TreeMap from root primary to node index.
+     *
+     * This is a performance optimization for finding reset positions.
+     * Without this, we would have to search through the entire nodes list.
+     * It also allows storing root primary weights in list head nodes,
+     * without previous index, leaving room in root primary nodes for 32-bit primary weights.
+     ','line_number':309,'multiline':True]['text':'*
+     * Data structure for assigning tailored weights and CEs.
+     * Doubly-linked lists of nodes in mostly collation order.
+     * Each list starts with a root primary node and ends with a nextIndex of 0.
+     *
+     * When there are any nodes in the list, then there is always a root primary node at index 0.
+     * This allows some code not to have to check explicitly for nextIndex==0.
+     *
+     * Root primary nodes have 32-bit weights but do not have previous indexes.
+     * All other nodes have at most 16-bit weights and do have previous indexes.
+     *
+     * Nodes with explicit weights store root collator weights,
+     * or default weak weights (e.g., secondary 05) for stronger nodes.
+     * "Tailored" nodes, with the IS_TAILORED bit set,
+     * do not store explicit weights but rather
+     * create a difference of a certain strength from the preceding node.
+     *
+     * A root node is followed by either
+     * - a root/default node of the same strength, or
+     * - a root/default node of the next-weaker strength, or
+     * - a tailored node of the same strength.
+     *
+     * A node of a given strength normally implies "common" weights on weaker levels.
+     *
+     * A node with HAS_BEFORE2 must be immediately followed by
+     * a secondary node with an explicit below-common weight, then a secondary tailored node,
+     * and later an explicit common-secondary node.
+     * The below-common weight can be a root weight,
+     * or it can be BEFORE_WEIGHT16 for tailoring before an implied common weight
+     * or before the lowest root weight.
+     * (&[before 2] resets to an explicit secondary node so that
+     * the following addRelation(secondary) tailors right after that.
+     * If we did not have this node and instead were to reset on the primary node,
+     * then addRelation(secondary) would skip forward to the the COMMON_WEIGHT16 node.)
+     *
+     * If the flag is not set, then there are no explicit secondary nodes
+     * with the common or lower weights.
+     *
+     * Same for HAS_BEFORE3 for tertiary nodes and weights.
+     * A node must not have both flags set.
+     *
+     * Tailored CEs are initially represented in a CollationDataBuilder as temporary CEs
+     * which point to stable indexes in this list,
+     * and temporary CEs stored in a CollationDataBuilder only point to tailored nodes.
+     *
+     * A temporary CE in the ces[] array may point to a non-tailored reset-before-position node,
+     * until the next relation is added.
+     *
+     * At the end, the tailored weights are allocated as necessary,
+     * then the tailored nodes are replaced with final CEs,
+     * and the CollationData is rewritten by replacing temporary CEs with final ones.
+     *
+     * We cannot simply insert new nodes in the middle of the array
+     * because that would invalidate the indexes stored in existing temporary CEs.
+     * We need to use a linked graph with stable indexes to existing nodes.
+     * A doubly-linked list seems easiest to maintain.
+     *
+     * Each node is stored as an int64_t, with its fields stored as bit fields.
+     *
+     * Root primary node:
+     * - primary weight: 32 bits 63..32
+     * - reserved/unused/zero: 4 bits 31..28
+     *
+     * Weaker root nodes & tailored nodes:
+     * - a weight: 16 bits 63..48
+     *   + a root or default weight for a non-tailored node
+     *   + unused/zero for a tailored node
+     * - index to the previous node: 20 bits 47..28
+     *
+     * All types of nodes:
+     * - index to the next node: 20 bits 27..8
+     *   + nextIndex=0 in last node per root-primary list
+     * - reserved/unused/zero bits: bits 7, 4, 2
+     * - HAS_BEFORE2: bit 6
+     * - HAS_BEFORE3: bit 5
+     * - IS_TAILORED: bit 3
+     * - the difference strength (primary/secondary/tertiary/quaternary): 2 bits 1..0
+     *
+     * We could allocate structs with pointers, but we would have to store them
+     * in a pointer list so that they can be indexed from temporary CEs,
+     * and they would require more memory allocations.
+     ','line_number':319,'multiline':True]['text':' !UCONFIG_NO_COLLATION','line_number':406,'multiline':False]['text':' __COLLATIONBUILDER_H__','line_number':407,'multiline':False]

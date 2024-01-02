@@ -1,0 +1,40 @@
+['text':'*
+ * Tests that tenant migrations that go through donor rollback are recovered correctly.
+ *
+ * Incompatible with shard merge, which can't handle rollback.
+ *
+ * @tags: [
+ *   incompatible_with_macos,
+ *   incompatible_with_shard_merge,
+ *   incompatible_with_windows_tls,
+ *   requires_majority_read_concern,
+ *   requires_persistence,
+ *   serverless,
+ *   requires_fcv_71,
+ * ]
+ ','line_number':1,'multiline':True]['text':'*
+ * Starts a donor ReplSetTest and creates a TenantMigrationTest for it. Runs 'setUpFunc' after
+ * initiating the donor. Then, runs 'rollbackOpsFunc' while replication is disabled on the
+ * secondaries, shuts down the primary and restarts it after re-election to force the operations in
+ * 'rollbackOpsFunc' to be rolled back. Finally, runs 'steadyStateFunc' after it is back in the
+ * replication steady state.
+ ','line_number':32,'multiline':True]['text':' This step ensures we can successfully step up the OriginalDonorSecondary node later in the','line_number':56,'multiline':False]['text':' test.','line_number':57,'multiline':False]['text':' The default WC is majority and stopServerReplication will prevent satisfying any majority','line_number':60,'multiline':False]['text':' writes.','line_number':61,'multiline':False]['text':' Disable replication on the secondaries so that writes during this step will be rolled back.','line_number':81,'multiline':False]['text':' Shut down the primary and re-enable replication to allow one of the secondaries to get','line_number':85,'multiline':False]['text':' elected, and make the writes above get rolled back on the original primary when it comes','line_number':86,'multiline':False]['text':' back up.','line_number':87,'multiline':False]['text':' Step up the donor secondary.','line_number':91,'multiline':False]['text':' Restart the original primary.','line_number':96,'multiline':False]['text':' restart ','line_number':98,'multiline':True]['text':'*
+ * Starts a migration and waits for the donor's primary to insert the donor's state doc. Forces the
+ * write to be rolled back. After the replication steady state is reached, asserts that
+ * donorStartMigration can restart the migration on the new primary.
+ ','line_number':108,'multiline':True]['text':' Start the migration asynchronously and wait for the primary to insert the state doc.','line_number':121,'multiline':False]['text':' Verify that the migration restarted successfully on the new primary despite rollback.','line_number':133,'multiline':False]['text':'*
+ * Starts a migration after enabling 'pauseFailPoint' (must pause the migration) and
+ * 'setUpFailPoints' on the donor's primary. Waits for the primary to do the write to transition
+ * to 'nextState' after reaching 'pauseFailPoint', then forces the write to be rolled back. After
+ * the replication steady state is reached, asserts that the migration is resumed successfully by
+ * new primary regardless of what the rolled back state transition is.
+ ','line_number':145,'multiline':True]['text':' Resume the migration and wait for the primary to do the write for the state transition.','line_number':171,'multiline':False]['text':' Verify that the migration resumed successfully on the new primary despite the rollback.','line_number':182,'multiline':False]['text':'*
+ * Runs donorForgetMigration after completing a migration. Waits for the donor's primary to
+ * mark the donor's state doc as garbage collectable, then forces the write to be rolled back.
+ * After the replication steady state is reached, asserts that donorForgetMigration can be retried
+ * on the new primary and that the state doc is eventually garbage collected.
+ ','line_number':194,'multiline':True]['text':' Run donorForgetMigration and wait for the primary to do the write to mark the state doc','line_number':211,'multiline':False]['text':' as garbage collectable.','line_number':212,'multiline':False]['text':' retryOnRetryableErrors ','line_number':216,'multiline':True]['text':' There is a ttl index on `expireAt`. Thus we know the state doc is marked as garbage','line_number':221,'multiline':False]['text':' collectible either when:','line_number':222,'multiline':False]['text':'','line_number':223,'multiline':False]['text':' 1) It has an `expireAt`.','line_number':224,'multiline':False]['text':' 2) The document is deleted/the collection is empty.','line_number':225,'multiline':False]['text':' Verify that the migration state got garbage collected successfully despite the rollback.','line_number':237,'multiline':False]['text':'*
+ * Starts a migration and forces the donor's primary to go through rollback after a random amount
+ * of time. After the replication steady state is reached, asserts that the migration is resumed
+ * successfully.
+ ','line_number':244,'multiline':True]['text':' Start the migration and wait for a random amount of time before transitioning to the','line_number':260,'multiline':False]['text':' rollback operations state.','line_number':261,'multiline':False]['text':' Let the migration run in the rollback operations state for a random amount of time.','line_number':267,'multiline':False]['text':' Verify that the migration completed and was garbage collected successfully despite the','line_number':272,'multiline':False]['text':' rollback.','line_number':273,'multiline':False]

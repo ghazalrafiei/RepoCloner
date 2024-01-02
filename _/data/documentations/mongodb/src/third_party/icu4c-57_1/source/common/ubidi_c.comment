@@ -1,0 +1,452 @@
+['text':'
+******************************************************************************
+*
+*   Copyright (C) 1999-2015, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+******************************************************************************
+*   file name:  ubidi.c
+*   encoding:   US-ASCII
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 1999jul27
+*   created by: Markus W. Scherer, updated by Matitiahu Allouche
+*
+','line_number':1,'multiline':True]['text':'
+ * General implementation notes:
+ *
+ * Throughout the implementation, there are comments like (W2) that refer to
+ * rules of the BiDi algorithm, in this example to the second rule of the
+ * resolution of weak types.
+ *
+ * For handling surrogate pairs, where two UChar's form one "abstract" (or UTF-32)
+ * character according to UTF-16, the second UChar gets the directional property of
+ * the entire character assigned, while the first one gets a BN, a boundary
+ * neutral, type, which is ignored by most of the algorithm according to
+ * rule (X9) and the implementation suggestions of the BiDi algorithm.
+ *
+ * Later, adjustWSLevels() will set the level for each BN to that of the
+ * following character (UChar), which results in surrogate pairs getting the
+ * same level on each of their surrogates.
+ *
+ * In a UTF-8 implementation, the same thing could be done: the last byte of
+ * a multi-byte sequence would get the "real" property, while all previous
+ * bytes of that sequence would get BN.
+ *
+ * It is not possible to assign all those parts of a character the same real
+ * property because this would fail in the resolution of weak types with rules
+ * that look at immediately surrounding types.
+ *
+ * As a related topic, this implementation does not remove Boundary Neutral
+ * types from the input, but ignores them wherever this is relevant.
+ * For example, the loop for the resolution of the weak types reads
+ * types until it finds a non-BN.
+ * Also, explicit embedding codes are neither changed into BN nor removed.
+ * They are only treated the same way real BNs are.
+ * As stated before, adjustWSLevels() takes care of them at the end.
+ * For the purpose of conformance, the levels of all these codes
+ * do not matter.
+ *
+ * Note that this implementation modifies the dirProps
+ * after the initial setup, when applying X5c (replace FSI by LRI or RLI),
+ * X6, N0 (replace paired brackets by L or R).
+ *
+ * In this implementation, the resolution of weak types (W1 to W6),
+ * neutrals (N1 and N2), and the assignment of the resolved level (In)
+ * are all done in one single loop, in resolveImplicitLevels().
+ * Changes of dirProp values are done on the fly, without writing
+ * them back to the dirProps array.
+ *
+ *
+ * This implementation contains code that allows to bypass steps of the
+ * algorithm that are not needed on the specific paragraph
+ * in order to speed up the most common cases considerably,
+ * like text that is entirely LTR, or RTL text without numbers.
+ *
+ * Most of this is done by setting a bit for each directional property
+ * in a flags variable and later checking for whether there are
+ * any LTR characters or any RTL characters, or both, whether
+ * there are any explicit embedding codes, etc.
+ *
+ * If the (Xn) steps are performed, then the flags are re-evaluated,
+ * because they will then not contain the embedding codes any more
+ * and will be adjusted for override codes, so that subsequently
+ * more bypassing may be possible than what the initial flags suggested.
+ *
+ * If the text is not mixed-directional, then the
+ * algorithm steps for the weak type resolution are not performed,
+ * and all levels are set to the paragraph level.
+ *
+ * If there are no explicit embedding codes, then the (Xn) steps
+ * are not performed.
+ *
+ * If embedding levels are supplied as a parameter, then all
+ * explicit embedding codes are ignored, and the (Xn) steps
+ * are not performed.
+ *
+ * White Space types could get the level of the run they belong to,
+ * and are checked with a test of (flags&MASK_EMBEDDING) to
+ * consider if the paragraph direction should be considered in
+ * the flags variable.
+ *
+ * If there are no White Space types in the paragraph, then
+ * (L1) is not necessary in adjustWSLevels().
+ ','line_number':28,'multiline':True]['text':' to avoid some conditional statements, use tiny constant arrays ','line_number':109,'multiline':True]['text':' UBiDi object management -------------------------------------------------- ','line_number':122,'multiline':True]['text':' check the argument values ','line_number':135,'multiline':True]['text':' invalid arguments ','line_number':140,'multiline':True]['text':' allocate memory for the object ','line_number':143,'multiline':True]['text':' reset the object, all pointers NULL, all flags FALSE, all sizes 0 ','line_number':150,'multiline':True]['text':' get BiDi properties ','line_number':153,'multiline':True]['text':' allocate memory for arrays as requested ','line_number':156,'multiline':True]['text':' use simpleRuns[] ','line_number':169,'multiline':True]['text':'
+ * We are allowed to allocate memory if memory==NULL or
+ * mayAllocate==TRUE for each array that we need.
+ * We also try to grow memory as needed if we
+ * allocate it.
+ *
+ * Assume sizeNeeded>0.
+ * If *pMemory!=NULL, then assume *pSize>0.
+ *
+ * ### this realloc() may unnecessarily copy the old data,
+ * which we know we don't need any more;
+ * is this the best way to do this??
+ ','line_number':186,'multiline':True]['text':' check for existing memory ','line_number':202,'multiline':True]['text':' we need to allocate memory ','line_number':204,'multiline':True]['text':' there is already enough memory ','line_number':213,'multiline':True]['text':' not enough memory, and we must not allocate ','line_number':217,'multiline':True]['text':' we try to grow ','line_number':220,'multiline':True]['text':' in most cases, we do not need the copy-old-data part of
+             * realloc, but it is needed when adding runs using getRunsMemory()
+             * in setParaRunsOnly()
+             ','line_number':222,'multiline':True]['text':' we failed to grow ','line_number':231,'multiline':True]['text':' in case one tries to reuse this block ','line_number':241,'multiline':True]['text':' set to approximate "inverse BiDi" ---------------------------------------- ','line_number':268,'multiline':True]['text':' FOOD FOR THOUGHT: currently the reordering modes are a mixture of
+ * algorithm for direct BiDi, algorithm for inverse BiDi and the bizarre
+ * concept of RUNS_ONLY which is a double operation.
+ * It could be advantageous to divide this into 3 concepts:
+ * a) Operation: direct / inverse / RUNS_ONLY
+ * b) Direct algorithm: default / NUMBERS_SPECIAL / GROUP_NUMBERS_WITH_R
+ * c) Inverse algorithm: default / INVERSE_LIKE_DIRECT / NUMBERS_SPECIAL
+ * This would allow combinations not possible today like RUNS_ONLY with
+ * NUMBERS_SPECIAL.
+ * Also allow to set INSERT_MARKS for the direct step of RUNS_ONLY and
+ * REMOVE_CONTROLS for the inverse step.
+ * Not all combinations would be supported, and probably not all do make sense.
+ * This would need to document which ones are supported and what are the
+ * fallbacks for unsupported combinations.
+ ','line_number':288,'multiline':True]['text':' i is incremented by U16_NEXT ','line_number':357,'multiline':True]['text':' perform (P2)..(P3) ------------------------------------------------------- ','line_number':368,'multiline':True]['text':'*
+ * Returns the directionality of the first strong character
+ * after the last B in prologue, if any.
+ * Requires prologue!=null.
+ ','line_number':370,'multiline':True]['text':' i is incremented by U16_NEXT ','line_number':383,'multiline':True]['text':'
+ * Check that there are enough entries in the array pointed to by pBiDi->paras
+ ','line_number':399,'multiline':True]['text':'
+ * Get the directional properties for the text, calculate the flags bit-set, and
+ * determine the paragraph level if necessary (in pBiDi->paras[i].level).
+ * FSI initiators are also resolved and their dirProp replaced with LRI or RLI.
+ * When encountering an FSI, it is initially replaced with an LRI, which is the
+ * default. Only if a strong R or AL is found within its scope will the LRI be
+ * replaced by an RLI.
+ ','line_number':420,'multiline':True]['text':' pBiDi->dirProps is const ','line_number':431,'multiline':True]['text':' collect all directionalities in the text ','line_number':434,'multiline':True]['text':' initialize to avoid compiler warnings ','line_number':436,'multiline':True]['text':' for inverse BiDi, the default para level is set to RTL if there is a
+       strong R or AL character at either end of the text                            ','line_number':438,'multiline':True]['text':' 0: not contextual paraLevel, not after FSI ','line_number':449,'multiline':True]['text':' 1: looking for first strong char in para ','line_number':450,'multiline':True]['text':' 2: looking for first strong after FSI ','line_number':451,'multiline':True]['text':' 3: found strong after FSI, looking for PDI ','line_number':452,'multiline':True]['text':' for default level & inverse BiDi ','line_number':455,'multiline':True]['text':' The following stacks are used to manage isolate sequences. Those
+       sequences may be nested, but obviously never more deeply than the
+       maximum explicit embedding level.
+       lastStack is the index of the last used entry in the stack. A value of -1
+       means that there is no open isolate sequence.
+       lastStack is reset to -1 on paragraph boundaries. ','line_number':456,'multiline':True]['text':' The following stack contains the position of the initiator of
+       each open isolate sequence ','line_number':462,'multiline':True]['text':' The following stack contains the last known state before
+       encountering the initiator of an isolate sequence ','line_number':465,'multiline':True]['text':' there is a prologue ','line_number':476,'multiline':True]['text':' with a strong character ','line_number':477,'multiline':True]['text':' set the default para level ','line_number':479,'multiline':True]['text':' set the default para level ','line_number':481,'multiline':True]['text':' count paragraphs and determine the paragraph level (P2..P3) ','line_number':490,'multiline':True]['text':'
+     * see comment in ubidi.h:
+     * the UBIDI_DEFAULT_XXX values are designed so that
+     * their bit 0 alone yields the intended default
+     ','line_number':491,'multiline':True]['text':' i=0 above ','line_number':496,'multiline':True]['text':' i is incremented by U16_NEXT ','line_number':497,'multiline':True]['text':' set the lead surrogate's property to BN ','line_number':501,'multiline':True]['text':' no need for next statement, already set by default ','line_number':514,'multiline':True]['text':' dirProps[isolateStartStack[stackLast]]=LRI; ','line_number':515,'multiline':True]['text':' FSI, LRI or RLI ','line_number':540,'multiline':True]['text':' default if no strong char ','line_number':547,'multiline':True]['text':' no need for next statement, already set by default ','line_number':557,'multiline':True]['text':' dirProps[isolateStartStack[stackLast]]=LRI; ','line_number':558,'multiline':True]['text':' do nothing on the CR ','line_number':570,'multiline':True]['text':' When streaming, we only process whole paragraphs
+                   thus some updates are only done on paragraph boundaries ','line_number':576,'multiline':True]['text':' i is index to next character ','line_number':578,'multiline':True]['text':' B not last char in text ','line_number':581,'multiline':True]['text':' not enough memory for a new para entry ','line_number':583,'multiline':True]['text':' Ignore still open isolate sequences with overflow ','line_number':598,'multiline':True]['text':' to be on the safe side ','line_number':601,'multiline':True]['text':' Resolve direction of still unresolved open FSI sequences ','line_number':603,'multiline':True]['text':' no need for next statement, already set by default ','line_number':606,'multiline':True]['text':' dirProps[isolateStartStack[stackLast]]=LRI; ','line_number':607,'multiline':True]['text':' When streaming, ignore text after the last paragraph separator ','line_number':614,'multiline':True]['text':' For inverse bidi, default para direction is RTL if there is
+       a strong R or AL at either end of the paragraph ','line_number':622,'multiline':True]['text':' The following is needed to resolve the text direction for default level
+       paragraphs containing no strong character ','line_number':630,'multiline':True]['text':' determine the paragraph level at position index ','line_number':643,'multiline':True]['text':' Functions for handling paired brackets ----------------------------------- ','line_number':655,'multiline':True]['text':' In the isoRuns array, the first entry is used for text outside of any
+   isolate sequence.  Higher entries are used for each more deeply nested
+   isolate sequence. isoRunLast is the index of the last used entry.  The
+   openings array is used to note the data of opening brackets not yet
+   matched by a closing bracket, or matched but still susceptible to change
+   level.
+   Each isoRun entry contains the index of the first and
+   one-after-last openings entries for pending opening brackets it
+   contains.  The next openings entry to use is the one-after-last of the
+   most deeply nested isoRun entry.
+   isoRun entries also contain their current embedding level and the last
+   encountered strong character, since these will be needed to resolve
+   the level of paired brackets.  ','line_number':657,'multiline':True]['text':' paragraph boundary ','line_number':691,'multiline':True]['text':' LRE, LRO, RLE, RLO, PDF ','line_number':701,'multiline':True]['text':' after an isolate ','line_number':707,'multiline':True]['text':' not a PDF ','line_number':709,'multiline':True]['text':' LRI or RLI ','line_number':717,'multiline':True]['text':' PDI ','line_number':732,'multiline':True]['text':' newly found opening bracket: create an openings entry ','line_number':741,'multiline':True]['text':' return TRUE if success ','line_number':742,'multiline':True]['text':' no available new entry ','line_number':746,'multiline':True]['text':' may have changed ','line_number':753,'multiline':True]['text':' change N0c1 to N0c2 when a preceding bracket is assigned the embedding level ','line_number':766,'multiline':True]['text':' This function calls itself recursively ','line_number':769,'multiline':True]['text':' not an N0c match ','line_number':775,'multiline':True]['text':' prevent further changes ','line_number':787,'multiline':True]['text':' process closing bracket ','line_number':793,'multiline':True]['text':' return L or R if N0b or N0c, ON if N0d ','line_number':794,'multiline':True]['text':' assume stable until proved otherwise ','line_number':803,'multiline':True]['text':' The stable flag is set when brackets are paired and their
+       level is resolved and cannot be changed by what will be
+       found later in the source string.
+       An unstable match can occur only when applying N0c, where
+       the resolved level depends on the preceding context, and
+       this context may be affected by text occurring later.
+       Example: RTL paragraph containing:  abc[(latin) HEBREW]
+       When the closing parenthesis is encountered, it appears
+       that N0c1 must be applied since 'abc' sets an opposite
+       direction context and both parentheses receive level 2.
+       However, when the closing square bracket is processed,
+       N0b applies because of 'HEBREW' being included within the
+       brackets, thus the square brackets are treated like R and
+       receive level 1. However, this changes the preceding
+       context of the opening parenthesis, and it now appears
+       that N0c2 must be applied to the parentheses rather than
+       N0c1. ','line_number':805,'multiline':True]['text':' N0b ','line_number':824,'multiline':True]['text':' N0c ','line_number':827,'multiline':True]['text':' it is stable if there is no containing pair or in
+           conditions too complicated and not worth checking ','line_number':828,'multiline':True]['text':' N0c1 ','line_number':832,'multiline':True]['text':' N0c2 ','line_number':834,'multiline':True]['text':' forget this and any brackets nested within this pair ','line_number':836,'multiline':True]['text':' N0d ','line_number':838,'multiline':True]['text':' Update nested N0c pairs that may be affected ','line_number':842,'multiline':True]['text':' forget any brackets nested within this pair ','line_number':845,'multiline':True]['text':' remove lower located synonyms if any ','line_number':846,'multiline':True]['text':' neutralize lower located synonyms if any ','line_number':853,'multiline':True]['text':' neutralize any unmatched opening between the current pair;
+           this will also neutralize higher located synonyms if any ','line_number':858,'multiline':True]['text':' handle strong characters, digits and candidates for closing brackets ','line_number':871,'multiline':True]['text':' return TRUE if success ','line_number':872,'multiline':True]['text':' First see if it is a matching closing bracket. Hopefully, this is
+           more efficient than checking if it is a closing bracket at all ','line_number':882,'multiline':True]['text':' We have a match ','line_number':888,'multiline':True]['text':' N0d ','line_number':890,'multiline':True]['text':' prevent handling as an opening ','line_number':891,'multiline':True]['text':' X4, X5 ','line_number':898,'multiline':True]['text':' matching brackets are not overridden by LRO/RLO ','line_number':906,'multiline':True]['text':' matching brackets are not overridden by LRO/RLO ','line_number':909,'multiline':True]['text':' We get here only if the ON character is not a matching closing
+           bracket or it is a case of N0d ','line_number':913,'multiline':True]['text':' Now see if it is an opening bracket ','line_number':915,'multiline':True]['text':' get the matching char ','line_number':917,'multiline':True]['text':' has a matching char ','line_number':920,'multiline':True]['text':' opening bracket ','line_number':921,'multiline':True]['text':' special case: process synonyms
+               create an opening entry for each synonym ','line_number':922,'multiline':True]['text':' RIGHT-POINTING ANGLE BRACKET ','line_number':924,'multiline':True]['text':' RIGHT ANGLE BRACKET ','line_number':928,'multiline':True]['text':' X4, X5 ','line_number':937,'multiline':True]['text':' W7 ','line_number':956,'multiline':True]['text':' N0 ','line_number':963,'multiline':True]['text':' W2 ','line_number':965,'multiline':True]['text':' N0 ','line_number':973,'multiline':True]['text':' if the last real char was ON, change NSM to ON so that it
+           will stay ON even if the last real char is a bracket which
+           may be changed to L or R ','line_number':979,'multiline':True]['text':' perform (X1)..(X9) ------------------------------------------------------- ','line_number':1000,'multiline':True]['text':' determine if the text is mixed-directional or single-directional ','line_number':1002,'multiline':True]['text':' if the text contains AN and neutrals, then some neutrals may become RTL ','line_number':1006,'multiline':True]['text':'
+ * Resolve the explicit levels as specified by explicit embedding codes.
+ * Recalculate the flags to have them reflect the real properties
+ * after taking the explicit embeddings into account.
+ *
+ * The BiDi algorithm is designed to result in the same behavior whether embedding
+ * levels are externally specified (from "styled text", supposedly the preferred
+ * method) or set by explicit embedding codes (LRx, RLx, PDF, FSI, PDI) in the plain text.
+ * That is why (X9) instructs to remove all not-isolate explicit codes (and BN).
+ * However, in a real implementation, the removal of these codes and their index
+ * positions in the plain text is undesirable since it would result in
+ * reallocated, reindexed text.
+ * Instead, this implementation leaves the codes in there and just ignores them
+ * in the subsequent processing.
+ * In order to get the same reordering behavior, positions with a BN or a not-isolate
+ * explicit embedding code just get the same level assigned as the last "real"
+ * character.
+ *
+ * Some implementations, not this one, then overwrite some of these
+ * directionality properties at "real" same-level-run boundaries by
+ * L or R codes so that the resolution of weak types can be performed on the
+ * entire paragraph at once instead of having to parse it once more and
+ * perform that resolution on same-level-runs.
+ * This limits the scope of the implicit rules in effectively
+ * the same way as the run limits.
+ *
+ * Instead, this implementation does not modify these codes, except for
+ * paired brackets whose properties (ON) may be replaced by L or R.
+ * On one hand, the paragraph has to be scanned for same-level-runs, but
+ * on the other hand, this saves another loop to reset these codes,
+ * or saves making and modifying a copy of dirProps[].
+ *
+ *
+ * Note that (Pn) and (Xn) changed significantly from version 4 of the BiDi algorithm.
+ *
+ *
+ * Handling the stack of explicit levels (Xn):
+ *
+ * With the BiDi stack of explicit levels, as pushed with each
+ * LRE, RLE, LRO, RLO, LRI, RLI and FSI and popped with each PDF and PDI,
+ * the explicit level must never exceed UBIDI_MAX_EXPLICIT_LEVEL.
+ *
+ * In order to have a correct push-pop semantics even in the case of overflows,
+ * overflow counters and a valid isolate counter are used as described in UAX#9
+ * section 3.3.2 "Explicit Levels and Directions".
+ *
+ * This implementation assumes that UBIDI_MAX_EXPLICIT_LEVEL is odd.
+ *
+ * Returns normally the direction; -1 if there was a memory shortage
+ *
+ ','line_number':1016,'multiline':True]['text':' collect all directionalities in the text ','line_number':1074,'multiline':True]['text':' determine if the text is mixed-directional or single-directional ','line_number':1082,'multiline':True]['text':' we may not need to resolve any explicit levels ','line_number':1085,'multiline':True]['text':' not mixed directionality: levels don't matter - trailingWSStart will be 0 ','line_number':1087,'multiline':True]['text':' inverse BiDi: mixed, but all characters are at the same embedding level ','line_number':1091,'multiline':True]['text':' set all levels to the paragraph level ','line_number':1092,'multiline':True]['text':' no bracket matching for inverse BiDi ','line_number':1104,'multiline':True]['text':' no embeddings, set all levels to the paragraph level ','line_number':1107,'multiline':True]['text':' we still have to perform bracket matching ','line_number':1108,'multiline':True]['text':' skip CR when followed by LF ','line_number':1127,'multiline':True]['text':' continue to perform (Xn) ','line_number':1141,'multiline':True]['text':' (X1) level is set for all codes, embeddingLevel keeps track of the push/pop operations ','line_number':1143,'multiline':True]['text':' both variables may carry the UBIDI_LEVEL_OVERRIDE flag to indicate the override status ','line_number':1144,'multiline':True]['text':' previous level for regular (not CC) characters ','line_number':1146,'multiline':True]['text':' index of last effective LRx,RLx, PDx ','line_number':1147,'multiline':True]['text':' The following stack remembers the embedding level and the ISOLATE flag of level runs.
+           stackLast points to its current entry. ','line_number':1149,'multiline':True]['text':' we never push anything >=UBIDI_MAX_EXPLICIT_LEVEL
+                                                        but we need one more entry as base ','line_number':1151,'multiline':True]['text':' initialize base entry to para level, no override, no isolate ','line_number':1159,'multiline':True]['text':' recalculate the flags ','line_number':1161,'multiline':True]['text':' (X2, X3, X4, X5) ','line_number':1171,'multiline':True]['text':' least greater even level ','line_number':1175,'multiline':True]['text':' least greater odd level ','line_number':1178,'multiline':True]['text':' we don't need to set UBIDI_LEVEL_OVERRIDE off for LRE and RLE
+                       since this has already been done for newLevel which is
+                       the source for embeddingLevel.
+                     ','line_number':1188,'multiline':True]['text':' (X7) ','line_number':1198,'multiline':True]['text':' handle all the overflow cases first ','line_number':1201,'multiline':True]['text':' not an isolate entry ','line_number':1209,'multiline':True]['text':' (X5a, X5b) ','line_number':1225,'multiline':True]['text':' least greater even level ','line_number':1227,'multiline':True]['text':' least greater odd level ','line_number':1230,'multiline':True]['text':' we can increment stackLast without checking because newLevel
+                       will exceed UBIDI_MAX_EXPLICIT_LEVEL before stackLast overflows ','line_number':1240,'multiline':True]['text':' make it WS so that it is handled by adjustWSLevels() ','line_number':1246,'multiline':True]['text':' (X6a) ','line_number':1257,'multiline':True]['text':' make it WS so that it is handled by adjustWSLevels() ','line_number':1260,'multiline':True]['text':' pop embedding entries ','line_number':1267,'multiline':True]['text':' until the last isolate entry ','line_number':1268,'multiline':True]['text':' pop also the last isolate entry ','line_number':1269,'multiline':True]['text':' make it WS so that it is handled by adjustWSLevels() ','line_number':1273,'multiline':True]['text':' skip CR when followed by LF ','line_number':1285,'multiline':True]['text':' initialize base entry to para level, no override, no isolate ','line_number':1290,'multiline':True]['text':' BN, LRE, RLE, and PDF are supposed to be removed (X9) ','line_number':1295,'multiline':True]['text':' they will get their levels set correctly in adjustWSLevels() ','line_number':1296,'multiline':True]['text':' all other types are normal characters and get the "real" level ','line_number':1301,'multiline':True]['text':' the dirProp may have been changed in bracketProcessChar() ','line_number':1315,'multiline':True]['text':' again, determine if the text is mixed-directional or single-directional ','line_number':1324,'multiline':True]['text':'
+ * Use a pre-specified embedding levels array:
+ *
+ * Adjust the directional properties for overrides (->LEVEL_OVERRIDE),
+ * ignore all explicit codes (X9),
+ * and check all the preset levels.
+ *
+ * Recalculate the flags to have them reflect the real properties
+ * after taking the explicit embeddings into account.
+ ','line_number':1331,'multiline':True]['text':' collect all directionalities in the text ','line_number':1349,'multiline':True]['text':' keep the override flag in levels[i] but adjust the flags ','line_number':1366,'multiline':True]['text':' make the range check below simpler ','line_number':1367,'multiline':True]['text':' set the flags ','line_number':1370,'multiline':True]['text':' level out of bounds ','line_number':1376,'multiline':True]['text':' determine if the text is mixed-directional or single-directional ','line_number':1383,'multiline':True]['text':'*****************************************************************
+ The Properties state machine table
+*******************************************************************
+
+ All table cells are 8 bits:
+      bits 0..4:  next state
+      bits 5..7:  action to perform (if > 0)
+
+ Cells may be of format "n" where n represents the next state
+ (except for the rightmost column).
+ Cells may also be of format "s(x,y)" where x represents an action
+ to perform and y represents the next state.
+
+*******************************************************************
+ Definitions and type for properties state table
+*******************************************************************
+','line_number':1388,'multiline':True]['text':' dirProp regrouped ','line_number':1411,'multiline':True]['text':'  L   R   EN  ES  ET  AN  CS  B   S   WS  ON  LRE LRO AL  RLE RLO PDF NSM BN  FSI LRI RLI PDI ENL ENR ','line_number':1413,'multiline':True]['text':' reduced dirProp ','line_number':1416,'multiline':True]['text':'*****************************************************************
+
+      PROPERTIES  STATE  TABLE
+
+ In table impTabProps,
+      - the ON column regroups ON and WS, FSI, RLI, LRI and PDI
+      - the BN column regroups BN, LRE, RLE, LRO, RLO, PDF
+      - the Res column is the reduced property assigned to a run
+
+ Action 1: process current run1, init new run1
+        2: init new run2
+        3: process run1, process run2, init new run1
+        4: process run1, set run1=run2, init new run2
+
+ Notes:
+  1) This table is used in resolveImplicitLevels().
+  2) This table triggers actions when there is a change in the Bidi
+     property of incoming characters (action 1).
+  3) Most such property sequences are processed immediately (in
+     fact, passed to processPropertySeq().
+  4) However, numbers are assembled as one sequence. This means
+     that undefined situations (like CS following digits, until
+     it is known if the next char will be a digit) are held until
+     following chars define them.
+     Example: digits followed by CS, then comes another CS or ON;
+              the digits will be processed, then the CS assigned
+              as the start of an ON sequence (action 3).
+  5) There are cases where more than one sequence must be
+     processed, for instance digits followed by CS followed by L:
+     the digits must be processed as one sequence, and the CS
+     must be processed as an ON sequence, all this before starting
+     assembling chars for the opening L sequence.
+
+
+','line_number':1418,'multiline':True]['text':'                        L ,     R ,    EN ,    AN ,    ON ,     S ,     B ,    ES ,    ET ,    CS ,    BN ,   NSM ,    AL ,   ENL ,   ENR , Res ','line_number':1455,'multiline':True]['text':' 0 Init        ','line_number':1456,'multiline':True]['text':' 1 L           ','line_number':1457,'multiline':True]['text':' 2 R           ','line_number':1458,'multiline':True]['text':' 3 AL          ','line_number':1459,'multiline':True]['text':' 4 EN          ','line_number':1460,'multiline':True]['text':' 5 AN          ','line_number':1461,'multiline':True]['text':' 6 AL:EN/AN    ','line_number':1462,'multiline':True]['text':' 7 ON          ','line_number':1463,'multiline':True]['text':' 8 AL:ON       ','line_number':1464,'multiline':True]['text':' 9 ET          ','line_number':1465,'multiline':True]['text':'10 EN+ES/CS    ','line_number':1466,'multiline':True]['text':'11 EN+ET       ','line_number':1467,'multiline':True]['text':'12 AN+CS       ','line_number':1468,'multiline':True]['text':'13 AL:EN/AN+CS ','line_number':1469,'multiline':True]['text':'14 ON+ET       ','line_number':1470,'multiline':True]['text':'15 S           ','line_number':1471,'multiline':True]['text':'16 AL:S        ','line_number':1472,'multiline':True]['text':'17 B           ','line_number':1473,'multiline':True]['text':'18 ENL         ','line_number':1474,'multiline':True]['text':'19 ENL+ES/CS   ','line_number':1475,'multiline':True]['text':'20 ENL+ET      ','line_number':1476,'multiline':True]['text':'21 ENR         ','line_number':1477,'multiline':True]['text':'22 ENR+ES/CS   ','line_number':1478,'multiline':True]['text':'23 ENR+ET      ','line_number':1479,'multiline':True]['text':'  we must undef macro s because the levels tables have a different
+ *  structure (4 bits for action and 4 bits for next state.
+ ','line_number':1482,'multiline':True]['text':'*****************************************************************
+ The levels state machine tables
+*******************************************************************
+
+ All table cells are 8 bits:
+      bits 0..3:  next state
+      bits 4..7:  action to perform (if > 0)
+
+ Cells may be of format "n" where n represents the next state
+ (except for the rightmost column).
+ Cells may also be of format "s(x,y)" where x represents an action
+ to perform and y represents the next state.
+
+ This format limits each table to 16 states each and to 15 actions.
+
+*******************************************************************
+ Definitions and type for levels state tables
+*******************************************************************
+','line_number':1487,'multiline':True]['text':' FOOD FOR THOUGHT: each ImpTab should have its associated ImpAct,
+ * instead of having a pair of ImpTab and a pair of ImpAct.
+ ','line_number':1515,'multiline':True]['text':'*****************************************************************
+
+      LEVELS  STATE  TABLES
+
+ In all levels state tables,
+      - state 0 is the initial state
+      - the Res column is the increment to add to the text level
+        for this property sequence.
+
+ The impAct arrays for each table of a pair map the local action
+ numbers of the table to the total list of actions. For instance,
+ action 2 in a given table corresponds to the action number which
+ appears in entry [2] of the impAct array for that table.
+ The first entry of all impAct arrays must be 0.
+
+ Action 1: init conditional sequence
+        2: prepend conditional sequence to current sequence
+        3: set ON sequence to new level - 1
+        4: init EN/AN/ON sequence
+        5: fix EN/AN/ON sequence followed by R
+        6: set previous level sequence to level 2
+
+ Notes:
+  1) These tables are used in processPropertySeq(). The input
+     is property sequences as determined by resolveImplicitLevels.
+  2) Most such property sequences are processed immediately
+     (levels are assigned).
+  3) However, some sequences cannot be assigned a final level till
+     one or more following sequences are received. For instance,
+     ON following an R sequence within an even-level paragraph.
+     If the following sequence is R, the ON sequence will be
+     assigned basic run level+1, and so will the R sequence.
+  4) S is generally handled like ON, since its level will be fixed
+     to paragraph level in adjustWSLevels().
+
+','line_number':1523,'multiline':True]['text':' Even paragraph level ','line_number':1560,'multiline':True]['text':'  In this table, conditional sequences receive the lower possible level
+    until proven otherwise.
+','line_number':1561,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1565,'multiline':True]['text':' 0 : init       ','line_number':1566,'multiline':True]['text':' 1 : R          ','line_number':1567,'multiline':True]['text':' 2 : AN         ','line_number':1568,'multiline':True]['text':' 3 : R+EN/AN    ','line_number':1569,'multiline':True]['text':' 4 : R+ON       ','line_number':1570,'multiline':True]['text':' 5 : AN+ON      ','line_number':1571,'multiline':True]['text':' Odd  paragraph level ','line_number':1573,'multiline':True]['text':'  In this table, conditional sequences receive the lower possible level
+    until proven otherwise.
+','line_number':1574,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1578,'multiline':True]['text':' 0 : init       ','line_number':1579,'multiline':True]['text':' 1 : L          ','line_number':1580,'multiline':True]['text':' 2 : EN/AN      ','line_number':1581,'multiline':True]['text':' 3 : L+AN       ','line_number':1582,'multiline':True]['text':' 4 : L+ON       ','line_number':1583,'multiline':True]['text':' 5 : L+AN+ON    ','line_number':1584,'multiline':True]['text':' Even paragraph level ','line_number':1591,'multiline':True]['text':'  In this table, conditional sequences receive the lower possible level
+    until proven otherwise.
+','line_number':1592,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1596,'multiline':True]['text':' 0 : init       ','line_number':1597,'multiline':True]['text':' 1 : L+EN/AN    ','line_number':1598,'multiline':True]['text':' 2 : R          ','line_number':1599,'multiline':True]['text':' 3 : R+ON       ','line_number':1600,'multiline':True]['text':' 4 : R+EN/AN    ','line_number':1601,'multiline':True]['text':'  In this table, EN/AN+ON sequences receive levels as if associated with R
+    until proven that there is L or sor/eor on both sides. AN is handled like EN.
+','line_number':1608,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1612,'multiline':True]['text':' 0 init         ','line_number':1613,'multiline':True]['text':' 1 EN/AN        ','line_number':1614,'multiline':True]['text':' 2 EN/AN+ON     ','line_number':1615,'multiline':True]['text':' 3 R            ','line_number':1616,'multiline':True]['text':' 4 R+ON         ','line_number':1617,'multiline':True]['text':' 5 R+EN/AN      ','line_number':1618,'multiline':True]['text':'  In this table, EN/AN+ON sequences receive levels as if associated with R
+    until proven that there is L on both sides. AN is handled like EN.
+','line_number':1621,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1625,'multiline':True]['text':' 0 init         ','line_number':1626,'multiline':True]['text':' 1 EN/AN        ','line_number':1627,'multiline':True]['text':' 2 L            ','line_number':1628,'multiline':True]['text':' 3 L+ON         ','line_number':1629,'multiline':True]['text':' 4 L+EN/AN      ','line_number':1630,'multiline':True]['text':'  This table is identical to the Default LTR table except that EN and AN are
+    handled like L.
+','line_number':1639,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1643,'multiline':True]['text':' 0 : init       ','line_number':1644,'multiline':True]['text':' 1 : R          ','line_number':1645,'multiline':True]['text':' 2 : AN         ','line_number':1646,'multiline':True]['text':' 3 : R+EN/AN    ','line_number':1647,'multiline':True]['text':' 4 : R+ON       ','line_number':1648,'multiline':True]['text':' 5 : AN+ON      ','line_number':1649,'multiline':True]['text':'  This table is identical to the Default RTL table except that EN and AN are
+    handled like L.
+','line_number':1652,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1656,'multiline':True]['text':' 0 : init       ','line_number':1657,'multiline':True]['text':' 1 : L          ','line_number':1658,'multiline':True]['text':' 2 : EN/AN      ','line_number':1659,'multiline':True]['text':' 3 : L+AN       ','line_number':1660,'multiline':True]['text':' 4 : L+ON       ','line_number':1661,'multiline':True]['text':' 5 : L+AN+ON    ','line_number':1662,'multiline':True]['text':' Odd  paragraph level ','line_number':1669,'multiline':True]['text':'  In this table, conditional sequences receive the lower possible level
+    until proven otherwise.
+','line_number':1670,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1674,'multiline':True]['text':' 0 : init       ','line_number':1675,'multiline':True]['text':' 1 : L          ','line_number':1676,'multiline':True]['text':' 2 : EN/AN      ','line_number':1677,'multiline':True]['text':' 3 : L+ON       ','line_number':1678,'multiline':True]['text':' 4 : L+ON+AN    ','line_number':1679,'multiline':True]['text':' 5 : L+AN+ON    ','line_number':1680,'multiline':True]['text':' 6 : L+ON+EN    ','line_number':1681,'multiline':True]['text':' FOOD FOR THOUGHT: in LTR table below, check case "JKL 123abc"
+ ','line_number':1684,'multiline':True]['text':'  The case handled in this table is (visually):  R EN L
+','line_number':1692,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1695,'multiline':True]['text':' 0 : init       ','line_number':1696,'multiline':True]['text':' 1 : L+AN       ','line_number':1697,'multiline':True]['text':' 2 : L+AN+ON    ','line_number':1698,'multiline':True]['text':' 3 : R          ','line_number':1699,'multiline':True]['text':' 4 : R+ON       ','line_number':1700,'multiline':True]['text':' 5 : R+EN       ','line_number':1701,'multiline':True]['text':' 6 : R+AN       ','line_number':1702,'multiline':True]['text':'  The cases handled in this table are (visually):  R EN L
+                                                     R L AN L
+','line_number':1705,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1709,'multiline':True]['text':' 0 : init       ','line_number':1710,'multiline':True]['text':' 1 : R+EN/AN    ','line_number':1711,'multiline':True]['text':' 2 : R+EN/AN+ON ','line_number':1712,'multiline':True]['text':' 3 : L          ','line_number':1713,'multiline':True]['text':' 4 : L+ON       ','line_number':1714,'multiline':True]['text':' 5 : L+ON+EN    ','line_number':1715,'multiline':True]['text':' 6 : L+AN       ','line_number':1716,'multiline':True]['text':'  The case handled in this table is (visually):  R EN L
+','line_number':1731,'multiline':True]['text':'                         L ,     R ,    EN ,    AN ,    ON ,     S ,     B , Res ','line_number':1734,'multiline':True]['text':' 0 : init       ','line_number':1735,'multiline':True]['text':' 1 : L+EN/AN    ','line_number':1736,'multiline':True]['text':' 2 : R          ','line_number':1737,'multiline':True]['text':' 3 : R+ON       ','line_number':1738,'multiline':True]['text':' 4 : R+EN/AN    ','line_number':1739,'multiline':True]['text':' level table pointer          ','line_number':1749,'multiline':True]['text':' action map array             ','line_number':1750,'multiline':True]['text':' start of ON sequence         ','line_number':1751,'multiline':True]['text':' start of level 2 sequence    ','line_number':1752,'multiline':True]['text':' index of last found R or AL  ','line_number':1753,'multiline':True]['text':' current state                ','line_number':1754,'multiline':True]['text':' start position of the run    ','line_number':1755,'multiline':True]['text':' run level before implicit solving ','line_number':1756,'multiline':True]['text':'------------------------------------------------------------------------','line_number':1759,'multiline':True]['text':' param pos:     position where to insert
+     param flag:    one of LRM_BEFORE, LRM_AFTER, RLM_BEFORE, RLM_AFTER
+  ','line_number':1763,'multiline':True]['text':' no room for new point ','line_number':1781,'multiline':True]['text':' perform rules (Wn), (Nn), and (In) on a run of the text ------------------ ','line_number':1818,'multiline':True]['text':'
+ * This implementation of the (Wn) rules applies all rules in one pass.
+ * In order to do so, it needs a look-ahead of typically 1 character
+ * (except for W5: sequences of ET) and keeps track of changes
+ * in a rule Wp that affect a later Wq (p<q).
+ *
+ * The (Nn) and (In) rules are also performed in that same single loop,
+ * but effectively one iteration behind for white space.
+ *
+ * Since all implicit rules are performed in one step, it is not necessary
+ * to actually store the intermediate directional properties in dirProps[].
+ ','line_number':1820,'multiline':True]['text':' save original start position ','line_number':1844,'multiline':True]['text':' isolate the new state ','line_number':1847,'multiline':True]['text':' isolate the action ','line_number':1848,'multiline':True]['text':' init ON seq ','line_number':1853,'multiline':True]['text':' prepend ON seq to current seq ','line_number':1857,'multiline':True]['text':' EN/AN after R+ON ','line_number':1861,'multiline':True]['text':' EN/AN before R for NUMBERS_SPECIAL ','line_number':1866,'multiline':True]['text':' L or S after possible relevant EN/AN ','line_number':1871,'multiline':True]['text':' check if we had EN after R/AL ','line_number':1872,'multiline':True]['text':' not within previous if since could also be -2 ','line_number':1876,'multiline':True]['text':' check if we had any relevant EN/AN after R/AL ','line_number':1877,'multiline':True]['text':' nothing, just clean up ','line_number':1882,'multiline':True]['text':' check if we have a pending conditional segment ','line_number':1884,'multiline':True]['text':' after ON ','line_number':1886,'multiline':True]['text':' reset to basic run level ','line_number':1887,'multiline':True]['text':' add LRM before S ','line_number':1889,'multiline':True]['text':' reset previous RTL cont to level for LTR text ','line_number':1896,'multiline':True]['text':' reset odd level, leave runLevel+2 as is ','line_number':1899,'multiline':True]['text':' mark insert points as confirmed ','line_number':1902,'multiline':True]['text':' add LRM before S ','line_number':1905,'multiline':True]['text':' R/AL after possible relevant EN/AN ','line_number':1912,'multiline':True]['text':' just clean up ','line_number':1913,'multiline':True]['text':' remove all non confirmed insert points ','line_number':1916,'multiline':True]['text':' EN/AN after R/AL + possible cont ','line_number':1923,'multiline':True]['text':' check for real AN ','line_number':1924,'multiline':True]['text':' real AN ','line_number':1928,'multiline':True]['text':' if no relevant EN already found ','line_number':1929,'multiline':True]['text':' just note the righmost digit as a strong RTL ','line_number':1931,'multiline':True]['text':' after EN, no AN ','line_number':1935,'multiline':True]['text':' note AN ','line_number':1940,'multiline':True]['text':' if first EN/AN after R/AL ','line_number':1944,'multiline':True]['text':' note location of latest R/AL ','line_number':1950,'multiline':True]['text':' L after R+ON/EN/AN ','line_number':1955,'multiline':True]['text':' include possible adjacent number on the left ','line_number':1956,'multiline':True]['text':' add RLM before ','line_number':1959,'multiline':True]['text':' confirm it ','line_number':1961,'multiline':True]['text':' AN after L ','line_number':1966,'multiline':True]['text':' AN numbers between L text on both sides may be trouble. ','line_number':1967,'multiline':True]['text':' tentatively bracket with LRMs; will be confirmed if followed by L ','line_number':1968,'multiline':True]['text':' add LRM before ','line_number':1969,'multiline':True]['text':' add LRM after  ','line_number':1970,'multiline':True]['text':' R after L+ON/EN/AN ','line_number':1973,'multiline':True]['text':' false alert, infirm LRMs around previous AN ','line_number':1974,'multiline':True]['text':' add RLM before S ','line_number':1977,'multiline':True]['text':' L after L+ON/AN ','line_number':1984,'multiline':True]['text':' confirm inserts ','line_number':1991,'multiline':True]['text':' L after L+ON+EN/AN/ON ','line_number':1995,'multiline':True]['text':' R after L+ON+EN/AN/ON ','line_number':2014,'multiline':True]['text':' we should never get here ','line_number':2023,'multiline':True]['text':'*
+ * Returns the directionality of the last strong character at the end of the prologue, if any.
+ * Requires prologue!=null.
+ ','line_number':2040,'multiline':True]['text':' i is decremented by U16_PREV ','line_number':2052,'multiline':True]['text':'*
+ * Returns the directionality of the first strong character, or digit, in the epilogue, if any.
+ * Requires epilogue!=null.
+ ','line_number':2068,'multiline':True]['text':' i is incremented by U16_NEXT ','line_number':2080,'multiline':True]['text':' check for RTL inverse BiDi mode ','line_number':2113,'multiline':True]['text':' FOOD FOR THOUGHT: in case of RTL inverse BiDi, it would make sense to
+     * loop on the text characters from end to start.
+     * This would need a different properties state table (at least different
+     * actions) and different levels state tables (maybe very similar to the
+     * LTR corresponding ones.
+     ','line_number':2114,'multiline':True]['text':' initialize for property and levels state tables ','line_number':2125,'multiline':True]['text':' used for INVERSE_LIKE_DIRECT_WITH_MARKS ','line_number':2126,'multiline':True]['text':' used for INVERSE_LIKE_DIRECT_WITH_MARKS ','line_number':2127,'multiline':True]['text':' The isolates[] entries contain enough information to
+       resume the bidi algorithm in the same state as it was
+       when it was interrupted by an isolate sequence. ','line_number':2138,'multiline':True]['text':' to make Java compiler happy ','line_number':2157,'multiline':True]['text':' no forced closing for sequence ending with LRI/RLI ','line_number':2165,'multiline':True]['text':' current isolates stack entry == none ','line_number':2171,'multiline':True]['text':' AL before EN does not make it AN ','line_number':2175,'multiline':True]['text':' look for next strong char (L/R/AL) ','line_number':2179,'multiline':True]['text':' set default ','line_number':2181,'multiline':True]['text':' isolate the new state ','line_number':2201,'multiline':True]['text':' isolate the action ','line_number':2202,'multiline':True]['text':' there is an unprocessed sequence if its property == eor   ','line_number':2204,'multiline':True]['text':' process the last sequence ','line_number':2205,'multiline':True]['text':' process current seq1, init new seq1 ','line_number':2210,'multiline':True]['text':' init new seq2 ','line_number':2214,'multiline':True]['text':' process seq1, process seq2, init new seq1 ','line_number':2217,'multiline':True]['text':' process seq1, set seq1=seq2, init new seq2 ','line_number':2222,'multiline':True]['text':' we should never get here ','line_number':2227,'multiline':True]['text':' flush possible pending sequence, e.g. ON ','line_number':2234,'multiline':True]['text':' look for the last char not a BN or LRE/RLE/LRO/RLO/PDF ','line_number':2242,'multiline':True]['text':' perform (L1) and (X9) ---------------------------------------------------- ','line_number':2256,'multiline':True]['text':'
+ * Reset the embedding levels for some non-graphic characters (L1).
+ * This function also sets appropriate levels for BN, and
+ * explicit embedding types that are supposed to have been removed
+ * from the paragraph in (X9).
+ ','line_number':2258,'multiline':True]['text':' reset a sequence of WS/BN before eop and B/S to the paragraph paraLevel ','line_number':2276,'multiline':True]['text':' reset BN to the next character's paraLevel until B/S, which restarts above loop ','line_number':2285,'multiline':True]['text':' here, i+1 is guaranteed to be <length ','line_number':2286,'multiline':True]['text':' check the argument values ','line_number':2308,'multiline':True]['text':' forget the last context ','line_number':2332,'multiline':True]['text':' mark successful setPara ','line_number':2334,'multiline':True]['text':' obtain memory for mapping table and visual text ','line_number':2363,'multiline':True]['text':' accept only 0 or 1 ','line_number':2377,'multiline':True]['text':' we cannot access directly pBiDi->levels since it is not yet set if
+     * direction is not MIXED
+     ','line_number':2382,'multiline':True]['text':' FOOD FOR THOUGHT: instead of writing the visual text, we could use
+     * the visual map and the dirProps array to drive the second call
+     * to ubidi_setPara (but must make provision for possible removal of
+     * BiDi controls.  Alternatively, only use the dirProps array via
+     * customized classifier callback.
+     ','line_number':2391,'multiline':True]['text':' Because what we did with reorderingOptions, visualText may be shorter
+     * than the original text. But we don't want the levels memory to be
+     * reallocated shorter than the original length, since we need to restore
+     * the levels as after the first call to ubidi_setpara() before returning.
+     * We will force mayAllocateText to FALSE before the second call to
+     * ubidi_setpara(), and will restore it afterwards.
+     ','line_number':2407,'multiline':True]['text':' check if some runs must be split, count how many splits ','line_number':2422,'multiline':True]['text':' because we switch from UBiDi.simpleRuns to UBiDi.runs ','line_number':2444,'multiline':True]['text':' split runs which are not consecutive in source text ','line_number':2453,'multiline':True]['text':' restore initial paraLevel ','line_number':2503,'multiline':True]['text':' restore real text ','line_number':2506,'multiline':True]['text':' the saved levels should never excess levelsSize, but we check anyway ','line_number':2511,'multiline':True]['text':' free memory for mapping table and visual text ','line_number':2521,'multiline':True]['text':' ubidi_setPara ------------------------------------------------------------ ','line_number':2527,'multiline':True]['text':' check the argument values ','line_number':2536,'multiline':True]['text':' special treatment for RUNS_ONLY mode ','line_number':2548,'multiline':True]['text':' initialize the UBiDi structure ','line_number':2554,'multiline':True]['text':' mark unfinished setPara ','line_number':2555,'multiline':True]['text':' clean up from last call ','line_number':2565,'multiline':True]['text':' clean up from last call ','line_number':2566,'multiline':True]['text':'
+     * Save the original paraLevel if contextual; otherwise, set to 0.
+     ','line_number':2568,'multiline':True]['text':'
+         * For an empty paragraph, create a UBiDi object with the paraLevel and
+         * the flags and the direction set but without allocating zero-length arrays.
+         * There is nothing more to do.
+         ','line_number':2574,'multiline':True]['text':' mark successful setPara ','line_number':2586,'multiline':True]['text':' allocate paras memory ','line_number':2592,'multiline':True]['text':'
+     * Get the directional properties,
+     * the flags bit-set, and
+     * determine the paragraph level if necessary.
+     ','line_number':2598,'multiline':True]['text':' the processed length may have changed if UBIDI_OPTION_STREAMING ','line_number':2614,'multiline':True]['text':' the levels[] will reflect the WS run ','line_number':2616,'multiline':True]['text':' are explicit levels specified? ','line_number':2618,'multiline':True]['text':' no: determine explicit levels according to the (Xn) rules ','line_number':2620,'multiline':True]['text':' set BN for all explicit codes, check that all levels are 0 or paraLevel..UBIDI_MAX_EXPLICIT_LEVEL ','line_number':2632,'multiline':True]['text':' allocate isolate memory ','line_number':2640,'multiline':True]['text':' current isolates stack entry == none ','line_number':2654,'multiline':True]['text':'
+     * The steps after (X9) in the UBiDi algorithm are performed only if
+     * the paragraph text has mixed directionality!
+     ','line_number':2656,'multiline':True]['text':' all levels are implicitly at paraLevel (important for ubidi_getLevels()) ','line_number':2663,'multiline':True]['text':' all levels are implicitly at paraLevel (important for ubidi_getLevels()) ','line_number':2667,'multiline':True]['text':'
+         *  Choose the right implicit state table
+         ','line_number':2671,'multiline':True]['text':' we should never get here ','line_number':2702,'multiline':True]['text':'
+         * If there are no external levels specified and there
+         * are no significant explicit level codes in the text,
+         * then we can treat the entire paragraph as one run.
+         * Otherwise, we need to perform the following rules on runs of
+         * the text with the same embedding levels. (X10)
+         * "Significant" explicit level codes are ones that actually
+         * affect non-BN characters.
+         * Examples for "insignificant" ones are empty embeddings
+         * LRE-PDF, LRE-RLE-PDF-PDF, etc.
+         ','line_number':2706,'multiline':True]['text':' sor, eor: start and end types of same-level-run ','line_number':2723,'multiline':True]['text':' determine the first sor and set eor to it because of the loop body (sor=eor there) ','line_number':2729,'multiline':True]['text':' determine start and limit of the run (end points just behind the run) ','line_number':2739,'multiline':True]['text':' the values for this run's start are the same as for the previous run's end ','line_number':2741,'multiline':True]['text':' except if this is a new paragraph, then set sor = para level ','line_number':2745,'multiline':True]['text':' search for the limit of this run ','line_number':2751,'multiline':True]['text':' get the correct level of the next run ','line_number':2756,'multiline':True]['text':' determine eor from max(level, nextLevel); sor is last run's eor ','line_number':2763,'multiline':True]['text':' if the run consists of overridden directional types, then there
+                   are no implicit types to be resolved ','line_number':2770,'multiline':True]['text':' remove the UBIDI_LEVEL_OVERRIDE flags ','line_number':2775,'multiline':True]['text':' check if we got any memory shortage while adding insert points ','line_number':2782,'multiline':True]['text':' reset the embedding levels for some non-graphic characters (L1), (X9) ','line_number':2788,'multiline':True]['text':' add RLM for inverse Bidi with contextual orientation resolving
+     * to RTL which would not round-trip otherwise
+     ','line_number':2792,'multiline':True]['text':' LTR paragraph ','line_number':2806,'multiline':True]['text':' mark successful setPara ','line_number':2831,'multiline':True]['text':' paragraphs API functions ------------------------------------------------- ','line_number':2895,'multiline':True]['text':' check the argument values ','line_number':2921,'multiline':True]['text':' get Para object if Line object ','line_number':2926,'multiline':True]['text':' check the argument values ','line_number':2949,'multiline':True]['text':' pErrorCode will be checked by the call to ubidi_getParagraphByIndex ','line_number':2950,'multiline':True]['text':' get Para object if Line object ','line_number':2953,'multiline':True]

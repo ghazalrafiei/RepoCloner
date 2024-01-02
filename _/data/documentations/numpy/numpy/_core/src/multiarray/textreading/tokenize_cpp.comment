@@ -1,0 +1,73 @@
+['text':'
+    How parsing quoted fields works:
+
+    For quoting to be activated, the first character of the field
+    must be the quote character (after taking into account
+    ignore_leading_spaces).  While quoting is active, delimiters
+    are treated as regular characters, not delimiters.  Quoting is
+    deactivated by the second occurrence of the quote character.  An
+    exception is the occurrence of two consecutive quote characters,
+    which is treated as a literal occurrence of a single quote character.
+    E.g. (with delimiter=',' and quote='"'):
+        12.3,"New York, NY","3'2"""
+    The second and third fields are `New York, NY` and `3'2"`.
+
+    If a non-delimiter occurs after the closing quote, the quote is
+    ignored and parsing continues with quoting deactivated.  Quotes
+    that occur while quoting is not activated are not handled specially;
+    they become part of the data.
+    E.g:
+        12.3,"ABC"DEF,XY"Z
+    The second and third fields are `ABCDEF` and `XY"Z`.
+
+    Note that the second field of
+        12.3,"ABC"   ,4.5
+    is `ABC   `.  Currently there is no option to ignore whitespace
+    at the end of a field.
+','line_number':13,'multiline':True]['text':' Space for length +1 termination, +2 additional padding for add_field ','line_number':48,'multiline':True]['text':' always ensure we end with NUL ','line_number':71,'multiline':True]['text':' The previous field is done, advance to keep a NUL byte at the end ','line_number':80,'multiline':True]['text':' Check for a size overflow, path should be almost impossible. ','line_number':89,'multiline':True]['text':' Ensure this (currently empty) word is NUL terminated. ','line_number':106,'multiline':True]['text':' before we can check for quotes, strip leading whitespace ','line_number':122,'multiline':True]['text':' Setting chunk effectively starts the field ','line_number':134,'multiline':True]['text':' TOKENIZE_QUOTED is OK with pos == stop ','line_number':138,'multiline':True]['text':' Set to TOKENIZE_QUOTED or TOKENIZE_QUOTED_WHITESPACE ','line_number':141,'multiline':True]['text':' Note, this branch is largely identical to `TOKENIZE_UNQUOTED` ','line_number':174,'multiline':True]['text':' Copy the quote character directly from the config: ','line_number':216,'multiline':True]['text':' continue parsing as if unquoted ','line_number':225,'multiline':True]['text':' Set to TOKENIZE_UNQUOTED or TOKENIZE_UNQUOTED_WHITESPACE ','line_number':226,'multiline':True]['text':' advance to next buffer ','line_number':233,'multiline':True]['text':' "Universal newline" support: remove \n in \r\n. ','line_number':251,'multiline':True]['text':'
+ * This tokenizer always copies the full "row" (all tokens).  This makes
+ * two things easier:
+ * 1. It means that every word is guaranteed to be followed by a NUL character
+ *    (although it can include one as well).
+ * 2. If usecols are used we can sniff the first row easier by parsing it
+ *    fully.  Further, usecols can be negative so we may not know which row we
+ *    need up-front.
+ *
+ * The tokenizer could grow the ability to skip fields and check the
+ * maximum number of fields when known, it is unclear that this is worthwhile.
+ *
+ * Unlike some tokenizers, this one tries to work in chunks and copies
+ * data in chunks as well.  The hope is that this makes multiple light-weight
+ * loops rather than a single heavy one, to allow e.g. quickly scanning for the
+ * end of a field.  Copying chunks also means we usually only check once per
+ * field whether the buffer is large enough.
+ * Different choices are possible, this one seems to work well, though.
+ *
+ * The core (main part) of the tokenizer is specialized for the three Python
+ * unicode flavors UCS1, UCS2, and UCS4 as a worthwhile optimization.
+ ','line_number':267,'multiline':True]['text':' Reset to start of buffer ','line_number':297,'multiline':True]['text':'
+         * This loop adds new fields to the result (to make up a full row)
+         * until the row ends (typically a line end or the file end)
+         ','line_number':302,'multiline':True]['text':' Start a new field ','line_number':307,'multiline':True]['text':'
+                 * Finished line, do not read anymore (also do not eat \n).
+                 * If we are in a quoted field and the "line" does not end with
+                 * a newline, the quoted field will not have it either.
+                 * I.e. `np.loadtxt(['"a', 'b"'], dtype="S2", quotechar='"')`
+                 * reads "ab". This matches `next(csv.reader(['"a', 'b"']))`.
+                 ','line_number':317,'multiline':True]['text':' fetch new data ','line_number':326,'multiline':True]['text':' stream should ensure this. ','line_number':334,'multiline':True]['text':' This must be an empty line (and it must be indicated!). ','line_number':338,'multiline':True]['text':'
+     * We have finished tokenizing a full row into fields, finalize result
+     ','line_number':363,'multiline':True]['text':' This line is "finished", make sure we don't touch it again: ','line_number':367,'multiline':True]['text':' Finish the last field (we "append" one to store the last ones length) ','line_number':377,'multiline':True]['text':'
+     * We always start a new field (at the very beginning and whenever a
+     * delimiter was found).
+     * This gives us two scenarios where we need to ignore the last field
+     * if it is empty:
+     * 1. If there is exactly one empty (unquoted) field, the whole line is
+     *    empty.
+     * 2. If we are splitting on whitespace we always ignore a last empty
+     *    field to match Python's splitting: `" 1 ".split()`.
+     *    (Zero fields are possible when we are only skipping lines)
+     ','line_number':383,'multiline':True]['text':'
+ * Initialize the tokenizer.  We may want to copy all important config
+ * variables into the tokenizer.  This would improve the cache locality during
+ * tokenizing.
+ ','line_number':420,'multiline':True]['text':' State and buf_state could be moved into tokenize if we go by row ','line_number':428,'multiline':True]

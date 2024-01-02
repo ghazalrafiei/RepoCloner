@@ -1,0 +1,140 @@
+['text':'
+ * This file contains the implementation of the 'einsum' function,
+ * which provides an einstein-summation operation.
+ *
+ * Copyright (c) 2011 by Mark Wiebe (mwwiebe@gmail.com)
+ * The University of British Columbia
+ *
+ * See LICENSE.txt for the license.
+ ','line_number':1,'multiline':True]['text':'PyArray_AssignRawScalar','line_number':20,'multiline':False]['text':'
+ * Parses the subscripts for one operand into an output of 'ndim'
+ * labels. The resulting 'op_labels' array will have:
+ *  - the ASCII code of the label for the first occurrence of a label;
+ *  - the (negative) offset to the first occurrence of the label for
+ *    repeated labels;
+ *  - zero for broadcast dimensions, if subscripts has an ellipsis.
+ * For example:
+ *  - subscripts="abbcbc",  ndim=6 -> op_labels=[97, 98, -1, 99, -3, -2]
+ *  - subscripts="ab...bc", ndim=6 -> op_labels=[97, 98, 0, 0, -3, 99]
+ ','line_number':32,'multiline':True]['text':' Process all labels for this operand ','line_number':53,'multiline':True]['text':' A proper label for an axis. ','line_number':57,'multiline':True]['text':' Check we don't exceed the operator dimensions. ','line_number':59,'multiline':True]['text':' The beginning of the ellipsis. ','line_number':76,'multiline':True]['text':' Check it's a proper ellipsis. ','line_number':78,'multiline':True]['text':' No ellipsis found, labels must match dimensions exactly. ','line_number':99,'multiline':True]['text':' Ellipsis found, may have to add broadcast dimensions. ','line_number':109,'multiline':True]['text':' Move labels after ellipsis to the end. ','line_number':111,'multiline':True]['text':' Set all broadcast dimensions to zero. ','line_number':115,'multiline':True]['text':'
+     * Find any labels duplicated for this operand, and turn them
+     * into negative offsets to the axis to merge with.
+     *
+     * In C, the char type may be signed or unsigned, but with
+     * twos complement arithmetic the char is ok either way here, and
+     * later where it matters the char is cast to a signed char.
+     ','line_number':121,'multiline':True]['text':' If it is a proper label, find any duplicates of it. ','line_number':131,'multiline':True]['text':' Search for the next matching label. ','line_number':133,'multiline':True]['text':' The offset from next to op_labels[idim] (negative). ','line_number':137,'multiline':True]['text':' Search for the next matching label. ','line_number':139,'multiline':True]['text':'
+ * Parses the subscripts for the output operand into an output that
+ * includes 'ndim_broadcast' unlabeled dimensions, and returns the total
+ * number of output dimensions, or -1 if there is an error. Similarly
+ * to parse_operand_subscripts, the 'out_labels' array will have, for
+ * each dimension:
+ *  - the ASCII code of the corresponding label;
+ *  - zero for broadcast dimensions, if subscripts has an ellipsis.
+ ','line_number':149,'multiline':True]['text':' Process all the output labels. ','line_number':167,'multiline':True]['text':' A proper label for an axis. ','line_number':171,'multiline':True]['text':' Check that it doesn't occur again. ','line_number':173,'multiline':True]['text':' Check that it was used in the inputs. ','line_number':181,'multiline':True]['text':' Check that there is room in out_labels for this label. ','line_number':189,'multiline':True]['text':' The beginning of the ellipsis. ','line_number':199,'multiline':True]['text':' Check it is a proper ellipsis. ','line_number':201,'multiline':True]['text':' Check there is room in out_labels for broadcast dims. ','line_number':210,'multiline':True]['text':' If no ellipsis was found there should be no broadcast dimensions. ','line_number':232,'multiline':True]['text':'
+ * When there's just one operand and no reduction we can return a view
+ * into 'op'.  This calculates the view and stores it in 'ret', if
+ * possible.  Returns -1 on error, 0 otherwise.  Note that a 0 return
+ * does not mean that a view was successfully created.
+ ','line_number':245,'multiline':True]['text':' Initialize the dimensions and strides to zero ','line_number':263,'multiline':True]['text':' Match the labels in the operand with the output labels ','line_number':269,'multiline':True]['text':'
+         * The char type may be either signed or unsigned, we
+         * need it to be signed here.
+         ','line_number':271,'multiline':True]['text':' If this label says to merge axes, get the actual label ','line_number':276,'multiline':True]['text':' If the label is 0, it's an unlabeled broadcast dimension ','line_number':280,'multiline':True]['text':' The next output label that's a broadcast dimension ','line_number':282,'multiline':True]['text':' Find the position for this dimension in the output ','line_number':298,'multiline':True]['text':' If it's not found, reduction -> can't return a view ','line_number':301,'multiline':True]['text':' Update the dimensions and strides of the output ','line_number':305,'multiline':True]['text':' If we processed all the input axes, return a view ','line_number':318,'multiline':True]['text':' Return success, but that we couldn't make a view ','line_number':333,'multiline':True]['text':'
+ * The char type may be either signed or unsigned, we need it to be
+ * signed here.
+ ','line_number':339,'multiline':True]['text':'
+ * Given the labels for an operand array, returns a view of the array
+ * with all repeated labels collapsed into a single dimension along
+ * the corresponding diagonal. The labels are also updated to match
+ * the dimensions of the new array. If no label is repeated, the
+ * original array is reference increased and returned unchanged.
+ ','line_number':357,'multiline':True]['text':' A fast path to avoid unnecessary calculations. ','line_number':374,'multiline':True]['text':' Combine repeated labels. ','line_number':381,'multiline':True]['text':'
+         * The char type may be either signed or unsigned, we
+         * need it to be signed here.
+         ','line_number':384,'multiline':True]['text':' A label seen for the first time, add it to the op view. ','line_number':392,'multiline':True]['text':'
+             * icombinemap maps dimensions in the original array to
+             * their position in the combined dimensions view.
+             ','line_number':394,'multiline':True]['text':' A repeated label, find the original one and merge them. ','line_number':403,'multiline':True]['text':' Overwrite labels to match the new operand view. ','line_number':420,'multiline':True]['text':' The number of dimensions of the combined view. ','line_number':429,'multiline':True]['text':' Create a view of the operand with the compressed dimensions. ','line_number':432,'multiline':True]['text':'
+         * If it's an unlabeled broadcast dimension, choose
+         * the next broadcast dimension from the operand.
+         ','line_number':452,'multiline':True]['text':'
+             * If we used up all the operand broadcast dimensions,
+             * extend it with a "newaxis"
+             ','line_number':460,'multiline':True]['text':' Otherwise map to the broadcast axis ','line_number':467,'multiline':True]['text':' It's a labeled dimension, find the matching one ','line_number':473,'multiline':True]['text':' If the op doesn't have the label, broadcast it ','line_number':476,'multiline':True]['text':' Otherwise use it ','line_number':480,'multiline':True]['text':'
+     * Since the iterator wasn't tracking coordinates, the
+     * loop provided by the iterator is in Fortran-order.
+     ','line_number':523,'multiline':True]['text':'
+     * Since the iterator wasn't tracking coordinates, the
+     * loop provided by the iterator is in Fortran-order.
+     ','line_number':584,'multiline':True]['text':'
+     * Since the iterator wasn't tracking coordinates, the
+     * loop provided by the iterator is in Fortran-order.
+     ','line_number':648,'multiline':True]['text':'
+     * Since the iterator wasn't tracking coordinates, the
+     * loop provided by the iterator is in Fortran-order.
+     ','line_number':711,'multiline':True]['text':'NUMPY_API
+ * This function provides summation of array elements according to
+ * the Einstein summation convention.  For example:
+ *  - trace(a)        -> einsum("ii", a)
+ *  - transpose(a)    -> einsum("ji", a)
+ *  - multiply(a,b)   -> einsum(",", a, b)
+ *  - inner(a,b)      -> einsum("i,i", a, b)
+ *  - outer(a,b)      -> einsum("i,j", a, b)
+ *  - matvec(a,b)     -> einsum("ij,j", a, b)
+ *  - matmat(a,b)     -> einsum("ij,jk", a, b)
+ *
+ * subscripts: The string of subscripts for einstein summation.
+ * nop:        The number of operands
+ * op_in:      The array of operands
+ * dtype:      Either NULL, or the data type to force the calculation as.
+ * order:      The order for the calculation/the output axes.
+ * casting:    What kind of casts should be permitted.
+ * out:        Either NULL, or an array into which the output should be placed.
+ *
+ * By default, the labels get placed in alphabetical order
+ * at the end of the output. So, if c = einsum("i,j", a, b)
+ * then c[i,j] == a[i]*b[j], but if c = einsum("j,i", a, b)
+ * then c[i,j] = a[j]*b[i].
+ *
+ * Alternatively, you can control the output order or prevent
+ * an axis from being summed/force an axis to be summed by providing
+ * indices for the output. This allows us to turn 'trace' into
+ * 'diag', for example.
+ *  - diag(a)         -> einsum("ii->i", a)
+ *  - sum(a, axis=0)  -> einsum("i...->", a)
+ *
+ * Subscripts at the beginning and end may be specified by
+ * putting an ellipsis "..." in the middle.  For example,
+ * the function einsum("i...i", a) takes the diagonal of
+ * the first and last dimensions of the operand, and
+ * einsum("ij...,jk...->ik...") takes the matrix product using
+ * the first two indices of each operand instead of the last two.
+ *
+ * When there is only one operand, no axes being summed, and
+ * no output parameter, this function returns a view
+ * into the operand instead of making a copy.
+ ','line_number':747,'multiline':True]['text':' nop+1 (+1 is for the output) must fit in NPY_MAXARGS ','line_number':813,'multiline':True]['text':' Parse the subscripts string into label_counts and op_labels ','line_number':825,'multiline':True]['text':' Move subscripts to the start of the labels for the next op ','line_number':850,'multiline':True]['text':'
+     * Find the number of broadcast dimensions, which is the maximum
+     * number of labels == 0 in an op_labels array.
+     ','line_number':857,'multiline':True]['text':'
+     * If there is no output signature, fill output_labels and ndim_output
+     * using each label that appeared once, in alphabetical order.
+     ','line_number':879,'multiline':True]['text':' If no output was specified, always broadcast left, as usual. ','line_number':884,'multiline':True]['text':' Parse the output subscript string. ','line_number':911,'multiline':True]['text':'
+     * If there's just one operand and no output parameter,
+     * first try remapping the axes to the output to return
+     * a view instead of a copy.
+     ','line_number':928,'multiline':True]['text':' Set all the op references to NULL ','line_number':946,'multiline':True]['text':'
+     * Process all the input ops, combining dimensions into their
+     * diagonal where specified.
+     ','line_number':951,'multiline':True]['text':' Set the output op ','line_number':964,'multiline':True]['text':'
+     * Set up the labels for the iterator (output + combined labels).
+     * Can just share the output_labels memory, because iter_labels
+     * is output_labels with some more labels appended.
+     ','line_number':967,'multiline':True]['text':' Set up the op_axes for the iterator ','line_number':986,'multiline':True]['text':' Set up the op_dtypes if dtype was provided ','line_number':996,'multiline':True]['text':' Set the op_axes for the output ','line_number':1007,'multiline':True]['text':' Set the iterator per-op flags ','line_number':1016,'multiline':True]['text':' Allocate the iterator ','line_number':1040,'multiline':True]['text':' Initialize the output to all zeros or None','line_number':1048,'multiline':True]['text':'*************************','line_number':1054,'multiline':True]['text':'
+     * Acceleration for some specific loop structures. Note
+     * that with axis coalescing, inputs with more dimensions can
+     * be reduced to fit into these patterns.
+     ','line_number':1055,'multiline':True]['text':'*************************','line_number':1093,'multiline':True]['text':'
+     * Get an inner loop function, specializing it based on
+     * the strides that are fixed for the whole loop.
+     ','line_number':1099,'multiline':True]['text':' Finally, the main loop ','line_number':1113,'multiline':True]['text':' If the API was needed, it may have thrown an error ','line_number':1142,'multiline':True]

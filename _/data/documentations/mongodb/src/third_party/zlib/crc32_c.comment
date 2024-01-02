@@ -1,0 +1,158 @@
+['text':' crc32.c -- compute the CRC-32 of a data stream
+ * Copyright (C) 1995-2022 Mark Adler
+ * For conditions of distribution and use, see copyright notice in zlib.h
+ *
+ * This interleaved implementation of a CRC makes use of pipelined multiple
+ * arithmetic-logic units, commonly found in modern CPU cores. It is due to
+ * Kadatch and Jenkins (2010). See doc/crc-doc.1.0.pdf in this distribution.
+ ','line_number':1,'multiline':True]['text':' @(#) $Id$ ','line_number':10,'multiline':True]['text':'
+  Note on the use of DYNAMIC_CRC_TABLE: there is no mutex or semaphore
+  protection on the static variables used to control the first-use generation
+  of the crc tables. Therefore, if you #define DYNAMIC_CRC_TABLE, you should
+  first call get_crc_table() to initialize the tables before allowing more than
+  one thread to use crc32().
+
+  MAKECRCH can be #defined to write out crc32.h. A main() routine is also
+  produced, so that this one source file can be compiled to an executable.
+ ','line_number':12,'multiline':True]['text':' !DYNAMIC_CRC_TABLE ','line_number':27,'multiline':True]['text':' MAKECRCH ','line_number':28,'multiline':True]['text':' for Z_U4, Z_U8, z_crc_t, and FAR definitions ','line_number':30,'multiline':True]['text':'
+  A CRC of a message is computed on N braids of words in the message, where
+  each word consists of W bytes (4 or 8). If N is 3, for example, then three
+  running sparse CRCs are calculated respectively on each braid, at these
+  indices in the array of words: 0, 3, 6, ..., 1, 4, 7, ..., and 2, 5, 8, ...
+  This is done starting at a word boundary, and continues until as many blocks
+  of N * W bytes as are available have been processed. The results are combined
+  into a single CRC at the end. For this code, N must be in the range 1..6 and
+  W must be 4 or 8. The upper limit on N can be increased if desired by adding
+  more #if blocks, extending the patterns apparent in the code. In addition,
+  crc32.h would need to be regenerated, if the maximum N value is increased.
+
+  N and W are chosen empirically by benchmarking the execution time on a given
+  processor. The choices for N and W below were based on testing on Intel Kaby
+  Lake i7, AMD Ryzen 7, ARM Cortex-A57, Sparc64-VII, PowerPC POWER9, and MIPS64
+  Octeon II processors. The Intel, AMD, and ARM processors were all fastest
+  with N=5, W=8. The Sparc, PowerPC, and MIPS64 were all fastest at N=5, W=4.
+  They were all tested with either gcc or clang, all using the -O3 optimization
+  level. Your mileage may vary.
+ ','line_number':32,'multiline':True]['text':' Define N ','line_number':53,'multiline':True]['text':'
+  z_crc_t must be at least 32 bits. z_word_t must be at least as long as
+  z_crc_t. It is assumed here that z_word_t is either 32 bits or 64 bits, and
+  that bytes are eight bits.
+ ','line_number':63,'multiline':True]['text':'
+  Define W and the associated z_word_t type. If W is not defined, then a
+  braided calculation is not used, and the associated tables and code are not
+  compiled.
+ ','line_number':69,'multiline':True]['text':' required for MAKECRCH ','line_number':80,'multiline':True]['text':' If available, use the ARM processor CRC32 instruction. ','line_number':101,'multiline':True]['text':'
+  Swap the bytes in a z_word_t to convert between little and big endian. Any
+  self-respecting compiler will optimize this to a single machine byte-swap
+  instruction, if one is available. This assumes that word_t is either 32 bits
+  or 64 bits.
+ ','line_number':107,'multiline':True]['text':' W == 4 ','line_number':124,'multiline':True]['text':' =========================================================================
+ * Table of powers of x for combining CRC-32s, filled in by make_crc_table()
+ * below.
+ ','line_number':135,'multiline':True]['text':' =========================================================================
+ * Tables for byte-wise and braided CRC-32 calculations, and a table of powers
+ * of x for combining CRC-32s, all made by make_crc_table().
+ ','line_number':141,'multiline':True]['text':' CRC polynomial. ','line_number':148,'multiline':True]['text':' p(x) reflected, with x^32 implied ','line_number':149,'multiline':True]['text':'
+  Return a(x) multiplied by b(x) modulo p(x), where p(x) is the CRC polynomial,
+  reflected. For speed, this requires that a not be zero.
+ ','line_number':151,'multiline':True]['text':'
+  Return x^(n * 2^k) modulo p(x). Requires that x2n_table[] has been
+  initialized.
+ ','line_number':172,'multiline':True]['text':' x^0 == 1 ','line_number':179,'multiline':True]['text':' =========================================================================
+ * Build the tables for byte-wise and braided CRC-32 calculations, and a table
+ * of powers of x for combining CRC-32s.
+ ','line_number':190,'multiline':True]['text':' MAKECRCH ','line_number':205,'multiline':True]['text':'
+  Define a once() function depending on the availability of atomics. If this is
+  compiled with DYNAMIC_CRC_TABLE defined, and if CRCs will be computed in
+  multiple threads, and if atomics are not available, then get_crc_table() must
+  be called to initialize the tables and must return before any threads are
+  allowed to compute or combine CRCs.
+ ','line_number':207,'multiline':True]['text':' Definition of once functionality. ','line_number':215,'multiline':True]['text':' Check for the availability of atomics. ','line_number':218,'multiline':True]['text':' Structure for once(), which must be initialized with ONCE_INIT. ','line_number':224,'multiline':True]['text':'
+  Run the provided init() function exactly once, even if multiple threads
+  invoke once() at the same time. The state must be a once_t initialized with
+  ONCE_INIT.
+ ','line_number':231,'multiline':True]['text':' no atomics ','line_number':248,'multiline':True]['text':' Structure for once(), which must be initialized with ONCE_INIT. ','line_number':250,'multiline':True]['text':' Test and set. Alas, not atomic, but tries to minimize the period of
+   vulnerability. ','line_number':257,'multiline':True]['text':' Run the provided init() function once. This is not thread-safe. ','line_number':267,'multiline':True]['text':' State for once(). ','line_number':282,'multiline':True]['text':'
+  Generate tables for a byte-wise 32-bit CRC calculation on the polynomial:
+  x^32+x^26+x^23+x^22+x^16+x^12+x^11+x^10+x^8+x^7+x^5+x^4+x^2+x+1.
+
+  Polynomials over GF(2) are represented in binary, one bit per coefficient,
+  with the lowest powers in the most significant bit. Then adding polynomials
+  is just exclusive-or, and multiplying a polynomial by x is a right shift by
+  one. If we call the above polynomial p, and represent a byte as the
+  polynomial q, also with the lowest power in the most significant bit (so the
+  byte 0xb1 is the polynomial x^7+x^3+x^2+1), then the CRC is (q*x^32) mod p,
+  where a mod b means the remainder after dividing a by b.
+
+  This calculation is done using the shift-register method of multiplying and
+  taking the remainder. The register is initialized to zero, and for each
+  incoming bit, x^32 is added mod p to the register if the bit is a one (where
+  x^32 mod p is p+x^32 = x^26+...+1), and the register is multiplied mod p by x
+  (which is shifting right by one and adding x^32 mod p if the bit shifted out
+  is a one). We start with the highest power (least significant bit) of q and
+  repeat for all eight bits of q.
+
+  The table is simply the CRC of all possible eight bit values. This is all the
+  information needed to generate CRCs on data a byte at a time for all
+  combinations of CRC register values and incoming bytes.
+ ','line_number':285,'multiline':True]['text':' initialize the CRC of bytes tables ','line_number':314,'multiline':True]['text':' initialize the x^2^n mod p(x) table ','line_number':325,'multiline':True]['text':' x^1 ','line_number':326,'multiline':True]['text':' initialize the braiding tables -- needs x2n_table[] ','line_number':332,'multiline':True]['text':'
+          The crc32.h header file contains tables for both 32-bit and 64-bit
+          z_word_t's, and so requires a 64-bit type be available. In that case,
+          z_word_t must be defined to be 64-bits. This code then also generates
+          and writes out the tables for the case that z_word_t is 32 bits.
+         ','line_number':338,'multiline':True]['text':' write out little-endian CRC table to crc32.h ','line_number':355,'multiline':True]['text':' write out big-endian CRC table for 64-bit z_word_t to crc32.h ','line_number':366,'multiline':True]['text':' write out big-endian CRC table for 32-bit z_word_t to crc32.h ','line_number':379,'multiline':True]['text':' write out braid tables for each value of N ','line_number':392,'multiline':True]['text':' compute braid tables for this N and 64-bit word_t ','line_number':398,'multiline':True]['text':' write out braid tables for 64-bit z_word_t to crc32.h ','line_number':401,'multiline':True]['text':' compute braid tables for this N and 32-bit word_t ','line_number':424,'multiline':True]['text':' write out braid tables for 32-bit z_word_t to crc32.h ','line_number':427,'multiline':True]['text':' write out zeros operator table to crc32.h ','line_number':458,'multiline':True]['text':' MAKECRCH ','line_number':468,'multiline':True]['text':'
+   Write the 32-bit values in table[0..k-1] to out, five per line in
+   hexadecimal separated by commas.
+ ','line_number':473,'multiline':True]['text':'
+   Write the high 32-bits of each value in table[0..k-1] to out, five per line
+   in hexadecimal separated by commas.
+ ','line_number':486,'multiline':True]['text':'
+  Write the 64-bit values in table[0..k-1] to out, three per line in
+  hexadecimal separated by commas. This assumes that if there is a 64-bit
+  type, then there is also a long long integer type, and it is at least 64
+  bits. If not, then the type cast and format string can be adjusted
+  accordingly.
+ ','line_number':499,'multiline':True]['text':' Actually do the deed. ','line_number':515,'multiline':True]['text':' MAKECRCH ','line_number':521,'multiline':True]['text':'
+  Generate the little and big-endian braid tables for the given n and z_word_t
+  size w. Each array must have room for w blocks of 256 elements.
+ ','line_number':524,'multiline':True]['text':' DYNAMIC_CRC_TABLE ','line_number':543,'multiline':True]['text':' =========================================================================
+ * This function can be used by asm versions of crc32(), and to force the
+ * generation of the CRC tables in a threaded application.
+ ','line_number':545,'multiline':True]['text':' DYNAMIC_CRC_TABLE ','line_number':552,'multiline':True]['text':' =========================================================================
+ * Use ARM machine instructions if available. This will compute the CRC about
+ * ten times faster than the braided calculation. This code does not check for
+ * the presence of the CRC instruction at run time. __ARM_FEATURE_CRC32 will
+ * only be defined if the compilation specifies an ARM processor architecture
+ * that has the instructions. For example, compiling with -march=armv8.1-a or
+ * -march=armv8-a+crc, or -march=native if the compile machine has the crc32
+ * instructions.
+ ','line_number':556,'multiline':True]['text':'
+   Constants empirically determined to maximize speed. These values are from
+   measurements on a Cortex-A57. Your mileage may vary.
+ ','line_number':567,'multiline':True]['text':' number of words in a batch ','line_number':571,'multiline':True]['text':' computed from Z_BATCH = 3990 ','line_number':572,'multiline':True]['text':' fewest words in a final batch ','line_number':573,'multiline':True]['text':' Return initial CRC, if requested. ','line_number':584,'multiline':True]['text':' DYNAMIC_CRC_TABLE ','line_number':589,'multiline':True]['text':' Pre-condition the CRC ','line_number':591,'multiline':True]['text':' Compute the CRC up to a word boundary. ','line_number':594,'multiline':True]['text':' Prepare to compute the CRC on full 64-bit words word[0..num-1]. ','line_number':601,'multiline':True]['text':' Do three interleaved CRCs to realize the throughput of one crc32x
+       instruction per cycle. Each CRC is calculated on Z_BATCH words. The
+       three CRCs are combined into a single CRC after each set of batches. ','line_number':606,'multiline':True]['text':' Do one last smaller batch with the remaining words, if there are enough
+       to pay for the combination of CRCs. ','line_number':626,'multiline':True]['text':' Compute the CRC on any remaining words. ','line_number':648,'multiline':True]['text':' Complete the CRC on any remaining bytes. ','line_number':655,'multiline':True]['text':' Return the CRC, post-conditioned. ','line_number':663,'multiline':True]['text':'
+  Return the CRC of the W bytes in the word_t data, taking the
+  least-significant byte of the word as the first byte of data, without any pre
+  or post conditioning. This is used to combine the CRCs of each braid.
+ ','line_number':671,'multiline':True]['text':' ========================================================================= ','line_number':693,'multiline':True]['text':' Return initial CRC, if requested. ','line_number':696,'multiline':True]['text':' DYNAMIC_CRC_TABLE ','line_number':701,'multiline':True]['text':' Pre-condition the CRC ','line_number':703,'multiline':True]['text':' If provided enough bytes, do a braided CRC calculation. ','line_number':708,'multiline':True]['text':' Compute the CRC up to a z_word_t boundary. ','line_number':715,'multiline':True]['text':' Compute the CRC on as many N z_word_t blocks as are available. ','line_number':721,'multiline':True]['text':' Do endian check at execution time instead of compile time, since ARM
+           processors can change the endianness at execution time. If the
+           compiler knows what the endianness will be, it can optimize out the
+           check and the unused branch. ','line_number':726,'multiline':True]['text':' Little endian. ','line_number':732,'multiline':True]['text':' Initialize the CRC for each braid. ','line_number':757,'multiline':True]['text':'
+              Process the first blks-1 blocks, computing the CRCs on each braid
+              independently.
+             ','line_number':775,'multiline':True]['text':' Load the word for each braid into registers. ','line_number':780,'multiline':True]['text':' Compute and update the CRC for each word. The loop should
+                   get unrolled. ','line_number':799,'multiline':True]['text':'
+              Process the last block, combining the CRCs of the N braids at the
+              same time.
+             ','line_number':837,'multiline':True]['text':' Big endian. ','line_number':860,'multiline':True]['text':' Initialize the CRC for each braid. ','line_number':879,'multiline':True]['text':'
+              Process the first blks-1 blocks, computing the CRCs on each braid
+              independently.
+             ','line_number':897,'multiline':True]['text':' Load the word for each braid into registers. ','line_number':902,'multiline':True]['text':' Compute and update the CRC for each word. The loop should
+                   get unrolled. ','line_number':921,'multiline':True]['text':'
+              Process the last block, combining the CRCs of the N braids at the
+              same time.
+             ','line_number':959,'multiline':True]['text':'
+          Update the pointer to the remaining bytes to process.
+         ','line_number':983,'multiline':True]['text':' W ','line_number':989,'multiline':True]['text':' Complete the computation of the CRC on any remaining bytes. ','line_number':991,'multiline':True]['text':' Return the CRC, post-conditioned. ','line_number':1008,'multiline':True]['text':' ========================================================================= ','line_number':1014,'multiline':True]['text':' ========================================================================= ','line_number':1020,'multiline':True]['text':' DYNAMIC_CRC_TABLE ','line_number':1024,'multiline':True]['text':' ========================================================================= ','line_number':1028,'multiline':True]['text':' ========================================================================= ','line_number':1033,'multiline':True]['text':' DYNAMIC_CRC_TABLE ','line_number':1037,'multiline':True]['text':' ========================================================================= ','line_number':1041,'multiline':True]['text':' ========================================================================= ','line_number':1046,'multiline':True]

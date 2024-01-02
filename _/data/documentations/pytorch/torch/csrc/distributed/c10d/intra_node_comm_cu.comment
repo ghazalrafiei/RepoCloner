@@ -1,0 +1,40 @@
+['text':'*
+ * NOTE [cross device memory synchronization]
+ *
+ * The multi-stage algorithms (e.g. two-shot, hcm allreduce) require the writes
+ * of a thread to be visible by threads with the same block/thread ID on other
+ * devices. To satisfy CUDA's memory consistency model, every thread has to
+ * release its writes at the system scope, and the consuming thread has to
+ * acquire the writes at the system scope. This incurs high overhead and
+ * attempts in optmizing this process can be prone to race condition.
+ *
+ * Instead, we go around caching by having each thread:
+ *
+ * - Directly write to global memory via st.cs (cache-streaming).
+ * - Synchronize with threads within the block.
+ * - Perform cross device synchronization at block level (via system scope
+ *   atomic ops).
+ * - Synchronize with threads within the block.
+ * - Directly read from global memory via ld.nc (non-coherent/non-cached).
+ ','line_number':47,'multiline':True]['text':'//////////////////////////////////////////////////////////////////////////////','line_number':121,'multiline':False]['text':' Fully Connected Algos','line_number':122,'multiline':False]['text':'//////////////////////////////////////////////////////////////////////////////','line_number':123,'multiline':False]['text':' Wait for all other ranks to enter the kernel','line_number':143,'multiline':False]['text':' The source pointers. Distributed round-robin for the different warps','line_number':151,'multiline':False]['text':' Wait for all other ranks to enter the kernel','line_number':199,'multiline':False]['text':' The source pointers. Distributed round-robin for the different warps','line_number':207,'multiline':False]['text':' Store local sums into input now so we can avoid','line_number':232,'multiline':False]['text':' a global memory access later for it.','line_number':233,'multiline':False]['text':'//////////////////////////////////////////////////////////////////////////////','line_number':256,'multiline':False]['text':' Hybrid Cube Mesh Algos','line_number':257,'multiline':False]['text':'//////////////////////////////////////////////////////////////////////////////','line_number':258,'multiline':False]['text':'*
+ * NOTE [hybrid cube mesh]
+ *
+ * In a hybrid cube mesh topology, every device has exactly 4 neighbors
+ * (directly connected via NVLink). For every device X, it has exactly 1
+ * neighbor Y that is a neighbor of the 3 non-neighbor of X. We call Y the
+ * relay neighbor of X. This property is symmetrical: X is also guaranteed to
+ * be the relay neighbor of Y.
+ *
+ * With this property, we can perform a variant of one-shot allreduce algo that
+ * only moves data across NVLinks:
+ *
+ * - Each device one-shot allreduce among itself and 3 non-relay neighbors.
+ * - Each device exchange data with its relay neighbor.
+ *
+ * HybridCubeMesh is a data structure for describing the topology:
+ *
+ * - hcm[X][0:3] are the 3 neighbors of X.
+ * - hcm[X][3] is the relay neighbor of X.
+ * - For load balancing purpose, we also ensure that if hcm[X][k] = Y,
+ *   hcm[Y][k] = X.
+ ','line_number':260,'multiline':True]['text':' A topology is an HCM if:','line_number':297,'multiline':False]['text':' - Every device has exactly 4 neighbors.','line_number':298,'multiline':False]['text':' - For every device, it has exactly 1 relay neighbor that is','line_number':299,'multiline':False]['text':'   a neighbor of the 3 non-neighbor of the device.','line_number':300,'multiline':False]['text':' Condition 1: check the number of neighbors','line_number':305,'multiline':False]['text':' Condition 2: check the number of relay neighbors','line_number':312,'multiline':False]['text':' We can only fill hcm[i][k] with j if hcm[j][k] is not filled','line_number':322,'multiline':False]['text':' Wait for HCM neigbors to enter the kernel','line_number':352,'multiline':False]['text':' Cached store for local sums','line_number':384,'multiline':False]['text':' Cached load for local sums','line_number':397,'multiline':False]['text':' Only support bf16 for now','line_number':658,'multiline':False]['text':' namespace intra_node_comm','line_number':707,'multiline':False]['text':' namespace c10d','line_number':708,'multiline':False]

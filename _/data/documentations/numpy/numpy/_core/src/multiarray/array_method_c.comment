@@ -1,0 +1,165 @@
+['text':'
+ * This file implements an abstraction layer for "Array methods", which
+ * work with a specific DType class input and provide low-level C function
+ * pointers to do fast operations on the given input functions.
+ * It thus adds an abstraction layer around individual ufunc loops.
+ *
+ * Unlike methods, a ArrayMethod can have multiple inputs and outputs.
+ * This has some serious implication for garbage collection, and as far
+ * as I (@seberg) understands, it is not possible to always guarantee correct
+ * cyclic garbage collection of dynamically created DTypes with methods.
+ * The keyword (or rather the solution) for this seems to be an "ephemeron"
+ * which I believe should allow correct garbage collection but seems
+ * not implemented in Python at this time.
+ * The vast majority of use-cases will not require correct garbage collection.
+ * Some use cases may require the user to be careful.
+ *
+ * Generally there are two main ways to solve this issue:
+ *
+ * 1. A method with a single input (or inputs of all the same DTypes) can
+ *    be "owned" by that DType (it becomes unusable when the DType is deleted).
+ *    This holds especially for all casts, which must have a defined output
+ *    DType and must hold on to it strongly.
+ * 2. A method which can infer the output DType(s) from the input types does
+ *    not need to keep the output type alive. (It can use NULL for the type,
+ *    or an abstract base class which is known to be persistent.)
+ *    It is then sufficient for a ufunc (or other owner) to only hold a
+ *    weak reference to the input DTypes.
+ ','line_number':1,'multiline':True]['text':'
+ * The default descriptor resolution function.  The logic is as follows:
+ *
+ * 1. The output is ensured to be canonical (currently native byte order),
+ *    if it is of the correct DType.
+ * 2. If any DType is was not defined, it is replaced by the common DType
+ *    of all inputs. (If that common DType is parametric, this is an error.)
+ *
+ * We could allow setting the output descriptors specifically to simplify
+ * this step.
+ *
+ * Note that the default version will indicate that the cast can be done
+ * as using `arr.view(new_dtype)` if the default cast-safety is
+ * set to "no-cast".  This default function cannot be used if a view may
+ * be sufficient for casting but the cast is not always "no-cast".
+ ','line_number':44,'multiline':True]['text':'
+     * If we relax the requirement for specifying all `dtypes` (e.g. allow
+     * abstract ones or unspecified outputs).  We can use the common-dtype
+     * operation to provide a default here.
+     ','line_number':83,'multiline':True]['text':'
+         * By (current) definition no-casting should imply viewable.  This
+         * is currently indicated for example for object to object cast.
+         ','line_number':89,'multiline':True]['text':'*
+ * The default method to fetch the correct loop for a cast or ufunc
+ * (at the time of writing only casts).
+ * Note that the default function provided here will only indicate that a cast
+ * can be done as a view (i.e., arr.view(new_dtype)) when this is trivially
+ * true, i.e., for cast safety "no-cast". It will not recognize view as an
+ * option for other casts (e.g., viewing '>i8' as '>i4' with an offset of 4).
+ *
+ * @param context
+ * @param aligned
+ * @param move_references UNUSED.
+ * @param strides
+ * @param descriptors
+ * @param out_loop
+ * @param out_transferdata
+ * @param flags
+ * @return 0 on success -1 on failure.
+ ','line_number':118,'multiline':True]['text':'*
+ * Validate that the input is usable to create a new ArrayMethod.
+ *
+ * @param spec
+ * @return 0 on success -1 on error.
+ ','line_number':169,'multiline':True]['text':' Check the passed spec for invalid fields/values ','line_number':179,'multiline':True]['text':'
+         * Note that we could allow for output dtypes to not be specified
+         * (the array-method would have to make sure to support this).
+         * We could even allow for some dtypes to be abstract.
+         * For now, assume that this is better handled in a promotion step.
+         * One problem with providing all DTypes is the definite need to
+         * hold references.  We probably, eventually, have to implement
+         * traversal and trust the GC to deal with it.
+         ','line_number':203,'multiline':True]['text':'*
+ * Initialize a new BoundArrayMethodObject from slots.  Slots which are
+ * not provided may be filled with defaults.
+ *
+ * @param res The new PyBoundArrayMethodObject to be filled.
+ * @param spec The specification list passed by the user.
+ * @param private Private flag to limit certain slots to use in NumPy.
+ * @return -1 on error 0 on success
+ ','line_number':229,'multiline':True]['text':' Set the defaults ','line_number':245,'multiline':True]['text':' no initial/identity by default ','line_number':248,'multiline':True]['text':' Fill in the slots passed by the user ','line_number':250,'multiline':True]['text':'
+     * TODO: This is reasonable for now, but it would be nice to find a
+     *       shorter solution, and add some additional error checking (e.g.
+     *       the same slot used twice). Python uses an array of slot offsets.
+     ','line_number':251,'multiline':True]['text':'
+                 * NOTE: get_loop is considered "unstable" in the public API,
+                 *       I do not like the signature, and the `move_references`
+                 *       parameter must NOT be used.
+                 *       (as in: we should not worry about changing it, but of
+                 *       course that would not break it immediately.)
+                 ','line_number':272,'multiline':True]['text':' "Typical" loops, supported used by the default `get_loop` ','line_number':281,'multiline':True]['text':' Check whether the slots are valid: ','line_number':309,'multiline':True]['text':' Do not check the actual loop fields. ','line_number':345,'multiline':True]['text':' Check whether the provided loops make sense. ','line_number':349,'multiline':True]['text':' Fill in the blanks: ','line_number':368,'multiline':True]['text':'
+ * Public version of `PyArrayMethod_FromSpec_int` (see below).
+ *
+ * TODO: Error paths will probably need to be improved before a release into
+ *       the non-experimental public API.
+ ','line_number':390,'multiline':True]['text':'*
+ * Create a new ArrayMethod (internal version).
+ *
+ * @param name A name for the individual method, may be NULL.
+ * @param spec A filled context object to pass generic information about
+ *        the method (such as usually needing the API, and the DTypes).
+ *        Unused fields must be NULL.
+ * @param slots Slots with the correct pair of IDs and (function) pointers.
+ * @param private Some slots are currently considered private, if not true,
+ *        these will be rejected.
+ *
+ * @returns A new (bound) ArrayMethod object.
+ ','line_number':410,'multiline':True]['text':' Cleanup for wrapping array method (defined in umath) ','line_number':494,'multiline':True]['text':'
+ * Calls resolve_descriptors() and returns the casting level, the resolved
+ * descriptors as a tuple, and a possible view-offset (integer or None).
+ * If the operation is impossible returns (-1, None, None).
+ * May raise an error, but usually should not.
+ * The function validates the casting attribute compared to the returned
+ * casting level.
+ *
+ * TODO: This function is not public API, and certain code paths will need
+ *       changes and especially testing if they were to be made public.
+ ','line_number':550,'multiline':True]['text':' transfer ownership to the tuple. ','line_number':624,'multiline':True]['text':'
+     * The casting flags should be the most generic casting level.
+     * If no input is parametric, it must match exactly.
+     *
+     * (Note that these checks are only debugging checks.)
+     ','line_number':641,'multiline':True]['text':'
+             * Non-parametric can only mismatch if it switches from equiv to no
+             * (e.g. due to byteorder changes).
+             ','line_number':667,'multiline':True]['text':'
+ * TODO: This function is not public API, and certain code paths will need
+ *       changes and especially testing if they were to be made public.
+ ','line_number':690,'multiline':True]['text':' Check that the input is compatible with a simple method call. ','line_number':729,'multiline':True]['text':' TODO: We may need to distinguish aligned and itemsize-aligned ','line_number':758,'multiline':True]['text':' NOTE: This check is probably much stricter than necessary... ','line_number':782,'multiline':True]['text':'
+     * TODO: Add floating point error checks if requested and
+     *       possibly release GIL if allowed by the flags.
+     ','line_number':808,'multiline':True]['text':'
+ * Support for masked inner-strided loops.  Masked inner-strided loops are
+ * only used in the ufunc machinery.  So this special cases them.
+ * In the future it probably makes sense to create an::
+ *
+ *     Arraymethod->get_masked_strided_loop()
+ *
+ * Function which this can wrap instead.
+ ','line_number':823,'multiline':True]['text':'
+ * This function wraps a regular unmasked strided-loop as a
+ * masked strided-loop, only calling the function for elements
+ * where the mask is True.
+ *
+ * TODO: Reductions also use this code to implement masked reductions.
+ *       Before consolidating them, reductions had a special case for
+ *       broadcasts: when the mask stride was 0 the code does not check all
+ *       elements as `npy_memchr` currently does.
+ *       It may be worthwhile to add such an optimization again if broadcasted
+ *       masks are common enough.
+ ','line_number':850,'multiline':True]['text':' Process the data as runs of unmasked values ','line_number':878,'multiline':True]['text':' Skip masked values ','line_number':882,'multiline':True]['text':' Process unmasked values ','line_number':889,'multiline':True]['text':'
+ * Fetches a strided-loop function that supports a boolean mask as additional
+ * (last) operand to the strided-loop.  It is otherwise largely identical to
+ * the `get_strided_loop` method which it wraps.
+ * This is the core implementation for the ufunc `where=...` keyword argument.
+ *
+ * NOTE: This function does not support `move_references` or inner dimensions.
+ ','line_number':908,'multiline':True]['text':' Add working memory for the data pointers, to modify them in-place ','line_number':927,'multiline':True]['text':' not currently used ','line_number':935,'multiline':True]

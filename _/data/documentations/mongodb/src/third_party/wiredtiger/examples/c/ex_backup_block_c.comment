@@ -1,0 +1,102 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * ex_backup_block.c
+ * 	demonstrates how to use block-based incremental backup.
+ ','line_number':1,'multiline':True]['text':'
+     * We run 'wt dump' on both the full backup directory and the incremental backup directory for
+     * this iteration. Since running 'wt' runs recovery and makes both directories "live", we need a
+     * new directory for each iteration.
+     *
+     * If i == 0, we're comparing against the main, original directory with the final incremental
+     * directory.
+     ','line_number':67,'multiline':True]['text':'
+     * Now run dump on the incremental directory.
+     ','line_number':81,'multiline':True]['text':'
+     * Compare the files.
+     ','line_number':88,'multiline':True]['text':'
+     * If they compare successfully, clean up.
+     ','line_number':102,'multiline':True]['text':'
+ * Set up all the directories needed for the test. We have a full backup directory for each
+ * iteration and an incremental backup for each iteration. That way we can compare the full and
+ * incremental each time through.
+ ','line_number':113,'multiline':True]['text':'
+         * For incremental backups we need 0-N. The 0 incremental directory will compare with the
+         * original at the end.
+         ','line_number':125,'multiline':True]['text':'
+         * For full backups we need 1-N.
+         ','line_number':134,'multiline':True]['text':'
+     * Only on even iterations add content to the extra table. This illustrates and shows that
+     * sometimes only some tables will be updated.
+     ','line_number':151,'multiline':True]['text':'
+     * Perform some operations with individual auto-commit transactions.
+     ','line_number':158,'multiline':True]['text':'
+     * Process files that were removed. Any file that is not marked in the previous list as existing
+     * in this iteration should be removed. Free all previous filenames as we go along. Then free
+     * the overall list.
+     ','line_number':184,'multiline':True]['text':' Set up the current list as the new previous list. ','line_number':202,'multiline':True]['text':'
+ * Process a file name. Build up a list of current file names. But also process the file names from
+ * the previous iteration. Mark any name we see as existing so that the finalize function can remove
+ * any that don't exist. We walk the list each time. This is slow.
+ ','line_number':208,'multiline':True]['text':' Build up the current list, growing as needed. ','line_number':219,'multiline':True]['text':' Check against the previous list. ','line_number':237,'multiline':True]['text':' If name is NULL, we've reached the end of the list. ','line_number':239,'multiline':True]['text':'
+     * First time through we take a full backup into the incremental directories. Otherwise only
+     * into the appropriate full directory.
+     ','line_number':260,'multiline':True]['text':'
+         * If it is a log file, prepend the path for cp.
+         ','line_number':284,'multiline':True]['text':'
+             * Take a full backup into each incremental directory.
+             ','line_number':293,'multiline':True]['text':'! [Query existing IDs] ','line_number':334,'multiline':True]['text':'! [Query existing IDs] ','line_number':341,'multiline':True]['text':' Open the backup data source for incremental backup. ','line_number':343,'multiline':True]['text':' For each file listed, open a duplicate backup cursor and copy the blocks. ','line_number':352,'multiline':True]['text':'
+                 * We should never get a range key after a whole file so the read file descriptor
+                 * should be valid. If the read descriptor is valid, so is the write one.
+                 ','line_number':381,'multiline':True]['text':'
+                 * Don't use the system checker for lseek. The system check macro uses an int which
+                 * is often 4 bytes and checks for any negative value. The offset returned from
+                 * lseek is 8 bytes and we can have a false positive error check.
+                 ','line_number':399,'multiline':True]['text':' Use the read size since we may have read less than the granularity. ','line_number':409,'multiline':True]['text':' Whole file, so close both files and just copy the whole thing. ','line_number':412,'multiline':True]['text':' Done processing this file. Close incremental cursor. ','line_number':427,'multiline':True]['text':' Close file descriptors if they're open. ','line_number':430,'multiline':True]['text':'
+         * For each file, we want to copy the file into each of the later incremental directories so
+         * that they start out at the same for the next incremental round. We then check each
+         * incremental directory along the way.
+         ','line_number':435,'multiline':True]['text':' Done processing all files. Close backup cursor. ','line_number':452,'multiline':True]['text':' Unused variable ','line_number':468,'multiline':True]['text':' For each iteration we may add work and checkpoint multiple times. ','line_number':489,'multiline':True]['text':'
+         * The full backup here is only needed for testing and comparison purposes. A normal
+         * incremental backup procedure would not include this.
+         ','line_number':495,'multiline':True]['text':'
+         * Taking the incremental backup also calls truncate to remove the log files, if the copies
+         * were successful. See that function for details on that call.
+         ','line_number':501,'multiline':True]['text':'
+     * Close and reopen the connection to illustrate the durability of id information.
+     ','line_number':513,'multiline':True]['text':'
+     * We should have an entry for i-1 and i-2. Use the older one.
+     ','line_number':528,'multiline':True]['text':'
+     * After we're done, release resources. Test the force stop setting.
+     ','line_number':536,'multiline':True]['text':'
+     * Close the connection. We're done and want to run the final comparison between the incremental
+     * and original.
+     ','line_number':543,'multiline':True]['text':'
+     * Reopen the connection to verify that the forced stop should remove incremental information.
+     ','line_number':558,'multiline':True]['text':'
+     * We should not have any information.
+     ','line_number':563,'multiline':True]

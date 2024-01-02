@@ -1,0 +1,20 @@
+['text':'
+ * Test that the server is able to roll back a 'dropDatabase' entry correctly.  This test creates
+ * a collection, then executes a 'dropDatabase' command, partitioning the primary such that the
+ * final 'dropDatabase' oplog entry is not replicated. The test then forces rollback of that entry.
+ *
+ * The 'dropDatabase' command drops each collection, ensures that the last drop is majority
+ * committed, and only then logs a 'dropDatabase' oplog entry. This is therefore the only entry that
+ * could get rolled back.
+ *
+ * Additionally test handling of an incompletely dropped database across a replica set. If a primary
+ * writes a dropDatabase oplog entry and clears in-memory database state, but subsequently rolls
+ * back the dropDatabase oplog entry, then the replica set secondaries will still have the in-memory
+ * state. If the original primary is re-elected, it will allow a subsequent createCollection with a
+ * database name conflicting with the original database. The secondaries should close the original
+ * empty database and open the new database on receipt of the createCollection.
+ *
+ * @tags: [
+ *   multiversion_incompatible,
+ * ]
+ ','line_number':1,'multiline':True]['text':' MongoDB does not allow multiple databases to exist that differ only in letter case. These','line_number':26,'multiline':False]['text':' database names will differ only in letter case, to test that secondaries will safely close','line_number':27,'multiline':False]['text':' conflicting empty databases.','line_number':28,'multiline':False]['text':' Perform initial insert (common operation).','line_number':36,'multiline':False]['text':' Set a failpoint on the original primary, so that it blocks after it commits the last','line_number':39,'multiline':False]['text':' 'dropCollection' entry but before the 'dropDatabase' entry is logged.','line_number':40,'multiline':False]['text':' Issue a 'dropDatabase' command.','line_number':44,'multiline':False]['text':' Ensure that we've hit the failpoint before moving on.','line_number':54,'multiline':False]['text':' Wait for the secondary to finish dropping the collection (the last replicated entry).','line_number':58,'multiline':False]['text':' We use the default 10-minute timeout for this.','line_number':59,'multiline':False]['text':' Check that the dropDatabase oplog entry has not been written.','line_number':67,'multiline':False]['text':' Allow the final 'dropDatabase' entry to be logged on the now isolated primary.','line_number':70,'multiline':False]['text':' This is the rollback node's divergent oplog entry.','line_number':71,'multiline':False]['text':' Check that the dropDatabase oplog entry has now been written.','line_number':76,'multiline':False]['text':' Perform an insert on another database while interfacing with the new primary.','line_number':84,'multiline':False]['text':' This is the sync source's divergent oplog entry.','line_number':85,'multiline':False]['text':' Check that replication rollback occurred on the old primary.','line_number':92,'multiline':False]['text':' The syncSourceNode never received the dropDatabase oplog entry from the rollbackNode. Therefore,','line_number':95,'multiline':False]['text':' syncSourceNode never cleared the in-memory database state for that database. Check that','line_number':96,'multiline':False]['text':' syncSourceNode will safely clear the original empty database when applying a createCollection','line_number':97,'multiline':False]['text':' with a new database name that conflicts with the original.','line_number':98,'multiline':False]['text':' Using only w:2 because the third node is frozen / not replicating.','line_number':100,'multiline':False]

@@ -1,0 +1,275 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * Fast-delete (also called "fast-truncate") support.
+ *
+ * This file contains most of the code that allows WiredTiger to delete pages of data without
+ * reading them into the cache.
+ *
+ * The way session truncate works is it explicitly reads the first and last pages of the truncate
+ * range, then walks the tree with a flag so the tree walk code skips reading eligible pages within
+ * the range and instead just marks them as deleted, by changing their WT_REF state to
+ * WT_REF_DELETED. Pages ineligible for this fast path ("fast-truncate" or "fast-delete") include
+ * pages that are already in the cache and can not be evicted, records in the pages that are
+ * not visible to the transaction, pages containing overflow items, pages containing prepared
+ * values, or pages that belong to FLCS trees. Ineligible pages are read and have their rows
+ * updated/deleted individually ("slow-truncate"). The transaction for the delete operation is
+ * stored in memory referenced by the WT_REF.page_del field.
+ *
+ * Future cursor walks of the tree will skip the deleted page based on the transaction stored for
+ * the delete, but it gets more complicated if a read is done using a random key, or a cursor walk
+ * is done with a transaction where the delete is not visible, or if an update is applied. In those
+ * cases, we read the original contents of the page. The page-read code notices a deleted page is
+ * being read, and as part of the read instantiates the contents of the page, creating tombstone
+ * WT_UPDATE records, in the same transaction that deleted the page. In other words, the read
+ * process makes it appear as if the page was read and each individual row deleted, exactly as
+ * would have happened if the page had been in the cache all along.
+ *
+ * There's an additional complication to support transaction rollback of the page delete. When the
+ * page was marked deleted, a pointer to the WT_REF was saved in the deleting session's transaction
+ * list and the delete is unrolled by resetting the WT_REF_DELETED state back to WT_REF_DISK.
+ * However, if the page has been instantiated by some reading thread, that's not enough; each
+ * individual row on the page must have the delete operation reset. If the page split, the WT_UPDATE
+ * lists might have been saved/restored during reconciliation and appear on multiple pages, and the
+ * WT_REF stored in the deleting session's transaction list is no longer useful. For this reason,
+ * when the page is instantiated by a read, a list of the WT_UPDATE structures on the page is stored
+ * in the WT_PAGE_MODIFY.inst_updates field. That way the session resolving the delete can find all
+ * WT_UPDATE structures that require update.
+ *
+ * There are two other ways pages can be marked deleted: if they reconcile empty, or if they are
+ * found to be eligible for deletion and contain only obsolete items. (The latter is known as
+ * "checkpoint cleanup" and happens in bt_sync.c.) There are also two cases in which deleted pages
+ * are manufactured out of thin air: in VLCS, if a key-space gap exists between the start recno of
+ * an internal page and the start recno of its first child, a deleted page is created to cover this
+ * space; and, when new trees are created they are created with a single deleted leaf page. In these
+ * cases, the WT_REF state will be set to WT_REF_DELETED but there will not be any associated
+ * WT_REF.page_del field since the page contains no data. These pages are always skipped during
+ * cursor traversal, and if read is forced to instantiate such a page, it creates an empty page from
+ * scratch.
+ *
+ * This feature is not available for FLCS objects. While most of the machinery exists (it is mostly
+ * a property of column-store internal pages) there is a showstopper problem. For VLCS, truncate
+ * introduces gaps in the namespace, and we can just skip over those gaps when iterating and
+ * instantiate fresh pages if rows in the gap are updated. For FLCS, because there are no deleted
+ * values (deleted values read back as 0) we have to iterate _through_ gaps, and that means knowing
+ * how many rows each gap contains. This knowledge is encoded in the internal page tree structure,
+ * but it is not _available_ there; we would have to carry it around during tree-walk. (Basically,
+ * every descent would need to remember the starting key of the next page, and since in general the
+ * depth is more than 2 this requires a stack, and there's no place to keep it except passing it in
+ * from the caller, and it would make an ugly mess and is generally a non-starter.) We can't just
+ * declare that gaps are skipped, because gaps happen not where the user truncates things but at
+ * nearby (and arbitrary) page boundaries and also the whim of eviction and which pages are in and
+ * out of cache. Furthermore, if the end of the tree gets truncated either we have to let that move
+ * the end of the table backwards (also arbitrarily and confusingly, and which is also possibly
+ * problematic in its own right) or we don't know where to stop when iterating. The latter problems
+ * could conceivably be avoided by never fast-deleting the last page in the tree, but there's no
+ * good way to know when we're on the last page.
+ *
+ * For VLCS trees, there is a complication. If we create gaps in the namespace, we can fill those
+ * gaps by using the append list of the next leaf page to the left. That is, if an internal page has
+ * children beginning at 100, 120, 140, and 160, and the two middle pages get truncated and
+ * discarded, we now have an internal page with children beginning at 100 and 160. Writes between
+ * 120 and 159 will be sent to the page beginning at 100 and populate its append list, eventually
+ * resulting in splits and new child pages. However, if we discard the _first_ (leftmost) child of
+ * an internal page, this logic breaks. Given an internal page with children beginning at 100, 120,
+ * 140, and 160, if we discard the page that begins at 100 we now have an internal page that itself
+ * begins at 100 but whose children begin at 120, 140, and 160. Now if someone goes to write at 110,
+ * Search quite reasonably assumes that this should go to some child of this internal page; but
+ * there isn't one and it asserts. There are two reasonable ways to handle this situation: one is to
+ * use the in-memory split code to insert a new ref on demand (this is logically very similar to a
+ * reverse split); the other is to avoid ever discarding the leftmost child. It was decided that the
+ * split operation is delicate and risky and it was better to preserve that page. This requires
+ * special-case code in four places: (a) in split, for VLCS trees, don't discard the first child ref
+ * in splits, even if it's deleted and the deletion is globally visible; (b) in VLCS trees, don't
+ * attempt reverse splits originating from that page, as that would discard it; (c) as noted above,
+ * when loading an internal page, create an extra ref in this position if the first on-disk child
+ * starts at a later recno from the internal page itself; and (d) in verify, accept that the page
+ * in this position might be an empty deleted ref with no on-disk address. Note that the critical
+ * issue is that one must not _discard_ this page after deleting it. It is fine for it to _be_
+ * deleted, as long as the ref always exists when the internal page is in memory. (It is not written
+ * to disk either; internal page reconciliation skips it.)
+ ','line_number':11,'multiline':True]['text':'
+ * __wt_delete_page --
+ *     If deleting a range, try to delete the page without instantiating it.
+ ','line_number':101,'multiline':True]['text':' If we have a clean page in memory, attempt to evict it. ','line_number':114,'multiline':True]['text':'
+     * Fast check to see if it's worth locking, then atomically switch the page's state to lock it.
+     ','line_number':131,'multiline':True]['text':'
+     * There should be no previous page-delete information: if the page was previously deleted and
+     * remains deleted, it'll be in WT_REF_DELETED state and we won't get here to do another delete.
+     * If the page was previously deleted and instantiated, we can only get here if it was written
+     * out again or we successfully just evicted it; in that case, the reconciliation will have
+     * cleared the final traces of the previous deletion and instantiation. Furthermore, any prior
+     * deletion must have committed or another attempt would have failed with an update conflict.
+     ','line_number':144,'multiline':True]['text':'
+     * We cannot truncate pages that have overflow key/value items as the overflow blocks have to be
+     * discarded. The way we figure that out is to check the page's cell type, cells for leaf pages
+     * without overflow items are special.
+     *
+     * Additionally, if the page has prepared updates or the aggregated start time point on the page
+     * is not visible to us then we cannot truncate the page.
+     *
+     * Note that we indicate this by succeeding without setting the skip flag, not via EBUSY.
+     ','line_number':154,'multiline':True]['text':'
+     * History store data are always visible. No need to check visibility. Other than history store,
+     * use the max durable timestamp that is available in the page aggregation for the visibility
+     * checks as we do not track the aggregated commit timestamp.
+     ','line_number':170,'multiline':True]['text':'
+     * This action dirties the parent page: mark it dirty now, there's no future reconciliation of
+     * the child leaf page that will dirty it as we write the tree.
+     ','line_number':181,'multiline':True]['text':' Allocate and initialize the page-deleted structure. ','line_number':187,'multiline':True]['text':' History store truncation is non-transactional. ','line_number':191,'multiline':True]['text':' Publish the page to its new state, ensuring visibility. ','line_number':198,'multiline':True]['text':' Publish the page to its previous state, ensuring visibility. ','line_number':205,'multiline':True]['text':'
+ * __wt_delete_page_rollback --
+ *     Transaction rollback for a fast-truncate operation.
+ ','line_number':210,'multiline':True]['text':' Lock the reference. We cannot access ref->page_del except when locked. ','line_number':222,'multiline':True]['text':'
+         * We wait for the change in page state, yield before retrying, and if we've yielded enough
+         * times, start sleeping so we don't burn CPU to no purpose.
+         ','line_number':241,'multiline':True]['text':'
+     * There are two possible cases:
+     *
+     * 1. The state is WT_REF_DELETED. In this case page_del cannot be null, because the
+     * operation cannot reach global visibility while its transaction remains uncommitted. The page
+     * itself is as we left it, so we can just reset the state.
+     *
+     * 2. The state is WT_REF_MEM. We check mod->inst_updates for a list of updates to abort. Allow
+     * the update list to be null to be conservative.
+     ','line_number':249,'multiline':True]['text':'
+         * Don't set the WT_PAGE_DELETED transaction ID to aborted; instead, just discard the
+         * structure. This avoids having to check for an aborted delete in other situations.
+         ','line_number':261,'multiline':True]['text':'
+             * Walk any list of update structures and abort them. We can't use the normal read path
+             * to get the pages with updates (the original page may have split, so there may be more
+             * than one page), because the session may have closed the cursor, and we no longer have
+             * the reference to the tree required for a hazard pointer. We're safe since pages with
+             * unresolved transactions aren't going anywhere.
+             ','line_number':269,'multiline':True]['text':' Now discard the updates. ','line_number':278,'multiline':True]['text':'
+         * Drop any page_deleted information remaining in the ref. Note that while this must have
+         * been an instantiated page, the information (and flag) is only kept until the page is
+         * reconciled for the first time after instantiation, so it might not be set now.
+         ','line_number':281,'multiline':True]['text':'
+ * __delete_redo_window_cleanup_internal --
+ *     Process one internal page for __wt_delete_redo_window_cleanup. This fixes up the transaction
+ *     IDs in the delete info. Since we're called at the end of recovery there's no need to lock the
+ *     ref or worry about races.
+ ','line_number':296,'multiline':True]['text':'
+ * __delete_redo_window_cleanup_skip --
+ *     Tree-walk skip function for __wt_delete_redo_window_cleanup. This skips all leaf pages; we'll
+ *     visit all in-memory internal pages via the flag settings on the tree-walk call. Note that we
+ *     won't be called (even here) for deleted leaf pages themselves, because they're skipped by
+ *     default.
+ ','line_number':317,'multiline':True]['text':'
+ * __wt_delete_redo_window_cleanup --
+ *     Clear old transaction IDs from already-loaded page_del structures to make them look like we
+ *     just unpacked the information. Called after the tree write generation is bumped during
+ *     recovery so that old transaction IDs don't come back to life. Note that this can only fail if
+ *     something goes wrong in the tree walk; it doesn't itself ever fail.
+ ','line_number':337,'multiline':True]['text':'
+     * Walk the tree and look for internal pages holding fast-truncate information. Note: we pass
+     * WT_READ_VISIBLE_ALL because we have no snapshot, but we aren't actually doing any visibility
+     * checks.
+     ','line_number':350,'multiline':True]['text':'
+ * __wt_delete_page_skip --
+ *     If iterating a cursor, skip deleted pages that are either visible to us or globally visible.
+ ','line_number':364,'multiline':True]['text':'
+     * Deleted pages come from several possible sources (as described at the top of this file).
+     *
+     * In all cases, the WT_REF state will be WT_REF_DELETED. If there is a WT_PAGE_DELETED
+     * structure describing a transaction, the deletion is visible (so the page is *not* visible) if
+     * the transaction is visible. If there is no WT_PAGE_DELETED structure, the deletion is
+     * globally visible. This happens either because the structure described a transaction that had
+     * become globally visible and was previously removed, or because the page was deleted by a
+     * non-transactional mechanism. (In the latter case, the deletion is inherently globally
+     * visible; pages only become empty if nothing in them remains visible to anyone, and newly
+     * minted empty pages cannot have anything in them to see.)
+     *
+     * We're here because we found a WT_REF state set to WT_REF_DELETED. It is possible the page is
+     * being read into memory right now, though, and the page could switch to an in-memory state at
+     * any time. Lock down the structure, just to be safe.
+     ','line_number':373,'multiline':True]['text':'
+     * Check visibility.
+     *
+     * Use the option to hide prepared transactions in all checks; we can't skip a page if the
+     * deletion is only prepared (we need to visit it to generate a prepare conflict), and we can't
+     * discard the page_del info either, as doing so leads to dropping the on-disk page and if the
+     * prepared transaction rolls back we'd then be in trouble.
+     ','line_number':392,'multiline':True]['text':'
+     * The fast-truncate structure can be freed as soon as the delete is globally visible: it is
+     * only read when the ref state is locked. It is worth checking every time we come through
+     * because once this is freed, we no longer need synchronization to check the ref.
+     ','line_number':407,'multiline':True]['text':'
+ * __tombstone_update_alloc --
+ *     Allocate and initialize a page-deleted tombstone update structure.
+ ','line_number':419,'multiline':True]['text':'
+     * Cleared memory matches the lowest possible transaction ID and timestamp; do nothing if the
+     * page_del pointer is null.
+     ','line_number':432,'multiline':True]['text':'
+ * __instantiate_tombstone --
+ *     Instantiate a single tombstone on a page.
+ ','line_number':446,'multiline':True]['text':'
+     * If we find an existing stop time point we don't need to append a tombstone. Such rows would
+     * not have been visible to the original truncate operation and were, logically, skipped over
+     * rather than re-deleted. (If the row _was_ visible to the truncate in spite of having been
+     * subsequently removed, the stop time not being visible would have forced its page to be slow-
+     * truncated rather than fast-truncated.)
+     ','line_number':455,'multiline':True]['text':'
+ * __instantiate_col_var --
+ *     Iterate over a variable-length column-store page and instantiate tombstones.
+ ','line_number':474,'multiline':True]['text':'
+     * Open a cursor to use with col_modify. We use col_modify here (and thus a cursor) because
+     * setting up the append list inserts properly, even given the special case that we just loaded
+     * the page and have it locked so it's empty and there are no races, requires a lot of
+     * cut-and-paste code. Repeatedly searching the page while also iterating it is untidy and
+     * somewhat wasteful, but this doesn't need to be a fast path and isn't a common case.
+     *
+     * (Note that also we can't use next -- it is subject to visibility checks. A version of next at
+     * the same layer as __wt_col_search would be nice for this, but doesn't currently exist.)
+     ','line_number':494,'multiline':True]['text':' Walk the page entries, giving each key a tombstone. ','line_number':507,'multiline':True]['text':' Retrieve the stop time point from the page. ','line_number':510,'multiline':True]['text':' If it's already deleted, it doesn't need another tombstone. ','line_number':514,'multiline':True]['text':' Delete each key. ','line_number':520,'multiline':True]['text':' Position the cursor on the page. ','line_number':525,'multiline':True]['text':'leaf_safe','line_number':526,'multiline':True]['text':' Make sure we landed where we expected. ','line_number':528,'multiline':True]['text':' Attach the tombstone, using the update-restore path. ','line_number':531,'multiline':True]['text':' Null the pointer so we don't free it twice. ','line_number':533,'multiline':True]['text':' We just read the page and it's still locked. The append list should be empty. ','line_number':540,'multiline':True]['text':' Free any resources that may have been cached in the cursor. ','line_number':546,'multiline':True]['text':'
+ * __instantiate_row --
+ *     Iterate over a row-store page and instantiate tombstones.
+ ','line_number':551,'multiline':True]['text':' Allocate the per-page update array if one doesn't already exist. ','line_number':571,'multiline':True]['text':' We just read the page and it's still locked. The insert lists should be empty. ','line_number':578,'multiline':True]['text':' Walk the page entries, giving each one a tombstone. ','line_number':581,'multiline':True]['text':' Retrieve the stop time point from the page's row. ','line_number':583,'multiline':True]['text':' We just read the page and it's still locked. The insert lists should be empty. ','line_number':593,'multiline':True]['text':'
+     * Note that the label is required by the alloc-and-swap macro. There isn't anything we need to
+     * clean up; both the row update structure that allocates and the tombstones are attached to the
+     * page and will get flushed along with it further up the call chain.
+     ','line_number':599,'multiline':True]['text':'
+ * __wt_delete_page_instantiate --
+ *     Instantiate an entirely deleted row-store leaf page.
+ ','line_number':608,'multiline':True]['text':'
+     * An operation is accessing a "deleted" page, and we're building an in-memory version of the
+     * page, making it look like all entries in the page were individually updated by a remove
+     * operation. We end up here if a transaction used a truncate call to delete the page without
+     * reading it, and something else that can't yet see the truncation decided to read the page.
+     * (We also end up here if someone who _can_ see the truncation writes new data into the same
+     * namespace before the deleted pages are discarded.)
+     *
+     * This can happen after the truncate transaction resolves, but it can also happen before. In
+     * the latter case, we need to keep track of the updates we populate the page with, so they can
+     * be found when the transaction resolves. The page we're loading might split, in which case
+     * finding the updates any other way would become a problem.
+     ','line_number':622,'multiline':True]['text':' Fast-truncate only happens to leaf pages, and FLCS isn't supported. ','line_number':640,'multiline':True]['text':' Empty pages should get skipped before reaching this point. ','line_number':643,'multiline':True]['text':' Track the prepared, fast-truncate pages we've had to instantiate. ','line_number':648,'multiline':True]['text':'
+     * Give the page a modify structure. We need it to remember that the page has been instantiated.
+     * We do not need to mark the page dirty here. (It used to be necessary because evicting a clean
+     * instantiated page would lose the delete information; but that is no longer the case.) Note
+     * though that because VLCS instantiation goes through col_modify it will mark the page dirty
+     * regardless, except in read-only trees where attempts to mark things dirty are ignored. (Row-
+     * store instantiation adds the tombstones by hand and so does not need to mark the page dirty.)
+     *
+     * Note that partially visible truncates that may need instantiation can appear in read-only
+     * trees (whether a read-only open of the live database or via a checkpoint cursor) if they were
+     * not yet globally visible when the tree was checkpointed.
+     ','line_number':652,'multiline':True]['text':'
+     * If the truncate operation is not yet resolved, count how many updates we're going to need and
+     * allocate an array for them. This allows linking them in the page-deleted structure so they
+     * can be found when the transaction is resolved, even if they have moved to other pages. If the
+     * page-deleted structure is NULL, that means the truncate is globally visible, and therefore
+     * committed. Use an extra slot to mark the end with NULL so we don't need to also store the
+     * length.
+     ','line_number':666,'multiline':True]['text':' One tombstone for each recno on the page. ','line_number':678,'multiline':True]['text':' One tombstone for each row on the page. ','line_number':682,'multiline':True]['text':'
+     * Copy the page-deleted structure's timestamp information into an update for each row on the
+     * page.
+     ','line_number':690,'multiline':True]['text':'
+     * We will leave the WT_PAGE_DELETED structure in the ref; all of its information has been
+     * copied to the list of WT_UPDATE structures (if any), but we may still need it for internal
+     * page reconciliation until the instantiated page is itself successfully reconciled.
+     ','line_number':709,'multiline':True]

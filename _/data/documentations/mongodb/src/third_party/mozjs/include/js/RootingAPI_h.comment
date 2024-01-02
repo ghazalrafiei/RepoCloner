@@ -1,0 +1,279 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':' JS::detail::DefineComparisonOps','line_number':21,'multiline':False]['text':' JS_FOR_EACH_PUBLIC_{,TAGGED_}GC_POINTER_TYPE','line_number':24,'multiline':False]['text':'
+ * [SMDOC] Stack Rooting
+ *
+ * Moving GC Stack Rooting
+ *
+ * A moving GC may change the physical location of GC allocated things, even
+ * when they are rooted, updating all pointers to the thing to refer to its new
+ * location. The GC must therefore know about all live pointers to a thing,
+ * not just one of them, in order to behave correctly.
+ *
+ * The |Rooted| and |Handle| classes below are used to root stack locations
+ * whose value may be held live across a call that can trigger GC. For a
+ * code fragment such as:
+ *
+ * JSObject* obj = NewObject(cx);
+ * DoSomething(cx);
+ * ... = obj->lastProperty();
+ *
+ * If |DoSomething()| can trigger a GC, the stack location of |obj| must be
+ * rooted to ensure that the GC does not move the JSObject referred to by
+ * |obj| without updating |obj|'s location itself. This rooting must happen
+ * regardless of whether there are other roots which ensure that the object
+ * itself will not be collected.
+ *
+ * If |DoSomething()| cannot trigger a GC, and the same holds for all other
+ * calls made between |obj|'s definitions and its last uses, then no rooting
+ * is required.
+ *
+ * SpiderMonkey can trigger a GC at almost any time and in ways that are not
+ * always clear. For example, the following innocuous-looking actions can
+ * cause a GC: allocation of any new GC thing; JSObject::hasProperty;
+ * JS_ReportError and friends; and ToNumber, among many others. The following
+ * dangerous-looking actions cannot trigger a GC: js_malloc, cx->malloc_,
+ * rt->malloc_, and friends and JS_ReportOutOfMemory.
+ *
+ * The following family of three classes will exactly root a stack location.
+ * Incorrect usage of these classes will result in a compile error in almost
+ * all cases. Therefore, it is very hard to be incorrectly rooted if you use
+ * these classes exclusively. These classes are all templated on the type T of
+ * the value being rooted.
+ *
+ * - Rooted<T> declares a variable of type T, whose value is always rooted.
+ *   Rooted<T> may be automatically coerced to a Handle<T>, below. Rooted<T>
+ *   should be used whenever a local variable's value may be held live across a
+ *   call which can trigger a GC.
+ *
+ * - Handle<T> is a const reference to a Rooted<T>. Functions which take GC
+ *   things or values as arguments and need to root those arguments should
+ *   generally use handles for those arguments and avoid any explicit rooting.
+ *   This has two benefits. First, when several such functions call each other
+ *   then redundant rooting of multiple copies of the GC thing can be avoided.
+ *   Second, if the caller does not pass a rooted value a compile error will be
+ *   generated, which is quicker and easier to fix than when relying on a
+ *   separate rooting analysis.
+ *
+ * - MutableHandle<T> is a non-const reference to Rooted<T>. It is used in the
+ *   same way as Handle<T> and includes a |set(const T& v)| method to allow
+ *   updating the value of the referenced Rooted<T>. A MutableHandle<T> can be
+ *   created with an implicit cast from a Rooted<T>*.
+ *
+ * In some cases the small performance overhead of exact rooting (measured to
+ * be a few nanoseconds on desktop) is too much. In these cases, try the
+ * following:
+ *
+ * - Move all Rooted<T> above inner loops: this allows you to re-use the root
+ *   on each iteration of the loop.
+ *
+ * - Pass Handle<T> through your hot call stack to avoid re-rooting costs at
+ *   every invocation.
+ *
+ * The following diagram explains the list of supported, implicit type
+ * conversions between classes of this family:
+ *
+ *  Rooted<T> ----> Handle<T>
+ *     |               ^
+ *     |               |
+ *     |               |
+ *     +---> MutableHandle<T>
+ *     (via &)
+ *
+ * All of these types have an implicit conversion to raw pointers.
+ ','line_number':32,'multiline':True]['text':' Cannot use FOR_EACH_HEAP_ABLE_GC_POINTER_TYPE, as this would import too many','line_number':139,'multiline':False]['text':' macros into scope','line_number':140,'multiline':False]['text':' namespace gc ','line_number':156,'multiline':True]['text':' Important: Return a reference so passing a Rooted<T>, etc. to','line_number':158,'multiline':False]['text':' something that takes a |const T&| is not a GC hazard.','line_number':159,'multiline':False]['text':' Assignment operators on a base class are hidden by the implicitly defined','line_number':164,'multiline':False]['text':' operator= on the derived class. Thus, define the operator= directly on the','line_number':165,'multiline':False]['text':' class as we would need to manually pass it through anyway.','line_number':166,'multiline':False]['text':' namespace js ','line_number':194,'multiline':True]['text':'*
+ * Create a safely-initialized |T|, suitable for use as a default value in
+ * situations requiring a safe but arbitrary |T| value.
+ ','line_number':214,'multiline':True]['text':' This function wants to presume that |T()| -- which value-initializes a','line_number':220,'multiline':False]['text':' |T| per C++11 [expr.type.conv]p2 -- will produce a safely-initialized,','line_number':221,'multiline':False]['text':' safely-usable T that it can return.','line_number':222,'multiline':False]['text':' That presumption holds for pointers, where value initialization produces','line_number':227,'multiline':False]['text':' a null pointer.','line_number':228,'multiline':False]['text':' For classes and unions we *assume* that if |T|'s default constructor is','line_number':231,'multiline':False]['text':' non-trivial it'll initialize correctly. (This is unideal, but C++','line_number':232,'multiline':False]['text':' doesn't offer a type trait indicating whether a class's constructor is','line_number':233,'multiline':False]['text':' user-defined, which better approximates our desired semantics.)','line_number':234,'multiline':False]['text':'*
+ * For generational GC, assert that an object is in the tenured generation as
+ * opposed to being in the nursery.
+ ','line_number':248,'multiline':True]['text':'*
+ * The Heap<T> class is a heap-stored reference to a JS GC thing for use outside
+ * the JS engine. All members of heap classes that refer to GC things should use
+ * Heap<T> (or possibly TenuredHeap<T>, described below).
+ *
+ * Heap<T> is an abstraction that hides some of the complexity required to
+ * maintain GC invariants for the contained reference. It uses operator
+ * overloading to provide a normal pointer interface, but adds barriers to
+ * notify the GC of changes.
+ *
+ * Heap<T> implements the following barriers:
+ *
+ *  - Post-write barrier (necessary for generational GC).
+ *  - Read barrier (necessary for incremental GC and cycle collector
+ *    integration).
+ *
+ * Note Heap<T> does not have a pre-write barrier as used internally in the
+ * engine. The read barrier is used to mark anything read from a Heap<T> during
+ * an incremental GC.
+ *
+ * Heap<T> may be moved or destroyed outside of GC finalization and hence may be
+ * used in dynamic storage such as a Vector.
+ *
+ * Heap<T> instances must be traced when their containing object is traced to
+ * keep the pointed-to GC thing alive.
+ *
+ * Heap<T> objects should only be used on the heap. GC references stored on the
+ * C/C++ stack must use Rooted/Handle/MutableHandle instead.
+ *
+ * Type T must be a public GC pointer type.
+ ','line_number':260,'multiline':True]['text':' Please note: this can actually also be used by nsXBLMaybeCompiled<T>, for','line_number':293,'multiline':False]['text':' legacy reasons.','line_number':294,'multiline':False]['text':' No barriers are required for initialization to the default value.','line_number':302,'multiline':False]['text':'
+   * For Heap, move semantics are equivalent to copy semantics. However, we want
+   * the copy constructor to be explicit, and an explicit move constructor
+   * breaks common usage of move semantics, so we need to define both, even
+   * though they are equivalent.
+   ','line_number':308,'multiline':True]['text':' namespace detail','line_number':374,'multiline':False]['text':' The following *IsNotGray functions take account of the eventual','line_number':394,'multiline':False]['text':' gray marking state at the end of any ongoing incremental GC by','line_number':395,'multiline':False]['text':' delaying the checks if necessary.','line_number':396,'multiline':False]['text':'*
+ * The TenuredHeap<T> class is similar to the Heap<T> class above in that it
+ * encapsulates the GC concerns of an on-heap reference to a JS object. However,
+ * it has two important differences:
+ *
+ *  1) Pointers which are statically known to only reference "tenured" objects
+ *     can avoid the extra overhead of SpiderMonkey's write barriers.
+ *
+ *  2) Objects in the "tenured" heap have stronger alignment restrictions than
+ *     those in the "nursery", so it is possible to store flags in the lower
+ *     bits of pointers known to be tenured. TenuredHeap wraps a normal tagged
+ *     pointer with a nice API for accessing the flag bits and adds various
+ *     assertions to ensure that it is not mis-used.
+ *
+ * GC things are said to be "tenured" when they are located in the long-lived
+ * heap: e.g. they have gained tenure as an object by surviving past at least
+ * one GC. For performance, SpiderMonkey allocates some things which are known
+ * to normally be long lived directly into the tenured generation; for example,
+ * global objects. Additionally, SpiderMonkey does not visit individual objects
+ * when deleting non-tenured objects, so object with finalizers are also always
+ * tenured; for instance, this includes most DOM objects.
+ *
+ * The considerations to keep in mind when using a TenuredHeap<T> vs a normal
+ * Heap<T> are:
+ *
+ *  - It is invalid for a TenuredHeap<T> to refer to a non-tenured thing.
+ *  - It is however valid for a Heap<T> to refer to a tenured thing.
+ *  - It is not possible to store flag bits in a Heap<T>.
+ ','line_number':422,'multiline':True]['text':' namespace detail','line_number':536,'multiline':False]['text':' std::swap uses a stack temporary, which prevents classes like Heap<T>','line_number':538,'multiline':False]['text':' from being declared MOZ_HEAP_CLASS.','line_number':539,'multiline':False]['text':'*
+ * Reference to a T that has been rooted elsewhere. This is most useful
+ * as a parameter type, which guarantees that the T lvalue is properly
+ * rooted. See "Move GC Stack Rooting" above.
+ *
+ * If you want to add additional methods to Handle for a specific
+ * specialization, define a HandleBase<T> specialization containing them.
+ ','line_number':566,'multiline':True]['text':' Creates a handle from a handle of a type convertible to T. ','line_number':583,'multiline':True]['text':'
+   * Take care when calling this method!
+   *
+   * This creates a Handle from the raw location of a T.
+   *
+   * It should be called only if the following conditions hold:
+   *
+   *  1) the location of the T is guaranteed to be marked (for some reason
+   *     other than being a Rooted), e.g., if it is guaranteed to be reachable
+   *     from an implicit root.
+   *
+   *  2) the contents of the location are immutable, or at least cannot change
+   *     for the lifetime of the handle, as its users may not expect its value
+   *     to change underneath them.
+   ','line_number':602,'multiline':True]['text':'
+   * Construct a handle from an explicitly rooted location. This is the
+   * normal way to create a handle, and normally happens implicitly.
+   ','line_number':622,'multiline':True]['text':' Construct a read only handle from a mutable handle. ','line_number':636,'multiline':True]['text':' namespace detail','line_number':663,'multiline':False]['text':'*
+ * Similar to a handle, but the underlying storage can be changed. This is
+ * useful for outparams.
+ *
+ * If you want to add additional methods to MutableHandle for a specific
+ * specialization, define a MutableHandleBase<T> specialization containing
+ * them.
+ ','line_number':665,'multiline':True]['text':' Disallow nullptr for overloading purposes.','line_number':683,'multiline':False]['text':'
+   * This may be called only if the location of the T is guaranteed
+   * to be marked (for some reason other than being a Rooted),
+   * e.g., if it is guaranteed to be reachable from an implicit root.
+   *
+   * Create a MutableHandle from a raw location of a T.
+   ','line_number':697,'multiline':True]['text':' namespace detail','line_number':728,'multiline':False]['text':' namespace JS ','line_number':730,'multiline':True]['text':' Default implementations for barrier methods on GC thing pointers.','line_number':736,'multiline':False]['text':' namespace detail','line_number':754,'multiline':False]['text':' Provide hash codes for Cell kinds that may be relocated and, thus, not have','line_number':812,'multiline':False]['text':' a stable address to use as the base for a hash code. Instead of the address,','line_number':813,'multiline':False]['text':' this hasher uses Cell::getUniqueId to provide exact matches and as a base','line_number':814,'multiline':False]['text':' for generating hash codes.','line_number':815,'multiline':False]['text':'','line_number':816,'multiline':False]['text':' Note: this hasher, like PointerHasher can "hash" a nullptr. While a nullptr','line_number':817,'multiline':False]['text':' would not likely be a useful key, there are some cases where being able to','line_number':818,'multiline':False]['text':' hash a nullptr is useful, either on purpose or because of bugs:','line_number':819,'multiline':False]['text':' (1) existence checks where the key may happen to be null and (2) some','line_number':820,'multiline':False]['text':' aggregate Lookup kinds embed a JSObject* that is frequently null and do not','line_number':821,'multiline':False]['text':' null test before dispatching to the hasher.','line_number':822,'multiline':False]['text':' The rekey hash policy method is not provided since you dont't need to','line_number':832,'multiline':False]['text':' rekey any more when using this policy.','line_number':833,'multiline':False]['text':' namespace js','line_number':855,'multiline':False]['text':' namespace mozilla','line_number':871,'multiline':False]['text':' namespace js ','line_number':912,'multiline':True]['text':' js::AutoWrapperVector ','line_number':919,'multiline':True]['text':' js::AutoWrapperRooter ','line_number':920,'multiline':True]['text':' js::CustomAutoRooter ','line_number':921,'multiline':True]['text':' Dummy type to store root list entry pointers as. This code does not just use','line_number':927,'multiline':False]['text':' the actual type, because then eg JSObject* and JSFunction* would be assumed','line_number':928,'multiline':False]['text':' to never alias but they do (they are stored in the same list). Also, do not','line_number':929,'multiline':False]['text':' use `void*` so that `Rooted<void*>` is a compile error.','line_number':930,'multiline':False]['text':' namespace detail','line_number':932,'multiline':False]['text':' Workaround MSVC issue where GCPolicy is needed even though this dummy type is','line_number':939,'multiline':False]['text':' never instantiated. Ideally, RootListEntry is removed in the future and an','line_number':940,'multiline':False]['text':' appropriate class hierarchy for the Rooted<T> types.','line_number':941,'multiline':False]['text':' Superclass of JSContext which can be used for rooting data in use by the','line_number':954,'multiline':False]['text':' current thread but that does not provide all the functions of a JSContext.','line_number':955,'multiline':False]['text':' Stack GC roots for Rooted GC heap pointers.','line_number':957,'multiline':False]['text':' Stack GC roots for AutoFooRooter classes.','line_number':962,'multiline':False]['text':' Gecko profiling metadata.','line_number':966,'multiline':False]['text':' This isn't really rooting related. It's only here because we want','line_number':967,'multiline':False]['text':' GetContextProfilingStackIfEnabled to be inlineable into non-JS code, and','line_number':968,'multiline':False]['text':' we didn't want to add another superclass of JSContext just for this.','line_number':969,'multiline':False]['text':' Implemented in gc/RootMarking.cpp. ','line_number':977,'multiline':True]['text':' The remaining members in this class should only be accessed through','line_number':987,'multiline':False]['text':' JSContext pointers. They are unrelated to rooting and are in place so','line_number':988,'multiline':False]['text':' that inlined API functions can directly access the data.','line_number':989,'multiline':False]['text':' The current realm. ','line_number':991,'multiline':True]['text':' The current zone. ','line_number':994,'multiline':True]['text':' Limit pointer for checking native stack consumption. ','line_number':998,'multiline':True]['text':' For WASI we can't catch call-stack overflows with stack-pointer checks, so','line_number':1002,'multiline':False]['text':' we count recursion depth with RAII based AutoCheckRecursionLimit.','line_number':1003,'multiline':False]['text':' __wasi__','line_number':1007,'multiline':False]['text':'
+   * Discriminates actual subclass of this being used. The meaning is
+   * indicated by the corresponding value in the Kind enum.
+   ','line_number':1048,'multiline':True]['text':' No copy or assignment semantics. ','line_number':1054,'multiline':True]['text':'*
+ * Custom rooting behavior for internal and external clients.
+ *
+ * Deprecated. Where possible, use Rooted<> instead.
+ ','line_number':1059,'multiline':True]['text':'* Supplied by derived class to trace roots. ','line_number':1075,'multiline':True]['text':' Dummy types to make it easier to understand template overload preference','line_number':1092,'multiline':False]['text':' ordering.','line_number':1093,'multiline':False]['text':' namespace detail ','line_number':1098,'multiline':True]['text':'*
+ * Local variable of type T whose value is always rooted. This is typically
+ * used for local variables, or for non-rooted values being passed to a
+ * function that requires a handle, e.g. Foo(Root<T>(cx, x)).
+ *
+ * If you want to add additional methods to Rooted for a specific
+ * specialization, define a RootedBase<T> specialization containing them.
+ ','line_number':1100,'multiline':True]['text':' Define either one or two Rooted(cx) constructors: the fallback one, which','line_number':1126,'multiline':False]['text':' constructs a Rooted holding a SafelyInitialized<T>, and a convenience one','line_number':1127,'multiline':False]['text':' for types that can be constructed with a cx, which will give a Rooted','line_number':1128,'multiline':False]['text':' holding a T(cx).','line_number':1129,'multiline':False]['text':' Dummy type to distinguish these constructors from Rooted(cx, initial)','line_number':1131,'multiline':False]['text':' Normal case: construct an empty Rooted holding a safely initialized but','line_number':1134,'multiline':False]['text':' empty T.','line_number':1135,'multiline':False]['text':' If T can be constructed with a cx, then define another constructor for it','line_number':1140,'multiline':False]['text':' that will be preferred.','line_number':1141,'multiline':False]['text':' Construct an empty Rooted. Delegates to an internal constructor that','line_number':1151,'multiline':False]['text':' chooses a specific meaning of "empty" depending on whether T can be','line_number':1152,'multiline':False]['text':' constructed with a cx.','line_number':1153,'multiline':False]['text':'
+   * This method is public for Rooted so that Codegen.py can use a Rooted
+   * interchangeably with a MutableHandleValue.
+   ','line_number':1173,'multiline':True]['text':'
+   * These need to be templated on RootListEntry* to avoid aliasing issues
+   * between, for example, Rooted<JSObject*> and Rooted<JSFunction*>, which use
+   * the same stack head pointer for different classes.
+   ','line_number':1198,'multiline':True]['text':' namespace detail','line_number':1218,'multiline':False]['text':' namespace JS ','line_number':1220,'multiline':True]['text':'
+ * Inlinable accessors for JSContext.
+ *
+ * - These must not be available on the more restricted superclasses of
+ *   JSContext, so we can't simply define them on RootingContext.
+ *
+ * - They're perfectly ordinary JSContext functionality, so ought to be
+ *   usable without resorting to jsfriendapi.h, and when JSContext is an
+ *   incomplete type.
+ ','line_number':1224,'multiline':True]['text':'*
+ * Augment the generic Rooted<T> interface when T = JSObject* with
+ * class-querying and downcasting operations.
+ *
+ * Given a Rooted<JSObject*> obj, one can view
+ *   Handle<StringObject*> h = obj.as<StringObject*>();
+ * as an optimization of
+ *   Rooted<StringObject*> rooted(cx, &obj->as<StringObject*>());
+ *   Handle<StringObject*> h = rooted;
+ ','line_number':1255,'multiline':True]['text':'*
+ * Augment the generic Handle<T> interface when T = JSObject* with
+ * downcasting operations.
+ *
+ * Given a Handle<JSObject*> obj, one can view
+ *   Handle<StringObject*> h = obj.as<StringObject*>();
+ * as an optimization of
+ *   Rooted<StringObject*> rooted(cx, &obj->as<StringObject*>());
+ *   Handle<StringObject*> h = rooted;
+ ','line_number':1273,'multiline':True]['text':' namespace js ','line_number':1291,'multiline':True]['text':'*
+ * A copyable, assignable global GC root type with arbitrary lifetime, an
+ * infallible constructor, and automatic unrooting on destruction.
+ *
+ * These roots can be used in heap-allocated data structures, so they are not
+ * associated with any particular JSContext or stack. They are registered with
+ * the JSRuntime itself, without locking. Initialization may take place on
+ * construction, or in two phases if the no-argument constructor is called
+ * followed by init().
+ *
+ * Note that you must not use an PersistentRooted in an object owned by a JS
+ * object:
+ *
+ * Whenever one object whose lifetime is decided by the GC refers to another
+ * such object, that edge must be traced only if the owning JS object is traced.
+ * This applies not only to JS objects (which obviously are managed by the GC)
+ * but also to C++ objects owned by JS objects.
+ *
+ * If you put a PersistentRooted in such a C++ object, that is almost certainly
+ * a leak. When a GC begins, the referent of the PersistentRooted is treated as
+ * live, unconditionally (because a PersistentRooted is a *root*), even if the
+ * JS object that owns it is unreachable. If there is any path from that
+ * referent back to the JS object, then the C++ object containing the
+ * PersistentRooted will not be destructed, and the whole blob of objects will
+ * not be freed, even if there are no references to them from the outside.
+ *
+ * In the context of Firefox, this is a severe restriction: almost everything in
+ * Firefox is owned by some JS object or another, so using PersistentRooted in
+ * such objects would introduce leaks. For these kinds of edges, Heap<T> or
+ * TenuredHeap<T> would be better types. It's up to the implementor of the type
+ * containing Heap<T> or TenuredHeap<T> members to make sure their referents get
+ * marked when the object itself is marked.
+ ','line_number':1341,'multiline':True]['text':'
+     * Copy construction takes advantage of the fact that the original
+     * is already inserted, and simply adds itself to whatever list the
+     * original was on - no JSRuntime pointer needed.
+     *
+     * This requires mutating rhs's links, but those should be 'mutable'
+     * anyway. C++ doesn't let us declare mutable base classes.
+     ','line_number':1436,'multiline':True]['text':' namespace detail','line_number':1501,'multiline':False]['text':' namespace JS ','line_number':1503,'multiline':True]['text':' This only supports a subset of Maybe's interface.','line_number':1539,'multiline':False]['text':' This only supports a subset of Maybe's interface.','line_number':1553,'multiline':False]['text':' namespace gc ','line_number':1574,'multiline':True]['text':' namespace js ','line_number':1576,'multiline':True]['text':' js_RootingAPI_h ','line_number':1578,'multiline':True]

@@ -1,0 +1,313 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * Define functions that increment histogram statistics for cursor read and write operations
+ * latency.
+ ','line_number':11,'multiline':True]['text':'
+ * Wrapper for substituting checkpoint state when doing checkpoint cursor operations.
+ *
+ * A checkpoint cursor has two extra things in it: a dummy transaction (always), and a dhandle for
+ * the corresponding history store checkpoint (mostly but not always).
+ *
+ * If there's a checkpoint transaction, it means we're a checkpoint cursor. In that case we
+ * substitute the transaction into the session, and also stick the checkpoint name of the history
+ * store dhandle in the session for when the history store is opened. And store the base write
+ * generation we got from the global checkpoint metadata in the session for use in the unpacking
+ * cleanup code. After the operation completes we then undo it all.
+ *
+ * If the current transaction is _already_ a checkpoint cursor dummy transaction, however, do
+ * nothing. This happens when the history store logic opens history store cursors inside checkpoint
+ * cursor operations on the data store. In that case we want to keep the existing state. Note that
+ * in this case we know that the checkpoint write generation is the same -- we are reading some
+ * specific checkpoint and we got that checkpoint's write generation from the global checkpoint
+ * metadata, not from per-tree information.
+ ','line_number':18,'multiline':True]['text':'
+ * __curfile_check_cbt_txn --
+ *     Enforce restrictions on nesting checkpoint cursors. The only nested cursors we should get to
+ *     from a checkpoint cursor are cursors for the corresponding history store checkpoint.
+ ','line_number':67,'multiline':True]['text':' If not reading a checkpoint, everything's fine. ','line_number':79,'multiline':True]['text':'
+     * It is ok if the current transaction is already a checkpoint transaction. Assert that we are
+     * the history store.
+     ','line_number':83,'multiline':True]['text':'
+ * __wt_cursor_checkpoint_id --
+ *     Return the checkpoint ID for checkpoint cursors, otherwise 0.
+ ','line_number':95,'multiline':True]['text':'
+ * __curfile_compare --
+ *     WT_CURSOR->compare method for the btree cursor type.
+ ','line_number':109,'multiline':True]['text':'
+     * Check both cursors are a btree type then call the underlying function, it can handle cursors
+     * pointing to different objects.
+     ','line_number':123,'multiline':True]['text':'
+ * __curfile_equals --
+ *     WT_CURSOR->equals method for the btree cursor type.
+ ','line_number':139,'multiline':True]['text':'
+     * Check both cursors are a btree type then call the underlying function, it can handle cursors
+     * pointing to different objects.
+     ','line_number':153,'multiline':True]['text':'
+ * __curfile_next --
+ *     WT_CURSOR->next method for the btree cursor type.
+ ','line_number':169,'multiline':True]['text':' Next maintains a position, key and value. ','line_number':191,'multiline':True]['text':'
+ * __wt_curfile_next_random --
+ *     WT_CURSOR->next method for the btree cursor type when configured with next_random. This is
+ *     exported because it is called directly within LSM.
+ ','line_number':202,'multiline':True]['text':' Next-random maintains a position, key and value. ','line_number':223,'multiline':True]['text':'
+ * __curfile_prev --
+ *     WT_CURSOR->prev method for the btree cursor type.
+ ','line_number':232,'multiline':True]['text':' Prev maintains a position, key and value. ','line_number':254,'multiline':True]['text':'
+ * __curfile_reset --
+ *     WT_CURSOR->reset method for the btree cursor type.
+ ','line_number':265,'multiline':True]['text':'
+     * The bounded cursor API clears bounds on external calls to cursor->reset. We determine this by
+     * guarding the call to cursor bound reset with the API_USER_ENTRY macro. Doing so prevents
+     * internal API calls from resetting cursor bounds unintentionally, e.g. cursor->remove.
+     ','line_number':282,'multiline':True]['text':' Reset maintains no position, key or value. ','line_number':290,'multiline':True]['text':'
+ * __curfile_search --
+ *     WT_CURSOR->search method for the btree cursor type.
+ ','line_number':299,'multiline':True]['text':' Search maintains a position, key and value. ','line_number':326,'multiline':True]['text':'
+ * __curfile_search_near --
+ *     WT_CURSOR->search_near method for the btree cursor type.
+ ','line_number':337,'multiline':True]['text':' Search-near maintains a position, key and value. ','line_number':364,'multiline':True]['text':'
+ * __curfile_insert --
+ *     WT_CURSOR->insert method for the btree cursor type.
+ ','line_number':375,'multiline':True]['text':'
+     * Insert maintains no position, key or value (except for column-store appends, where we are
+     * returning a key).
+     ','line_number':400,'multiline':True]['text':'
+ * __wt_curfile_insert_check --
+ *     WT_CURSOR->insert_check method for the btree cursor type.
+ ','line_number':416,'multiline':True]['text':'
+ * Detecting a conflict should not cause transaction error.
+ ','line_number':436,'multiline':True]['text':'
+ * __curfile_modify --
+ *     WT_CURSOR->modify method for the btree cursor type.
+ ','line_number':445,'multiline':True]['text':' Check for a rational modify vector count. ','line_number':461,'multiline':True]['text':'
+     * Modify maintains a position, key and value. Unlike update, it's not always an internal value.
+     ','line_number':467,'multiline':True]['text':'
+ * __curfile_update --
+ *     WT_CURSOR->update method for the btree cursor type.
+ ','line_number':479,'multiline':True]['text':' Update maintains a position, key and value. ','line_number':502,'multiline':True]['text':'
+ * __curfile_remove --
+ *     WT_CURSOR->remove method for the btree cursor type.
+ ','line_number':512,'multiline':True]['text':'
+     * WT_CURSOR.remove has a unique semantic, the cursor stays positioned if it starts positioned,
+     * otherwise clear the cursor on completion. Track if starting with a positioned cursor and pass
+     * that information into the underlying Btree remove function so it tries to maintain a position
+     * in the tree. This is complicated by the loop in this code that restarts operations if they
+     * return prepare-conflict or restart.
+     ','line_number':525,'multiline':True]['text':' If we've lost an initial position, we must fail. ','line_number':544,'multiline':True]['text':'
+     * Remove with a search-key is fire-and-forget, no position and no key. Remove starting from a
+     * position maintains the position and a key, but the key can end up being internal, external,
+     * or not set, there's nothing to assert. There's never a value.
+     ','line_number':551,'multiline':True]['text':' If we've lost an initial position, we must fail. ','line_number':559,'multiline':True]['text':'
+ * __curfile_reserve --
+ *     WT_CURSOR->reserve method for the btree cursor type.
+ ','line_number':565,'multiline':True]['text':'
+     * Reserve maintains a position and key, which doesn't match the library API, where reserve
+     * maintains a value. Fix the API by searching after each successful reserve operation.
+     ','line_number':585,'multiline':True]['text':'
+     * The application might do a WT_CURSOR.get_value call when we return, so we need a value and
+     * the underlying functions didn't set one up. For various reasons, those functions may not have
+     * done a search and any previous value in the cursor might race with WT_CURSOR.reserve (and in
+     * cases like LSM, the reserve never encountered the original key). For simplicity, repeat the
+     * search here.
+     ','line_number':596,'multiline':True]['text':'
+ * __curfile_close --
+ *     WT_CURSOR->close method for the btree cursor type.
+ ','line_number':606,'multiline':True]['text':' Only try to cache the cursor if there's no error. ','line_number':623,'multiline':True]['text':'
+         * If releasing the cursor fails in any way, it will be left in a state that allows it to be
+         * normally closed.
+         ','line_number':625,'multiline':True]['text':' Free the bulk-specific resources. ','line_number':636,'multiline':True]['text':' The URI is owned by the btree handle. ','line_number':641,'multiline':True]['text':' Free any private transaction set up for a checkpoint cursor. ','line_number':646,'multiline':True]['text':' Close any history store handle set up for a checkpoint cursor. ','line_number':650,'multiline':True]['text':'
+     * Note: release the data handle last so that cursor statistics are updated correctly.
+     ','line_number':659,'multiline':True]['text':' Decrement the data-source's in-use counter. ','line_number':663,'multiline':True]['text':'
+         * If the cursor was marked dead, we got here from reopening a cached cursor, which had a
+         * handle that was dead at that time, so it did not obtain a lock on the handle.
+         ','line_number':666,'multiline':True]['text':'
+ * __curfile_cache --
+ *     WT_CURSOR->cache method for the btree cursor type.
+ ','line_number':678,'multiline':True]['text':'
+ * __curfile_reopen_int --
+ *     Helper for __curfile_reopen, called with the session data handle set.
+ ','line_number':697,'multiline':True]['text':'
+     * Lock the handle: we're only interested in open handles, any other state disqualifies the
+     * cache.
+     ','line_number':713,'multiline':True]['text':'
+     * The data handle may not be available, in which case handle it like a dead handle: fail the
+     * reopen, and flag the cursor so that the handle won't be unlocked when subsequently closed.
+     ','line_number':723,'multiline':True]['text':'
+     * The btree handle may have been reopened since we last accessed it. Reset fields in the cursor
+     * that point to memory owned by the btree handle.
+     ','line_number':733,'multiline':True]['text':' Assert a valid tree (we didn't race with eviction). ','line_number':738,'multiline':True]['text':'
+ * __curfile_reopen --
+ *     WT_CURSOR->reopen method for the btree cursor type.
+ ','line_number':752,'multiline':True]['text':'
+         * The sweep check returns WT_NOTFOUND if the cursor should be swept. Generally if the
+         * associated data handle cannot be reopened it should be swept. But a handle being operated
+         * on by this thread should not be swept. The situation where a handle cannot be reopened
+         * but also cannot be swept can occur if this thread is in the middle of closing a cursor
+         * for a handle that is marked as dropped. During the close, a few iterations of the session
+         * cursor sweep are run. The sweep calls this function to see if a cursor should be swept,
+         * and it may thus be asking about the very cursor being closed.
+         ','line_number':768,'multiline':True]['text':'
+     * Temporarily set the session's data handle to the data handle in the cursor. Reopen may be
+     * called either as part of an open API call, or during cursor sweep as part of a different API
+     * call, so we need to restore the original data handle that was in our session after the reopen
+     * completes.
+     ','line_number':781,'multiline':True]['text':'
+ * __curfile_setup_checkpoint --
+ *     Open helper code for checkpoint cursors.
+ ','line_number':791,'multiline':True]['text':'
+     * It is important that reading from a checkpoint also reads from the corresponding
+     * checkpoint of the history store and also uses matching snapshot and timestamp data;
+     * otherwise all kinds of things go wrong. The logic for getting a matching set is complex (what
+     * it means to be "matching" is also complex) and is explained in session_dhandle.c. This
+     * comment explains what happens once we get a matching set so that subsequent reads work
+     * correctly.
+     *
+     * 1. When we get here, if we are opening a data store checkpoint, our "current" dhandle in the
+     * session is the data store checkpoint, hs_dhandle is the matching history store checkpoint,
+     * and ckpt_snapshot contains the snapshot and timestamp data. It is at least theoretically
+     * possible for hs_dhandle to be null; this means there is no corresponding history store
+     * checkpoint. In this case we will avoid trying to open it later.
+     *
+     * We keep the history store checkpoint dhandle in the checkpoint cursor, and hold it open as
+     * long as the checkpoint cursor remains open. It is never directly used, but it ensures that
+     * the history store checkpoint will not be removed under us and any history store lookups done
+     * via the checkpoint cursor (which open the history store separately themselves) will be able
+     * to open the right version of the history store. This is essential for unnamed checkpoints as
+     * they turn over frequently and asynchronously. It is, strictly speaking, not necessary for
+     * named checkpoints, because as long as a named checkpoint data store cursor is open that named
+     * checkpoint cannot be changed. However, making the behavior conditional would introduce
+     * substantial interface complexity to little benefit.
+     *
+     * 2. When we get here, if we are opening a history store checkpoint, our "current" dhandle in
+     * the session is the history store checkpoint, hs_dhandle is null, and ckpt_snapshot contains
+     * the checkpoint's snapshot and timestamp information.
+     *
+     * If we are opening a history store checkpoint directly from the application (normally the
+     * application should never do this, but one or two tests do) we will get snapshot information
+     * matching the checkpoint. If we are opening a history store checkpoint internally, as part of
+     * an operation on a data store checkpoint cursor, we will have explicitly opened the right
+     * history store checkpoint. The snapshot information may be from a newer checkpoint, but will
+     * not be used.
+     *
+     * 3. To make visibility checks work correctly relative to the checkpoint snapshot, we concoct a
+     * dummy transaction and load the snapshot data into it. This transaction lives in the
+     * checkpoint cursor. It is substituted into session->txn during checkpoint cursor operations.
+     * Note that we do _not_ substitute into txn_shared, so using a checkpoint cursor does not cause
+     * interactions with other threads and in particular does not affect the pinned timestamp
+     * computation. The read timestamp associated with the checkpoint is kept in the dummy
+     * transaction, and there's a (single) special case in the visibility code to check it instead
+     * of the normal read timestamp in txn_shared.
+     *
+     * Global visibility checks that can occur during checkpoint cursor operations need to be
+     * special-cased, because global visibility checks against the current world and not the
+     * checkpoint. There are only a few of these and it seemed more effective to conditionalize them
+     * directly rather than tinkering with the visibility code itself.
+     *
+     * 4. We do not substitute into session->txn if we are already in a checkpoint cursor (that is,
+     * if session->txn is a checkpoint cursor dummy transaction) -- this happens when doing history
+     * store accesses within a data store operation, and means that the history store accesses use
+     * the same snapshot and timestamp information as the data store accesses, which is important
+     * for consistency.
+     *
+     * 5. Because the checkpoint cursor in use is not itself visible in various parts of the
+     * system (most notably the history store code) anything else we need to know about
+     * elsewhere also gets substituted into the session at this point. Currently the only such item
+     * is the name for the matching history store checkpoint.
+     *
+     * 6. When accessing the history store, we will use the history store checkpoint name stashed in
+     * the session if there is one.
+     ','line_number':805,'multiline':True]['text':' We may have gotten a history store handle, but not if we're the history store. ','line_number':869,'multiline':True]['text':' We should always have snapshot data, though it might be degenerate. ','line_number':872,'multiline':True]['text':'
+     * Remember the write generation so we can use it in preference to the btree's own write
+     * generation. This comes into play when the btree-level checkpoint is from an earlier run than
+     * the global checkpoint metadata: the unpack code hides old transaction ids, and we need to
+     * have it show us exactly the transaction ids that correspond to the snapshot we're using. The
+     * write generation we get might be 0 if the global checkpoint is old and didn't contain the
+     * information; in that case we'll ignore it.
+     ','line_number':875,'multiline':True]['text':' Remember the checkpoint ID so it can be returned to the application. ','line_number':885,'multiline':True]['text':'
+     * Override the read timestamp if explicitly provided. Otherwise it's the stable timestamp from
+     * the checkpoint. Replace it in the snapshot info if necessary.
+     ','line_number':888,'multiline':True]['text':'
+             * Allow setting "0" explicitly to mean "none". Otherwise 0 is rejected by the timestamp
+             * parser. Note that the default is not "none", it is the checkpoint's stable timestamp.
+             ','line_number':896,'multiline':True]['text':'
+             * Fail if the read timestamp is less than checkpoint's oldest timestamp. Since this is
+             * a debug setting it's not super critical to make it a usable interface, and for
+             * testing it's usually more illuminating to fail if something unexpected happens. If we
+             * end up exposing the checkpoint read timestamp, it might be better to have this always
+             * round up instead, since there's no useful way for the application to get the
+             * checkpoint's oldest timestamp itself.
+             ','line_number':904,'multiline':True]['text':'
+     * Always create the dummy transaction. If we're opening the history store from inside a data
+     * store checkpoint cursor, we'll end up not using it, but we can't easily tell from here
+     * whether that's the case. Pass in the snapshot info.
+     ','line_number':918,'multiline':True]['text':'
+     * Stow the history store handle on success. (It will be released further up the call chain if
+     * we fail.)
+     ','line_number':925,'multiline':True]['text':'
+ * __curfile_create --
+ *     Open a cursor for a given btree handle.
+ ','line_number':936,'multiline':True]['text':' get-key ','line_number':944,'multiline':True]['text':' get-value ','line_number':945,'multiline':True]['text':' get-raw-key-value ','line_number':946,'multiline':True]['text':' set-key ','line_number':947,'multiline':True]['text':' set-value ','line_number':948,'multiline':True]['text':' compare ','line_number':949,'multiline':True]['text':' equals ','line_number':950,'multiline':True]['text':' next ','line_number':951,'multiline':True]['text':' prev ','line_number':952,'multiline':True]['text':' reset ','line_number':953,'multiline':True]['text':' search ','line_number':954,'multiline':True]['text':' search-near ','line_number':955,'multiline':True]['text':' insert ','line_number':956,'multiline':True]['text':' modify ','line_number':957,'multiline':True]['text':' update ','line_number':958,'multiline':True]['text':' remove ','line_number':959,'multiline':True]['text':' reserve ','line_number':960,'multiline':True]['text':' reconfigure ','line_number':961,'multiline':True]['text':' largest_key ','line_number':962,'multiline':True]['text':' bound ','line_number':963,'multiline':True]['text':' cache ','line_number':964,'multiline':True]['text':' reopen ','line_number':965,'multiline':True]['text':' checkpoint ID ','line_number':966,'multiline':True]['text':' close ','line_number':967,'multiline':True]['text':'
+     * Increment the data-source's in-use counter; done now because closing the cursor will
+     * decrement it, and all failure paths from here close the cursor.
+     ','line_number':994,'multiline':True]['text':' Checkpoint cursor. ','line_number':1001,'multiline':True]['text':' Fail now; otherwise we fail further down and then segfault trying to recover. ','line_number':1003,'multiline':True]['text':' We should not have been given the bits used by checkpoint cursors. ','line_number':1007,'multiline':True]['text':' Optionally skip the validation of each bulk-loaded key. ','line_number':1017,'multiline':True]['text':'
+     * Random retrieval, row-store only. Random retrieval cursors support a limited set of methods.
+     ','line_number':1022,'multiline':True]['text':' Underlying btree initialization. ','line_number':1051,'multiline':True]['text':'
+     * WT_CURSOR.modify supported on 'S' and 'u' value formats, but the fast-path through the btree
+     * code requires log file format changes, it's not available in all versions.
+     ','line_number':1054,'multiline':True]['text':' Cursors on metadata should not be cached, doing so interferes with named checkpoints. ','line_number':1062,'multiline':True]['text':'
+         * Our caller expects to release the data handles if we fail. Disconnect both the main and
+         * any history store handle from the cursor before closing.
+         ','line_number':1074,'multiline':True]['text':'
+ * __wt_curfile_open --
+ *     WT_SESSION->open_cursor method for the btree cursor type.
+ ','line_number':1088,'multiline':True]['text':'
+     * Decode the bulk configuration settings. In memory databases ignore bulk load.
+     ','line_number':1110,'multiline':True]['text':'
+         * Unordered bulk insert is a special case used internally by index creation on existing
+         * tables. It doesn't enforce any special semantics at the file level. It primarily exists
+         * to avoid some locking problems between LSM and index creation.
+         ','line_number':1121,'multiline':True]['text':' Bulk handles require exclusive access. ','line_number':1138,'multiline':True]['text':' Find out if we're supposed to avoid opening the history store. ','line_number':1142,'multiline':True]['text':'
+     * This open path is used for checkpoint cursors and bulk cursors as well as ordinary cursors.
+     * Several considerations apply as a result.
+     *
+     * 1. For bulk cursors we need to do an exclusive open. In this case, a running database-wide
+     * checkpoint can result in EBUSY. To avoid this, we can take the checkpoint lock while opening
+     * the dhandle, which causes us to block until any running checkpoint finishes. This is
+     * controlled by the "checkpoint_wait" config. Nothing else does an exclusive open, so the path
+     * with the checkpoint lock is not otherwise reachable.
+     *
+     * 2. For checkpoint cursors it is not safe to take the checkpoint lock here, because the LSM
+     * code opens checkpoint cursors while holding the schema lock and the checkpoint lock is
+     * supposed to come before the schema lock. If there should ever be some reason to do an
+     * exclusive open of a checkpoint cursor, something will have to give.
+     *
+     * 3. If we are opening a checkpoint cursor, we need two dhandles, one for the tree we're
+     * actually trying to open and (unless that's itself the history store) one for the history
+     * store, and also a copy of the snapshot and timestamp metadata for the checkpoint. It's
+     * necessary for data correctness for all three of these to match. There's a complicated scheme
+     * for getting a matching set while avoiding races with a running checkpoint inside the open
+     * logic (see session_dhandle.c) that we fortunately don't need to think about here.
+     *
+     * 4. The LSM code also opens cursors on single-file checkpoints with no corresponding history
+     * store or snapshot information. It takes steps to make sure everything in the checkpoint is
+     * globally visible and sets checkpoint_use_history=false to indicate we shouldn't try to open
+     * the history store or retrieve the snapshot. If we were to try, we'd fail and the LSM code
+     * would get upset.
+     *
+     * 5. To avoid a proliferation of cases, and to avoid repeatedly parsing config strings, we
+     * always pass down the return arguments for the history store dhandle and checkpoint snapshot
+     * information (except for the bulk-only case and the LSM case) and pass the results on to
+     * __curfile_create. We will not get anything back unless we are actually opening a checkpoint
+     * cursor. The open code takes care of the special case of opening a checkpoint cursor on the
+     * history store. (This is not normally done by applications; but it is done by a couple tests,
+     * and furthermore any internally opened history store cursors come through here, so this case
+     * does matter.)
+     *
+     * This initialization is repeated when opening the underlying data handle, which is ugly, but
+     * cleanup requires the initialization have happened even if not opening a checkpoint handle.
+     ','line_number':1146,'multiline':True]['text':' Get the handle and lock it while the cursor is using it. ','line_number':1195,'multiline':True]['text':' If a snapshot array was returned and hasn't been moved elsewhere, discard it now. ','line_number':1214,'multiline':True]['text':' If the cursor could not be opened, release the handle. ','line_number':1217,'multiline':True]

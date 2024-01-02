@@ -1,0 +1,503 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':' Maximum number of retries for a failed heartbeat.','line_number':87,'multiline':False]['text':'*
+ * Replication Topology Coordinator
+ *
+ * This object is responsible for managing the topology of the cluster.
+ * Tasks include consensus and leader election, chaining, and configuration management.
+ * Methods of this class should be non-blocking.
+ ','line_number':90,'multiline':True]['text':'*
+     * RecentSyncSourceChanges stores the times that recent sync source changes happened. It will
+     * maintain a max size of maxSyncSourceChangesPerHour. If any additional entries are added,
+     * older entries will be removed. It is used to restrict the number of sync source changes that
+     * happen per hour when the node already has a valid sync source.
+     ','line_number':102,'multiline':True]['text':'*
+         * Checks if all the entries occurred within the last hour or not. It will remove additional
+         * entries if it sees that there are more than maxSyncSourceChangesPerHour entries. If there
+         * are fewer than maxSyncSourceChangesPerHour entries, it returns false.
+         ','line_number':110,'multiline':True]['text':'*
+         * Adds a new entry. It will remove additional entries if it sees that there are more than
+         * maxSyncSourceChangesPerHour entries. This should only be called if the sync source was
+         * changed to another node, not if the sync source was cleared.
+         ','line_number':117,'multiline':True]['text':'*
+         * Return the underlying queue. Used for testing purposes only.
+         ','line_number':124,'multiline':True]['text':'*
+     * Type that denotes the role of a node in the replication protocol.
+     *
+     * The role is distinct from MemberState, in that it only deals with the
+     * roles a node plays in the basic protocol -- leader, follower and candidate.
+     * The mapping between MemberState and Role is complex -- several MemberStates
+     * map to the follower role, and MemberState::RS_SECONDARY maps to either
+     * follower or candidate roles, e.g.
+     ','line_number':133,'multiline':True]['text':' A sync source is re-evaluated after it lags behind further than this amount.','line_number':145,'multiline':False]['text':' Whether or not this node is running as a config server.','line_number':148,'multiline':False]['text':'*
+     * Constructs a Topology Coordinator object.
+     *','line_number':152,'multiline':True]['text':'//////////////////////////////////////////////////////////','line_number':160,'multiline':False]['text':'','line_number':161,'multiline':False]['text':' State inspection methods.','line_number':162,'multiline':False]['text':'','line_number':163,'multiline':False]['text':'//////////////////////////////////////////////////////////','line_number':164,'multiline':False]['text':'*
+     * Gets the role of this member in the replication protocol.
+     ','line_number':166,'multiline':True]['text':'*
+     * Gets the current topology version of this member.
+     ','line_number':171,'multiline':True]['text':'*
+     * Gets the MemberState of this member in the replica set.
+     ','line_number':176,'multiline':True]['text':'*
+     * Returns the replica set's MemberData.
+     ','line_number':181,'multiline':True]['text':'*
+     * Returns whether this node should be allowed to accept writes.
+     ','line_number':186,'multiline':True]['text':'*
+     * Returns true if this node is in the process of stepping down unconditionally.
+     ','line_number':191,'multiline':True]['text':'*
+     * Returns true if this node is in the process of stepping down either conditionally or
+     * unconditionally. Note that this can be due to an unconditional stepdown that must
+     * succeed (for instance from learning about a new term) or due to a stepdown attempt
+     * that could fail (for instance from a stepdown cmd that could fail if not enough nodes
+     * are caught up).
+     ','line_number':196,'multiline':True]['text':'*
+     * Returns the address of the current sync source, or an empty HostAndPort if there is no
+     * current sync source.
+     ','line_number':205,'multiline':True]['text':'*
+     * Gets the earliest time the current node will stand for election.
+     ','line_number':211,'multiline':True]['text':'*
+     * Gets the current value of the maintenance mode counter.
+     ','line_number':216,'multiline':True]['text':'*
+     * Gets the latest term this member is aware of. If this member is the primary,
+     * it's the current term of the replica set.
+     ','line_number':221,'multiline':True]['text':'*
+     * Returns true if we are a one-node replica set, we're the one member,
+     * we're electable, we're not in maintenance mode, and we are currently in followerMode
+     * SECONDARY.
+     *
+     * This is used to decide if we should start an election in a one-node replica set.
+     ','line_number':229,'multiline':True]['text':'//////////////////////////////////////////////////////////','line_number':239,'multiline':False]['text':'','line_number':240,'multiline':False]['text':' Basic state manipulation methods.','line_number':241,'multiline':False]['text':'','line_number':242,'multiline':False]['text':'//////////////////////////////////////////////////////////','line_number':243,'multiline':False]['text':'*
+     * Sets the latest term this member is aware of to the higher of its current value and
+     * the value passed in as "term".
+     * Returns the result of setting the term value, or if a stepdown should be triggered.
+     ','line_number':245,'multiline':True]['text':'*
+     * Sets the index into the config used when we next choose a sync source
+     ','line_number':252,'multiline':True]['text':'*
+     * Chooses and sets a new sync source, based on our current knowledge of the world.
+     * If readPreference is PrimaryOnly, only the primary will be selected.
+     ','line_number':257,'multiline':True]['text':'*
+     * Suppresses selecting "host" as sync source until "until".
+     ','line_number':265,'multiline':True]['text':'*
+     * Removes a single entry "host" from the list of potential sync sources which we
+     * have denylisted, if it is supposed to be undenylisted by "now".
+     ','line_number':270,'multiline':True]['text':'*
+     * Clears the list of potential sync sources we have denylisted.
+     ','line_number':276,'multiline':True]['text':'*
+     * Determines if a new sync source should be chosen, if a better candidate sync source is
+     * available.  If the current sync source's last optime ("syncSourceLastOpTime" under
+     * protocolVersion 1, but pulled from the MemberData in protocolVersion 0) is more than
+     * _maxSyncSourceLagSecs behind any syncable source, this function returns true. If we are
+     * running in ProtocolVersion 1, our current sync source is not primary, has no sync source
+     * ("syncSourceHasSyncSource" is false), and only has data up to "myLastOpTime", returns true.
+     *
+     * "now" is used to skip over currently denylisted sync sources.
+     ','line_number':281,'multiline':True]['text':'*
+     * Determines if a new sync source should be chosen when an error occurs. In this case
+     * we do not have current metadata from the sync source and so can only do a subset of
+     * the checks we do when we get a response.
+     ','line_number':297,'multiline':True]['text':'*
+     * Returns true if we find an eligible sync source that is significantly closer than our current
+     * sync source.
+     ','line_number':305,'multiline':True]['text':'*
+     * Sets the reported mode of this node to one of RS_SECONDARY, RS_STARTUP2, RS_ROLLBACK or
+     * RS_RECOVERING, when getRole() == Role::follower.  This is the interface by which the
+     * applier changes the reported member state of the current node, and enables or suppresses
+     * electability of the current node.  All modes but RS_SECONDARY indicate an unelectable
+     * follower state (one that cannot transition to candidate).
+     ','line_number':315,'multiline':True]['text':'*
+     * Scan the memberData and determine the highest last applied or last
+     * durable optime present on a majority of servers; set _lastCommittedOpTime to this
+     * new entry.
+     * Whether the last applied or last durable op time is used depends on whether
+     * the config getWriteConcernMajorityShouldJournal is set.
+     * Returns true if the _lastCommittedOpTime was changed.
+     ','line_number':324,'multiline':True]['text':'*
+     * Updates _lastCommittedOpTime to be 'committedOpTime' if it is more recent than the current
+     * last committed OpTime.  Returns true if _lastCommittedOpTime is changed. We ignore
+     * 'committedOpTime' if it has a different term than our lastApplied, unless
+     * 'fromSyncSource'=true, which guarantees we are on the same branch of history as
+     * 'committedOpTime', so we update our commit point to min(committedOpTime, lastApplied).
+     * The 'forInitiate' flag is to force-advance our committedOpTime during the execution of
+     * the replSetInitiate command.
+     ','line_number':334,'multiline':True]['text':'*
+     * Returns the OpTime of the latest majority-committed op known to this server.
+     ','line_number':347,'multiline':True]['text':'*
+     * Returns true if it's safe to transition to LeaderMode::kWritablePrimary.
+     ','line_number':354,'multiline':True]['text':'*
+     * Called by the ReplicationCoordinator to signal that we have finished catchup and drain modes
+     * and are ready to fully become primary and start accepting writes.
+     * "firstOpTimeOfTerm" is a floor on the OpTimes this node will be allowed to consider committed
+     * for this tenure as primary. This prevents entries from before our election from counting as
+     * committed in our view, until our election (the "firstOpTimeOfTerm" op) has been committed.
+     ','line_number':359,'multiline':True]['text':'*
+     * Adjusts the maintenance mode count by "inc".
+     *
+     * It is an error to call this method if getRole() does not return Role::follower.
+     * It is an error to allow the maintenance count to go negative.
+     ','line_number':368,'multiline':True]['text':'*
+     * Sets the value of the maintenance mode counter to 0.
+     ','line_number':376,'multiline':True]['text':'//////////////////////////////////////////////////////////','line_number':381,'multiline':False]['text':'','line_number':382,'multiline':False]['text':' Methods that prepare responses to command requests.','line_number':383,'multiline':False]['text':'','line_number':384,'multiline':False]['text':'//////////////////////////////////////////////////////////','line_number':385,'multiline':False]['text':' produces a reply to a replSetSyncFrom command','line_number':387,'multiline':False]['text':' produce a reply to a V1 heartbeat, and return whether the remote node's config has changed.','line_number':392,'multiline':False]['text':' boost::none if the storage engine does not support recovery to a timestamp, or if the','line_number':406,'multiline':False]['text':' storage engine is not available.','line_number':407,'multiline':False]['text':' Timestamp::min() if a stable recovery timestamp is yet to be taken.','line_number':408,'multiline':False]['text':'','line_number':409,'multiline':False]['text':' On the replication layer, a non-min() timestamp ensures recoverable rollback is possible,','line_number':410,'multiline':False]['text':' as well as startup recovery without re-initial syncing in the case of durable storage','line_number':411,'multiline':False]['text':' engines.','line_number':412,'multiline':False]['text':' produce a reply to a status request','line_number':417,'multiline':False]['text':' Produce a replSetUpdatePosition command to be sent to the node's sync source.','line_number':422,'multiline':False]['text':' Produce a reply to a hello request.  It is only valid to call this if we are a','line_number':426,'multiline':False]['text':' replset.  Drivers interpret the hello fields according to the Server Discovery and','line_number':427,'multiline':False]['text':' Monitoring Spec, see the "Parsing an isMaster response" section.','line_number':428,'multiline':False]['text':' Produce member data for the serverStatus command and diagnostic logging.','line_number':432,'multiline':False]['text':'*
+     * Produce a reply to a freeze request. Returns a PostMemberStateUpdateAction on success that
+     * may trigger state changes in the caller.
+     ','line_number':437,'multiline':True]['text':'//////////////////////////////////////////////////////////','line_number':445,'multiline':False]['text':'','line_number':446,'multiline':False]['text':' Methods for sending and receiving heartbeats,','line_number':447,'multiline':False]['text':' reconfiguring and handling the results of standing for','line_number':448,'multiline':False]['text':' election.','line_number':449,'multiline':False]['text':'','line_number':450,'multiline':False]['text':'//////////////////////////////////////////////////////////','line_number':451,'multiline':False]['text':'*
+     * Updates the topology coordinator's notion of the replica set configuration.
+     *
+     * "newConfig" is the new configuration, and "selfIndex" is the index of this
+     * node's configuration information in "newConfig", or "selfIndex" is -1 to
+     * indicate that this node is not a member of "newConfig".
+     *
+     * newConfig.isInitialized() should be true, though implementations may accept
+     * configurations where this is not true, for testing purposes.
+     ','line_number':453,'multiline':True]['text':'*
+     * Prepares a heartbeat request appropriate for sending to "target", assuming the
+     * current time is "now".  "ourSetName" is used as the name for our replica set if
+     * the topology coordinator does not have a valid configuration installed.
+     *
+     * The returned pair contains proper arguments for a replSetHeartbeat command, and
+     * an amount of time to wait for the response.
+     *
+     * This call should be paired (with intervening network communication) with a call to
+     * processHeartbeatResponse for the same "target".
+     ','line_number':465,'multiline':True]['text':'*
+     * Processes a heartbeat response from "target" that arrived around "now", having spent
+     * "networkRoundTripTime" millis on the network.
+     *
+     * Updates internal topology coordinator state, and returns instructions about what action
+     * to take next.
+     *
+     * If the next action indicates "StepDownSelf", the topology coordinator has transitioned
+     * to the "follower" role from "leader", and the caller should take any necessary actions
+     * to become a follower.
+     *
+     * If the next action indicates "Reconfig", the caller should verify the configuration in
+     * hbResponse is acceptable, perform any other reconfiguration actions it must, and call
+     * updateConfig with the new configuration and the appropriate value for "selfIndex".  It
+     * must also wrap up any outstanding elections (by calling processLoseElection or
+     * processWinElection) before calling updateConfig.
+     *
+     * This call should be paired (with intervening network communication) with a call to
+     * prepareHeartbeatRequestV1 for the same "target".
+     ','line_number':479,'multiline':True]['text':'*
+     *  Returns whether or not at least 'numNodes' have reached the given opTime with the same term.
+     * "durablyWritten" indicates whether the operation has to be durably applied.
+     ','line_number':505,'multiline':True]['text':'*
+     * Returns whether or not at least one node matching the tagPattern has reached the given opTime
+     * with the same term.
+     * "durablyWritten" indicates whether the operation has to be durably applied.
+     ','line_number':511,'multiline':True]['text':'*
+     * Return the predicate that tests if a member has reached the target OpTime.
+     ','line_number':522,'multiline':True]['text':'*
+     * Return the predicate that tests if a member has replicated the given config.
+     ','line_number':527,'multiline':True]['text':'*
+     * Returns whether or not at least one node matching the tagPattern has satisfied the given
+     * condition.
+     ','line_number':532,'multiline':True]['text':'*
+     * Returns a vector of members that have applied the operation with OpTime 'op'.
+     * "durablyWritten" indicates whether the operation has to be durably applied.
+     * "skipSelf" means to exclude this node whether or not the op has been applied.
+     ','line_number':539,'multiline':True]['text':'*
+     * Marks a member as down from our perspective and returns a bool which indicates if we can no
+     * longer see a majority of the nodes and thus should step down.
+     ','line_number':546,'multiline':True]['text':'*
+     * Goes through the memberData and determines which member that is currently live
+     * has the stalest (earliest) last update time.  Returns (MemberId(), Date_t::max()) if there
+     * are no other members.
+     ','line_number':552,'multiline':True]['text':'*
+     * Go through the memberData, and mark nodes which haven't been updated
+     * recently (within an election timeout) as "down".  Returns a HeartbeatResponseAction, which
+     * will be StepDownSelf if we can no longer see a majority of the nodes, otherwise NoAction.
+     ','line_number':559,'multiline':True]['text':'*
+     * Set all nodes in memberData that are present in member_set
+     * to not stale with a lastUpdate of "now".
+     ','line_number':566,'multiline':True]['text':'
+     * Returns the last optime that this node has written oplog entry into memory.
+     ','line_number':573,'multiline':True]['text':'
+     * Sets the last optime that this node has written oplog entry into memory. Fails with an
+     * invariant if 'isRollbackAllowed' is false and we're attempting to set the optime backwards.
+     * The Date_t 'now' is used to track liveness; setting a node's applied optime updates its
+     * liveness information.
+     ','line_number':579,'multiline':True]['text':'
+     * Returns the last optime that this node has applied, whether or not it has been journaled.
+     ','line_number':589,'multiline':True]['text':'
+     * Sets the last optime that this node has applied, whether or not it has been journaled. Fails
+     * with an invariant if 'isRollbackAllowed' is false and we're attempting to set the optime
+     * backwards. The Date_t 'now' is used to track liveness; setting a node's applied optime
+     * updates its liveness information.
+     ','line_number':595,'multiline':True]['text':'
+     * Returns the last optime that this node has applied and journaled.
+     ','line_number':605,'multiline':True]['text':'
+     * Sets the last optime that this node has applied and journaled. Fails with an invariant if
+     * 'isRollbackAllowed' is false and we're attempting to set the optime backwards. The Date_t
+     * 'now' is used to track liveness; setting a node's durable optime updates its liveness
+     * information.
+     ','line_number':611,'multiline':True]['text':'
+     * Sets the last optimes for a node, other than this node, based on the data from a
+     * replSetUpdatePosition command.
+     *
+     * Returns a Status if the position could not be set, false if the last optimes for the node
+     * did not change, or true if either the last applied or last durable optime did change.
+     ','line_number':621,'multiline':True]['text':'*
+     * Sets the latest optime committed in the previous config to the current lastCommitted optime.
+     ','line_number':630,'multiline':True]['text':'*
+     * Returns the latest optime committed in the previous config.
+     ','line_number':635,'multiline':True]['text':'*
+     * Returns an optime that must become majority committed in the current config before it is safe
+     * for a primary to move to a new config.
+     ','line_number':640,'multiline':True]['text':'*
+     * Sets lastVote to be for ourself in this term.
+     ','line_number':646,'multiline':True]['text':'*
+     * Sets election id and election optime.
+     ','line_number':651,'multiline':True]['text':'*
+     * Performs state updates associated with winning an election.
+     *
+     * It is an error to call this if the topology coordinator is not in candidate mode.
+     *
+     * Exactly one of either processWinElection or processLoseElection must be called if
+     * processHeartbeatResponse returns StartElection, to exit candidate mode.
+     ','line_number':656,'multiline':True]['text':'*
+     * Performs state updates associated with losing an election.
+     *
+     * It is an error to call this if the topology coordinator is not in candidate mode.
+     *
+     * Exactly one of either processWinElection or processLoseElection must be called if
+     * processHeartbeatResponse returns StartElection, to exit candidate mode.
+     ','line_number':666,'multiline':True]['text':'*
+     * Readies the TopologyCoordinator for an attempt to stepdown that may fail.  This is used
+     * when we receive a stepdown command (which can fail if not enough secondaries are caught up)
+     * to ensure that we never process more than one stepdown request at a time.
+     * Returns OK if it is safe to continue with the stepdown attempt, or returns:
+     * - NotWritablePrimary if this node is not a leader.
+     * - ConflictingOperationInProgess if this node is already processing a stepdown request of any
+     * kind.
+     * On an OK return status also returns a function object that can be called to abort the
+     * pending stepdown attempt and return this node to normal (writable) primary state.
+     ','line_number':678,'multiline':True]['text':'*
+     * Tries to transition the coordinator's leader mode from kAttemptingStepDown to
+     * kSteppingDown only if we are able to meet the below requirements for stepdown.
+     *
+     *      C1. 'force' is true and now > waitUntil
+     *
+     *      C2. A majority set of nodes, M, in the replica set have optimes greater than or
+     *      equal to the last applied optime of the primary.
+     *
+     *      C3. There exists at least one electable secondary node in the majority set M.
+     *
+     * If C1 is true, or if both C2 and C3 are true, then the transition succeeds and this
+     * method returns true. If the conditions for successful stepdown aren't met yet, but waiting
+     * for more time to pass could make it succeed, returns false.  If the whole stepdown attempt
+     * should be abandoned (for example because the time limit expired or because we've already
+     * stepped down), throws an exception.
+     * TODO(spencer): Unify with the finishUnconditionalStepDown() method.
+     ','line_number':691,'multiline':True]['text':'*
+     * Returns whether it is safe for a stepdown attempt to complete, ignoring the 'force' argument.
+     * This is essentially checking conditions C2 and C3 as described in the comment to
+     * tryToStartStepDown().
+     ','line_number':712,'multiline':True]['text':'*
+     * Readies the TopologyCoordinator for stepdown.  Returns false if we're already in the process
+     * of an unconditional step down.  If we are in the middle of a stepdown command attempt when
+     * this is called then this unconditional stepdown will supersede the stepdown attempt, which
+     * will cause the stepdown to fail.  When this returns true, step down via heartbeat and
+     * reconfig should call finishUnconditionalStepDown() and updateConfig respectively by holding
+     * the RSTL lock in X mode.
+     *
+     * An unconditional step down can be caused due to below reasons.
+     *     1) Learning new term via heartbeat.
+     *     2) Liveness timeout.
+     *     3) Force reconfig command.
+     *     4) Force reconfig via heartbeat.
+     * At most 2 operations can be in the middle of unconditional step down. And, out of 2
+     * operations, one should be due to reason #1 or #2 and other should be due to reason #3 or #4,
+     * in which case only one succeeds in stepping down and other does nothing.
+     ','line_number':719,'multiline':True]['text':'*
+     * Sometimes a request to step down comes in (like via a heartbeat), but we don't have the
+     * global exclusive lock so we can't actually stepdown at that moment. When that happens
+     * we record that a stepdown request is pending (by calling prepareForUnconditionalStepDown())
+     * and schedule work to stepdown in the global X lock.  This method is called after holding the
+     * global lock to perform the actual stepdown.
+     * TODO(spencer): Unify with the finishAttemptedStepDown() method.
+     ','line_number':738,'multiline':True]['text':'*
+     * Returns the index of the most suitable candidate for an election handoff. The node must be
+     * caught up and electable. Ties are resolved first by highest priority, then by lowest member
+     * id.
+     ','line_number':748,'multiline':True]['text':'*
+     * Set the outgoing heartbeat message from self
+     ','line_number':755,'multiline':True]['text':'*
+     * Prepares a ReplSetMetadata object describing the current term, primary, and lastOp
+     * information.
+     ','line_number':760,'multiline':True]['text':'*
+     * Prepares an OplogQueryMetadata object describing the current sync source, rbid, primary,
+     * lastOpApplied, and lastOpCommitted.
+     ','line_number':766,'multiline':True]['text':'*
+     * Prepares a ReplSetRequestVotesResponse.
+     ','line_number':772,'multiline':True]['text':'*
+     * Loads an initial LastVote document, which was read from local storage.
+     *
+     * Called only during replication startup. All other updates are done internally.
+     ','line_number':778,'multiline':True]['text':'*
+     * Updates the current primary index.
+     ','line_number':785,'multiline':True]['text':'*
+     * Returns the current primary index.
+     ','line_number':790,'multiline':True]['text':'*
+     * Transitions to the candidate role if the node is electable.
+     ','line_number':795,'multiline':True]['text':'*
+     * Updates the storage engine read committed support in the TopologyCoordinator options after
+     * creation.
+     ','line_number':800,'multiline':True]['text':'*
+     * Reset the booleans to record the last heartbeat restart for the target node.
+     ','line_number':806,'multiline':True]['text':'*
+     * Increments the counter field of the current TopologyVersion.
+     ','line_number':811,'multiline':True]['text':' Scans through all members that are 'up' and returns the latest known optime.','line_number':816,'multiline':False]['text':'*
+     * Scans through all members that are 'up' and return the latest known optime, if we have
+     * received (successful or failed) heartbeats from all nodes since heartbeat restart.
+     *
+     * Returns boost::none if any node hasn't responded to a heartbeat since we last restarted
+     * heartbeats.
+     * Returns OpTime(Timestamp(0, 0), 0), the smallest OpTime in PV1, if other nodes are all down.
+     ','line_number':819,'multiline':True]['text':'*
+     * Similar to latestKnownOpTimeSinceHeartbeatRestart(), but returns the latest known optime for
+     * each member in the config. If the member is not up or hasn't responded to a heartbeat since
+     * we last restarted, then its value will be boost::none.
+     ','line_number':829,'multiline':True]['text':'*
+     * Checks if the 'commitQuorum' can be satisifed by the current replica set config. Returns an
+     * OK Status if it can be satisfied, and an error otherwise.
+     ','line_number':837,'multiline':True]['text':'*
+     * Returns nullptr if there is no primary, or the MemberConfig* for the current primary.
+     ','line_number':843,'multiline':True]['text':'//////////////////////////////////////////////////////////','line_number':848,'multiline':False]['text':'','line_number':849,'multiline':False]['text':' Test support methods','line_number':850,'multiline':False]['text':'','line_number':851,'multiline':False]['text':'//////////////////////////////////////////////////////////','line_number':852,'multiline':False]['text':' Changes _memberState to newMemberState.  Only for testing.','line_number':854,'multiline':False]['text':' Sets "_electionTime" to "newElectionTime".  Only for testing.','line_number':858,'multiline':False]['text':' Sets _currentPrimaryIndex to the given index.  Should only be used in unit tests!','line_number':861,'multiline':False]['text':' TODO(spencer): Remove this once we can easily call for an election in unit tests to','line_number':862,'multiline':False]['text':' set the current primary.','line_number':863,'multiline':False]['text':'*
+     * Get a raw pointer to the list of recent sync source changes. It is the caller's
+     * responsibility to not use this pointer beyond the lifetime of the object. Used for testing
+     * only.
+     ','line_number':867,'multiline':True]['text':'*
+     * Change config (version, term) of each member in the initial test config so that
+     * it will be majority replicated without having to mock heartbeats.
+     ','line_number':874,'multiline':True]['text':'*
+     * Records the ping for the given host. For use only in testing.
+     ','line_number':880,'multiline':True]['text':' Returns _electionTime.  Only used in unittests.','line_number':885,'multiline':False]['text':' Returns _electionId.  Only used in unittests.','line_number':888,'multiline':False]['text':' Returns the name for a role.  Only used in unittests.','line_number':891,'multiline':False]['text':'*
+     * Different modes a node can be in while still reporting itself as in state PRIMARY.
+     *
+     * Valid transitions:
+     *
+     *       kNotLeader <----------------------------------
+     *          |                                         |
+     *          |                                         |
+     *          |                                         |
+     *          v                                         |
+     *       kLeaderElect-----------------                |
+     *          |    ^  |                |                |
+     *          |    |  |                |                |
+     *          v    |  |                |                |
+     *       kWritablePrimary -----------------           |
+     *        |  ^   |  |                |    |           |
+     *        |  |   |  |                |    |           |
+     *        |  |   |  |                |    |           |
+     *        v  |   |  v                v    v           |
+     *  kAttemptingStepDown----------->kSteppingDown------|
+     ','line_number':898,'multiline':True]['text':' This node is not currently a leader.','line_number':920,'multiline':False]['text':' This node has been elected leader, but can't yet accept writes.','line_number':921,'multiline':False]['text':' This node can accept writes. Depending on whether the client sent','line_number':922,'multiline':False]['text':' hello or isMaster, will report isWritablePrimary:true or ismaster:true','line_number':923,'multiline':False]['text':' This node is in the middle of a hb, force reconfig or stepdown','line_number':924,'multiline':False]['text':' command that must complete.','line_number':925,'multiline':False]['text':' This node is in the middle of a cmd initiated step down that might','line_number':926,'multiline':False]['text':' fail.','line_number':927,'multiline':False]['text':' Set what type of PRIMARY this node currently is.','line_number':943,'multiline':False]['text':' Returns a HostAndPort if one is forced via the 'replSetSyncFrom' command.','line_number':946,'multiline':False]['text':' Returns a HostAndPort if one is forced via the 'unsupportedSyncSource' startup parameter.','line_number':949,'multiline':False]['text':' Does preliminary checks involved in choosing sync source','line_number':952,'multiline':False]['text':' * Do we have a valid configuration?','line_number':953,'multiline':False]['text':' * Is the 'forceSyncSourceCandidate' failpoint enabled?','line_number':954,'multiline':False]['text':' * Have we gotten enough pings?','line_number':955,'multiline':False]['text':' Returns a HostAndPort if one is decided (may be empty), boost:none if we need to move to the','line_number':956,'multiline':False]['text':' next step.','line_number':957,'multiline':False]['text':' Returns the primary node if it is a valid sync source, otherwise returns an empty','line_number':960,'multiline':False]['text':' HostAndPort.','line_number':961,'multiline':False]['text':' Chooses a sync source among available nodes.  ReadPreference may be any value but','line_number':964,'multiline':False]['text':' PrimaryOnly, but PrimaryPreferred is treated the same as "Nearest" (it is assumed','line_number':965,'multiline':False]['text':' the caller will handle PrimaryPreferred by trying _choosePrimaryAsSyncSource() first)','line_number':966,'multiline':False]['text':' Does preliminary checkes to see if a new sync source should be chosen','line_number':971,'multiline':False]['text':' * Do we have a valid configuration -- if so, we do not change sync source.','line_number':972,'multiline':False]['text':' * Are we in initial sync -- if so, we do not change sync source.','line_number':973,'multiline':False]['text':' * Do we have a new forced sync source -- if so, we do change sync source.','line_number':974,'multiline':False]['text':' Returns decision and current sync source candidate if decision is kMaybe.','line_number':975,'multiline':False]['text':' (kMaybe indicates to continue with further checks).','line_number':976,'multiline':False]['text':' Returns true if we should choose a new sync source because chaining is disabled','line_number':981,'multiline':False]['text':' and there is a new primary.','line_number':982,'multiline':False]['text':' Change sync source if they are not ahead of us, and don't have a sync source.','line_number':986,'multiline':False]['text':' Note 'syncSourceIndex' is the index of our sync source's sync source. The 'currentSource'','line_number':987,'multiline':False]['text':' is our sync source.','line_number':988,'multiline':False]['text':' Change sync source if our sync source is also syncing from us when we are in primary','line_number':995,'multiline':False]['text':' catchup mode, forming a sync source selection cycle, and the sync source is not ahead','line_number':996,'multiline':False]['text':' of us.','line_number':997,'multiline':False]['text':' Note 'syncSourceHost' and 'syncSourceIndex' are the host and index of ourb sync source's','line_number':998,'multiline':False]['text':' sync source. The 'currentSource' is our sync source.','line_number':999,'multiline':False]['text':' Returns true if we should choose a new sync source due to our current sync source being','line_number':1006,'multiline':False]['text':' greater than maxSyncSourceLagSeconds and a better source being available.','line_number':1007,'multiline':False]['text':' Returns true if we should choose a new sync source because our current sync source does','line_number':1013,'multiline':False]['text':' not match our strict criteria for sync source candidates, but another member does.','line_number':1014,'multiline':False]['text':'
+     * Clear this node's sync source.
+     ','line_number':1019,'multiline':True]['text':'*
+     * Sets this node's sync source. It will also update whether the sync source was forced and add
+     * a new entry to recent sync source changes.
+     ','line_number':1024,'multiline':True]['text':' Returns the oldest acceptable OpTime that a node must have for us to choose it as our sync','line_number':1030,'multiline':False]['text':' source.','line_number':1031,'multiline':False]['text':' Returns true if the candidate node is viable as our sync source.','line_number':1034,'multiline':False]['text':' Returns the current "ping" value for the given member by their address.','line_number':1042,'multiline':False]['text':' Returns the index of the member with the matching id, or -1 if none match.','line_number':1045,'multiline':False]['text':' Sees if a majority number of votes are held by members who are currently "up"','line_number':1048,'multiline':False]['text':' Checks if the node can see a healthy primary of equal or greater priority to the','line_number':1051,'multiline':False]['text':' candidate. If so, returns the index of that node. Otherwise returns -1.','line_number':1052,'multiline':False]['text':' Is our optime close enough to the latest known optime to call for a priority takeover.','line_number':1055,'multiline':False]['text':' Is the primary node still in catchup mode and is our optime the latest','line_number':1058,'multiline':False]['text':' known optime of all the up nodes.','line_number':1059,'multiline':False]['text':' Returns reason why "self" member is unelectable','line_number':1062,'multiline':False]['text':' Returns reason why memberIndex is unelectable','line_number':1065,'multiline':False]['text':' Returns the nice text of why the node is unelectable','line_number':1068,'multiline':False]['text':' Return true if we are currently primary','line_number':1071,'multiline':False]['text':' Helper shortcut to self config','line_number':1074,'multiline':False]['text':' Helper shortcut to self member data for const members.','line_number':1077,'multiline':False]['text':' Helper shortcut to self member data for non-const members.','line_number':1080,'multiline':False]['text':' Index of self member in member data.','line_number':1083,'multiline':False]['text':'
+     * Returns information we have on the state of the node identified by memberId.  Returns
+     * nullptr if memberId is not found in the configuration.
+     ','line_number':1086,'multiline':True]['text':'*
+     * Performs updating "_currentPrimaryIndex" for processHeartbeatResponse().
+     ','line_number':1092,'multiline':True]['text':'*
+     * Determine if the node should run PriorityTakeover or CatchupTakeover.
+     ','line_number':1097,'multiline':True]['text':'*
+     * Updates _memberData based on the newConfig, ensuring that every member in the newConfig
+     * has an entry in _memberData.  If any nodes in the newConfig are also present in
+     * _currentConfig, copies their heartbeat info into the corresponding entry in the updated
+     * _memberData vector.
+     ','line_number':1101,'multiline':True]['text':'*
+     * Returns whether a stepdown attempt should be allowed to proceed.  See the comment for
+     * tryToStartStepDown() for more details on the rules of when stepdown attempts succeed
+     * or fail.
+     ','line_number':1109,'multiline':True]['text':'*
+     * Returns true if a node is both caught up to our last applied opTime and electable.
+     ','line_number':1116,'multiline':True]['text':'*
+     * Looks up the provided member in the denylist and returns true if the member's denylist
+     * expire time is after 'now'.  If the member is found but the expire time is before 'now',
+     * the function returns false.  If the member is not found in the denylist, the function
+     * returns false.
+     *','line_number':1123,'multiline':True]['text':' Returns a string representation of the current replica set status for logging purposes.','line_number':1131,'multiline':False]['text':' This node's role in the replication protocol.','line_number':1134,'multiline':False]['text':' This node's topology version. This is updated upon a significant topology change.','line_number':1137,'multiline':False]['text':' This is a unique id that is generated and set each time we transition to PRIMARY, as the','line_number':1140,'multiline':False]['text':' result of an election.','line_number':1141,'multiline':False]['text':' The time at which the current PRIMARY was elected.','line_number':1143,'multiline':False]['text':' This node's election term.  The term is used as part of the consensus algorithm to elect','line_number':1146,'multiline':False]['text':' and maintain one primary (leader) node in the cluster.','line_number':1147,'multiline':False]['text':' the index of the member we currently believe is primary, if one exists, otherwise -1','line_number':1150,'multiline':False]['text':' the hostandport we are currently syncing from','line_number':1153,'multiline':False]['text':' empty if no sync source (we are primary, or we cannot connect to anyone yet)','line_number':1154,'multiline':False]['text':' These members are not chosen as sync sources for a period of time, due to connection','line_number':1156,'multiline':False]['text':' issues with them','line_number':1157,'multiline':False]['text':' The next sync source to be chosen, requested via a replSetSyncFrom command','line_number':1159,'multiline':False]['text':' Whether the current sync source has been set via a replSetSyncFrom command','line_number':1161,'multiline':False]['text':' Options for this TopologyCoordinator','line_number':1164,'multiline':False]['text':' "heartbeat message"','line_number':1167,'multiline':False]['text':' sent in requestHeartbeat respond in field "hbm"','line_number':1168,'multiline':False]['text':' when it was logged','line_number':1170,'multiline':False]['text':' heartbeat msg to send to others; descriptive diagnostic info','line_number':1172,'multiline':False]['text':' this node's index in _members and _currentConfig','line_number':1175,'multiline':False]['text':' The current config, including a vector of MemberConfigs','line_number':1177,'multiline':False]['text':' Heartbeat, current applied/durable optime, and other state data for each member.  It is','line_number':1179,'multiline':False]['text':' guaranteed that this vector will be maintained in the same order as the MemberConfigs in','line_number':1180,'multiline':False]['text':' _currentConfig, therefore the member config index can be used to index into this vector as','line_number':1181,'multiline':False]['text':' well.','line_number':1182,'multiline':False]['text':' Time when stepDown command expires','line_number':1185,'multiline':False]['text':' A time before which this node will not stand for election.','line_number':1188,'multiline':False]['text':' In protocol version 1, this is used to prevent running for election after seeing','line_number':1189,'multiline':False]['text':' a new term.','line_number':1190,'multiline':False]['text':' OpTime of the latest committed operation.','line_number':1193,'multiline':False]['text':' OpTime representing our transition to PRIMARY and the start of our term.','line_number':1196,'multiline':False]['text':' _lastCommittedOpTime cannot be set to an earlier OpTime.','line_number':1197,'multiline':False]['text':' Latest committed optime in the previous config.','line_number':1200,'multiline':False]['text':' The number of calls we have had to enter maintenance mode','line_number':1203,'multiline':False]['text':' The sub-mode of follower that we are in.  Legal values are RS_SECONDARY, RS_RECOVERING,','line_number':1206,'multiline':False]['text':' RS_STARTUP2 (initial sync) and RS_ROLLBACK.  Only meaningful if _role == Role::follower.','line_number':1207,'multiline':False]['text':' Configured via setFollowerMode().  If the sub-mode is RS_SECONDARY, then the effective','line_number':1208,'multiline':False]['text':' sub-mode is either RS_SECONDARY or RS_RECOVERING, depending on _maintenanceModeCalls.','line_number':1209,'multiline':False]['text':' Rather than accesing this variable direclty, one should use the getMemberState() method,','line_number':1210,'multiline':False]['text':' which computes the replica set node state on the fly.','line_number':1211,'multiline':False]['text':' What type of PRIMARY this node currently is.  Don't set this directly, call _setLeaderMode','line_number':1214,'multiline':False]['text':' instead.','line_number':1215,'multiline':False]['text':' Ping stats for each member by HostAndPort;','line_number':1219,'multiline':False]['text':' For the purpose of deciding on a sync source, we count only pings for nodes which are in our','line_number':1221,'multiline':False]['text':' current config.','line_number':1222,'multiline':False]['text':' V1 last vote info for elections','line_number':1225,'multiline':False]['text':' Whether or not the storage engine supports read committed.','line_number':1234,'multiline':False]['text':'*
+ * A PingStats object stores data about heartbeat attempts to a particular target node. Over the
+ * course of its lifetime, it may be used for multiple rounds of heartbeats. This allows for the
+ * collection of statistics like average heartbeat latency to a target. The heartbeat latency
+ * measurement it stores for each replica set member is an average weighted 80% to the old value,
+ * and 20% to the new value.
+ *
+ ','line_number':1240,'multiline':True]['text':'*
+     * Starts a new round of heartbeat attempts by transitioning to 'TRYING' and resetting the
+     * failure count. Also records that a new heartbeat request started at "now".
+     ','line_number':1250,'multiline':True]['text':'*
+     * Records that a heartbeat request completed successfully, and that "millis" milliseconds
+     * were spent for a single network roundtrip plus remote processing time.
+     ','line_number':1256,'multiline':True]['text':'*
+     * Sets the ping time without considering previous pings. For use only in testing.
+     ','line_number':1262,'multiline':True]['text':'*
+     * Records that a heartbeat request failed.
+     ','line_number':1267,'multiline':True]['text':'*
+     * Gets the number of hit() calls.
+     ','line_number':1272,'multiline':True]['text':'*
+     * Gets the weighted average round trip time for heartbeat messages to the target.
+     * Returns 0 if there have been no pings recorded yet.
+     ','line_number':1279,'multiline':True]['text':'*
+     * Gets the date at which start() was last called, which is used to determine if
+     * a heartbeat should be retried or if the time limit has expired.
+     ','line_number':1287,'multiline':True]['text':'*
+     * Returns true if the number of failed heartbeats for the most recent round of attempts has
+     * exceeded the max number of heartbeat retries.
+     ','line_number':1295,'multiline':True]['text':'*
+     * Returns true if a good heartbeat has been received for the most recent round of heartbeat
+     * attempts before the maximum number of retries has been exceeded. Returns false otherwise.
+     ','line_number':1303,'multiline':True]['text':'*
+     * Returns true if a heartbeat attempt is currently in progress and there are still retries
+     * left.
+     ','line_number':1311,'multiline':True]['text':'*
+     * Returns true if 'start' has never been called on this instance of PingStats. Otherwise
+     * returns false.
+     ','line_number':1319,'multiline':True]['text':'*
+     * Gets the number of retries left for this heartbeat attempt. Invalid to call if the current
+     * state is 'UNINITIALIZED'.
+     ','line_number':1327,'multiline':True]['text':'*
+     * Represents the current state of this PingStats object.
+     *
+     * At creation time, a PingStats object is in the 'UNINITIALIZED' state, and will remain so
+     * until the first heartbeat attempt is initiated. Heartbeat attempts are initiated by calls to
+     * 'start', which puts the object into 'TRYING' state. If all heartbeat retries are used up
+     * before receiving a good response, it will enter the 'FAILED' state. If a good heartbeat
+     * response is received before exceeding the maximum number of retries, the object enters the
+     * 'SUCCEEDED' state. From either the 'SUCCEEDED' or 'FAILED' state, the object can go back into
+     * 'TRYING' state, to begin a new heartbeat attempt. The following is a simple state transition
+     * table illustrating this behavior:
+     *
+     * UNINITIALIZED:   [TRYING]
+     * TRYING:          [SUCCEEDED, FAILED]
+     * SUCCEEDED:       [TRYING]
+     * FAILED:          [TRYING]
+     *
+     ','line_number':1336,'multiline':True]['text':' The current state of this PingStats object.','line_number':1356,'multiline':False]['text':' Represents the uninitialized value of a counter that should only ever be >=0 after','line_number':1359,'multiline':False]['text':' initialization.','line_number':1360,'multiline':False]['text':' The value of 'averagePingTimeMs' before any good heartbeats have been received.','line_number':1363,'multiline':False]['text':' The number of successful heartbeats that have ever been received i.e. the total number of','line_number':1366,'multiline':False]['text':' calls to 'PingStats::hit'.','line_number':1367,'multiline':False]['text':' The running, weighted average round trip time for heartbeat messages to the target node.','line_number':1370,'multiline':False]['text':' Weighted 80% to the old round trip ping time, and 20% to the new round trip ping time.','line_number':1371,'multiline':False]['text':' The time of the most recent call to 'PingStats::start'.','line_number':1374,'multiline':False]['text':' The number of failed heartbeat attempts since the most recent call to 'PingStats::start'.','line_number':1377,'multiline':False]['text':'','line_number':1381,'multiline':False]['text':' Convenience method for unittest code. Please use accessors otherwise.','line_number':1382,'multiline':False]['text':'','line_number':1383,'multiline':False]['text':' namespace repl','line_number':1388,'multiline':False]['text':' namespace mongo','line_number':1389,'multiline':False]

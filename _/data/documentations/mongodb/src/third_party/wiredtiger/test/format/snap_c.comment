@@ -1,0 +1,158 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]['text':'
+ * snap_init --
+ *     Initialize the repeatable operation tracking.
+ ','line_number':35,'multiline':True]['text':'
+     * We maintain two snap lists, where the current one is indicated by tinfo->s, and keeps the
+     * most recent operations.
+     *
+     * The other one is used when we are running timestamp transactions with rollback_to_stable.
+     * When each thread notices that the stable timestamp has changed, it stashes the current snap
+     * list and starts fresh with the other snap list. After we've completed a rollback_to_stable,
+     * we can the secondary snap list to see the state of keys/values seen and updated at the time
+     * of the rollback.
+     ','line_number':42,'multiline':True]['text':'
+ * snap_teardown --
+ *     Tear down the repeatable operation tracking structures.
+ ','line_number':63,'multiline':True]['text':'
+ * snap_clear_one --
+ *     Clear a single snap entry.
+ ','line_number':83,'multiline':True]['text':'
+ * snap_clear --
+ *     Clear the snap list.
+ ','line_number':93,'multiline':True]['text':'
+ * snap_op_init --
+ *     Initialize the repeatable operation tracking for each new operation.
+ ','line_number':106,'multiline':True]['text':'
+         * If the stable timestamp has changed and we've advanced beyond it, preserve the current
+         * snapshot history up to this point, we'll use it verify rollback_to_stable. Switch our
+         * tracking to the other snap list. Use a barrier to ensure a cached value doesn't cause us
+         * to ignore a stable timestamp transition.
+         ','line_number':118,'multiline':True]['text':' Clear out older info from the snap list. ','line_number':134,'multiline':True]['text':'
+ * snap_track --
+ *     Add a single snapshot isolation returned value to the list.
+ ','line_number':146,'multiline':True]['text':' FALLTHROUGH ','line_number':176,'multiline':True]['text':'
+             * At this point we should have a value the right size for this table, even for mirror
+             * tables. If we messed up, bail now rather than waiting for a repeatable read to fail.
+             ','line_number':181,'multiline':True]['text':' Move to the next slot, wrap at the end of the circular buffer. ','line_number':200,'multiline':True]['text':'
+     * It's possible to pass this transaction's buffer starting point and start replacing our own
+     * entries. If that happens, we can't repeat operations because we don't know which ones were
+     * previously modified.
+     ','line_number':204,'multiline':True]['text':'
+ * snap_verify_callback --
+ *     Callback from inside the WiredTiger library.
+ ','line_number':222,'multiline':True]['text':' We only handle success and not-found. ','line_number':238,'multiline':True]['text':'
+     * It's possible that our cursor operation triggered another internal cursor operation (on the
+     * history store or metadata). Make sure it's the cursor we started with.
+     ','line_number':244,'multiline':True]['text':' -Wconditional-uninitialized ','line_number':258,'multiline':True]['text':' Get the value and check for matches. ','line_number':260,'multiline':True]['text':' Check for missing records matching delete operations. ','line_number':274,'multiline':True]['text':'
+     * In fixed length stores, zero values at the end of the key space are returned as not-found,
+     * and not-found row reads are saved as zero values. Map back-and-forth for simplicity.
+     ','line_number':278,'multiline':True]['text':'
+     * Things went pear-shaped.
+     *
+     * Dump the WiredTiger handle ID, it's useful in selecting trace records from the log. We have
+     * an open cursor on the handle, so while this is pretty ugly, I don't think it's unsafe.
+     ','line_number':289,'multiline':True]['text':' We have a mismatch, dump WiredTiger datastore pages. ','line_number':338,'multiline':True]['text':'
+ * snap_verify --
+ *     Repeat a read and verify the contents.
+ ','line_number':343,'multiline':True]['text':'
+     * Retrieve the key/value pair by key. Row-store inserts have a unique generated key we saved,
+     * else generate the key from the key number.
+     ','line_number':380,'multiline':True]['text':'
+     * Hook into the WiredTiger library with a callback function. That allows us to dump information
+     * before any failing operation releases its underlying pages.
+     ','line_number':400,'multiline':True]['text':'
+ * snap_ts_clear --
+ *     Clear snapshots at or before a specified timestamp.
+ ','line_number':419,'multiline':True]['text':' Check from the first slot to the last. ','line_number':428,'multiline':True]['text':'
+ * snap_repeat_match --
+ *     Compare two operations and return if they modified the same record.
+ ','line_number':434,'multiline':True]['text':' Reads are never a problem, there's no modification. ','line_number':444,'multiline':True]['text':' Check if the operations were in the same table. ','line_number':448,'multiline':True]['text':' Check for a matching single record insert, modify, remove or update. ','line_number':452,'multiline':True]['text':' Truncates are slightly harder, make sure the ranges don't overlap. ','line_number':456,'multiline':True]['text':'
+ * snap_repeat_ok_commit --
+ *     Return if an operation in the transaction can be repeated, where the transaction isn't yet
+ *     committed (so all locks are in place), or has already committed successfully.
+ ','line_number':471,'multiline':True]['text':'
+     * Truncates can't be repeated, we don't know the exact range of records that were removed (if
+     * any).
+     ','line_number':481,'multiline':True]['text':'
+     * For updates, check for subsequent changes to the record and don't repeat the read. For reads,
+     * check for either subsequent or previous changes to the record and don't repeat the read. (The
+     * reads are repeatable, but only at the commit timestamp, and the update will do the repeatable
+     * read in that case.)
+     ','line_number':488,'multiline':True]['text':' Wrap at the end of the circular buffer. ','line_number':495,'multiline':True]['text':' Wrap at the beginning of the circular buffer. ','line_number':508,'multiline':True]['text':'
+ * snap_repeat_ok_rollback --
+ *     Return if an operation in the transaction can be repeated, after a transaction has rolled
+ *     back.
+ ','line_number':520,'multiline':True]['text':' Ignore update operations, they can't be repeated after rollback. ','line_number':530,'multiline':True]['text':'
+     * Check for previous changes to the record and don't attempt to repeat the read in that case.
+     ','line_number':534,'multiline':True]['text':' Wrap at the beginning of the circular buffer. ','line_number':538,'multiline':True]['text':'
+ * snap_repeat_txn --
+ *     Repeat each operation done within a snapshot isolation transaction.
+ ','line_number':550,'multiline':True]['text':' If we wrapped the buffer, we can't repeat operations. ','line_number':559,'multiline':True]['text':' Check from the first operation we saved to the last. ','line_number':563,'multiline':True]['text':' Wrap at the end of the circular buffer. ','line_number':565,'multiline':True]['text':'
+         * The transaction is not yet resolved, so the rules are as if the transaction has
+         * committed. Note we are NOT checking if reads are repeatable based on the chosen
+         * timestamp. This is because we expect snapshot isolation to work even in the presence of
+         * other threads of control committing in our past, until the transaction resolves.
+         ','line_number':571,'multiline':True]['text':'
+ * snap_repeat_update --
+ *     Update the list of snapshot operations based on final transaction resolution.
+ ','line_number':584,'multiline':True]['text':' If we wrapped the buffer, we can't repeat operations. ','line_number':593,'multiline':True]['text':' Check from the first operation we saved to the last. ','line_number':597,'multiline':True]['text':' Wrap at the end of the circular buffer. ','line_number':599,'multiline':True]['text':'
+         * First, reads may simply not be repeatable because the read timestamp chosen wasn't older
+         * than all concurrently running uncommitted updates.
+         ','line_number':605,'multiline':True]['text':'
+         * Second, check based on the transaction resolution (the rules are different if the
+         * transaction committed or rolled back).
+         ','line_number':612,'multiline':True]['text':'
+         * Repeat reads at the transaction's read timestamp and updates at the commit timestamp.
+         ','line_number':619,'multiline':True]['text':'
+ * snap_repeat --
+ *     Repeat one operation.
+ ','line_number':627,'multiline':True]['text':' Start a transaction with a read-timestamp and verify the record. ','line_number':643,'multiline':True]['text':' EINVAL means the timestamp has aged out of the system. ','line_number':647,'multiline':True]['text':'
+         * The only expected error is rollback (as a read-only transaction, cache-full shouldn't
+         * matter to us). Persist after rollback, as a repeatable read we should succeed, yield to
+         * let eviction catch up.
+         ','line_number':655,'multiline':True]['text':'
+     * If we have a long running checkpoint, it may block eviction for an excessive amount of time.
+     * This would cause the snapshot read to rollback even we retry many times. Give up and ignore
+     * this case.
+     ','line_number':669,'multiline':True]['text':'
+ * snap_repeat_single --
+ *     Repeat an historic operation.
+ ','line_number':684,'multiline':True]['text':' Repeat an operation that's before any running operation. ','line_number':696,'multiline':True]['text':'
+     * Start at a random spot in the list of operations and look for a read to retry. Stop when
+     * we've walked the entire list or found one.
+     ','line_number':699,'multiline':True]['text':' Wrap at the end of the circular buffer. ','line_number':705,'multiline':True]['text':'
+ * snap_repeat_rollback --
+ *     Repeat all known operations after a rollback.
+ ','line_number':719,'multiline':True]['text':'
+         * For this thread, walk through both sets of snaps ("states"), looking for entries that are
+         * repeatable and have relevant timestamps. One set will have the most current operations,
+         * meaning they will likely be newer than the stable timestamp, and thus cannot be checked.
+         * The other set typically has operations that are just before the stable timestamp, so are
+         * candidates for checking.
+         ','line_number':741,'multiline':True]['text':' Show the final result. ','line_number':767,'multiline':True]

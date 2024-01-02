@@ -1,0 +1,796 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]['text':' 
+** This following is a discussion of the implementation of the unpacked x-float
+** bessel functions.  The algorithmic aspects of these routines are virtually
+** identical to the existing DPML x-float bessel function routines.
+** Consequently, the primary focus of the comments in this file is the
+** implementation details for the unpacked x-float case.  For details about the
+** algorithms used, the reader should refer to the file dpml_bessel.c.
+** 
+** 
+** 1.0 BACKGROUND AND BASICS
+** -------------------------
+** 
+** This note discusses the bessel functions of the first and second kind, j(n,x)
+** and y(n,x) respectively.  In this document, we use the notation C(n,x) to
+** refer to j(n,x) and y(n,x) simultaneously.  Further, we distinguish between
+** the first and second arguments to C(n,x) by the names 'order' and 'argument'
+** respectively.
+** 
+** Broadly speaking, the existing DPML algorithm for C(n,x) is divided into
+** three ranges: 
+** 
+** 	(1) |n| >= 2
+** 	(2) asymptotic approximations to C(0,x) and C(1,x)
+** 	(3) polynomial approximations to C(0,x) and C(1,x)
+** 
+** 
+** 2.0 IMPLEMENTATION DISCUSSION
+** -----------------------------
+** 
+** In this section we present an overview of the organization of the unpacked
+** x-float bessel function routines.  The following sections discuss the
+** implementation details on each of the ranges specified in section 1.0.
+** 
+** Each of the six user level bessel functions call a common interface routine,
+** C_BESSEL.  C_BESSEL unpacks the argument and determines s = 1 or
+** -1 so that C(n,x) = s*C(|n|,|x|).  C(|n|,|x|) is computed in unpacked form
+** by the routine UX_BESSEL, which may call out to UX_ASYMPTOTIC_BESSEL or
+** UX_LARGE_ORDER_BESSEL. 
+**
+** C_BESSEL invokes UX_BESSEL to actually determine which of the three
+** evaluation ranges to use and calls UX_ASYMPTOTIC_BESSEL and
+** UX_LARGE_ORDER_BESSEL for ranges  (1) and (2), or processes range (3)
+** directly.  The reason this is not done directly by C_BESSEL is so that
+** UX_BESSEL can be called recursively without having to unpack the arguments
+** again.
+** 
+** 
+** 2.1 ASYMPTOTIC RANGE FOR ORDER LESS THAN 2
+** ------------------------------------------
+** 
+** The simplest evaluation region is when the order less than 2 and the
+** arguments are large.  (See section 2.3.1 for a more precise definition of
+** "large arguments".)  On this range C(n,x) is be approximated as:
+** 
+** 	j(n,x) = w(x)*{ P(n,z)*cos(X(n,x)) - Q(n,z)*sin(X(n,x)) } (1)
+** 	y(n,x) = w(x)*{ P(n,z)*sin(X(n,x)) + Q(n,z)*cos(X(n,x)) }
+** 
+** where z = 1/x, w(x) = sqrt[2/(x*pi)],  X(n,x) = x - (2n+1)*(pi/4) and
+** P(n,z) and Q(n,z) are rational expressions in z.
+** 
+** In order to make the processing of C(n,x) more uniform, we note that
+** cos(x + pi/2) = -sin(x) and sin(x + pi/2) = cos(x), so that we can replace
+** the cos and sin terms in (1) with sin(pi/2+X(n,x)) and cos(pi/2+X(n,x))
+** respectively.  But pi/2 + X(n,x) = x - (pi/4)*(2n-1) = X(n-1,x) so that we
+** have
+** 
+** 	j(n,x) = w(x)*{ P(n,z)*sin(X(n-1,x)) + Q(n,z)*cos(X(n-1,x)) }
+** 	y(n,x) = w(x)*{ P(n,z)*sin(X(n,x))   + Q(n,z)*cos(X(n,x)) }
+** 
+** Since we are only dealing the cases n = 0 and 1, in order to ease the
+** implementation, we pad the coefficients of P(0,z), Q(0,z), P(1,z) and Q(1,z)
+** with zeros to insure they all have the same degree.  Further, we assume
+** that the coefficients are laid out in memory in the order presented.
+','line_number':47,'multiline':True]['text':' Get reciprocal ','line_number':134,'multiline':True]['text':'
+    ** Compute P(x, n) and Q(x,n) as rational functions in z = 2^t/x, where
+    ** t = MIN_ASYMPTOTIC_EXPONENT - 1.  Since we eventually need to multiply
+    ** the final result by w = sqrt[2/(x*pi)] = sqrt(z)/sqrt[ pi*2^(t-1) ],
+    ** we actually compute tmp[0,1] = P and Q respectively, with P = c*P(x,n)
+    ** and Q = c*Q(x,n), where c = 1/sqrt[ pi*2^(t-1) ]
+    ','line_number':138,'multiline':True]['text':'
+    ** Because the value of q0 is negative and the value of q1 is positive,
+    ** and EVALUATE_RATIONAL only deal with positive coefficients, tmp[1]
+    ** contains (-1)^(order+1)*Q rather than Q
+    ','line_number':170,'multiline':True]['text':' Already been scaled by previous call ','line_number':177,'multiline':True]['text':' get tmp[2,3] = sin and cos values respectively ','line_number':184,'multiline':True]['text':' Now multiply the results ','line_number':192,'multiline':True]['text':' tmp[0] = P*sin	','line_number':194,'multiline':True]['text':' tmp[1] = +/-Q*cos	','line_number':195,'multiline':True]['text':' Get sqrt and do final multiply ','line_number':198,'multiline':True]['text':' 
+** 2.2 LARGE ORDER RANGE
+** ---------------------
+** 
+** The implementation of bessel functions of large order are based on the
+** recurrence relations
+** 
+** 		           2n
+** 		C(n+1,x) = --- C(n,x) - C(n-1,x)		(2)
+** 			    x
+** 
+** For y(n,x), (2) is used by first computing y(0,x) and y(1,x) and iterating
+** until y(n,x) is obtained.  This approach is referred as a "forward"
+** recurrence.  The same approach can by used for j(n,x), if x > n.
+** 
+** When x <= n, the forward recurrence for j(n,x) is unstable, and a backward
+** recurrence must be used.  This technique is a little more subtle.  It is
+** based on the identity
+** 
+** 	1 = j(0,x) + 2*{ j(2,x) + j(4,x) + j(6,x) ... }		(3)
+** 
+** and the fact that j(n+1,x)/j(n,x) --> 0 as n gets large.
+**
+** The process begins by chosing an integer, N, and two real values, t(N+1,x)
+** and t(N,x) and define t(k,x) for 0 <= k < N by
+**
+**		t(k-1,x) = (2k/x)*t(k,x) - t(k+1,x)
+**
+** Now, we can find two real numbers, A and B such that
+**
+**		t(N+1,x) = A*j(N+1,x) + B*y(N+1,x)		(4)
+**		t(N,x)   = A*j(N,x)   + B*y(N,x)
+**
+** It follows from (2) and the definition of t(k,x), that
+**
+**		t(k,x) = A*j(k,x) + B*y(k,x)
+**
+** Ultimately, we want to find j(n,x) for a given n and x.  If we could 
+** arrange it so that the term B*y(n,x) was insignificant to A*j(n,x), then
+** to machine precision t(n,x) = A*j(n,x).  Further, if we could estimate
+** A, then we could compute j(n,x) to machine precision as t(n,x)/A.
+** Toward this end, we solve (4) for A and B:
+**
+**	A =   [t(N+1,x)*y(N,x) - t(N,x)*y(N+1,x)]/[2/(pi*x)]
+**	B = - [t(N+1,x)*j(N,x) - t(N,x)*j(N+1,x)]/[2/(pi*x)]
+**
+**	NOTE: The above expressions for A and B make use of the identity
+**	j(n+1,x)*y(n,x) - j(n,x)*y(n+1,x) = 2/(pi*z)
+**
+** Now consider the ratio:
+**
+**	    | B*y(n,x) |   | [t(N+1,x)*j(N,x) - t(N,x)*j(N+1,x)]*y(n,x) |
+**	r = | -------- | = | ------------------------------------------ |
+**	    | A*j(n,x) |   | [t(N+1,x)*y(N,x) - t(N,x)*y(N+1,x)]*j(n,x) |
+**
+** Now the choice of t(N+1,x) and t(N,x) was arbitrary, so to simplify things,
+** we take t(N+1,x) = 0 and t(N,x) = 1.  Then
+**
+**			A = - (pi*x/2)*y(N+1,x)]
+**			B =   (pi*x/2)*j(N+1,x)]
+**
+**			    | j(N+1,x)]*y(n,x) |
+**			r = | ---------------- |
+**			    | y(N+1,x)]*j(n,x) |
+**
+** Using asymptotic approximations for large orders (See Abramowitz and Stegun,
+** page 365, eq 9.3.1), we get
+**
+**			     [ex/(2N+2)]^(2N+2)
+**			r =  ------------------		(5)
+**			        [ex/(2n)]^2n
+**
+** So, if given x and n, we can find N, such that (5) is less that 1/2^(p+1)
+** then B*y(n,x) will be insignificant to A*j(n,x).  What we need to do
+** now is estimate A.  This is done via the identity in (3).  Specifically,
+** letting N' = 2*floor(N/2), we "replace" the j(k,x)'s in (3) with the
+** t(k,x)'s to get
+**
+** 	S = t(0,x) + 2*[ t(2,x) + t(4,x) + t(6,x) ... + t( 2N',x) ]
+** 	  = A*{ j(0,x) + 2*[ j(2,x) + j(4,x) + j(6,x) ... + j( 2N',x) ] } + 
+** 	       B*{ y(0,x) + 2*[ y(2,x) + y(4,x) + y(6,x) ... + y( 2N',x) ] }
+** 	  = A*J + B*Y
+**
+** The assumption here is that if N is chosen large enough, then J will equal
+** 1 to machine precision and that B*Y will be insignificant to A*J.  If this
+** true, then j(n,x) = t(n,x)/S.  So the key here is to choose N large enough
+** to the process work.
+**
+** Brent uses the solution to (5) in his MP package.  However, this choice
+** of N does not guarantee that that B*Y is small enough.  The DPML bessel
+** functions assume that if j(N,x) is insignificant compared to 1, then N is
+** big enough.  So the DPML routines use that asymptotic approximation for
+** j(n,x) and "solve"
+**
+**			(ex/(2N))^N
+**			------------ < 1/2^(p+1)
+**			sqrt(2*pi*N)
+**
+** for N.  This choice of N "works" in the sense that the answer is accurate,
+** however, N chosen this way is much larger than is necessary, especially for
+** small n.
+**
+** There is a passing comment in Abramowitz and Stegun (pg. 386) that
+**
+**	"The number of correct significant figures in the final
+**	 values [ i.e. j(n,x) ] is the same as the number of digits
+**	 in the respective trial values. [ i.e. t(n,x) ]"
+** 
+** Using the asymptotic estimates for j(n,x) and y(n,x) and noting that
+** t(n,x) ~ A*j(n,x), we can try to find N such that
+**
+**	(x/2)* [ 2N/(ex) ]^N * [ ex/(2n) ]^n = 2^t * sqrt(N*n)	(6)
+**
+** with t = p + 1. This seems to give accurate results without making N unduly
+** large.
+**
+** Solving (6) for N is difficult and requires an iterative numerical approach.
+** 
+** 
+** 2.2.1 ERROR CHECKING
+** --------------------
+** 
+** For large orders and small arguments, y(n,x) can overflow and j(n,x) can
+** underflow.  Using the relationships:
+** 
+** 	| y(n,x) | > (n-1)!*(2/x)^n	| j(n,x) | < (x/2)^n/n!
+** 
+** We can screen out guaranteed overflow and underflow conditions via the
+** comparisons:
+** 
+** 	(n-1)!*(2/x)^n >= 2^EMAX	(x/2)^n/n! <= 2^EMIN
+** 
+** where EMAX = F_MAX_BIN_EXP + 1 and EMIN = F_MIN_BIN_EXP - F_PRECISION + 1.
+** The above comparisons are equivalent to:
+** 
+** 	log2[(n-1)!] + n*[1 - log2(x)] >= EMAX
+** 	    n*[log2(x) - 1] - log2(n!) <= EMIN
+** 
+** Noting that x = 2^k*f, f in [1/2, 1) and that log2(n!) = log2[(n-1)!] +
+** log2(n), the two comparisons are equivalent to:
+** 
+** 	          log2[(n-1)!] + n*[1 - k - log2(f)] >= EMAX	(7)
+** 	n*[k + log2(f) - 1] - log2[(n-1)!] - log2(n) <= EMIN	(8)
+** 
+** Now we need to estimate the value of log2[(n-1)!].  Since doing this
+** precisely is equivalent to evaluating the lgamma function, we will use an
+** upper and lower bound for log2[(n-1)!] in (7) and (8) to get comparisons
+** that give less precise error range boundaries, but are easier to compute.
+** 
+** From Hart, we show that if n = 2^E*g, where g is in the interval [1/2, 1),
+** then,
+** 
+** 	(n-.5)*bexp(n) - n*(1/ln2 + 1) + (1 + .5*log2(pi)) <= log2((n-1)!)
+** 	log2((n-1)!) <= (n-.5)*E - n/ln2 + .5 + .5*log2(pi)
+** 
+** Noting that -1 <= log2(f) < 0, and using the bounds for log2[(n-1)!], we
+** can transform (7) and (8) to:
+** 
+** 	    (n-.5)*E - n*(1/ln2+1) + 1 +.5*log2(pi) + n*(1-k) - EMAX >= 0  (9)
+** 	n*(k-1) - (n-.5)*E + n/ln2 - .5 - .5*log2(pi) - (E-1) - EMIN <= 0  (10)
+** 
+** If we denote the left hand sides of (9) and (10) as A and B respectively,
+** the we can define c = (A + B)/2 and d = (A - B)/2 and the above comparisons
+** are equivalent to
+** 
+** 			c + d >= 0
+** 			    c <= 0
+** 
+** where 
+** 
+** 	c = .5*(3/2 - EMAX - EMIN) - .5*(n + E)
+** 	d = n*[ E - k + (1/2 - 1/ln2) ] + [ 1/2 + log2(pi) - EMAX + EMIN ]/2
+** 
+** 
+** 2.2.2 COMPUTING 2*N
+** -------------------
+** 
+** For both the forward and backward recurrence, the computation of 2*k for
+** k increasing or decreasing is required.  In the process of creating the
+** unpacked representation for the initial value of 2*k, we can create an
+** integer value that is an unnormalized representation of 2.  This integer
+** can be added/subtracted to the high word of 2*k to get the unpacked
+** representation of the next value of 2*k.  If the addition/subtraction
+** results in a carry out or borrow from the MSB of the fraction, then the
+** exponent of the result and the unnormalized representation of two needs to
+** be adjusted.
+','line_number':204,'multiline':True]['text':'
+    ** For both the forward and backward recurrence we need 1/x
+    ** and pointers into the tmp[] array to hold the results of
+    ** recursion.
+    ','line_number':432,'multiline':True]['text':'
+    ** Determine if a forward or backward recurrence is needed.
+    ** In the process, do underflow and overflow screening.
+    ','line_number':443,'multiline':True]['text':' 
+    ** if evaluating Y_BESSEL functions or if x >= n, use a
+    ** forward recurrence.
+    ','line_number':456,'multiline':True]['text':' Check for certain overflow ','line_number':462,'multiline':True]['text':' J_BESSEL, check for underflow ','line_number':470,'multiline':True]['text':'
+        ** if x < n use backward recurrence.  Use N as a temporary location
+        ** to hold the "aligned" fraction part of x
+        ','line_number':477,'multiline':True]['text':'forward_recurrence:','line_number':488,'multiline':False]['text':'
+    ** We want to compute C(k+1,x) = (2k/x)*C(k,x) - C(k-1,x)
+    ** for k = 1,2, ... n-1.  The initialization phase requires
+    ** the computation of 2, C(1,x) and C(0,x)
+    ','line_number':490,'multiline':True]['text':' Now do the recursions ','line_number':504,'multiline':True]['text':' Adjust pointers, check for overflow or underflow ','line_number':515,'multiline':True]['text':' carry out occurred on the addition ','line_number':524,'multiline':True]['text':' Copy result of iteration to unpacked result ','line_number':532,'multiline':True]['text':'
+    ** In order to solve (11) iteratively to find the starting point N, we
+    ** set up the recursion
+    **
+    **		    t*ln2 - log(x/2) - n*log(.5*e*x/n) + .5*log(N*n)
+    **		N = ------------------------------------------------
+    **		                 log(2N/(ex))
+    **
+    **		    B + .5*log2(N)
+    **		  = --------------
+    **		     log2(N) - A
+    **
+    **	where
+    **
+    **		A = log2(.5*e*x) and
+    **		B = t - .5*A - (n + .5)*[ A - log2(n)] + 1/ln2
+    **
+    ** The initial choice of N is important for the iteration.  It can be
+    ** shown analytically, that n+1 <= N < n + 1 + t.  Experimentally, we
+    ** have found that taking N = n + 1 + (x/n)*(C*log2(n) + D) yields
+    ** very good results.
+    **
+    ** Start by computing x/n to get the initial value for N.
+    ','line_number':539,'multiline':True]['text':' ftmp = x/n at this point.  Get initial value of N ','line_number':577,'multiline':True]['text':'
+    ** Now compute the constants A and B, so that we can start the iteration
+    ','line_number':590,'multiline':True]['text':' Iterate three times to get a good approximation to N ','line_number':601,'multiline':True]['text':'
+    ** Convert to integer and do one last check. 
+    ','line_number':610,'multiline':True]['text':'
+    ** We want to compute C(k-1,x) = (2k/x)*C(k,x) - C(k+1,x)
+    ** for k = N,N-1, ... 0.  The initialization phase requires
+    ** the computation of 2*N and setting C(N,x) = 1 and
+    ** C(N+1, x) = 0 and the running sum to C(N,x) or C(N+1,x)
+    ** depending on the parity of n
+    ','line_number':617,'multiline':True]['text':' Now do the recursions ','line_number':638,'multiline':True]['text':' if N == n, C2 = K*J(n,x).  Save it for later ','line_number':652,'multiline':True]['text':' Add to sum if N is even ','line_number':657,'multiline':True]['text':' Adjust pointers ','line_number':662,'multiline':True]['text':' decrement twice_n by  2 ','line_number':669,'multiline':True]['text':' borrow from MSB on the subtraction ','line_number':673,'multiline':True]['text':'
+    ** at this point sum = K*sum{ k=1,2,... | J(2k,x) }, and C2 points
+    ** to K*J(0,x).  Compute K from the relation
+    **
+    **		1 = J(0,x) + 2*{ J(2,x) + J(4,x) + J(6,x) ... }
+    ','line_number':681,'multiline':True]['text':' 
+** 2.3 POLYNOMIAL RANGE FOR ORDER LESS THAN 2
+** ------------------------------------------
+** 
+** C(n,x) oscillates much like an attenuated sin or cos curve, and consequently
+** has infinite number of zeros.  The polynomial range is divided into
+** intervals, each of which contains a zero of the function.  We then expand
+** C(n,x) in a "polynomial" around that zero.
+** 
+** The primary issue in the polynomial range is determining the appropriate
+** zero and corresponding set of polynomial coefficients for a given argument.
+** Generally speaking, if e[i] and e[i+1] are i-th and i+1st extrema locations
+** of C(n,x), and z[i] is the zero located between e[i] and e[i+1], then we
+** approximate C(n,x) on [ e[i], e[i+1] ) in a polynomial around z[i].
+** 
+** 	NOTE: The above 'algorithm' requires some special case code when
+** 	the function has a zero at x = 0 and for the first interval of
+**	y0 and y1.  See the comments in the MPHOC code below for details.
+** 
+** 
+** 2.3.1 CONSTRUCTING THE ARRAYS
+** -----------------------------
+** 
+** The first step in constructing the arrays is to establish the number of
+** entries in the arrays.  As a side effect of this computation, we determine
+** the range for the asymptotic evaluations.  It should be noted here, that
+** while the asymptotic expansion is useful for x as small as 8, if x is less
+** that (approximately) 22, the terms of the asymptotic approximation do not
+** decrease in magnitude, which is a problem for the unpacked rational
+** evaluation routine.  Consequently, we need to force the lower limit of the
+** asymptotic range to be at least 22.
+** 
+** For each of the four bessel functions, f = j0, j1, y0, and y1, denote intial
+** local extrema by e(f,0) and recursively define e(f, i+1) to be the first
+** extrema value of f after e(f,i).  Further, we define z(f,i) to be the zero
+** of f between e(f,i) and e(f,i+1).  Lastly, define n(f) to be the smallest
+** their local extrema by e(f,1), e(f,2) ... and define n(f) to be the
+** integer such that e(f, n(f)) > 22.
+** 
+** The precise locations of the extrema points are not critical to the
+** algorithm, so we need not store them in full precision.  In fact, all of
+** the extrema points are less than 32, so we can store them in true fixed
+** point format consisting of one integer word with the binary point after
+** the 5-th most significant bit.
+** 
+** The values of the zeros on the other hand must be stored to twice the normal
+** precision.  Toward this end, we represent the zeros using a 256 bit fraction.
+** Since the input argument has 113 significant bits, if we compute the reduced
+** argument to 128 bits, the zeros need only be accurate to 241 bits, which
+** leaves 15 "extra" bits in the 256 bit fraction.  Since the signs of the
+** zeros are all positive, and the exponents are small, we can conserve overall
+** storage by encoding the exponent of the zeros in the low order 5 bits of the
+** fraction field and construct the unpacked form of the zero at run-time.
+** 
+** The interval data is stored as:
+','line_number':701,'multiline':True]['text':'
+** where
+**
+**	extrema		is the fixed point value of the upper limit
+**			of the evaluation interval.
+**	zero		is the zero associated with this particular
+**			interval
+**	eval_data	is miscellaneous information about the evaluation
+**			on this interval, including the degree of the
+**			polynomial
+**	eval_data_hi	is a hack to deal with storing all of the evaluation
+**			data required in 32 bit chunks.
+**
+** Since the number of intervals and coefficients per interval vary, we
+** create an auxiliary data structure that can be indexed by 'kind' and 'order'
+** to determine the minimum asymptotic value and the start of the interval
+** data:
+','line_number':784,'multiline':True]['text':'
+** The following definitions are used to pack and extract data from the
+** eval_data field of the INTERVAL_DATA structure.  In order to insure that
+** all of the information fits in 32 bit chunks, the format of the eval_data
+** field is different depending on whether we are doing a packed or unpacked
+** evaluation.
+**
+** For the unpacked, case, we want to have the eval_data field look like a
+** super set of the flags passed to the unpacked rational evaluation routine.
+** In this case the eval_data field looks like:
+**
+**	         2 2 2 2 2     1 1 11 1
+**	         4 3 2 1 0     4 3 21 0 8 7  4 3  0
+**	+-------+-+-+-+-+-------+-+--+---+----+----+
+**	|       |P|X|M|N|   D   |n| O|   |    |    |
+**	+-------+-+-+-+-+-------+-+--+---+----+----+
+**
+**	Bits Name		Meaning
+**	--------- -----------------------------------
+**	    P	  Packed or unpacked evaluation: 1 = packed
+**	    X	  Expand the polynomial around the zero of the interval
+**	    M	  Post multiply the result of the polynomial evaluation
+**		  by the argument.  I.e. compute z*P(z)
+**	    N	  Indicates a Neumann evaluation
+**	    D	  The degree of the polynomial
+**	    n	  Negate the final result
+**	    O	  Indicates how (if needed) to combine the odd and even
+**		  terms of the polynomial.  Choices are add/sub/none
+**
+** Bits 0 through 10 are the standard rational evaluation flags defined in
+** dpml_ux.h.
+','line_number':810,'multiline':True]['text':'
+** For the packed case, eval_data looks like;
+**
+**	         2 22  2 2     1 1     
+**	         4 32  1 0     4 3     7 6     0
+**	+-------+-+-+-+-+-------+-------+-------+
+**	|       |P|X|M|N|   D   |   W   |   B   |
+**	+-------+-+-+-+-+-------+-------+-------+
+**
+** Where P, X, M, N nd D ar as above and B and W are used to endcode the
+** relative expoenent bias and width for the packed coefficients
+','line_number':857,'multiline':True]['text':'
+** The next 4 definitions are used to extract the exponent information from
+** the zero values
+','line_number':878,'multiline':True]['text':'
+    ** Compare the input argument with the minimum asymptotic value for this
+    ** bessel function
+    ','line_number':909,'multiline':True]['text':'
+    ** Get the extrema, zeros and coefficients for this particular
+    ** function.
+    ','line_number':924,'multiline':True]['text':'
+    ** Now scan through the extrema values to determine the
+    ** nearest zero.  For the comparison, convert the high word
+    ** and exponent of the argument to fixed point form
+    ','line_number':932,'multiline':True]['text':'
+    ** Having located the appropriate zero, call it a, put it in
+    ** unpacked form and carefully compute the reduced argument,
+    ** x - a.
+    ','line_number':950,'multiline':True]['text':'
+    ** Evaluate the polynomial.
+    ','line_number':972,'multiline':True]['text':'
+        ** The call to EVALUATE_RATIONAL will have scaled poly_argument, so
+        ** unscale it for possible use in the POST_MULTIPLY code.
+        ','line_number':994,'multiline':True]['text':' For y bessel functions, add in jn(x)*ln(x) term ','line_number':1011,'multiline':True]['text':'
+        ** For Y_BESSEL:
+        **
+        **	y0(x) = (2/pi)*j0(x)*ln(x) - y0_hat(x)			(11)
+        **	y1(x) = (2/pi)*j1(x)*ln(x) - (1/pi)/x - y1_hat(x)
+        **
+        ** where y0_hat(x) and y1_hat(x) are polynomials that
+        ** have just been evaluated
+        **
+        ** The previous call to the polynomial evaluation routines may
+	** have implicitly scaled the input argument, so we may need to
+	** unscale before proceeding
+        ','line_number':1014,'multiline':True]['text':'
+** All of the bessel functions call a common routine C_BESSEL, to unpacked
+** their argument and account for negative orders and arguments.  Some of the
+** bessel functions can overflow or underflow.  In order to make the selection
+** of the error codes more uniform, we use an array of error codes for the
+** bessel functions.  Each user level bessel function will pass C_BESSEL an
+** integer, error_map, that consists of three fields corresponding to underflow,
+** positive overflow and negative overflow.  These fields will be indices into
+** the bessel_error_code table.
+','line_number':1049,'multiline':True]['text':' Map negative arguments onto positive arguments ','line_number':1124,'multiline':True]['text':' Account for reflection formula: C(-n,x) = (-1)^n*C(x) ','line_number':1129,'multiline':True]['text':'
+             ** If orders >= 2, the unpack routine returns C(|n|,|x|), so
+             ** we have to adjust the sign of the packed result.
+             ','line_number':1144,'multiline':True]['text':'
+** The following six routines are the user level bessel functions j0, j1, jn,
+** y0, y1 and yn.  Each of the interfaces simply passes information onto the
+** C_BESSEL routine.
+','line_number':1169,'multiline':True]['text':' data 1 ','line_number':1291,'multiline':True]['text':' data 2 ','line_number':1292,'multiline':True]['text':' data 1 ','line_number':1339,'multiline':True]['text':' data 2 ','line_number':1340,'multiline':True]['text':' data 3 ','line_number':1341,'multiline':True]['text':' data 4 ','line_number':1342,'multiline':True]['text':' data 5 ','line_number':1343,'multiline':True]['text':' data 6 ','line_number':1344,'multiline':True]['text':' data 7 ','line_number':1345,'multiline':True]['text':'
+    ** The following MPHOC code is used to generate polynomials to evaluate
+    ** the bessel functions on sub-intervals that are bounded by their
+    ** consecutive extrema values.  On each subinterval, we evaluate a
+    ** polynomial of the form x^i*p(x^2) or z^i*q(z) where z = x - a and i
+    ** is 0 or 1.
+    **
+    ** The polynomial evaluation process for the bessel function presents
+    ** a bit of a problem.  We would like to use the unpacked polynomial
+    ** evaluation routine because of its performance characteristics.
+    ** However, the unpacked polynomial evaluation routine requires that
+    ** the polynomials be "well formed": i.e. the terms decrease in size
+    ** and either alternate in sign or have the same sign.  Most of the 
+    ** bessel polynomials do not meet this definition of "well formed".  The
+    ** good news is that most of the bessel polynomials made into "well formed"
+    ** polynomials by evaluating their even and odd terms separately.  There
+    ** are a few exceptions for the y0 and y1 function: The first couple of
+    ** intervals near zero cannot be made "well formed" so we need to evaluate
+    ** in packed form (see the discussion of packed form polynomial evaluation
+    ** in dpml_ux_ops.c).
+    **
+    ** In order to deal with the different types of evaluation strategies
+    ** along with the polynomial coefficients, we store a number of flags
+    ** defining the evaluation type and any additional information that
+    ** might be required for computing the final result.  The flags are
+    ** stored in the word preceeding the coefficient and include items
+    ** like:
+    **
+    **		o The form of the polynomial - packed vs. unpacked.
+    **		o pre/post processing information 
+    **		o The degree of the polynomial
+    **		o The bias and exponent mask used for unpacking
+    ','line_number':1353,'multiline':True]['text':'
+    ** In order to locate the extrema and zero values as well as generate
+    ** the interval coefficient, many auxillary functions are required.
+    ** In most cases, we need both jn and yn versions of these function
+    ** for n = 0 and 1.  In order to consolidate much of the code, we
+    ** parameterize all of the function to deal with the 0 and 1 cases and
+    ** refer to the jn and yn cases "indirectly" as follows:
+    **
+    ** Suppose __jn_func and __yn_func are the two versions of the functions
+    ** we are interested in.  Then, when we need to refer to __jn_func, we
+    ** include the line
+    **
+    **		function __bessel_func(x) { return __jn_func(x); }
+    **
+    ** in the mphoc and use __bessel_func to refer to __jn_func.  Similarly
+    ** we can include the line
+    **
+    **		function __bessel_func(x) { return __yn_func(x); }
+    **
+    ** in the mphoc and use __bessel_func to refer to __yn_func.
+    **
+    ** The following "table" give forward definitions for the various
+    ** __bessel_<func> that are used and indicates what they are used for.
+    ** The forward definitions are required so that mphoc doesn't report
+    ** syntax errors.
+    ','line_number':1389,'multiline':True]['text':' find zeros ','line_number':1416,'multiline':True]['text':' find extrema ','line_number':1417,'multiline':True]['text':' find coef about x = a ','line_number':1418,'multiline':True]['text':'
+    ** init_bessel sets up global values that are dependent on the order of the
+    ** bessel function under consideration (order is 0 or 1).  These values
+    ** are use by routines defining the functions that we are going to
+    ** approximating with polynomials or rationals.
+    ','line_number':1420,'multiline':True]['text':'
+    ** polynomial evaluation of jn'(x).  Used to find the extrema of j0 and j1.
+    ** Actually, __jn_prime doesn't calculate jn'(x), rather it calculates
+    ** jn'(x)/x^i, where i is chosen so that the leading term of the series
+    ** is constant.
+    ','line_number':1435,'multiline':True]['text':'
+    ** __jn_hat(z) is used to find the Remes coefficients for jn expanded
+    ** around one of its zeros, call it a.  Specifically, jn_hat(z) =
+    ** j(n,z + a)/z^i, where i = 0 or 1.
+    ','line_number':1452,'multiline':True]['text':'
+    ** __yn_prime is used (primarily) to locate the extrema of y0 and y1 by
+    ** finding the zeros of __yn_prime.  Actually, __yn_prime doesn't calculate
+    ** yn'(x), rather it calculates yn'(x)/x^i, where i is chosen so that the
+    ** leading term of the series is constant.
+    ','line_number':1473,'multiline':True]['text':'
+    ** __yn_hat(z) is used to find the Remes coefficients for yn(x) expanded
+    ** around one of its zeros, call it a.  Specifically,
+    ** yn_hat(z) = y(n,x+a)/z.
+    ','line_number':1490,'multiline':True]['text':'
+    ** __yn_neumann_hat(z) is used to find the Remes coefficients for
+    ** neumann_yn(x) expanded around one of its zeros, call it a.
+    ** Specifically, __yn_neumann_hat(z) = neumann_yn(n,z+a)/(pi*z^i), where
+    ** i = 0 or 1
+    ','line_number':1507,'multiline':True]['text':'
+    ** find_bessel_zero attempts to find a zero of jn or yn in the "interval"
+    ** [a,b) using an approximate Newton's method to precision p. 
+    **
+    ** Since we are using the MPHOC find_root operator, a and b must bracket
+    ** the root that is being searched for.
+    **
+    ** __bessel(x) is a dummy function that is redefined later on to be
+    ** one of __jn or __yn.
+    ','line_number':1552,'multiline':True]['text':'
+    ** find_next_bessel_extrema(z, p) attempts to find the next extrema after
+    ** the extrema, z, to precision p.  It does this by searching for a
+    ** bracketing pair of values, (a,b) for a zero of the derivative of the
+    ** function, and then uses the MPHOC find_root operator.
+    **
+    ** __bessel_prime(x) is a dummy function that is redefined later on to be
+    ** one of __jn_prime or __yn_prime.
+    ','line_number':1574,'multiline':True]['text':'
+        ** Since the difference of consecutive zeros of the bessel functions
+        ** asymptotically approach pi, take a and b to be z + pi/2 and 
+        ** z + 3*pi/2 respectively
+        ','line_number':1588,'multiline':True]['text':'
+    ** The following two routines are used to generate the coefficients for
+    ** the asymptotic region.
+    ','line_number':1611,'multiline':True]['text':' Forward references.  Will be defined later ','line_number':1616,'multiline':True]['text':'
+    ** As noted above, the coefficients for the bessel functions are not
+    ** particularly well behaved:  Sometimes they do not decrease in size
+    ** and sometimes, they neither alternate in sign nor all have the same
+    ** sign.  The function check_em checks to see that the coefficients are
+    ** decreasing and have a "nice" sign pattern.
+    ','line_number':1639,'multiline':True]['text':' The second term not less than the first term is OK ','line_number':1664,'multiline':True]['text':'
+    ** As pointed out above, the ill formed coefficients of the bessel
+    ** polynomials are can frequently be put into a format that is well
+    ** structured.  Specifically, many of the polynomials have their even and
+    ** odd coefficients form an alternating series.  That is we can write the
+    ** polynomial as:
+    **
+    **		p(x) = e(x^2) + x*o(x^2)
+    ** 
+    ** where e(x) and o(x) have alternating signs and decreasing terms even
+    ** though p(x) does not have decreasing terms.  The function reform_coefs
+    ** takes the the coefficients of p and attempts to rearranges them into
+    ** a well formed set.  Failing that, it converts the coefficients to
+    ** packed form.
+    ','line_number':1686,'multiline':True]['text':'
+        ** As part of the reforming process, we scale the coefficients so
+        ** that we normalize the input argument to between 1/2 and 1.
+        ','line_number':1713,'multiline':True]['text':'
+            ** The bessel expansions around zero are known to be alternating
+            ** in sign, so just scale the coefficients.
+            **
+            ** We know these polynomials use a square term and are even or
+            ** odd depending on the order of the bessel function
+            ','line_number':1728,'multiline':True]['text':'
+            ** These coefficients need to be split up into even and odd
+            ** terms.
+            **
+            ** if we are dividing out a zero of the function, we need to 
+            ** post multiply.  Also, if the first two terms of the original
+            ** series have different signs, then we need to subtract the
+            ** even and odd terms rather than add them.
+            ','line_number':1762,'multiline':True]['text':' make sure its initialized ','line_number':1793,'multiline':True]['text':' NULL ','line_number':1795,'multiline':True]['text':' Add scale factor for unpacked evaluations ','line_number':1814,'multiline':True]['text':'
+            ** Need to use packed evaluation here, so do the conversion.
+            **
+            ** The call to find_exponent_width and bias sets the global
+            ** values packed_exponent_width and packed_exponent_bias.
+            ** Since find_exponent_width_and_bias and cvt_to_packed expected
+            ** the coefficients to be in the array ux_rational_coefs, copy
+            ** them there in the correct order
+            ','line_number':1818,'multiline':True]['text':' Save degree in ux_tmp_coefs[0] in case we need it later ','line_number':1859,'multiline':True]['text':'
+    ** The function foo is used to determine the points at which we can
+    ** approximate y0 and y1 using the neumann_yn functions without losing
+    ** signficance (see (11)).  In particular, we require the the ratio of
+    ** yn and yn(x) - (2/pi)*jn(x)*ln(x) be greater than 1/2.
+    ','line_number':1864,'multiline':True]['text':'
+    ** print_interval_data prints the Remes coefficients and the associated
+    ** zeros in the order/format specified in the INTERVAL_DATA structure
+    ** definitions.
+    **
+    ** The Remes coefficients are implicitly passed to this routine via the
+    ** global array ux_fraction_digits.  The evaluation flags for the
+    ** polynomial, the numerator/denominator degrees and the scale factor
+    ** are stored in ux_fraction_digits[index, index+1, index+2, index+3]
+    ** respectively
+    ','line_number':1881,'multiline':True]['text':'
+        ** print the most significant digit of the upper limit of the interval
+        ** in fixed point and the evaluation flags
+        ','line_number':1903,'multiline':True]['text':'
+        ** Now print out the zero in extended format.  First, add in the
+        ** exponent, and then print out digits from high to low
+        ','line_number':1915,'multiline':True]['text':'
+    ** get_coefficients computes the remes coefficients for "current" function
+    ** on the interval [a,b] expanded around the point, z.  When z is zero,
+    ** a square term polynomial approximation is assumed.
+    ** 
+    ** get_coefficients invokes reform_coefs to see if then can be made into
+    ** a well formed set of coefficients.  The following table lists the
+    ** possible out comes of get_coefficients based on the result reform_coefs
+    ** and the value of action
+    **
+    **		reform
+    **		result	action		Processing
+    **		------	-------- ------------------------------
+    **		FAILED	NO_PRINT returns k
+    **			PRINT	 prints packed coefficients; return k+1;
+    **			SIGNAL	 print error message and quit
+    **		PASSED	NO_PRINT returns k+1
+    **			PRINT	 prints packed coefficients; return k+1;
+    **			SIGNAL	 prints packed coefficients; return k+1;
+    ','line_number':1955,'multiline':True]['text':'
+        ** We assume here that if z == 0 ==> a == 0
+        ','line_number':1994,'multiline':True]['text':' need auxillary function ','line_number':2015,'multiline':True]['text':' Extract fixed degree from "packed" list ','line_number':2021,'multiline':True]['text':' need auxillary function ','line_number':2033,'multiline':True]['text':' exit; ','line_number':2043,'multiline':True]['text':' Check for ill formed coefficients ','line_number':2049,'multiline':True]['text':'
+    ** The function, get_neumann_coefficients generates the coefficients of
+    ** the neumann function on the interval [a,b] expanded around z, where z
+    ** is a zero of the neumann function in the interval [a,b] if it exists 
+    ** or .5*(a+b) if it doesn't.
+    ','line_number':2072,'multiline':True]['text':'
+    ** the function find_yn_bound is a "helper" function that is used to
+    ** locate the boundaries of an interval were using the neumann
+    ** approximations will not result in a sever cancellation error.
+    ','line_number':2105,'multiline':True]['text':'
+    ** find_interval_data(bessel_enum, a, x) finds all of the zeros
+    ** and extrema values of jn or yn in the interval (0, x) as well as
+    ** the first extrema greater than or equal to x.  For each zero, the Remes
+    ** coefficients are computed for the bessel function on [e,f], where e and
+    ** f are the extrema values that bracket the zero. (There's one exception
+    ** to scheme described below.)
+    **
+    ** The value a is used to determine the location of the "first" extrema.
+    ** if a != 0, we find remes coefficients on the interval (0,a) and then
+    ** proceed as defined above on the interval (a,x) rather than (0,x).  The
+    ** value of 'a' need not actually be the location of the first extrema.
+    ** If it is not, then a + pi/2 and a + 3*pi/2 should bracket the location
+    ** of the first extrema.
+    **
+    ** The zeros, extrema values and coefficients are written to the coefficient
+    ** table.
+    ','line_number':2125,'multiline':True]['text':'
+        ** In order to insure 'tol' bits in the zeros of jn, we need to
+        ** compute bessel to at least 2*'tol' bits.
+        ','line_number':2150,'multiline':True]['text':' Get coefficients on (0,a) ','line_number':2177,'multiline':True]['text':'
+            ** Near 0, we need to compute yn via the neumann functions (see eq.
+            ** (11)).  However, if the interval on which we use the neumann
+            ** function includes a zero of yn, then we will have accuracy
+            ** problems.  So the first thing we do, is find the smallest zero
+            ** of yn, call it z, and compute b, so that if t is in [0,b] then
+            **
+            **              |            yn(t)           |
+            **              | -------------------------- | > 1/2
+            **              | yn(t) - (2/pi)*jn(x)*ln(x) |
+            **
+            ** That way, we know there can be no massive loss of significance
+            ** when using the neumann functions
+            ','line_number':2186,'multiline':True]['text':'
+            ** We know that expansion around the first zero of y0 or y1 between
+            ** its first extrema values is ill conditioned and extremely large
+            ** (hundreds of terms), so we take a *TINY* interval around the zero
+            ** so that polynomial is not too long (i.e.  the performance of the
+            ** packed polynomial evaluation is not to bad) and the accuracy will
+            ** be OK.
+            ','line_number':2206,'multiline':True]['text':'
+            ** We finish up the "first interval" by approximating yn via the
+            ** neumann approximation on [c, e] where e is the first extrema
+            ** location of yn
+            ','line_number':2219,'multiline':True]['text':'
+        ** Now loop through the remaining intervals 
+        ','line_number':2233,'multiline':True]['text':' Check for the correct number of intervals ','line_number':2248,'multiline':True]['text':'
+    ** The function, get_neumann_coefficients is a helper function that
+    ** generates the coefficients of the neumann functions expanded around
+    ** z, where z is a zero of the neumann function in the interval [a,b]
+    ** if it exists or .5*(a+b) if it doesn't
+    ','line_number':2259,'multiline':True]['text':'
+    ** get_asymptotic_coefficients computes the Remes rational approximations
+    ** to Pn and Qn for n = 0 and 1.  It also writes its results to the
+    ** the coefficient table.
+    ','line_number':2307,'multiline':True]['text':'
+    ** If we aren't using "FIND" mode, specify the number of intervals and
+    ** the associated degrees of the polynomials.
+    ','line_number':2379,'multiline':True]['text':'
+    ** Set up __bessel() to get locations of the extrema and zeros of j0 and j1.
+    ','line_number':2410,'multiline':True]['text':'
+    ** Since the necessary value of "t" used in the each of the calls to 
+    ** find_interval_data is known prior to build time and the accuracy of the
+    ** algorithm as a hole is not affected by it precision, we pre-compute
+    ** t to save time.
+    **
+    ** For j0 and j1, t is the actual location of the first extrema.
+    ','line_number':2418,'multiline':True]['text':'
+    ** Now set up __bessel() to get extrema locations of y0 and y1
+    ','line_number':2433,'multiline':True]['text':'
+    ** For y0 and y1 the value of t is chosen as the lower bound of an interval
+    ** in which to find the first zero of y0 or y1.   We don't pre-compute
+    ** this value, since it need to be known to a specific accuracy.
+    ','line_number':2441,'multiline':True]['text':'
+    ** Generate miscellaneous constants
+    ','line_number':2477,'multiline':True]

@@ -1,0 +1,226 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 4. Neither the name MongoDB or the name WiredTiger
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY MONGODB INC. ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ ','line_number':1,'multiline':True]['text':' Set to 1 for debugging output. ','line_number':33,'multiline':True]['text':' Length of header in compressed message, in bits. ','line_number':35,'multiline':True]['text':'
+ * Maximum allowed length of Huffman code words, which otherwise can range up to (#symbols - 1) bits
+ * long. Lower value to use less memory for tables, higher value for better compression. Max value =
+ * 16 (or 32-7=25 or 64-7=57 if adjust data types). FYI, JPEG uses 16. A side effect of limiting max
+ * code length is that the worst case compression (a message of the least frequent symbols) is
+ * shorter.
+ ','line_number':38,'multiline':True]['text':'
+     * Data structure representing a node of the huffman tree. It holds a
+     * 64-bit weight and pointers to the left and right child nodes.  The
+     * node either has two child nodes or none.
+     ','line_number':48,'multiline':True]['text':' only used in leaf nodes ','line_number':53,'multiline':True]['text':' bit 0 ','line_number':55,'multiline':True]['text':' bit 1 ','line_number':56,'multiline':True]['text':' requirement: length of field's type
+                       * in bits >= MAX_CODE_LENGTH.
+                       ','line_number':60,'multiline':True]['text':'
+     * Data structure here defines specific instance of the encoder/decoder.
+     ','line_number':67,'multiline':True]['text':' Symbols: UINT16_MAX or UINT8_MAX ','line_number':70,'multiline':True]['text':' Tree max/min depths ','line_number':72,'multiline':True]['text':'
+     * use: codes[symbol] = struct with pattern and length. Used in encoding and decoding. memory:
+     * codes[0-to-(number of symbols - 1)]
+     ','line_number':74,'multiline':True]['text':'
+     * use: code2symbol[Huffman_code] = symbol. Used in decoding. memory: code2symbol[1 <<
+     * max_code_length]
+     ','line_number':80,'multiline':True]['text':'
+ * Queue element data structure.
+ *
+ * Consists of a pointer to a huffman tree node, and a pointer to the next element in the queue.
+ ','line_number':87,'multiline':True]['text':'
+ * Queue of huffman tree nodes.
+ *
+ * Contains a pointer to the beginning and the end of the queue, which is implemented as a linked
+ * list.
+ ','line_number':97,'multiline':True]['text':'
+ * Internal data structure used to preserve the symbol when rearranging the frequency array.
+ ','line_number':108,'multiline':True]['text':' not uint8_t: match external data structure ','line_number':112,'multiline':True]['text':'
+ * indexed_symbol_compare --
+ *     Qsort comparator to order the table by symbol, lowest to highest.
+ ','line_number':128,'multiline':True]['text':'
+ * indexed_freq_compare --
+ *     Qsort comparator to order the table by frequency (the most frequent symbols will be at the
+ *     end of the array).
+ ','line_number':140,'multiline':True]['text':'
+ * profile_tree --
+ *     Traverses tree to determine #leaves under each node, max depth, min depth of leaf.
+ ','line_number':153,'multiline':True]['text':' leaf ','line_number':162,'multiline':True]['text':'
+         * internal node -- way tree constructed internal always has left and right children
+         ','line_number':169,'multiline':True]['text':' abuse weight field ','line_number':175,'multiline':True]['text':'
+ * set_codes --
+ *     Computes Huffman code for each symbol in tree. Method is standard way in the literature,
+ *     except that limits maximum code length. A known max code length is important for limiting
+ *     memory use by the tables and for knowing how large data types need to be such as the field
+ *     that holds the code pattern.
+ ','line_number':179,'multiline':True]['text':'
+         * Check each subtree individually to see if can afford to split up bits into possibly
+         * shorter codes, or if need to employ all remaining bits up to MAX_CODE_LENGTH to
+         * consecutively number leaves.
+         ','line_number':201,'multiline':True]['text':'
+         * If not already in "low-bit mode", but need to be, open up lower-order bits for
+         * consecutive numbering.
+         ','line_number':207,'multiline':True]['text':' "low bit mode" ','line_number':222,'multiline':True]['text':' len unchanged ','line_number':225,'multiline':True]['text':'
+ * make_table --
+ *     Computes Huffman table used for subsequent lookups in encoding and decoding. With the table,
+ *     encoding from a symbol to Huffman code and decoding from a code to a symbol are simple array
+ *     lookups.
+ ','line_number':233,'multiline':True]['text':' Exceeds uint16_t bounds at loop boundary. ','line_number':244,'multiline':True]['text':' Zero out, for assertion below. ','line_number':248,'multiline':True]['text':'
+     * Here's the magic: flood all bit patterns for lower-order bits to point to same symbol.
+     ','line_number':252,'multiline':True]['text':'
+         * The size of the array index should be enough to hold largest
+         * index into symbol table.  Pre-existing symbols were packed
+         * 0-255, so 8 bits is enough.  Don't want to make it larger
+         * than necessary, we allocate (2 ^ max-code-length) of them.
+         ','line_number':259,'multiline':True]['text':'
+ * recursive_free_node --
+ *     Recursively free the huffman frequency tree's nodes.
+ ','line_number':276,'multiline':True]['text':'
+ * __wt_huffman_open --
+ *     Take a frequency table and return a pointer to a descriptor object.
+ ','line_number':290,'multiline':True]['text':'
+     * The frequency table is 4B pairs of symbol and frequency. The symbol is either 1 or 2 bytes
+     * and the frequency ranges from 1 to UINT32_MAX (a frequency of 0 means the value is never
+     * expected to appear in the input). Validate the symbols are within range.
+     ','line_number':312,'multiline':True]['text':'
+     * Order the array by symbol and check for invalid symbols and duplicates.
+     ','line_number':325,'multiline':True]['text':'
+     * Massage frequencies.
+     ','line_number':341,'multiline':True]['text':'
+     * Minimum of frequency==1 so everybody gets a Huffman code, in case data evolves and we need to
+     * represent this value.
+     ','line_number':346,'multiline':True]['text':'
+     * Avoid large tables by splitting UTF-16 frequencies into high byte and low byte.
+     ','line_number':355,'multiline':True]['text':'
+     * The array must be sorted by frequency to be able to use a linear time construction algorithm.
+     ','line_number':366,'multiline':True]['text':' We need two node queues to build the tree. ','line_number':371,'multiline':True]['text':'
+     * Adding the leaves to the queue.
+     *
+     * Discard symbols with a frequency of 0; this assumes these symbols never occur in the source
+     * stream, and the purpose is to reduce the huffman tree's size.
+     ','line_number':375,'multiline':True]['text':'
+         * We have to get the node with the smaller weight, examining both queues' first element. We
+         * are collecting pairs of these items, by alternating between node and node2:
+         ','line_number':391,'multiline':True]['text':'
+         * To decide which queue must be used, we get the weights of the first items from both:
+         ','line_number':397,'multiline':True]['text':'
+         * Based on the two weights we finally can dequeue the smaller element and place it to the
+         * alternating target node pointer:
+         ','line_number':403,'multiline':True]['text':'
+         * In every second run, we have both node and node2 initialized.
+         ','line_number':412,'multiline':True]['text':' The new weight is the sum of the two weights. ','line_number':418,'multiline':True]['text':' Enqueue it to the combined nodes queue ','line_number':423,'multiline':True]['text':' Reset the state pointers ','line_number':427,'multiline':True]['text':'
+     * The remaining node is in the node variable, this is the root of the tree. Calculate how many
+     * bytes it takes to hold numSymbols bytes bits.
+     ','line_number':432,'multiline':True]['text':'
+         * measure quality of computed Huffman codes, for different max bit lengths (say, 16 vs 24
+         * vs 32)
+         ','line_number':459,'multiline':True]['text':'
+ * __wt_huffman_close --
+ *     Discard a Huffman descriptor object.
+ ','line_number':493,'multiline':True]['text':'
+ * __wt_print_huffman_code --
+ *     Prints a symbol's Huffman code.
+ ','line_number':510,'multiline':True]['text':' should print code as binary ','line_number':529,'multiline':True]['text':'
+ * __wt_huffman_encode --
+ *     Take a byte string, encode it into the target. Translation from symbol to Huffman code is a
+ *     simple array lookup. WT_HUFFMAN_OBJ contains an array called 'codes' with one WT_HUFFMAN_CODE
+ *     per symbol. Then, given a symbol: pattern = codes[symbol].pattern; length =
+ *     codes[symbol].length; To encode byte-string, we iterate over the input symbols. For each
+ *     symbol, look it up via table, shift bits onto a shift register (an int long enough to hold
+ *     the longest code word + up to 7 bits remaining from the previous), then drain out full bytes.
+ *     Finally, at the end flush remaining bits and write header bits.
+ ','line_number':536,'multiline':True]['text':'
+     * Shift register to accumulate bits from input. Should be >= (MAX_CODE_LENGTH + 7), but also
+     * efficient to shift bits and preferably in a machine register.
+     ','line_number':559,'multiline':True]['text':' Count of bits in shift register ('bits' above). ','line_number':565,'multiline':True]['text':'
+     * We don't want to find all of our callers and ensure they don't pass
+     * 0-length byte strings, but there's no reason to do any work.
+     ','line_number':572,'multiline':True]['text':'
+     * Compute the largest compressed output size, which is if all symbols are least frequent and so
+     * have largest Huffman codes, and compressed output may be larger than the input size. This way
+     * we don't have to worry about resizing the buffer during compression. Use the shared system
+     * buffer while compressing, then allocate a new buffer of the right size and copy the result
+     * into it.
+     ','line_number':581,'multiline':True]['text':' round up to full byte ','line_number':589,'multiline':True]['text':'
+     * Leave the first 3 bits of the encoded value empty, it holds the number of bits actually used
+     * in the last byte of the encoded value.
+     ','line_number':592,'multiline':True]['text':' Translate symbol into Huffman code and stuff into buffer. ','line_number':605,'multiline':True]['text':' Flush shift register. ','line_number':617,'multiline':True]['text':'
+     * At this point, bitpos is the total number of used bits (including the 3 bits at the beginning
+     * of the buffer, which we'll set now to the number of bits used in the last byte). Note if the
+     * number of bits used in the last byte is 8, we set the 3 bits to 0, in other words, the first
+     * 3 bits of the encoded value are the number of bits used in the last byte, unless they're 0,
+     * in which case there are 8 bits used in the last byte.
+     ','line_number':622,'multiline':True]['text':' Copy result of exact known size into caller's buffer. ','line_number':632,'multiline':True]['text':'
+ * __wt_huffman_decode --
+ *     Take a byte string, decode it into the target. Translation from Huffman code to symbol is a
+ *     simple array lookup. WT_HUFFMAN_OBJ contains an array called 'code2symbol' indexed by code
+ *     word and whose value is the corresponding symbol. From the symbol, we index into the 'codes'
+ *     array to get the code length. When decoding a message, we don't know where the boundaries are
+ *     between codes. The trick is that we collect enough bits for the longest code word, and
+ *     construct the table such that for codes with fewer bits we flood the table with all of the
+ *     bit patterns in the lower order bits. This works because the Huffman code is a unique prefix,
+ *     and by the flooding we are treating bits beyond the unique prefix as don't care bits. For
+ *     example, we have table of length 2^max_code_length (1<<max_code_length). For a code of
+ *     length, max_code_length, the position code2symbol[code] = symbol. For a code word of
+ *     (max_length - 1), we fill code2symbol[code << 1] = symbol, as well as code2symbol[(code << 1)
+ *     | 1] = symbol. And so on, so in general we fill: code2symbol[(code) << shift inclusive ..
+ *     (code+1) << shift exclusive]. To decode a message, we read in enough bits from input to fill
+ *     the shift register with at least MAX_CODE_LENGTH bits. We look up in the table code2symbol to
+ *     obtain the symbol. We look up the symbol in 'codes' to obtain the code length Finally,
+ *     subtract off these bits from the shift register.
+ ','line_number':646,'multiline':True]['text':'
+     * We don't want to find all of our callers and ensure they don't pass
+     * 0-length byte strings, but there's no reason to do any work.
+     ','line_number':683,'multiline':True]['text':'
+     * The first 3 bits are the number of used bits in the last byte, unless they're 0, in which
+     * case there are 8 bits used in the last byte.
+     ','line_number':692,'multiline':True]['text':' Number of bits that have codes. ','line_number':701,'multiline':True]['text':'
+     * Compute largest uncompressed output size, which is if all symbols are most frequent and so
+     * have smallest Huffman codes and therefore largest expansion. Use the shared system buffer
+     * while uncompressing, then allocate a new buffer of exactly the right size and copy the result
+     * into it.
+     ','line_number':704,'multiline':True]['text':' The first byte of input is a special case because of header bits. ','line_number':714,'multiline':True]['text':' short patterns near end ','line_number':728,'multiline':True]['text':'
+         * from_len_bits is the total number of input bits, reduced by the number of bits we consume
+         * from input at each step. For all but the last step from_len_bits > len, then at the last
+         * step from_len_bits == len (in other words, from_len_bits - len = 0 input bits remaining).
+         * Generally, we cannot detect corruption during huffman decompression, this is one place
+         * where that's not true.
+         ','line_number':735,'multiline':True]['text':' corrupted ','line_number':742,'multiline':True]['text':' Return the number of bytes used. ','line_number':750,'multiline':True]['text':'
+ * node_queue_close --
+ *     Delete a queue from memory. It does not delete the pointed huffman tree nodes!
+ ','line_number':763,'multiline':True]['text':' Freeing each element of the queue's linked list. ','line_number':772,'multiline':True]['text':' Freeing the queue record itself. ','line_number':778,'multiline':True]['text':'
+ * node_queue_enqueue --
+ *     Push a tree node to the end of the queue.
+ ','line_number':782,'multiline':True]['text':' Allocating a new linked list element ','line_number':791,'multiline':True]['text':' It holds the tree node, and has no next element yet ','line_number':794,'multiline':True]['text':' If the queue is empty, the first element will be the new one. ','line_number':798,'multiline':True]['text':'
+     * If the queue is not empty, the last element's next pointer must be updated.
+     ','line_number':802,'multiline':True]['text':' The last element is the new one ','line_number':808,'multiline':True]['text':'
+ * node_queue_dequeue --
+ *     Removes a node from the beginning of the queue and copies the node's pointer to the location
+ *     referred by the retp parameter.
+ ','line_number':814,'multiline':True]['text':'
+     * Getting the first element of the queue and updating it to point to the next element as first.
+     ','line_number':824,'multiline':True]['text':'
+     * If the last element was the dequeued element, we have to update it to NULL.
+     ','line_number':831,'multiline':True]['text':' Freeing the linked list element that has been dequeued ','line_number':837,'multiline':True]

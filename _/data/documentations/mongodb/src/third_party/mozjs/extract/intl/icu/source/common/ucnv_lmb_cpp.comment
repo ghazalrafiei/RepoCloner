@@ -1,0 +1,263 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]['text':'  
+**********************************************************************
+*   Copyright (C) 2000-2016, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+**********************************************************************
+*   file name:  ucnv_lmb.cpp
+*   encoding:   UTF-8
+*   tab size:   4 (not used)
+*   indentation:4
+*
+*   created on: 2000feb09
+*   created by: Brendan Murray
+*   extensively hacked up by: Jim Snyder-Grant
+*
+* Modification History:
+* 
+*   Date        Name             Description
+* 
+*   06/20/2000  helena           OS/400 port changes; mostly typecast.
+*   06/27/2000  Jim Snyder-Grant Deal with partial characters and small buffers.
+*                                Add comments to document LMBCS format and implementation
+*                                restructured order & breakdown of functions
+*   06/28/2000  helena           Major rewrite for the callback API changes.
+','line_number':3,'multiline':True]['text':'
+  LMBCS
+
+  (Lotus Multi-Byte Character Set)
+
+  LMBCS was invented in the late 1980's and is primarily used in Lotus Notes 
+  databases and in Lotus 1-2-3 files. Programmers who work with the APIs 
+  into these products will sometimes need to deal with strings in this format.
+
+  The code in this file provides an implementation for an ICU converter of 
+  LMBCS to and from Unicode. 
+
+  Since the LMBCS character set is only sparsely documented in existing 
+  printed or online material, we have added  extensive annotation to this 
+  file to serve as a guide to understanding LMBCS. 
+
+  LMBCS was originally designed with these four sometimes-competing design goals:
+
+  -Provide encodings for the characters in 12 existing national standards
+   (plus a few other characters)
+  -Minimal memory footprint
+  -Maximal speed of conversion into the existing national character sets
+  -No need to track a changing state as you interpret a string.
+
+
+  All of the national character sets LMBCS was trying to encode are 'ANSI'
+  based, in that the bytes from 0x20 - 0x7F are almost exactly the 
+  same common Latin unaccented characters and symbols in all character sets. 
+
+  So, in order to help meet the speed & memory design goals, the common ANSI 
+  bytes from 0x20-0x7F are represented by the same single-byte values in LMBCS. 
+
+  The general LMBCS code unit is from 1-3 bytes. We can describe the 3 bytes as
+  follows:
+
+  [G] D1 [D2]
+
+  That is, a sometimes-optional 'group' byte, followed by 1 and sometimes 2
+  data bytes. The maximum size of a LMBCS character is 3 bytes:
+','line_number':46,'multiline':True]['text':'
+  The single-byte values from 0x20 to 0x7F are examples of single D1 bytes.
+  We often have to figure out if byte values are below or above this, so we 
+  use the ANSI nomenclature 'C0' and 'C1' to refer to the range of control 
+  characters just above & below the common lower-ANSI  range ','line_number':87,'multiline':True]['text':'
+  Since LMBCS is always dealing in byte units. we create a local type here for 
+  dealing with these units of LMBCS code units:
+
+','line_number':94,'multiline':True]['text':' 
+   Most of the values less than 0x20 are reserved in LMBCS to announce 
+   which national  character standard is being used for the 'D' bytes. 
+   In the comments we show the common name and the IBM character-set ID
+   for these character-set announcers:
+','line_number':101,'multiline':True]['text':' Latin-1    :ibm-850  ','line_number':108,'multiline':True]['text':' Greek      :ibm-851  ','line_number':109,'multiline':True]['text':' Hebrew     :ibm-1255 ','line_number':110,'multiline':True]['text':' Arabic     :ibm-1256 ','line_number':111,'multiline':True]['text':' Cyrillic   :ibm-1251 ','line_number':112,'multiline':True]['text':' Latin-2    :ibm-852  ','line_number':113,'multiline':True]['text':' Turkish    :ibm-1254 ','line_number':114,'multiline':True]['text':' Thai       :ibm-874  ','line_number':115,'multiline':True]['text':' Japanese   :ibm-943  ','line_number':116,'multiline':True]['text':' Korean     :ibm-1261 ','line_number':117,'multiline':True]['text':' Chinese SC :ibm-950  ','line_number':118,'multiline':True]['text':' Chinese TC :ibm-1386 ','line_number':119,'multiline':True]['text':'
+   So, the beginning of understanding LMBCS is that IF the first byte of a LMBCS 
+   character is one of those 12 values, you can interpret the remaining bytes of 
+   that character as coming from one of those character sets. Since the lower 
+   ANSI bytes already are represented in single bytes, using one of the character 
+   set announcers is used to announce a character that starts with a byte of 
+   0x80 or greater.
+
+   The character sets are  arranged so that the single byte sets all appear 
+   before the multi-byte character sets. When we need to tell whether a 
+   group byte is for a single byte char set or not we use this define: ','line_number':121,'multiline':True]['text':' 
+However, to fully understand LMBCS, you must also understand a series of 
+exceptions & optimizations made in service of the design goals. 
+
+First, those of you who are character set mavens may have noticed that
+the 'double-byte' character sets are actually multi-byte character sets 
+that can have 1 or two bytes, even in the upper-ascii range. To force
+each group byte to introduce a fixed-width encoding (to make it faster to 
+count characters), we use a convention of doubling up on the group byte 
+to introduce any single-byte character > 0x80 in an otherwise double-byte
+character set. So, for example, the LMBCS sequence x10 x10 xAE is the 
+same as '0xAE' in the Japanese code page 943.
+
+Next, you will notice that the list of group bytes has some gaps. 
+These are used in various ways.
+
+We reserve a few special single byte values for common control 
+characters. These are in the same place as their ANSI eqivalents for speed.
+','line_number':135,'multiline':True]['text':' Fixed control char - Horizontal Tab ','line_number':155,'multiline':True]['text':' Fixed control char - Line Feed ','line_number':156,'multiline':True]['text':' Fixed control char - Carriage Return ','line_number':157,'multiline':True]['text':' Then, 1-2-3 reserved a special single-byte character to put at the 
+beginning of internal 'system' range names: ','line_number':159,'multiline':True]['text':' Then we needed a place to put all the other ansi control characters 
+that must be moved to different values because LMBCS reserves those 
+values for other purposes. To represent the control characters, we start 
+with a first byte of 0xF & add the control character value as the 
+second byte ','line_number':164,'multiline':True]['text':' For the C0 controls (less than 0x20), we add 0x20 to preserve the 
+useful doctrine that any byte less than 0x20 in a LMBCS char must be 
+the first byte of a character:','line_number':171,'multiline':True]['text':' 
+Where to put the characters that aren't part of any of the 12 national 
+character sets? The first thing that was done, in the earlier years of 
+LMBCS, was to use up the spaces of the form
+
+  [G] D1, 
+  
+ where  'G' was one of the single-byte character groups, and
+ D1 was less than 0x80. These sequences are gathered together 
+ into a Lotus-invented doublebyte character set to represent a 
+ lot of stray values. Internally, in this implementation, we track this 
+ as group '0', as a place to tuck this exceptions list.','line_number':176,'multiline':True]['text':'
+ Finally, as the durability and usefulness of UNICODE became clear, 
+ LOTUS added a new group 0x14 to hold Unicode values not otherwise 
+ represented in LMBCS: ','line_number':190,'multiline':True]['text':' The two bytes appearing after a 0x14 are intrepreted as UFT-16 BE
+(Big-Endian) characters. The exception comes when the UTF16 
+representation would have a zero as the second byte. In that case,
+'F6' is used in its place, and the bytes are swapped. (This prevents 
+LMBCS from encoding any Unicode values of the form U+F6xx, but that's OK:
+0xF6xx is in the middle of the Private Use Area.)','line_number':195,'multiline':True]['text':' It is also useful in our code to have a constant for the size of 
+a LMBCS char that holds a literal Unicode value ','line_number':203,'multiline':True]['text':' 
+To squish the LMBCS representations down even further, and to make 
+translations even faster,sometimes the optimization group byte can be dropped 
+from a LMBCS character. This is decided on a process-by-process basis. The 
+group byte that is dropped is called the 'optimization group'.
+
+For Notes, the optimzation group is always 0x1.','line_number':207,'multiline':True]['text':' For 1-2-3 files, the optimzation group is stored in the header of the 1-2-3 
+file. 
+
+ In any case, when using ICU, you either pass in the 
+optimization group as part of the name of the converter (LMBCS-1, LMBCS-2, 
+etc.). Using plain 'LMBCS' as the name of the converter will give you 
+LMBCS-1.
+
+
+*** Implementation strategy ***
+
+
+Because of the extensive use of other character sets, the LMBCS converter
+keeps a mapping between optimization groups and IBM character sets, so that
+ICU converters can be created and used as needed. ','line_number':215,'multiline':True]['text':' As you can see, even though any byte below 0x20 could be an optimization 
+byte, only those at 0x13 or below can map to an actual converter. To limit
+some loops and searches, we define a value for that last group converter:','line_number':231,'multiline':True]['text':' last LMBCS group that has a converter ','line_number':235,'multiline':True]['text':' 0x0000 ','line_number':238,'multiline':True]['text':' internal home for the LOTUS exceptions list ','line_number':238,'multiline':True]['text':' 0x0001 ','line_number':239,'multiline':True]['text':' 0x0002 ','line_number':240,'multiline':True]['text':' 0x0003 ','line_number':241,'multiline':True]['text':' 0x0004 ','line_number':242,'multiline':True]['text':' 0x0005 ','line_number':243,'multiline':True]['text':' 0x0006 ','line_number':244,'multiline':True]['text':' 0x0007 ','line_number':245,'multiline':True]['text':' Unused ','line_number':245,'multiline':True]['text':' 0x0008 ','line_number':246,'multiline':True]['text':' 0x0009 ','line_number':247,'multiline':True]['text':' Control char HT ','line_number':247,'multiline':True]['text':' 0x000A ','line_number':248,'multiline':True]['text':' Control char LF ','line_number':248,'multiline':True]['text':' 0x000B ','line_number':249,'multiline':True]['text':' 0x000C ','line_number':250,'multiline':True]['text':' Unused ','line_number':250,'multiline':True]['text':' 0x000D ','line_number':251,'multiline':True]['text':' Control char CR ','line_number':251,'multiline':True]['text':' 0x000E ','line_number':252,'multiline':True]['text':' Unused ','line_number':252,'multiline':True]['text':' 0x000F ','line_number':253,'multiline':True]['text':' Control chars: 0x0F20 + C0/C1 character: algorithmic ','line_number':253,'multiline':True]['text':' 0x0010 ','line_number':254,'multiline':True]['text':' 0x0011 ','line_number':255,'multiline':True]['text':' 0x0012 ','line_number':256,'multiline':True]['text':' 0x0013 ','line_number':257,'multiline':True]['text':' The rest are null, including the 0x0014 Unicode compatibility region
+   and 0x0019, the 1-2-3 system range control char ','line_number':259,'multiline':True]['text':' That's approximately all the data that's needed for translating 
+  LMBCS to Unicode. 
+
+
+However, to translate Unicode to LMBCS, we need some more support.
+
+That's because there are often more than one possible mappings from a Unicode
+code point back into LMBCS. The first thing we do is look up into a table
+to figure out if there are more than one possible mappings. This table,
+arranged by Unicode values (including ranges) either lists which group 
+to use, or says that it could go into one or more of the SBCS sets, or
+into one or more of the DBCS sets.  (If the character exists in both DBCS & 
+SBCS, the table will place it in the SBCS sets, to make the LMBCS code point 
+length as small as possible. Here's the two special markers we use to indicate
+ambiguous mappings: ','line_number':264,'multiline':True]['text':' could fit in more than one 
+                                          LMBCS sbcs native encoding 
+                                          (example: most accented latin) ','line_number':280,'multiline':True]['text':' could fit in more than one 
+                                          LMBCS mbcs native encoding 
+                                          (example: Unihan) ','line_number':283,'multiline':True]['text':' And here's a simple way to see if a group falls in an appropriate range ','line_number':287,'multiline':True]['text':' The table & some code to use it: ','line_number':296,'multiline':True]['text':'zhujin: upgrade, for regressiont test, spr HKIA4YHTSU','line_number':372,'multiline':True]['text':' 
+We also ask the creator of a converter to send in a preferred locale 
+that we can use in resolving ambiguous mappings. They send the locale
+in as a string, and we map it, if possible, to one of the 
+LMBCS groups. We use this table, and the associated code, to 
+do the lookup: ','line_number':464,'multiline':True]['text':'*************************************************
+  This table maps locale ID's to LMBCS opt groups.
+  The default return is group 0x01. Note that for
+  performance reasons, the table is sorted in
+  increasing alphabetic order, with the notable
+  exception of zhTW. This is to force the check
+  for Traditonal Chinese before dropping back to
+  Simplified.
+
+  Note too that the Latin-1 groups have been
+  commented out because it's the default, and
+  this shortens the table, allowing a serial
+  search to go quickly.
+ ************************************************','line_number':471,'multiline':True]['text':' {"ca", ULMBCS_GRP_L1}, ','line_number':495,'multiline':True]['text':' {"da", ULMBCS_GRP_L1}, ','line_number':497,'multiline':True]['text':' {"de", ULMBCS_GRP_L1}, ','line_number':498,'multiline':True]['text':' {"en", ULMBCS_GRP_L1}, ','line_number':500,'multiline':True]['text':' {"es", ULMBCS_GRP_L1}, ','line_number':501,'multiline':True]['text':' {"et", ULMBCS_GRP_L1}, ','line_number':502,'multiline':True]['text':' {"fi", ULMBCS_GRP_L1}, ','line_number':503,'multiline':True]['text':' {"fr", ULMBCS_GRP_L1}, ','line_number':504,'multiline':True]['text':' {"is", ULMBCS_GRP_L1}, ','line_number':507,'multiline':True]['text':' {"it", ULMBCS_GRP_L1}, ','line_number':508,'multiline':True]['text':' {"lt", ULMBCS_GRP_L1}, ','line_number':512,'multiline':True]['text':' {"lv", ULMBCS_GRP_L1}, ','line_number':513,'multiline':True]['text':' {"nl", ULMBCS_GRP_L1}, ','line_number':515,'multiline':True]['text':' {"no", ULMBCS_GRP_L1}, ','line_number':516,'multiline':True]['text':' {"pt", ULMBCS_GRP_L1}, ','line_number':518,'multiline':True]['text':' {"sv", ULMBCS_GRP_L1}, ','line_number':526,'multiline':True]['text':' {"vi", ULMBCS_GRP_L1}, ','line_number':530,'multiline':True]['text':' Check only first char for speed ','line_number':549,'multiline':True]['text':' First char matches - check whole name, for entry-length ','line_number':551,'multiline':True]['text':' Sorted alphabetically - exit ','line_number':556,'multiline':True]['text':' 
+  Before we get to the main body of code, here's how we hook up to the rest 
+  of ICU. ICU converters are required to define a structure that includes 
+  some function pointers, and some common data, in the style of a C++
+  vtable. There is also room in there for converter-specific data. LMBCS
+  uses that converter-specific data to keep track of the 12 subconverters
+  we use, the optimization group, and the group (if any) that matches the 
+  locale. We have one structure instantiated for each of the 12 possible
+  optimization groups. To avoid typos & to avoid boring the reader, we 
+  put the declarations of these structures and functions into macros. To see 
+  the definitions of these structures, see unicode\ucnv_bld.h
+','line_number':564,'multiline':True]['text':' Converter per Opt. grp. ','line_number':579,'multiline':True]['text':' default Opt. grp. for this LMBCS session ','line_number':580,'multiline':True]['text':' reasonable locale match for index ','line_number':581,'multiline':True]['text':' The only function we needed to duplicate 12 times was the 'open'
+function, which will do basically the same thing except set a  different
+optimization group. So, we put the common stuff into a worker function, 
+and set up another macro to stamp out the 12 open functions:','line_number':618,'multiline':True]['text':' Here's the open worker & the common close function ','line_number':629,'multiline':True]['text':' ucnv.c/ucnv_safeClone() copied the main UConverter already ','line_number':712,'multiline':True]['text':' share the subconverters ','line_number':716,'multiline':True]['text':'
+ * There used to be a _LMBCSGetUnicodeSet() function here (up to svn revision 20117)
+ * which added all code points except for U+F6xx
+ * because those cannot be represented in the Unicode group.
+ * However, it turns out that windows-950 has roundtrips for all of U+F6xx
+ * which means that LMBCS can convert all Unicode code points after all.
+ * We now simply use ucnv_getCompleteUnicodeSet().
+ *
+ * This may need to be looked at again as Lotus uses _LMBCSGetUnicodeSet(). (091216)
+ ','line_number':728,'multiline':True]['text':' 
+   Here's the basic helper function that we use when converting from
+   Unicode to LMBCS, and we suspect that a Unicode character will fit into 
+   one of the 12 groups. The return value is the number of bytes written 
+   starting at pStartLMBCS (if any).
+','line_number':739,'multiline':True]['text':' subconverters, opt & locale groups ','line_number':748,'multiline':True]['text':' The group to try ','line_number':749,'multiline':True]['text':' where to put the results ','line_number':750,'multiline':True]['text':' The input unicode character ','line_number':751,'multiline':True]['text':' output: track last successful group used ','line_number':752,'multiline':True]['text':' output: track any unsuccessful groups ','line_number':753,'multiline':True]['text':' get the first result byte ','line_number':768,'multiline':True]['text':' most common failure mode is an unassigned character ','line_number':772,'multiline':True]['text':' All initial byte values in lower ascii range should have been caught by now,
+      except with the exception group.
+    ','line_number':779,'multiline':True]['text':' use converted data: first write 0, 1 or two group bytes ','line_number':784,'multiline':True]['text':' don't emit control chars ','line_number':794,'multiline':True]['text':' then move over the converted data ','line_number':799,'multiline':True]['text':' will never occur ','line_number':815,'multiline':True]['text':' This is a much simpler version of above, when we 
+know we are writing LMBCS using the Unicode group
+','line_number':823,'multiline':True]['text':' encode into LMBCS Unicode range ','line_number':829,'multiline':True]['text':' The main Unicode to LMBCS conversion function ','line_number':850,'multiline':True]['text':' Basic strategy: attempt to fill in local LMBCS 1-char buffer.(LMBCS)
+      If that succeeds, see if it will all fit into the target & copy it over 
+      if it does.
+
+      We try conversions in the following order:
+
+      1. Single-byte ascii & special fixed control chars (&null)
+      2. Look up group in table & try that (could be 
+            A) Unicode group
+            B) control group,
+            C) national encoding, 
+               or ambiguous SBCS or MBCS group (on to step 4...)
+        
+      3. If its ambiguous, try this order:
+         A) The optimization group
+         B) The locale group
+         C) The last group that succeeded with this string.
+         D) every other group that's relevent (single or double)
+         E) If its single-byte ambiguous, try the exceptions group
+
+      4. And as a grand fallback: Unicode
+   ','line_number':864,'multiline':True]['text':'Fix for SPR#DJOE66JFN3 (Lotus)','line_number':887,'multiline':True]['text':'Fix for SPR#DJOE66JFN3 (Lotus)','line_number':892,'multiline':True]['text':' check cases in rough order of how common they are, for speed ','line_number':904,'multiline':True]['text':' single byte matches: strategy 1 ','line_number':906,'multiline':True]['text':'Fix for SPR#DJOE66JFN3 (Lotus)','line_number':907,'multiline':True]['text':'Fix for SPR#JUYA6XAERU and TSAO7GL5NK (Lotus)','line_number':909,'multiline':True]['text':' Check by UNICODE range (Strategy 2) ','line_number':926,'multiline':True]['text':' (Strategy 2A) ','line_number':929,'multiline':True]['text':' (Strategy 2B) ','line_number':935,'multiline':True]['text':' Handle control characters here ','line_number':937,'multiline':True]['text':' (Strategy 2C) ','line_number':950,'multiline':True]['text':' a specific converter has been identified - use it ','line_number':952,'multiline':True]['text':' the ambiguous group cases  (Strategy 3) ','line_number':957,'multiline':True]['text':' check for non-default optimization group (Strategy 3A )','line_number':961,'multiline':True]['text':'zhujin: upgrade, merge #39299 here (Lotus) ','line_number':964,'multiline':True]['text':'To make R5 compatible translation, look for exceptional group first for non-DBCS','line_number':965,'multiline':True]['text':' check for locale optimization group (Strategy 3B) ','line_number':993,'multiline':True]['text':' check for last optimization group used for this string (Strategy 3C) ','line_number':999,'multiline':True]['text':' just check every possible matching converter (Strategy 3D) ','line_number':1007,'multiline':True]['text':' a final conversion fallback to the exceptions group if its likely 
+                     to be single byte  (Strategy 3E) ','line_number':1033,'multiline':True]['text':' all of our other strategies failed. Fallback to Unicode. (Strategy 4)','line_number':1042,'multiline':True]['text':' we have a translation. increment source and write as much as posible to target ','line_number':1052,'multiline':True]['text':' write any bytes that didn't fit in target to the error buffer,
+            common code will move this to target if we get called back with
+            enough target room
+         ','line_number':1066,'multiline':True]['text':'Fix for SPR#DJOE66JFN3 (Lotus)','line_number':1078,'multiline':True]['text':' Now, the Unicode from LMBCS section ','line_number':1084,'multiline':True]['text':' A function to call when we are looking at the Unicode group byte in LMBCS ','line_number':1087,'multiline':True]['text':' Called with LMBCS-style Unicode byte stream ','line_number':1089,'multiline':True]['text':' Big-endian Unicode in LMBCS compatibility group','line_number':1091,'multiline':True]['text':' zero-byte in LSB special character ','line_number':1097,'multiline':True]['text':' CHECK_SOURCE_LIMIT: Helper macro to verify that there are at least'index' 
+   bytes left in source up to  sourceLimit.Errors appropriately if not.
+   If we reach the limit, then update the source pointer to there to consume
+   all input as required by ICU converter semantics.
+','line_number':1104,'multiline':True]['text':' Return the Unicode representation for the current LMBCS character ','line_number':1118,'multiline':True]['text':' an output UNICODE char ','line_number':1124,'multiline':True]['text':' A byte from the input stream ','line_number':1125,'multiline':True]['text':' error check ','line_number':1127,'multiline':True]['text':' Grab first byte & save address for error recovery ','line_number':1133,'multiline':True]['text':'
+    * at entry of each if clause:
+    * 1. 'CurByte' points at the first byte of a LMBCS character
+    * 2. '*source'points to the next byte of the source stream after 'CurByte' 
+    *
+    * the job of each if clause is:
+    * 1. set '*source' to point at the beginning of next char (nop if LMBCS char is only 1 byte)
+    * 2. set 'uniChar' up with the right Unicode value, or set 'err' appropriately
+    ','line_number':1136,'multiline':True]['text':' First lets check the simple fixed values. ','line_number':1146,'multiline':True]['text':' ascii range ','line_number':1148,'multiline':True]['text':' Control character group - no opt group update ','line_number':1161,'multiline':True]['text':' Unicode compatibility group: BigEndian UTF16 ','line_number':1169,'multiline':True]['text':' don't check for error indicators fffe/ffff below ','line_number':1173,'multiline':True]['text':' group byte is in the source ','line_number':1178,'multiline':True]['text':' this is not a valid group byte - no converter','line_number':1182,'multiline':True]['text':' double byte conversion ','line_number':1185,'multiline':True]['text':' check for LMBCS doubled-group-byte case ','line_number':1190,'multiline':True]['text':' single byte ','line_number':1192,'multiline':True]['text':' double byte ','line_number':1197,'multiline':True]['text':' single byte conversion ','line_number':1202,'multiline':True]['text':' The non-optimizable oddballs where there is an explicit byte 
+                    * AND the second byte is not in the upper ascii range
+                    ','line_number':1212,'multiline':True]['text':' Lookup value must include opt group ','line_number':1220,'multiline':True]['text':' group byte is implicit ','line_number':1227,'multiline':True]['text':' double byte conversion ','line_number':1232,'multiline':True]['text':' let the MBCS conversion consume CurByte again ','line_number':1238,'multiline':True]['text':' let the MBCS conversion consume CurByte again ','line_number':1244,'multiline':True]['text':' single byte conversion ','line_number':1249,'multiline':True]['text':' The exported function that converts lmbcs to one or more
+   UChars - currently UTF-16
+','line_number':1259,'multiline':True]['text':' one output UNICODE char ','line_number':1267,'multiline':True]['text':' beginning of current code point ','line_number':1268,'multiline':True]['text':' beginning of whole string ','line_number':1269,'multiline':True]['text':' pointer to actual input in case an error occurs ','line_number':1270,'multiline':True]['text':' Process from source to limit, or until error ','line_number':1273,'multiline':True]['text':' beginning of current code point ','line_number':1276,'multiline':True]['text':' reassemble char from previous call ','line_number':1278,'multiline':True]['text':' limit from source is either remainder of temp buffer, or user limit on source ','line_number':1283,'multiline':True]['text':' evil special case: source buffers so small a char spans more than 2 buffers ','line_number':1301,'multiline':True]['text':' clear the partial-char marker ','line_number':1310,'multiline':True]['text':' if (uniChar == 0xffff) ','line_number':1334,'multiline':True]['text':' if target ran out before source, return U_BUFFER_OVERFLOW_ERROR ','line_number':1340,'multiline':True]['text':' If character incomplete or unmappable/illegal, store it in toUBytes[] ','line_number':1347,'multiline':True]['text':' And now, the macroized declarations of data & functions: ','line_number':1358,'multiline':True]['text':' #if !UCONFIG_NO_LEGACY_CONVERSION ','line_number':1388,'multiline':True]

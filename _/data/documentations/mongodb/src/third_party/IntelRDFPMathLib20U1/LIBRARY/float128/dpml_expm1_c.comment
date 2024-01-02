@@ -1,0 +1,227 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]['text':'
+** Get build file name.  Since the constant table is shared, alway define
+** MAKE_COMMON
+','line_number':38,'multiline':True]['text':'
+** Pick up the latest default DPML definitions. however, don't let
+** dpml_private.h default TABLE_NAME.  This has already been done or over-
+** ridden when the constant file was generated.
+','line_number':49,'multiline':True]['text':'
+** Pick up common build time constants and definitions from the generated
+** power constant table file
+','line_number':63,'multiline':True]['text':'
+** Pick up common compile time constants and definitions
+','line_number':71,'multiline':True]['text':'
+**  Design Overview:
+**  ---------------
+**
+**  The implementation of expm1 is based on the implementation of exp(x).
+**  Specifically, exp is computed as follows:
+**
+**	o Let fm be the value of x/ln2 rounded to POW2_K bits, where POW2_K
+**	  is a small positive integer value.
+**	o Let I and j be the integer and fraction bits of fm and z = x - ln2*fm
+**
+**  Then
+**
+**		e^x = 2^(I + j/2^POW2_K)*e^z
+**		    = 2^I * 2^(j/2^POW2_K) * [1 + z*p(z)]
+**
+**  where p(z) is a polynomial approximation to (e^x - 1)/x.  The value of
+**  2^(j/2^POW2_K) is obtained from a table in hi and lo pieces: T(j) the
+**  correctly rounded value of 2^(j/2^POW2_K) and R(j) =
+**  [2^(j/2^POW2_K) - T(j)]/T(j).  Then
+**
+**		e^x = 2^I * [ T(j) + T(j)* R(j)] * [ 1 + z*p(z) ]
+**		    = 2^I * T(j) * [ 1 + R(j)] * [ 1 + z*p(z) ]
+**		    = 2^I * T(j) * [ 1 + R(j) + z*p(z) + R(j)*z*p(z) ]
+**
+**  If we denote by V(I,j) the product 2^I*T(j) we have
+**
+**		e^x = V(I,j) + V(I,j)*{ R(j) + [1 + R(j)]*z*p(z) }
+**
+**  Note that V(I,j) is exact and there is an alignment shift of at least
+**  POW2_K + 1 bits between V(I,j) and V(I,j)*{ R(j) + [1 + R(j)]*z*p(z) },
+**  there by allowing for a very accurate final result.
+**
+**  Based on the above, e^x - 1 is simply
+**
+**	expm1(x) = V(I,j) + V(I,j)*{ R(j) + [1 + R(j)]*z*p(z) } - 1.	(1)
+**
+**  Note that the polynomial p(z) has the form p(z) = 1 + z*q(z).  If we
+**  define U(j,z) = R(j)*(1 + z) + z^2*q(z) and W(j,z) = U(j,z) + z, then
+**
+**	expm1(x) = V(I,j) + V(I,j)*{ R(j) + [1 + R(j)]*z*p(z) } - 1
+**	         = V(I,j) + V(I,j)*{ R(j) + [1 + R(j)]*z*[1 + z*q(z)] } - 1
+**	         = V(I,j) + V(I,j)*{ R(j) + [1 + R(j)]*z*[1 + z*q(z)] } - 1
+**	         = V(I,j) + V(I,j)*{ R(j)*(1 + z) + z^2*q(z) + z +
+**                     R(j)*z^2*q(z) } - 1
+**	         = V(I,j) + V(I,j)*{ U(j,z) + z + R(j)*z^2*q(z) } - 1
+**	         = V(I,j) + V(I,j)*{ W(j,z) + R(j)*z^2*q(z) } - 1.
+**
+**  Finally, we note that for machine precision arithmetic, the term
+**  R(j)*z^2*q(z) is insignificant relative to W(j,z) so that
+**
+**		expm1(x) = V(I,j) + V(I,j)*W(j,z)) - 1			(2)
+**
+**  The trick in evaluating (2) is determining where to add the -1 term so
+**  that no accuracy is lost.  The tack chosen in this routine is to divide
+**  the domain of expm1 into several subdomains based on the value of I.
+**
+**	NOTE: When backup precision is available, only one of the subdomains,
+** 	the polynomial range need be implemented.
+**
+**
+**  Constant Range:
+**
+**	If I < -(F_PRECISION + 1), all of the terms except -1 are insignificant
+**	in the current precision, so just return -1
+**
+**  Hi/lo Range:
+**
+**	If -(F_PRECISION + 1) <= I <= -2,  -1 is the dominate term, but
+**	the sum V(I,j) - 1 will lose some precision.  In this case, we
+**	break V(I,j) - 1 into hi and lo pieces as follows:
+**
+**		hi = V(I,j) - 1
+**		lo = V(I,j) - (hi + 1)
+**
+**	and then write (2) as
+**
+**		expm1(x) = hi + [ lo + V(I,j)*W(j,z)]
+**
+**  Problem Range:
+**
+**	When I = 0 or -1, V(I,j) is very close to 1, so that V(I,j) - 1 can be
+**	very small (zero in fact), which effectively eliminates the alignment
+**	shift required to maintain accuracy.  In this case, we need to reorder
+**	the sum in (1) in order to restore the original overhang.  Recalling
+**	that W(j,z) = U(j,z) + z, and denoting V(I,j) - 1 by V1(I,j),
+**
+**		expm1(x) = V(I,j) + V(I,j)*W(j,z) - 1
+**		         = [V(I,j) - 1] + V(I,j)*[ U(j,z) + z ]
+**		         = V1(I,j) + [ V1(I,j) + 1 ]*[ U(j,z) + z ]
+**		         = V1(I,j) + U(j,z) + z + V1(I,j)*[ U(j,z) + z ]
+**		         = V1(I,j) + z + U(j,z) + V1(I,j)*W(j,z)
+**
+**	Now, suppose that z, the reduced argument is computed in hi and lo
+**	pieces.  Then the above equation becomes:
+**
+**		expm1(x) = V1(I,j) + z + U(j,z) + V1(I,j)*W(j,z)
+**		         = [V1(I,j) + z_hi] + [z_lo + U(j,z) + V1(I,j)*W(j,z)]
+**
+**	Note that [ V1(I,j) + z_hi ]/[ z_lo + U(j,z) + V1(I,j)*W(j,z) ] ~
+**	[ V1(I,j) + z ]/[ z^2/2 + V1(I,j)*z ] so that the first term overhangs
+**	the second by at least POW2_K bits.  With all of the above in mind, the
+**	final calculation looks like:
+**
+**		hi = V1(I,j) + z_hi
+**		lo = (z_hi - (hi - V1(I,j))) + z_lo
+**		expm1(x) =  hi + { lo + [ U(j,z) + V1(I,j)*W(j,z) ] }
+**
+**  Normal Range:
+**
+**	When 1 <= I <= F_PRECISION - 1, V(I,j) - 1 is exact and loses at most
+**	one bit of alignment shift.  In this case we can compute expm1 as
+**
+**		expm1(x) = [V(I,j) - 1] + V(I,j)*W(j,z)
+**
+**  Big range:
+**
+**	When F_PRECISION <= I, then 1 is insignificant relative to V(I,j).
+**	In this case we can compute expm1 as
+**
+**		expm1(x) = V(I,j) + [ V(I,j)*W(j,z) - 1 ]
+**
+**	Note that on this range, overflow might occur.
+**
+**  Polynomial Range:
+**
+**	When |x| is relatively small, then I and j are both zero and no
+**	alignment shift is available using (2).  In this situation, we
+**	base are approximation on the Taylor series expansion:
+**
+**		expm1(x) = sum { x^n/n! | n = 1, ... }
+**
+**
+**  The following diagram summerizes the evaluation ranges for expm1
+**
+**    -inf				  0				  +inf
+**	+----------+---------+--------+---+---+--------+-----------+--------+
+**      |          |         |        |       |        |           |        |
+**        constant    hi/lo    problem   poly  problem   normal      big
+','line_number':77,'multiline':True]['text':' Select data type function dependent table values ','line_number':219,'multiline':True]['text':' 'big' for accurate pow ','line_number':227,'multiline':True]['text':' Miscellaneous local definitions ','line_number':229,'multiline':True]['text':'
+    ** Weed out: near overflow, certain -1 cases, NaN's, Inf's, denorms and
+    ** polynomial cases.
+    ','line_number':250,'multiline':True]['text':'
+    ** The product x*(1/ln2) is on the critical path of this routine.
+    ** Because the code is structured with a branch prior to the multiply,
+    ** it is difficult for some compilers to schedule the load of
+    ** the constant 1/ln2 early enough to avoid delaying the reduced argument
+    ** computation.  To avoid this delay, we preload (1/ln2)
+    ','line_number':260,'multiline':True]['text':'
+    ** Screen out cases where expm1(x) = -1, or overflow as well as x = NaN
+    ** or infinity.  We also need to screen out denorms and small argument
+    ** (polynomial range).  In order to avoid code schedule issues, pre-compute
+    ** the check for the polynomial range. 
+    ','line_number':271,'multiline':True]['text':'
+    ** compute the reduced argument, z.
+    ','line_number':287,'multiline':True]['text':' Save for getting m later on ','line_number':294,'multiline':True]['text':'
+    ** Now get the bits of m as a integer and break it up into I and j
+    ','line_number':302,'multiline':True]['text':' Scale 2^(j/2^POW2_K) by 2^I, so that only one multiply is done ','line_number':317,'multiline':True]['text':' We no longer care about the rounding mode, so restore it. ','line_number':326,'multiline':True]['text':' Scale polynomial result and check for possible overflow ','line_number':332,'multiline':True]['text':'
+        ** Strip out the big case since once thats done, its safe to use
+        ** V(i,j) in arithmetic expressions
+        ','line_number':340,'multiline':True]['text':'
+         * Normal, problem and hi/lo ranges get here
+         ','line_number':348,'multiline':True]['text':' problem_region: ','line_number':360,'multiline':True]['text':'
+        ** Screen for overflows with moderate care.  If no overflow possible,
+        ** just go ahead and compute the result.  At this point, m is the
+        ** hi bits of V(I,j) = 2^I*T(j)
+        ','line_number':379,'multiline':True]['text':' Fall through ','line_number':389,'multiline':True]['text':'
+    ** At this point x is small and m is the high word of |x|.  If x is
+    ** really tiny (including denorms), we can just return x.  Otherwise
+    ** compute the series evaluation for expm1.
+    ','line_number':400,'multiline':True]['text':' 
+    ** Do the "final" multiple.  However, when no backup is available
+    ** the final multiply might involve a NaN or dirty zero, so we need to
+    ** do this scaling carefully
+    ','line_number':413,'multiline':True]['text':' Multiply by table entry ','line_number':420,'multiline':True]['text':' "Multiply" by 2^i ','line_number':429,'multiline':True]['text':' Isolate exponent field and check for overflow ','line_number':435,'multiline':True]['text':'
+        * If we get here, i and m are the high words of x and |x|
+        * respectively.  If m doesn't contain all of the bits of x,
+        * check for non-zero bits in the low word
+        ','line_number':446,'multiline':True]['text':' x was +/- infinity ','line_number':454,'multiline':True]['text':'
+    ** If we get here, x is: large or an IEEE special case (NaN or Inf).
+    ** Start by weeding out NaN and infinities
+    ','line_number':465,'multiline':True]['text':' Screen out NaN's and Inf's ','line_number':471,'multiline':True]['text':'
+    ** If x is negative, expm1(x) = -1 to machine precision.  Otherwise,
+    ** expm1(x) overflows.
+    **
+    **		NOTE: at this point i is the high word of x and m
+    **		is i &= ~F_SIGN_BIT_MASK
+    ','line_number':475,'multiline':True]

@@ -1,0 +1,51 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]['text':'***************************************************************************','line_number':17,'multiline':True]['text':' template <class T> class RefPtrGetterAddRefs;','line_number':19,'multiline':False]['text':' namespace mscom','line_number':35,'multiline':False]['text':' defined(XP_WIN)','line_number':36,'multiline':False]['text':' Traditionally, RefPtr supports automatic refcounting of any pointer type','line_number':38,'multiline':False]['text':' with AddRef() and Release() methods that follow the traditional semantics.','line_number':39,'multiline':False]['text':'','line_number':40,'multiline':False]['text':' This traits class can be specialized to operate on other pointer types. For','line_number':41,'multiline':False]['text':' example, we specialize this trait for opaque FFI types that represent','line_number':42,'multiline':False]['text':' refcounted objects in Rust.','line_number':43,'multiline':False]['text':'','line_number':44,'multiline':False]['text':' Given the use of ConstRemovingRefPtrTraits below, U should not be a const-','line_number':45,'multiline':False]['text':' qualified type.','line_number':46,'multiline':False]['text':' namespace mozilla','line_number':53,'multiline':False]['text':' Constructors','line_number':85,'multiline':False]['text':' default constructor','line_number':89,'multiline':False]['text':' copy-constructor','line_number':94,'multiline':False]['text':' construct from a raw pointer (of the right type)','line_number':105,'multiline':False]['text':' construct from |already_AddRefed|','line_number':119,'multiline':False]['text':' construct from |otherRefPtr.forget()|','line_number':126,'multiline':False]['text':' copy-construct from a smart pointer with a related pointer type','line_number':133,'multiline':False]['text':' construct from |Move(RefPtr<SomeSubclassOfT>)|.','line_number':144,'multiline':False]['text':' defined(XP_WIN)','line_number':151,'multiline':False]['text':' Defined in OwningNonNull.h','line_number':153,'multiline':False]['text':' Defined in StaticLocalPtr.h','line_number':157,'multiline':False]['text':' Defined in StaticPtr.h','line_number':161,'multiline':False]['text':' Assignment operators','line_number':165,'multiline':False]['text':' copy assignment operator','line_number':173,'multiline':False]['text':' assign from an RefPtr of a related pointer type','line_number':181,'multiline':False]['text':' assign from a raw pointer (of the right type)','line_number':188,'multiline':False]['text':' assign from |already_AddRefed|','line_number':196,'multiline':False]['text':' assign from |otherRefPtr.forget()|','line_number':204,'multiline':False]['text':' defined(XP_WIN)','line_number':214,'multiline':False]['text':' Defined in OwningNonNull.h','line_number':223,'multiline':False]['text':' Defined in StaticLocalPtr.h','line_number':227,'multiline':False]['text':' Defined in StaticPtr.h','line_number':231,'multiline':False]['text':' Other pointer operators','line_number':235,'multiline':False]['text':' ...exchange ownership with |aRhs|; can save a pair of refcount operations','line_number':238,'multiline':False]['text':' ...exchange ownership with |aRhs|; can save a pair of refcount operations','line_number':246,'multiline':False]['text':' return the value of mRawPtr and null out mRawPtr. Useful for','line_number':254,'multiline':False]['text':' already_AddRefed return values.','line_number':255,'multiline':False]['text':' Set the target of aRhs to the value of mRawPtr and null out mRawPtr.','line_number':264,'multiline':False]['text':' Useful to avoid unnecessary AddRef/Release pairs with "out"','line_number':265,'multiline':False]['text':' parameters where aRhs bay be a T** or an I** where I is a base class','line_number':266,'multiline':False]['text':' of T.','line_number':267,'multiline':False]['text':'
+    Prefer the implicit conversion provided automatically by |operator T*()
+    const|. Use |get()| to resolve ambiguity or to get a castable pointer.
+  ','line_number':281,'multiline':True]['text':'
+    ...makes an |RefPtr| act like its underlying raw pointer type whenever it
+    is used in a context where a raw pointer is expected.  It is this operator
+    that makes an |RefPtr| substitutable for a raw pointer.
+
+    Prefer the implicit use of this operator to calling |get()|, except where
+    necessary to resolve ambiguity.
+  ','line_number':290,'multiline':True]['text':' Don't allow implicit conversion of temporary RefPtr to raw pointer,','line_number':302,'multiline':False]['text':' because the refcount might be one and the pointer will immediately become','line_number':303,'multiline':False]['text':' invalid.','line_number':304,'multiline':False]['text':' These are needed to avoid the deleted operator above.  XXX Why is operator!','line_number':307,'multiline':False]['text':' needed separately?  Shouldn't the compiler prefer using the non-deleted','line_number':308,'multiline':False]['text':' operator bool instead of the deleted operator T*?','line_number':309,'multiline':False]['text':' This is not intended to be used by clients.  See |address_of|','line_number':342,'multiline':False]['text':' below.','line_number':343,'multiline':False]['text':' This is not intended to be used by clients.  See |address_of|','line_number':349,'multiline':False]['text':' below.','line_number':350,'multiline':False]['text':' This helper class makes |RefPtr<const T>| possible by casting away','line_number':368,'multiline':False]['text':' the constness from the pointer when calling AddRef() and Release().','line_number':369,'multiline':False]['text':'','line_number':370,'multiline':False]['text':' This is necessary because AddRef() and Release() implementations can't','line_number':371,'multiline':False]['text':' generally expected to be const themselves (without heavy use of |mutable|','line_number':372,'multiline':False]['text':' and |const_cast| in their own implementations).','line_number':373,'multiline':False]['text':'','line_number':374,'multiline':False]['text':' This should be sound because while |RefPtr<const T>| provides a','line_number':375,'multiline':False]['text':' const view of an object, the object itself should not be const (it','line_number':376,'multiline':False]['text':' would have to be allocated as |new const T| or similar to be const).','line_number':377,'multiline':False]['text':'
+  ...
+
+  This class is designed to be used for anonymous temporary objects in the
+  argument list of calls that return COM interface pointers, e.g.,
+
+    RefPtr<IFoo> fooP;
+    ...->GetAddRefedPointer(getter_AddRefs(fooP))
+
+  DO NOT USE THIS TYPE DIRECTLY IN YOUR CODE.  Use |getter_AddRefs()| instead.
+
+  When initialized with a |RefPtr|, as in the example above, it returns
+  a |void**|, a |T**|, or an |nsISupports**| as needed, that the
+  outer call (|GetAddRefedPointer| in this case) can fill in.
+
+  This type should be a nested class inside |RefPtr<T>|.
+','line_number':423,'multiline':True]['text':' nothing else to do','line_number':444,'multiline':False]['text':'
+  Used around a |RefPtr| when
+  ...makes the class |RefPtrGetterAddRefs<T>| invisible.
+','line_number':461,'multiline':True]['text':' Comparing two |RefPtr|s','line_number':469,'multiline':False]['text':' Comparing an |RefPtr| to a raw pointer','line_number':481,'multiline':False]['text':' Comparing an |RefPtr| to |nullptr|','line_number':523,'multiline':False]['text':' MOZ_DBG support','line_number':545,'multiline':False]['text':'***************************************************************************','line_number':552,'multiline':True]['text':' Provide a specialization of AlignmentFinder to allow MOZ_ALIGNOF(RefPtr<T>)','line_number':571,'multiline':False]['text':' with an incomplete T.','line_number':572,'multiline':False]['text':'*
+ * Helper function to be able to conveniently write things like:
+ *
+ *   already_AddRefed<T>
+ *   f(...)
+ *   {
+ *     return MakeAndAddRef<T>(...);
+ *   }
+ ','line_number':579,'multiline':True]['text':'*
+ * Helper function to be able to conveniently write things like:
+ *
+ *   auto runnable =
+ * MakeRefPtr<ErrorCallbackRunnable<nsIDOMGetUserMediaSuccessCallback>>(
+ *       mOnSuccess, mOnFailure, *error, mWindowID);
+ ','line_number':594,'multiline':True]['text':' namespace mozilla','line_number':607,'multiline':False]['text':'*
+ * Deduction guide to allow simple `RefPtr` definitions from an
+ * already_AddRefed<T> without repeating the type, e.g.:
+ *
+ *   RefPtr ptr = MakeAndAddRef<SomeType>(...);
+ ','line_number':609,'multiline':True]['text':' mozilla_RefPtr_h ','line_number':618,'multiline':True]

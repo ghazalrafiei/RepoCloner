@@ -1,0 +1,193 @@
+['text':'*
+ * Starts up a sharded cluster with the given specifications. The cluster will be fully operational
+ * after the execution of this constructor function.
+ *
+ * In addition to its own methods, ShardingTest inherits all the functions from the 'sh' utility
+ * with the db set as the first mongos instance in the test (i.e. s0).
+ *
+ * @param {Object} params Contains the key-value pairs for the cluster
+ *   configuration. Accepted keys are:
+ *
+ *   {
+ *     name {string}: name for this test
+ *     shouldFailInit {boolean}: if set, assert that this will fail initialization
+ *     verbose {number}: the verbosity for the mongos
+ *     chunkSize {number}: the chunk size to use as configuration for the cluster
+ *
+ *     mongos {number|Object|Array.<Object>}: number of mongos or mongos
+ *       configuration object(s)(*). @see MongoRunner.runMongos
+ *
+ *     rs {Object|Array.<Object>}: replica set configuration object. Can
+ *       contain:
+ *       {
+ *         nodes {number}: number of replica members. Defaults to 3.
+ *         protocolVersion {number}: protocol version of replset used by the
+ *             replset initiation.
+ *         For other options, @see ReplSetTest#initiate
+ *       }
+ *
+ *     shards {number|Object|Array.<Object>}: number of shards or shard
+ *       configuration object(s)(*). @see MongoRunner.runMongod
+ *
+ *     config {number|Object|Array.<Object>}: number of config server or
+ *       config server configuration object(s)(*). @see MongoRunner.runMongod
+ *
+ *     (*) There are two ways For multiple configuration objects.
+ *       (1) Using the object format. Example:
+ *
+ *           { d0: { verbose: 5 }, d1: { auth: '' }, rs2: { oplogsize: 10 }}
+ *
+ *           In this format, d = mongod, s = mongos & c = config servers
+ *
+ *       (2) Using the array format. Example:
+ *
+ *           [{ verbose: 5 }, { auth: '' }]
+ *
+ *       Note: you can only have single server shards for array format.
+ *
+ *       Note: A special "bridgeOptions" property can be specified in both the object and array
+ *          formats to configure the options for the mongobridge corresponding to that node. These
+ *          options are merged with the params.bridgeOptions options, where the node-specific
+ *          options take precedence.
+ *
+ *     other: {
+ *       rs: same as above
+ *       chunkSize: same as above
+ *       keyFile {string}: the location of the keyFile
+ *
+ *       shardOptions {Object}: same as the shards property above.
+ *          Can be used to specify options that are common all shards.
+ *
+ *       configOptions {Object}: same as the config property above.
+ *          Can be used to specify options that are common all config servers.
+ *       mongosOptions {Object}: same as the mongos property above.
+ *          Can be used to specify options that are common all mongos.
+ *       enableBalancer {boolean} : if true, enable the balancer
+ *          enableBalancer setting
+ *       manualAddShard {boolean}: shards will not be added if true.
+ *
+ *       migrationLockAcquisitionMaxWaitMS {number}: number of milliseconds to acquire the migration
+ *          lock.
+ *
+ *       useBridge {boolean}: If true, then a mongobridge process is started for each node in the
+ *          sharded cluster. Defaults to false.
+ *
+ *       causallyConsistent {boolean}: Specifies whether the connections to the replica set nodes
+ *          should be created with the 'causal consistency' flag enabled, which means they will
+ *          gossip the cluster time and add readConcern afterClusterTime where applicable.
+ *          Defaults to false.
+ *
+ *       bridgeOptions {Object}: Options to apply to all mongobridge processes. Defaults to {}.
+ *
+ *       // replica Set only:
+ *       rsOptions {Object}: same as the rs property above. Can be used to
+ *         specify options that are common all replica members.
+ *       useHostname {boolean}: if true, use hostname of machine,
+ *         otherwise use localhost
+ *       numReplicas {number}
+ *
+ *       configShard {boolean}: Add the config server as a shard if true.
+ *       useAutoBootstrapProcedure {boolean}: Use the auto-bootstrapping procedure on every shard
+ *          and config server if set to true.
+ *       alwaysUseTestNameForShardName {boolean}: Always use the testname as the name of the shard.
+ *     }
+ *   }
+ *
+ * Member variables:
+ * s {Mongo} - connection to the first mongos
+ * s0, s1, ... {Mongo} - connection to different mongos
+ * rs0, rs1, ... {ReplSetTest} - test objects to replica sets
+ * shard0, shard1, ... {Mongo} - connection to shards
+ * config0, config1, ... {Mongo} - connection to config servers
+ * c0, c1, ... {Mongo} - same as config0, config1, ...
+ * configRS - the config ReplSetTest object
+ ','line_number':1,'multiline':True]['text':' Used for counting the test duration','line_number':110,'multiline':False]['text':' Timeout to be used for operations scheduled by the sharding test, which must wait for write','line_number':113,'multiline':False]['text':' concern (5 minutes)','line_number':114,'multiline':False]['text':' Ensure we don't mutate the passed-in parameters.','line_number':117,'multiline':False]['text':' Publicly exposed variables','line_number':120,'multiline':False]['text':'*
+     * Tries to load the 'jstests/libs/legacyThreadSupport.js' dependency. Returns true if the file
+     * is loaded successfully, and false otherwise.
+     ','line_number':122,'multiline':True]['text':' eslint-disable-next-line no-restricted-syntax ','line_number':132,'multiline':True]['text':' For Thread.','line_number':133,'multiline':False]['text':'*
+     * Constructs a human-readable string representing a chunk's range.
+     ','line_number':140,'multiline':True]['text':'*
+     * Extends the ShardingTest class with the methods exposed by the sh utility class.
+     ','line_number':147,'multiline':True]['text':'*
+     * Configures the cluster based on the specified parameters (balancer state, etc).
+     ','line_number':175,'multiline':True]['text':' ShardingTest API','line_number':230,'multiline':False]['text':'*
+     * Finds the _id of the primary shard for database 'dbname', e.g., 'test-rs0'
+     ','line_number':236,'multiline':True]['text':'*
+     * Find the connection to the primary shard for database 'dbname'.
+     ','line_number':273,'multiline':True]['text':'*
+     * Find a different shard connection than the one given.
+     ','line_number':303,'multiline':True]['text':'*
+     * Returns boolean for whether the sharding test is compatible to shutdown in parallel.
+     ','line_number':343,'multiline':True]['text':' Keep the current behavior of shutting down each replica set shard and the','line_number':352,'multiline':False]['text':' CSRS individually when otherParams.useBridge === true. There appear to only','line_number':353,'multiline':False]['text':' be 8 instances of {useBridge: true} with ShardingTest and the implementation','line_number':354,'multiline':False]['text':' complexity is too high','line_number':355,'multiline':False]['text':' The mongo shell performing X.509 authentication as a cluster member requires','line_number':361,'multiline':False]['text':' starting a parallel shell and using the server's (not the client's)','line_number':362,'multiline':False]['text':' certificate. The ReplSetTest instance constructed in a Thread wouldn't have','line_number':363,'multiline':False]['text':' copied the path to the server's certificate. We therefore fall back to','line_number':364,'multiline':False]['text':' initiating the CSRS and replica set shards sequentially when X.509','line_number':365,'multiline':False]['text':' authentication is being used.','line_number':366,'multiline':False]['text':' The test has chosen to opt out of parallel shutdown','line_number':381,'multiline':False]['text':'*
+     * Returns the replica sets args for sets that are to be terminated in parallel threads.
+     ','line_number':388,'multiline':True]['text':' Generating a list of live nodes in the replica set','line_number':394,'multiline':False]['text':' Ignore since the node is not live','line_number':402,'multiline':False]['text':' Getting the pid for the node','line_number':408,'multiline':False]['text':' Shutdown requires PID values for every node. The case we are','line_number':422,'multiline':False]['text':' unable to obtain a PID value is rare, however, should it','line_number':423,'multiline':False]['text':' occur, the code will throw this error.','line_number':424,'multiline':False]['text':' the number of livenodes must match the number of pidvalues being passed in','line_number':432,'multiline':False]['text':' rst.Args to ensure the replica set is constructed correctly','line_number':433,'multiline':False]['text':' Arguments for each replica set within parallel threads.','line_number':437,'multiline':False]['text':' Mixed-mode SSL tests may specify a keyFile per replica set rather','line_number':442,'multiline':False]['text':' than one for the whole cluster.','line_number':443,'multiline':False]['text':' Wait for each thread to finish. Throw an error if any thread fails.','line_number':480,'multiline':False]['text':' The replica sets shutting down serially','line_number':492,'multiline':False]['text':' Measure the execution time of shutting down shards.','line_number':523,'multiline':False]['text':' call get chunks String for every namespace in the collections','line_number':647,'multiline':False]['text':'*
+     * Returns the number of shards which contain the given dbName.collName collection
+     ','line_number':690,'multiline':True]['text':'*
+     * Returns an array of the size of numShards where each element is the number of documents on
+     * that particular shard
+     ','line_number':698,'multiline':True]['text':'*
+     * Waits up to the specified timeout (with a default of 60s) for the collection to be
+     * considered well balanced.
+     *','line_number':750,'multiline':True]['text':'*
+     * Returns the shards on which documents matching a particular query reside.
+     ','line_number':765,'multiline':True]['text':'*
+     * Wait for sharding to be initialized.
+     ','line_number':847,'multiline':True]['text':' The choice of namespace (local.fooCollection) does not affect the output.','line_number':853,'multiline':False]['text':' Skip arbiters','line_number':871,'multiline':False]['text':'*
+     * Kills the mongos with index n.
+     *
+     * @param {boolean} [extraOptions.waitPid=true] if true, we will wait for the process to
+     * terminate after stopping it.
+     ','line_number':916,'multiline':True]['text':'*
+     * Kills the config server mongod with index n.
+     ','line_number':933,'multiline':True]['text':'*
+     * Stops and restarts a mongos process.
+     *
+     * If 'opts' is not specified, starts the mongos with its previous parameters.  If 'opts' is
+     * specified and 'opts.restart' is false or missing, starts mongos with the parameters specified
+     * in 'opts'.  If opts is specified and 'opts.restart' is true, merges the previous options
+     * with the options specified in 'opts', with the options in 'opts' taking precedence.
+     *
+     * Warning: Overwrites the old s (if n = 0) admin, config, and sn member variables.
+     ','line_number':940,'multiline':True]['text':' The mongos processes identify themselves to mongobridge as host:port, where the','line_number':971,'multiline':False]['text':' host is the actual hostname of the machine and not localhost.','line_number':972,'multiline':False]['text':'*
+     * Restarts each node in a particular shard replica set using the shard's original startup
+     * options by default.
+     *
+     * Option { startClean : true } forces clearing the data directory.
+     * Option { auth : Object } object that contains the auth details for admin credentials.
+     *   Should contain the fields 'user' and 'pwd'
+     *
+     *
+     * @param {int} shard server number (0, 1, 2, ...) to be restarted
+     ','line_number':1003,'multiline':True]['text':'*
+     * Stops and restarts a config server mongod process.
+     *
+     * If opts is specified, the new mongod is started using those options. Otherwise, it is
+     * started
+     * with its previous parameters.
+     *
+     * Warning: Overwrites the old cn/confign member variables.
+     ','line_number':1026,'multiline':True]['text':'*
+     * Returns a document {isMixedVersion: <bool>, oldestBinVersion: <string>}.
+     * The 'isMixedVersion' field is true if any settings to ShardingTest or jsTestOptions indicate
+     * this is a multiversion cluster.
+     * The 'oldestBinVersion' field is set to the oldest binary version used in this cluster, one of
+     * 'latest', 'last-continuous' and 'last-lts'.
+     * Note: Mixed version cluster with binary versions older than 'last-lts' is not supported. If
+     * such binary exists in the cluster, this function assumes this is not a mixed version cluster
+     * and returns 'oldestBinVersion' as 'latest'.
+     *
+     * Checks for bin versions via:
+     *     jsTestOptions().shardMixedBinVersions, jsTestOptions().mongosBinVersion,
+     *     otherParams.configOptions.binVersion, otherParams.shardOptions.binVersion,
+     *     otherParams.mongosOptions.binVersion
+     ','line_number':1041,'multiline':True]['text':' Must check shardMixedBinVersion because it causes shardOptions.binVersion to be an','line_number':1065,'multiline':False]['text':' object (versionIterator) rather than a version string. Must check mongosBinVersion,','line_number':1066,'multiline':False]['text':' as well, because it does not update mongosOptions.binVersion.','line_number':1067,'multiline':False]['text':' Check for config servers.','line_number':1077,'multiline':False]['text':' Check for mongod servers.','line_number':1087,'multiline':False]['text':' Check for mongos servers.','line_number':1103,'multiline':False]['text':'*
+     * Runs a find on the namespace to force a refresh of the node's catalog cache.
+     ','line_number':1131,'multiline':True]['text':'*
+     * Waits for all operations to fully replicate on all shards.
+     ','line_number':1138,'multiline':True]['text':'*
+     * Returns if there is a new feature compatibility version for the "latest" version. This must
+     * be manually changed if and when there is a new feature compatibility version.
+     ','line_number':1145,'multiline':True]['text':'*
+     * Returns the total number of mongod nodes across all shards, excluding config server nodes.
+     * Used only for diagnostic logging.
+     ','line_number':1153,'multiline':True]['text':' ShardingTest initialization','line_number':1162,'multiline':False]['text':' Default enableBalancer to false.','line_number':1194,'multiline':False]['text':' Allow specifying mixed-type options like this:','line_number':1198,'multiline':False]['text':' { mongos : [ { bind_ip : "localhost" } ],','line_number':1199,'multiline':False]['text':'   shards : { rs : true, d : true } }','line_number':1200,'multiline':False]['text':' We avoid setting the random seed unequivocally to avoid unexpected behavior in tests','line_number':1319,'multiline':False]['text':' that already make use of Random.setRandomSeed(). This conditional can be removed if','line_number':1320,'multiline':False]['text':' it becomes the standard to always be generating the seed through ShardingTest.','line_number':1321,'multiline':False]['text':'','line_number':1327,'multiline':False]['text':' Start each shard replica set.','line_number':1328,'multiline':False]['text':'','line_number':1329,'multiline':False]['text':' Measure the execution time of startup and initiate.','line_number':1330,'multiline':False]['text':' Our documented upgrade/downgrade paths let us assume config server nodes will','line_number':1362,'multiline':False]['text':' always be fully upgraded before shard nodes, so skip a config shard.','line_number':1363,'multiline':False]['text':' If the test doesn't depend on specific shard binVersions, create a mixed','line_number':1368,'multiline':False]['text':' version','line_number':1369,'multiline':False]['text':' shard cluster that randomly assigns shard binVersions, half "latest" and half','line_number':1370,'multiline':False]['text':' "last-continuous" or "last-lts".','line_number':1371,'multiline':False]['text':' shardMixedBinVersions.','line_number':1372,'multiline':False]['text':' The number of nodes in the rs field will take priority.','line_number':1396,'multiline':False]['text':' Unless explicitly given a number of config servers, a config shard uses the shard's','line_number':1404,'multiline':False]['text':' number of nodes to increase odds of compatibility with test assertions.','line_number':1405,'multiline':False]['text':' Start up the replica set but don't wait for it to complete. This allows the startup','line_number':1433,'multiline':False]['text':' of each shard to proceed in parallel.','line_number':1434,'multiline':False]['text':'','line_number':1442,'multiline':False]['text':' Start up the config server replica set.','line_number':1443,'multiline':False]['text':'','line_number':1444,'multiline':False]['text':' always use wiredTiger as the storage engine for CSRS','line_number':1458,'multiline':False]['text':' Ensure that journaling is always enabled for config servers.','line_number':1461,'multiline':False]['text':' Start the config server's replica set without waiting for it to complete. This allows','line_number':1481,'multiline':False]['text':' it to proceed in parallel with the startup of each shard.','line_number':1482,'multiline':False]['text':'','line_number':1487,'multiline':False]['text':' Wait for each shard replica set to finish starting up.','line_number':1488,'multiline':False]['text':'','line_number':1489,'multiline':False]['text':'','line_number':1498,'multiline':False]['text':' Wait for the config server to finish starting up.','line_number':1499,'multiline':False]['text':'','line_number':1500,'multiline':False]['text':'','line_number':1511,'multiline':False]['text':' Initiate each shard replica set and wait for replication. Also initiate the config','line_number':1512,'multiline':False]['text':' replica set. Whenever possible, in parallel.','line_number':1513,'multiline':False]['text':'','line_number':1514,'multiline':False]['text':' The mongo shell cannot authenticate as the internal __system user in tests that use','line_number':1526,'multiline':False]['text':' x509 for cluster authentication. Choosing the default value for','line_number':1527,'multiline':False]['text':' wcMajorityJournalDefault in ReplSetTest cannot be done automatically without the','line_number':1528,'multiline':False]['text':' shell performing such authentication, so allow tests to pass the value in.','line_number':1529,'multiline':False]['text':' Arguments for creating instances of each replica set within parallel threads.','line_number':1542,'multiline':False]['text':' Mixed-mode SSL tests may specify a keyFile per replica set rather than one','line_number':1547,'multiline':False]['text':' for the whole cluster.','line_number':1548,'multiline':False]['text':' Replica set configuration for initiating the replica set.','line_number':1554,'multiline':False]['text':' Do replication.','line_number':1562,'multiline':False]['text':' The mongo shell performing X.509 authentication as a cluster member requires','line_number':1579,'multiline':False]['text':' starting a parallel shell and using the server's (not the client's)','line_number':1580,'multiline':False]['text':' certificate. The ReplSetTest instance constructed in a Thread wouldn't have','line_number':1581,'multiline':False]['text':' copied the path to the server's certificate. We therefore fall back to','line_number':1582,'multiline':False]['text':' initiating the CSRS and replica set shards sequentially when X.509','line_number':1583,'multiline':False]['text':' authentication is being used.','line_number':1584,'multiline':False]['text':' Wait for each thread to finish. Throw an error if any thread fails.','line_number':1622,'multiline':False]['text':' Wait for master to be elected before starting mongos','line_number':1655,'multiline':False]['text':' TODO: SERVER-80100 Remove assert.soon.','line_number':1659,'multiline':False]['text':' If 'otherParams.mongosOptions.binVersion' is an array value, then we'll end up','line_number':1674,'multiline':False]['text':' constructing a version iterator.','line_number':1675,'multiline':False]['text':' The default time for mongos quiesce mode in response to SIGTERM is 15 seconds.','line_number':1693,'multiline':False]['text':' Reduce this to 0 for faster shutdown.','line_number':1694,'multiline':False]['text':' Wait for the new featureCompatibilityVersion to propagate to all nodes in the','line_number':1712,'multiline':False]['text':' CSRS to ensure that older versions of mongos can successfully connect.','line_number':1713,'multiline':False]['text':' If chunkSize has been requested for this test, write the configuration','line_number':1725,'multiline':False]['text':' Start the MongoS servers','line_number':1757,'multiline':False]['text':' The mongos processes identify themselves to mongobridge as host:port, where','line_number':1768,'multiline':False]['text':' the host is the actual hostname of the machine and not localhost.','line_number':1769,'multiline':False]['text':' If auth is enabled for the test, login the mongos connections as system in order to','line_number':1804,'multiline':False]['text':' configure the instances and then log them out again.','line_number':1805,'multiline':False]['text':' Ensure that all config server nodes are up to date with any changes made to balancer','line_number':1813,'multiline':False]['text':' settings before adding shards to the cluster. This prevents shards, which read','line_number':1814,'multiline':False]['text':' config.settings with readPreference 'nearest', from accidentally fetching stale','line_number':1815,'multiline':False]['text':' values from secondaries that aren't up-to-date.','line_number':1816,'multiline':False]['text':' Clean up the running procceses on failure','line_number':1869,'multiline':False]['text':' Ensure that the sessions collection exists so jstests can run things with','line_number':1875,'multiline':False]['text':' logical sessions and test them. We do this by forcing an immediate cache refresh','line_number':1876,'multiline':False]['text':' on the config server, which auto-shards the collection for the cluster.','line_number':1877,'multiline':False]['text':' Ensure that all CSRS nodes are up to date. This is strictly needed for tests that use','line_number':1880,'multiline':False]['text':' multiple mongoses. In those cases, the first mongos initializes the contents of the','line_number':1881,'multiline':False]['text':' 'config' database, but without waiting for those writes to replicate to all the config','line_number':1882,'multiline':False]['text':' servers then the secondary mongoses risk reading from a stale config server and seeing an','line_number':1883,'multiline':False]['text':' empty config database.','line_number':1884,'multiline':False]['text':' This is needed because auto-bootstrapping will initially create a config.shards entry','line_number':1888,'multiline':False]['text':' for the config shard where the host field does not contain all the nodes in the','line_number':1889,'multiline':False]['text':' replica set.','line_number':1890,'multiline':False]['text':' Flushes the routing table cache on connection 'conn'. If 'keyFileLocal' is defined,','line_number':1906,'multiline':False]['text':' authenticates the keyfile user.','line_number':1907,'multiline':False]['text':' Invokes the actual execution of cache refresh.','line_number':1909,'multiline':False]['text':' this was expected to fail, so clean up appropriately','line_number':1958,'multiline':False]['text':' This initialization was expected to fail, but it did not.','line_number':1964,'multiline':False]['text':' Stub for a hook to check that the cluster-wide metadata is consistent.','line_number':1969,'multiline':False]['text':' Stub for a hook to check that collection UUIDs are consistent across shards and the config','line_number':1974,'multiline':False]['text':' server.','line_number':1975,'multiline':False]['text':' Stub for a hook to check that indexes are consistent across shards.','line_number':1978,'multiline':False]

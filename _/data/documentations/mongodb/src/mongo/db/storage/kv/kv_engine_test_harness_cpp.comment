@@ -1,0 +1,169 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':' This includes the _mdb_catalog.','line_number':223,'multiline':False]['text':' 'loc' holds location of "abc" and is referenced after restarting engine.','line_number':236,'multiline':False]['text':' This includes the _mdb_catalog.','line_number':378,'multiline':False]['text':' Dropping a collection might fail if we haven't checkpointed the data','line_number':382,'multiline':False]['text':'
+ * Pinned oldest with another session
+ * | Session 1                   | Session 2                  |
+ * |-----------------------------+----------------------------|
+ * | Begin                       |                            |
+ * | Write A 1                   |                            |
+ * | Commit :commit 10           |                            |
+ * | Begin :readAt 15            |                            |
+ * |                             | Begin                      |
+ * |                             | Write A 2                  |
+ * | Read A (1)                  |                            |
+ * |                             | Commit :commit 20          |
+ * | Read A (1)                  |                            |
+ * |                             | Begin :readAt 15           |
+ * |                             | Read A (1)                 |
+ * | Rollback                    |                            |
+ * |                             | Rollback                   |
+ ','line_number':442,'multiline':True]['text':'
+ * All durable
+ * | Session 1            | Session 2            | GlobalActor                      |
+ * |----------------------+----------------------+----------------------------------|
+ * | Begin                |                      |                                  |
+ * | Timestamp :commit 10 |                      |                                  |
+ * | Commit               |                      |                                  |
+ * |                      |                      | QueryTimestamp :all_durable (10) |
+ * | Begin                |                      |                                  |
+ * | Timestamp :commit 20 |                      |                                  |
+ * |                      |                      | QueryTimestamp :all_durable (10) |
+ * |                      | Begin                |                                  |
+ * |                      | Timestamp :commit 30 |                                  |
+ * |                      | Commit               |                                  |
+ * |                      |                      | QueryTimestamp :all_durable (19) |
+ * | Commit               |                      |                                  |
+ * |                      |                      | QueryTimestamp :all_durable (30) |
+ * | Begin                |                      |                                  |
+ * | Timestamp :commit 25 |                      |                                  |
+ * |                      |                      | QueryTimestamp :all_durable (24) |
+ ','line_number':516,'multiline':True]['text':'
+ * Basic Timestamp - Single
+ * | Session              |
+ * |----------------------|
+ * | Begin                |
+ * | Write A 1            |
+ * | Commit :commit 10    |
+ * |                      |
+ * | Begin :readAt 9      |
+ * | Read A (NOT_FOUND)   |
+ * | Rollback             |
+ * |                      |
+ * | Begin :readAt 10     |
+ * | Read A (1)           |
+ ','line_number':602,'multiline':True]['text':' Start a read transaction.','line_number':641,'multiline':False]['text':' Insert a record at a later time.','line_number':649,'multiline':False]['text':' Should not see the record, even if we abandon the snapshot as the read timestamp is still','line_number':661,'multiline':False]['text':' earlier than the insert timestamp.','line_number':662,'multiline':False]['text':'
+ * Basic Timestamp - Multiple
+ * | Session              |
+ * |----------------------|
+ * | Begin                |
+ * | Timestamp :commit 10 |
+ * | Write A 1            |
+ * | Timestamp :commit 20 |
+ * | Update A 2           |
+ * | Commit               |
+ * |                      |
+ * | Begin :readAt 10     |
+ * | Read A (1)           |
+ * | Rollback             |
+ * |                      |
+ * | Begin  :readAt 20    |
+ * | Read A (2)           |
+ ','line_number':676,'multiline':True]['text':' Initial insert of record.','line_number':718,'multiline':False]['text':' Update a record at a later time.','line_number':726,'multiline':False]['text':'
+ * Item Not Found - Read timestamp hides visibility
+ * | Session              |
+ * |----------------------|
+ * | Begin                |
+ * | Write A 1            |
+ * | Commit :commit 10    |
+ * |                      |
+ * | Begin :readAt 9      |
+ * | Read A (NOT_FOUND)   |
+ * | Write A 1 (NOT_FOUND)|
+ ','line_number':746,'multiline':True]['text':' Snapshot was taken before the insert and will not find the record even after the commit.','line_number':787,'multiline':False]['text':' Trying to write in an outdated snapshot will cause item not found.','line_number':795,'multiline':False]['text':'
+ * Insert
+ * | Session                |
+ * |------------------------|
+ * | Begin                  |
+ * | Write A 1              |
+ * | Timestamp :commit 10   |
+ * | Write Oplog            |
+ * | Commit                 |
+ * |                        |
+ * | Begin :readAt 9        |
+ * | Read A (NOT_FOUND)     |
+ * | Read Oplog (NOT_FOUND) |
+ * | Rollback               |
+ * |                        |
+ * | Begin :readAt 10       |
+ * | Read A (1)             |
+ * | Read Oplog (FOUND)     |
+ ','line_number':801,'multiline':True]['text':' Insert into collectionRs.','line_number':859,'multiline':False]['text':' Insert into oplogRs.','line_number':864,'multiline':False]['text':'
+ * Pinned oldest timestamp - Read
+ * | Session                     | GlobalActor                |
+ * |-----------------------------+----------------------------|
+ * | Begin                       |                            |
+ * | Write A 1                   |                            |
+ * | Commit :commit 10           |                            |
+ * |                             |                            |
+ * | Begin :readAt 15            |                            |
+ * | Read A (1)                  |                            |
+ * | Rollback                    |                            |
+ * |                             | GlobalTimestamp :oldest 20 |
+ * | Begin :readAt 15            |                            |
+ * | Read A (DB exception)       |                            |
+ ','line_number':886,'multiline':True]['text':'
+ * Pinned oldest timestamp - Write
+ * | Session                     | GlobalActor                |
+ * |-----------------------------+----------------------------|
+ * |                             | GlobalTimestamp :oldest 2  |
+ * | Begin                       |                            |
+ * | Write A 1                   |                            |
+ * | Commit :commit 2 (WCE)      |                            |
+ ','line_number':940,'multiline':True]['text':' A write transaction cannot insert records before the oldest timestamp.','line_number':971,'multiline':False]['text':'
+ * Rolling Back To Last Stable
+ * | Session                     | GlobalActor                |
+ * |-----------------------------+----------------------------|
+ * | Begin                       |                            |
+ * | Write A 1                   |                            |
+ * | Timestamp: commit 1         |                            |
+ * |                             | Last Stable Timetamp: 1    |
+ * | Begin                       |                            |
+ * | Write B 2                   |                            |
+ * | Timestamp: commit 3         |                            |
+ * |                             | Recover to Last Stable     |
+ * | Read A (1)                  |                            |
+ * | Read B (NOT_FOUND)          |                            |
+ ','line_number':980,'multiline':True]['text':' The initial data timestamp has to be set to take stable checkpoints.','line_number':999,'multiline':False]['text':' Set the stable timestamp to (1, 1) as it can't be set higher than the all durable','line_number':1028,'multiline':False]['text':' timestamp, which is (1, 1) in this case.','line_number':1029,'multiline':False]['text':' Force a checkpoint to be taken. This should advance the last stable timestamp.','line_number':1035,'multiline':False]['text':' Insert a record after the stable timestamp.','line_number':1043,'multiline':False]['text':' Rollback to the last stable timestamp.','line_number':1054,'multiline':False]['text':' Verify that we can find record A and can't find the record B inserted at Timestamp(3, 3)','line_number':1060,'multiline':False]['text':' in the collection any longer. 'numRecords' will still show two as it's the fast count and','line_number':1061,'multiline':False]['text':' doesn't get reflected during the rollback.','line_number':1062,'multiline':False]['text':'
+ * Commit behind stable
+ * | Session                         | GlobalActor                |
+ * |---------------------------------+----------------------------|
+ * |                                 | GlobalTimestamp :stable 2  |
+ * | Begin                           |                            |
+ * | Write A 1                       |                            |
+ * | Timestamp :commit 1  (ROLLBACK) |                            |
+ ','line_number':1072,'multiline':True]['text':' The initial data timestamp has to be set to take stable checkpoints.','line_number':1085,'multiline':False]['text':' Set the stable timestamp to (2, 2).','line_number':1103,'multiline':False]['text':' Force a checkpoint to be taken. This should advance the last stable timestamp.','line_number':1108,'multiline':False]['text':' Committing at or behind the stable timestamp is not allowed.','line_number':1115,'multiline':False]['text':' remove index','line_number':1263,'multiline':False]['text':' collection','line_number':1306,'multiline':False]['text':' index','line_number':1319,'multiline':False]['text':' index','line_number':1378,'multiline':False]['text':' index','line_number':1437,'multiline':False]['text':' Create a DurableCatalog and RecordStore','line_number':1528,'multiline':False]['text':' Insert an entry into the DurableCatalog, and ensure the tenantId is stored on the nss in the','line_number':1548,'multiline':False]['text':' entry.','line_number':1549,'multiline':False]['text':' Re-initialize the DurableCatalog (as if it read from disk). Ensure the tenantId is still','line_number':1563,'multiline':False]['text':' stored on the nss in the entry.','line_number':1564,'multiline':False]['text':' namespace','line_number':1583,'multiline':False]['text':' namespace mongo','line_number':1594,'multiline':False]

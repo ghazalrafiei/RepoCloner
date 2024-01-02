@@ -1,0 +1,289 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+ *
+ * A FailPoint is a hook mechanism allowing testing behavior to occur at prearranged
+ * execution points in the server code. They can be activated and deactivated, and
+ * configured to hold data.
+ *
+ * Failpoints are only available when set on the command line with
+ * '--setParameter enableTestCommands=1'.
+ * See FailPointRegistry::registerAllFailPointsAsServerParameters & docs/test_commands.md.
+ *
+ * A FailPoint is usually defined by the MONGO_FAIL_POINT_DEFINE(name) macro,
+ * which arranges for it to be added to the global failpoint registry.
+ *
+ * A FailPoint object can have unusual lifetime semantics. It can be marked
+ * `immortal`, so that its internal state is never destroyed. This is possible
+ * because FailPoint is designed to have only trivially destructible nonstatic
+ * data members, and we can choose not to manually destroy the internal state
+ * object. This enables server code that is instrumented by an immortal
+ * static-duration FailPoint to remain valid even during process shutdown.
+ *
+ * Sample use:
+ *
+ * // Defined somewhere:
+ * MONGO_FAIL_POINT_DEFINE(failPoint);
+ *
+ * bool somewhereInTheCode() {
+ *   ... do some stuff ...
+ *   // The failpoint artificially changes the return value of this function when active.
+ *   if (MONGO_unlikely(failPoint.shouldFail()))
+ *       return false;
+ *   return true;
+ * }
+ *
+ * - or to implement more complex scenarios, use execute/executeIf -
+ *
+ * bool somewhereInTheCode() {
+ *     failPoint.execute([&](const BSONObj& data) {
+ *         // The bad things happen here, and can read the injected 'data'.
+ *     });
+ *     return true;
+ * }
+ *
+ * // scoped() is another way to do it, where lambda isn't suitable, e.g. to cause
+ * // a return/continue/break to control the enclosing function.
+ * for (auto& user : users) {
+ *     // The failpoint can be activated and given a user name, to skip that user.
+ *     if (auto sfp = failPoint.scoped(); MONGO_unlikely(sfp.isActive())) {
+ *         if (sfp.getData()["user"] == user.name()) {
+ *             continue;
+ *         }
+ *     }
+ *     processOneUser(user);
+ * }
+ *
+ * // Rendered compactly with scopedIf where the data serves as an activation filter.
+ * for (auto& user : users) {
+ *     if (MONGO_unlikely(failPoint.scopedIf([&](auto&& o) {
+ *         return o["user"] == user.name();
+ *     }).isActive())) {
+ *         continue;
+ *     }
+ *     processOneUser(user);
+ * }
+ *
+ *  The `scopedIf` and `executeIf` members have an advantage over `scoped` and `execute`. They
+ *  only affect the `FailPoint` activation counters (relevant to the `nTimes` and `skip` modes)
+ *  if the predicate is true.
+ *
+ * A FailPoint can be configured remotely by a database command.
+ * See `src/mongo/db/commands/fail_point_cmd.cpp`.
+ *
+ ','line_number':56,'multiline':True]['text':' long long values are able to be appended to BSON. If this is using declaration is changed,','line_number':139,'multiline':False]['text':' please make sure that the new type is also BSON-compatible.','line_number':140,'multiline':False]['text':'*
+             * Returns true if this LockHandle associated with a FailPoint, and
+             * the lock outcome was a "hit". `lockHandle.isActive()` generally
+             * means the block of FailPoint special behavior should execute.
+             ','line_number':170,'multiline':True]['text':'*
+             * Returns true if the fail point is still enabled.
+             *
+             * This function does not increment the underlying counter. Note that the fail point
+             * may have been changed in various ways while a LockHandle is held:
+             * - The fail point may be in the process of mutation which toggles to disabled until
+             *   LockHandles are released.
+             * - The fail point may have the modes "activationProbability", "skip", or
+             *   "times".
+             ','line_number':179,'multiline':True]['text':'* May only be called if isActive() is true. ','line_number':193,'multiline':True]['text':'< True if this represents a tryLock "hit".','line_number':201,'multiline':False]['text':'* See `FailPoint::pauseWhileSet`. ','line_number':223,'multiline':True]['text':'* See `FailPoint::pauseWhileSetAndNotCanceled`. ','line_number':232,'multiline':True]['text':'* No default parameters. No-Frills shouldFail implementation. ','line_number':257,'multiline':True]['text':'*
+         * Release a FailPoint lock previously acquired with `_tryLock`.
+         * Used only by `~LockHandle`.
+         ','line_number':263,'multiline':True]['text':'*
+         * Attempt to access the fail point. If FailPoint is disabled, it
+         * cannot be accessed and this call will return a disengaged and
+         * inactive LockHandle.
+         *
+         * After successfully locking it, however, the caller will have
+         * received either a hit or a miss, observable by calling
+         * `result.isActive()`.  If true, then caller may further access the
+         * associated `const BSONObj&` payload with `result.getData()`.
+         *
+         * If `pred` is callable, `pred(data)` is invoked with the FailPoint
+         * BSON data payload. If it returns false, it specifies a user-defined
+         * Failpoint miss. In response, this function will return an inactive
+         * LockHandle.
+         *
+         * Otherwise the FailPoint determines whether this lock operation
+         * outcome is a hit or a miss based on the FailPoint's configured Mode.
+         *
+         * Unless `alreadyCounted` is true, such a hit will also increment
+         * `_hitCount` as a side effect. This complication enables the
+         * `pauseWhileSet` loop to evaluate the failpoint multiple times while
+         * only counting the first of those hits in terms of the `_hitCount`.
+         ','line_number':271,'multiline':True]['text':' Fast path','line_number':297,'multiline':False]['text':' Took a reference to disabled in data race.','line_number':300,'multiline':False]['text':' Slow path. Wrap in `std::function` to deal with nullptr_t','line_number':302,'multiline':False]['text':' or other predicates that are not bool-convertible.','line_number':303,'multiline':False]['text':' The caller-supplied predicate, if provided, can force a miss that','line_number':306,'multiline':False]['text':' bypasses the `_evaluateByMode()` call.','line_number':307,'multiline':False]['text':'*
+         * Use the configured mode to determine hit or miss.
+         * Return true to indicate a hit
+         ','line_number':316,'multiline':True]['text':' Bit layout:','line_number':322,'multiline':False]['text':' 31: tells whether this fail point is active.','line_number':323,'multiline':False]['text':' 0~30: ref counter: # of outstanding LockHandles.','line_number':324,'multiline':False]['text':' Number of times this has been locked with a `hit` result. ','line_number':327,'multiline':True]['text':' Invariant: These should be read only if _kActiveBit of _fpInfo is set.','line_number':330,'multiline':False]['text':' protects _mode, _modeValue, _data','line_number':337,'multiline':False]['text':'*
+     * An object representing a FailPoint's interaction with the code it is
+     * instrumenting. Users don't create these. They are only used within the
+     * execute and executeIf functions and returned by the scoped() and
+     * scopedIf() functions.
+     *
+     * If the FailPoint access attempt does not acquire a reference to the
+     * FailPoint, the returned LockHandle will be disengaged. Otherwise, it
+     * holds a reference to its associated FailPoint, ensuring that FailPoint's
+     * state doesn't change while a LockHandle is attached to it.
+     *
+     * Even an engaged LockHandle (holds a reference to a FailPoint)
+     * can still have `isActive()==false`.
+     *
+     * LockHandle `isActive()`, then `getData()` may be called on it to
+     * retrieve injected data from the associated FailPoint.
+     *
+     * Ex:
+     *     if (auto scoped = failPoint.scoped(); scoped.isActive()) {
+     *         const BSONObj& data = scoped.getData();
+     *         //  failPoint injects some behavior, informed by `data`.
+     *     }
+     ','line_number':342,'multiline':True]['text':'*
+     * Explicitly resets the seed used for the PRNG in this thread.  If not called on a thread,
+     * an instance of SecureRandom is used to seed the PRNG.
+     ','line_number':367,'multiline':True]['text':'*
+     * Parses the {mode, val, extra} from the BSON.
+     * obj = {
+     *   mode: modeElem // required
+     *   data: extra    // optional payload to inject into the FailPoint intercept site.
+     * }
+     * where `modeElem` is one of:
+     *       "off"
+     *       "alwaysOn"
+     *       {"times" : val}   // active for the next val calls
+     *       {"skip" : val}    // skip calls, activate on and after call number (val+1).
+     *       {"activationProbability" : val}  // val is in interval [0.0, 1.0]
+     ','line_number':373,'multiline':True]['text':'*
+     * FailPoint state can be kept alive during shutdown by setting `immortal` true.
+     * The usual macro definition does this, but FailPoint unit tests do not.
+     ','line_number':388,'multiline':True]['text':'*
+     * If this FailPoint was constructed as `immortal` (FailPoints defined by
+     * MONGO_FAIL_POINT_DEFINE are immortal), this destructor does nothing. In
+     * that case the FailPoint (and the code it is instrumenting) can operate
+     * normally while the process shuts down.
+     ','line_number':397,'multiline':True]['text':'*
+     * Returns true if fail point is active.
+     *
+     * @param pred       see `executeIf` for more information.
+     *
+     * Calls to `shouldFail` should be placed inside MONGO_unlikely for performance.
+     *    if (MONGO_unlikely(failpoint.shouldFail())) ...
+     ','line_number':409,'multiline':True]['text':'*
+     * Changes the settings of this fail point. This will turn off the FailPoint and
+     * wait for all references on this FailPoint to go away before modifying it.
+     *
+     * @param mode  new mode
+     * @param val   unsigned having different interpretations depending on the mode:
+     *
+     *     - off, alwaysOn: ignored
+     *     - random: static_cast<int32_t>(std::numeric_limits<int32_t>::max() * p), where
+     *           where p is the probability that any given evaluation of the failpoint should
+     *           activate.
+     *     - nTimes: the number of times this fail point will be active when
+     *         #shouldFail/#execute/#scoped are called.
+     *     - skip: will become active and remain active after
+     *         #shouldFail/#execute/#scoped are called this number of times.
+     *
+     * @param extra arbitrary BSON object that can be stored to this fail point
+     *     that can be referenced afterwards with #getData. Defaults to an empty
+     *     document.
+     *
+     * @returns the number of times the fail point has been entered so far.
+     ','line_number':426,'multiline':True]['text':'*
+     * Waits until the fail point has been entered the desired number of times.
+     *
+     * @param targetTimesEntered the number of times the fail point has been entered.
+     *
+     * @returns the number of times the fail point has been entered so far.
+     ','line_number':456,'multiline':True]['text':'*
+     * Like `waitForTimesEntered`, but interruptible via the `interruptible->sleepFor` mechanism.
+     * See `mongo::Interruptible::sleepFor`.
+     ','line_number':467,'multiline':True]['text':'*
+     * @returns a BSON object showing the current mode and data stored.
+     ','line_number':476,'multiline':True]['text':'*
+     * Create a LockHandle from this FailPoint.
+     * The returned object will be active if the failpoint is active.
+     * If it's active, the returned object can be used to access FailPoint data.
+     ','line_number':483,'multiline':True]['text':'*
+     * Create a LockHandle from this FailPoint.
+     * If `pred(payload)` is true, then the returned object is active and the
+     * FailPoint's activation count is altered (relevant to e.g. the `nTimes` mode). If the
+     * predicate is false, an inactive LockHandle is returned and this FailPoint's mode is not
+     * modified at all.
+     * If it's active, the returned object can be used to access FailPoint data.
+     * The `pred` should be callable like a `bool pred(const BSONObj&)`.
+     ','line_number':492,'multiline':True]['text':'*
+     * If `pred(payload)` is true, then `f(payload)` is executed and the FailPoint's
+     * activation count is altered (relevant to e.g. the `nTimes` mode). Otherwise, `f`
+     * is not executed and this FailPoint's mode is not altered (e.g. `nTimes` isn't
+     * consumed).
+     * The `pred` should be callable like a `bool pred(const BSONObj&)`.
+     ','line_number':511,'multiline':True]['text':'*
+     * Take short `_kWaitGranularity` pauses for as long as the FailPoint is
+     * active. Though this makes several accesses to `shouldFail()`, it counts
+     * as only one increment in the FailPoint `nTimes` counter.
+     ','line_number':526,'multiline':True]['text':'*
+     * Like `pauseWhileSet`, but interruptible via the `interruptible->sleepFor` mechanism.  See
+     * `mongo::Interruptible::sleepFor`.
+     ','line_number':535,'multiline':True]['text':'*
+     * Like `pauseWhileSet`, but will also unpause as soon as the cancellation token is canceled.
+     * This method will throw if the token is canceled, to match the behavior when the
+     * Interruptible* is interrupted.
+     ','line_number':543,'multiline':True]['text':' Reuse const overload','line_number':558,'multiline':False]['text':' Relaxed: such violations can only occur during single-threaded static initialization.','line_number':562,'multiline':False]['text':' Reuse const overload','line_number':568,'multiline':False]['text':'*
+     * True only when `_impl()` should succeed.
+     * We exploit zero-initialization of statics to detect use-before-init.
+     ','line_number':573,'multiline':True]['text':'*
+     * Adds a new fail point to this registry. Duplicate names are not allowed.
+     *
+     * @return the status code under these circumstances:
+     *     OK - if successful.
+     *     51006 - if the given name already exists in this registry.
+     *     CannotMutateObject - if this registry is already frozen.
+     ','line_number':586,'multiline':True]['text':'*
+     * @return a registered FailPoint, or nullptr if it was not registered.
+     ','line_number':596,'multiline':True]['text':'*
+     * Freezes this registry from being modified.
+     ','line_number':601,'multiline':True]['text':'*
+     * Creates a new FailPointServerParameter for each failpoint in the registry. This allows the
+     * failpoint to be set on the command line via --setParameter, but is only allowed when
+     * running with '--setParameter enableTestCommands=1'.
+     ','line_number':606,'multiline':True]['text':'*
+     * Sets all registered FailPoints to Mode::off. Used primarily during unit test cleanup to
+     * reset the state of all FailPoints set by the unit test. Does not prevent FailPoints from
+     * being enabled again after.
+     ','line_number':613,'multiline':True]['text':'*
+ * A scope guard that enables a named FailPoint on construction and disables it on destruction.
+ ','line_number':625,'multiline':True]['text':' Const access to the underlying FailPoint','line_number':639,'multiline':False]['text':' Const access to the underlying FailPoint','line_number':644,'multiline':False]['text':' Return the value of timesEntered() when the block was entered','line_number':649,'multiline':False]['text':'*
+ * Set a fail point in the global registry to a given value via BSON
+ * @return the number of times the fail point has been entered so far.
+ * @throw DBException corresponding to ErrorCodes::FailPointSetFailed if no failpoint
+ * called failPointName exists.
+ ','line_number':659,'multiline':True]['text':'*
+ * Registration object for FailPoint. Its static-initializer registers FailPoint `fp`
+ * into the `globalFailPointRegistry()` under the specified `name`.
+ ','line_number':667,'multiline':True]['text':'*
+ * Convenience macro for defining a fail point and registering it.
+ * Must be used at namespace scope, not at local (inside a function) or class scope.
+ * Never use in header files, only .cpp files.
+ ','line_number':678,'multiline':True]['text':' An immortal FailPoint ','line_number':684,'multiline':True]['text':' namespace mongo','line_number':688,'multiline':False]

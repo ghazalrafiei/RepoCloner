@@ -1,0 +1,222 @@
+['text':'
+******************************************************************************
+*
+*   Copyright (C) 1999-2015, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+******************************************************************************
+*
+*
+*  ucnv_io.cpp:
+*  initializes global variables and defines functions pertaining to converter 
+*  name resolution aspect of the conversion code.
+*
+*   new implementation:
+*
+*   created on: 1999nov22
+*   created by: Markus W. Scherer
+*
+*   Use the binary cnvalias.icu (created from convrtrs.txt) to work
+*   with aliases for converter names.
+*
+*   Date        Name        Description
+*   11/22/1999  markus      Created
+*   06/28/2002  grhoten     Major overhaul of the converter alias design.
+*                           Now an alias can map to different converters
+*                           depending on the specified standard.
+*******************************************************************************
+','line_number':1,'multiline':True]['text':' Format of cnvalias.icu -----------------------------------------------------
+ *
+ * cnvalias.icu is a binary, memory-mappable form of convrtrs.txt.
+ * This binary form contains several tables. All indexes are to uint16_t
+ * units, and not to the bytes (uint8_t units). Addressing everything on
+ * 16-bit boundaries allows us to store more information with small index
+ * numbers, which are also 16-bit in size. The majority of the table (except
+ * the string table) are 16-bit numbers.
+ *
+ * First there is the size of the Table of Contents (TOC). The TOC
+ * entries contain the size of each section. In order to find the offset
+ * you just need to sum up the previous offsets.
+ * The TOC length and entries are an array of uint32_t values.
+ * The first section after the TOC starts immediately after the TOC.
+ *
+ * 1) This section contains a list of converters. This list contains indexes
+ * into the string table for the converter name. The index of this list is
+ * also used by other sections, which are mentioned later on.
+ * This list is not sorted.
+ *
+ * 2) This section contains a list of tags. This list contains indexes
+ * into the string table for the tag name. The index of this list is
+ * also used by other sections, which are mentioned later on.
+ * This list is in priority order of standards.
+ *
+ * 3) This section contains a list of sorted unique aliases. This
+ * list contains indexes into the string table for the alias name. The
+ * index of this list is also used by other sections, like the 4th section.
+ * The index for the 3rd and 4th section is used to get the
+ * alias -> converter name mapping. Section 3 and 4 form a two column table.
+ * Some of the most significant bits of each index may contain other
+ * information (see findConverter for details).
+ *
+ * 4) This section contains a list of mapped converter names. Consider this
+ * as a table that maps the 3rd section to the 1st section. This list contains
+ * indexes into the 1st section. The index of this list is the same index in
+ * the 3rd section. There is also some extra information in the high bits of
+ * each converter index in this table. Currently it's only used to say that
+ * an alias mapped to this converter is ambiguous. See UCNV_CONVERTER_INDEX_MASK
+ * and UCNV_AMBIGUOUS_ALIAS_MAP_BIT for more information. This section is
+ * the predigested form of the 5th section so that an alias lookup can be fast.
+ *
+ * 5) This section contains a 2D array with indexes to the 6th section. This
+ * section is the full form of all alias mappings. The column index is the
+ * index into the converter list (column header). The row index is the index
+ * to tag list (row header). This 2D array is the top part a 3D array. The
+ * third dimension is in the 6th section.
+ *
+ * 6) This is blob of variable length arrays. Each array starts with a size,
+ * and is followed by indexes to alias names in the string table. This is
+ * the third dimension to the section 5. No other section should be referencing
+ * this section.
+ *
+ * 7) Starting in ICU 3.6, this can be a UConverterAliasOptions struct. Its
+ * presence indicates that a section 9 exists. UConverterAliasOptions specifies
+ * what type of string normalization is used among other potential things in the
+ * future.
+ *
+ * 8) This is the string table. All strings are indexed on an even address.
+ * There are two reasons for this. First many chip architectures locate strings
+ * faster on even address boundaries. Second, since all indexes are 16-bit
+ * numbers, this string table can be 128KB in size instead of 64KB when we
+ * only have strings starting on an even address.
+ *
+ * 9) When present this is a set of prenormalized strings from section 8. This
+ * table contains normalized strings with the dashes and spaces stripped out,
+ * and all strings lowercased. In the future, the options in section 7 may state
+ * other types of normalization.
+ *
+ * Here is the concept of section 5 and 6. It's a 3D cube. Each tag
+ * has a unique alias among all converters. That same alias can
+ * be mentioned in other standards on different converters,
+ * but only one alias per tag can be unique.
+ *
+ *
+ *              Converter Names (Usually in TR22 form)
+ *           -------------------------------------------.
+ *     T    /                                          /|
+ *     a   /                                          / |
+ *     g  /                                          /  |
+ *     s /                                          /   |
+ *      /                                          /    |
+ *      ------------------------------------------/     |
+ *    A |                                         |     |
+ *    l |                                         |     |
+ *    i |                                         |    /
+ *    a |                                         |   /
+ *    s |                                         |  /
+ *    e |                                         | /
+ *    s |                                         |/
+ *      -------------------------------------------
+ *
+ *
+ *
+ * Here is what it really looks like. It's like swiss cheese.
+ * There are holes. Some converters aren't recognized by
+ * a standard, or they are really old converters that the
+ * standard doesn't recognize anymore.
+ *
+ *              Converter Names (Usually in TR22 form)
+ *           -------------------------------------------.
+ *     T    /##########################################/|
+ *     a   /     #            #                       /#
+ *     g  /  #      ##     ##     ### # ### ### ### #/
+ *     s / #             #####  ####        ##  ## #/#
+ *      / ### # # ##  #  #   #          ### # #   #/##
+ *      ------------------------------------------/# #
+ *    A |### # # ##  #  #   #          ### # #   #|# #
+ *    l |# # #    #     #               ## #     #|# #
+ *    i |# # #    #     #                #       #|#
+ *    a |#                                       #|#
+ *    s |                                        #|#
+ *    e
+ *    s
+ *
+ ','line_number':47,'multiline':True]['text':'*
+ * Used by the UEnumeration API
+ ','line_number':164,'multiline':True]['text':' length of the swapper's temporary offsets[] ','line_number':189,'multiline':True]['text':' min. tocLength in the file, does not count the tocLengthIndex! ','line_number':190,'multiline':True]['text':' containsCnvOptionInfo ','line_number':195,'multiline':True]['text':'context','line_number':203,'multiline':True]['text':'type','line_number':204,'multiline':True]['text':'name','line_number':204,'multiline':True]['text':' dataFormat="CvAl" ','line_number':210,'multiline':True]['text':' Everything was cleaned up ','line_number':227,'multiline':True]['text':' aliasLists is a 1's based array, but it has a padding character ','line_number':284,'multiline':True]['text':' Faster table ','line_number':292,'multiline':True]['text':' Smaller table, or I can't handle this normalization mode!
+        Use the original slower table lookup. ','line_number':296,'multiline':True]['text':' character types relevant for ucnv_compareNames() ','line_number':338,'multiline':True]['text':' any values from here on are lowercase letter mappings ','line_number':343,'multiline':True]['text':' character types for ASCII 00..7F ','line_number':346,'multiline':True]['text':' character types for EBCDIC 80..FF ','line_number':360,'multiline':True]['text':' @see ucnv_compareNames ','line_number':382,'multiline':True]['text':' ignore all but letters and digits ','line_number':395,'multiline':True]['text':' ignore leading zero before another digit ','line_number':400,'multiline':True]['text':' lowercased letter ','line_number':408,'multiline':True]['text':' ignore all but letters and digits ','line_number':430,'multiline':True]['text':' ignore leading zero before another digit ','line_number':435,'multiline':True]['text':' lowercased letter ','line_number':443,'multiline':True]['text':'*
+ * Do a fuzzy compare of two converter/alias names.
+ * The comparison is case-insensitive, ignores leading zeroes if they are not
+ * followed by further digits, and ignores all but letters and digits.
+ * Thus the strings "UTF-8", "utf_8", "u*T@f08" and "Utf 8" are exactly equivalent.
+ * See section 1.4, Charset Alias Matching in Unicode Technical Standard #22
+ * at http://www.unicode.org/reports/tr22/
+ *
+ * This is a symmetrical (commutative) operation; order of arguments
+ * is insignificant.  This is an important property for sorting the
+ * list (when the list is preprocessed into binary form) and for
+ * performing binary searches on it at run time.
+ *
+ * @param name1 a converter name or alias, zero-terminated
+ * @param name2 a converter name or alias, zero-terminated
+ * @return 0 if the names match, or a negative value if the name1
+ * lexically precedes name2, or a positive value if the name1
+ * lexically follows name2.
+ *
+ * @see ucnv_io_stripForCompare
+ ','line_number':453,'multiline':True]['text':' ignore all but letters and digits ','line_number':487,'multiline':True]['text':' ignore leading zero before another digit ','line_number':492,'multiline':True]['text':' lowercased letter ','line_number':500,'multiline':True]['text':' deliver c1 ','line_number':504,'multiline':True]['text':' ignore all but letters and digits ','line_number':511,'multiline':True]['text':' ignore leading zero before another digit ','line_number':516,'multiline':True]['text':' lowercased letter ','line_number':524,'multiline':True]['text':' deliver c2 ','line_number':528,'multiline':True]['text':' If we reach the ends of both strings then they match ','line_number':531,'multiline':True]['text':' Case-insensitive comparison ','line_number':536,'multiline':True]['text':'
+ * search for an alias
+ * return the converter number index for gConverterList
+ ','line_number':544,'multiline':True]['text':' Lower case and remove ignoreable characters. ','line_number':562,'multiline':True]['text':' do a binary search for the alias ','line_number':567,'multiline':True]['text':' Have we moved? ','line_number':575,'multiline':True]['text':' We haven't moved, and it wasn't found. ','line_number':576,'multiline':True]['text':' Since the gencnval tool folds duplicates into one entry,
+             * this alias in gAliasList is unique, but different standards
+             * may map an alias to different converters.
+             ','line_number':591,'multiline':True]['text':' State whether the canonical converter name contains an option.
+            This information is contained in this list in order to maintain backward & forward compatibility. ','line_number':598,'multiline':True]['text':'
+ * Is this alias in this list?
+ * alias and listOffset should be non-NULL.
+ ','line_number':613,'multiline':True]['text':' +1 to skip listCount ','line_number':622,'multiline':True]['text':'
+ * Search for an standard name of an alias (what is the default name
+ * that this standard uses?)
+ * return the listOffset for gTaggedAliasLists. If it's 0,
+ * the it couldn't be found, but the parameters are valid.
+ ','line_number':635,'multiline':True]['text':' Make a quick guess. Hopefully they used a TR22 canonical alias. ','line_number':649,'multiline':True]['text':' Uh Oh! They used an ambiguous alias.
+               We have to search the whole swiss cheese starting
+               at the highest standard affinity.
+               This may take a while.
+            ','line_number':661,'multiline':True]['text':' else keep on looking ','line_number':675,'multiline':True]['text':' We could speed this up by starting on the next row
+                       because an alias is unique per row, right now.
+                       This would change if alias versioning appears. ','line_number':676,'multiline':True]['text':' The standard doesn't know about the alias ','line_number':681,'multiline':True]['text':' else no default name ','line_number':683,'multiline':True]['text':' else converter or tag not found ','line_number':686,'multiline':True]['text':' Return the canonical name ','line_number':691,'multiline':True]['text':' Make a quick guess. Hopefully they used a TR22 canonical alias. ','line_number':700,'multiline':True]['text':' Uh Oh! They used an ambiguous alias.
+               We have to search one slice of the swiss cheese.
+               We search only in the requested tag, not the whole thing.
+               This may take a while.
+            ','line_number':712,'multiline':True]['text':' The standard doesn't know about the alias ','line_number':725,'multiline':True]['text':' else no canonical name ','line_number':727,'multiline':True]['text':' else converter or tag not found ','line_number':729,'multiline':True]['text':'
+             * After the first unsuccess converter lookup, check to see if
+             * the name begins with 'x-'. If it does, strip it off and try
+             * again.  This behaviour is similar to how ICU4J does it.
+             ','line_number':742,'multiline':True]['text':' else converter not found ','line_number':758,'multiline':True]['text':'pErrorCode','line_number':768,'multiline':True]['text':'pErrorCode','line_number':782,'multiline':True]['text':' Either we accessed a zero length list, or we enumerated too far. ','line_number':799,'multiline':True]['text':'pErrorCode','line_number':807,'multiline':True]['text':' Enumerate the aliases for the specified converter and standard tag ','line_number':817,'multiline':True]['text':' When listOffset == 0, we want to acknowledge that the
+           converter name and standard are okay, but there
+           is nothing to enumerate. ','line_number':837,'multiline':True]['text':' else converter or tag not found ','line_number':859,'multiline':True]['text':' tagListNum - 1 is the ALL tag ','line_number':869,'multiline':True]['text':' else this shouldn't happen. internal program error ','line_number':875,'multiline':True]['text':' else converter not found ','line_number':877,'multiline':True]['text':' tagListNum - 1 is the ALL tag ','line_number':888,'multiline':True]['text':' +1 to skip listCount ','line_number':893,'multiline':True]['text':' else this shouldn't happen. internal program error ','line_number':900,'multiline':True]['text':' else converter not found ','line_number':902,'multiline':True]['text':' tagListNum - 1 is the ALL tag ','line_number':912,'multiline':True]['text':' +1 to skip listCount ','line_number':917,'multiline':True]['text':' else this shouldn't happen. internal program error ','line_number':925,'multiline':True]['text':' else converter not found ','line_number':927,'multiline':True]['text':' Don't include the empty list ','line_number':935,'multiline':True]['text':' Get the preferred name from this list ','line_number':962,'multiline':True]['text':' else someone screwed up the alias table. ','line_number':966,'multiline':True]['text':' *pErrorCode = U_INVALID_FORMAT_ERROR ','line_number':967,'multiline':True]['text':'enumerator','line_number':1014,'multiline':True]['text':'pErrorCode','line_number':1014,'multiline':True]['text':'pErrorCode','line_number':1021,'multiline':True]['text':' Either we accessed a zero length list, or we enumerated too far. ','line_number':1032,'multiline':True]['text':'pErrorCode','line_number':1040,'multiline':True]['text':' alias table swapping ----------------------------------------------------- ','line_number':1086,'multiline':True]['text':'
+ * row of a temporary array
+ *
+ * gets platform-endian charset string indexes and sorting indexes;
+ * after sorting this array by strings, the actual arrays are permutated
+ * according to the sorting indexes
+ ','line_number':1090,'multiline':True]['text':' 16-bit-addressed offsets from inTable/outTable ','line_number':1134,'multiline':True]['text':' udata_swapDataHeader checks the arguments ','line_number':1141,'multiline':True]['text':' check data format and format version ','line_number':1147,'multiline':True]['text':' dataFormat="CvAl" ','line_number':1150,'multiline':True]['text':' an alias table must contain at least the table of contents array ','line_number':1164,'multiline':True]['text':' read the known part of the table of contents ','line_number':1182,'multiline':True]['text':' compute offsets ','line_number':1187,'multiline':True]['text':' count two 16-bit units per toc entry ','line_number':1189,'multiline':True]['text':' compute the overall size of the after-header data, in numbers of 16-bit units ','line_number':1194,'multiline':True]['text':' swap the entire table of contents ','line_number':1212,'multiline':True]['text':' swap unormalized strings & normalized strings ','line_number':1215,'multiline':True]['text':' no need to sort, just swap all 16-bit values together ','line_number':1224,'multiline':True]['text':' allocate the temporary table for sorting ','line_number':1231,'multiline':True]['text':' sort by outCharset ','line_number':1234,'multiline':True]['text':' U_EBCDIC_FAMILY ','line_number':1252,'multiline':True]['text':'
+             * Sort unique aliases+mapped names.
+             *
+             * We need to sort the list again by outCharset strings because they
+             * sort differently for different charset families.
+             * First we set up a temporary table with the string indexes and
+             * sorting indexes and sort that.
+             * Then we permutate and copy/swap the actual values.
+             ','line_number':1256,'multiline':True]['text':' copy/swap/permutate items ','line_number':1281,'multiline':True]['text':'
+                     * If we swap in-place, then the permutation must use another
+                     * temporary array (tempTable.resort)
+                     * before the results are copied to the outBundle.
+                     ','line_number':1289,'multiline':True]['text':' swap remaining 16-bit values ','line_number':1320,'multiline':True]['text':'
+ * Hey, Emacs, please set the following:
+ *
+ * Local Variables:
+ * indent-tabs-mode: nil
+ * End:
+ *
+ ','line_number':1340,'multiline':True]

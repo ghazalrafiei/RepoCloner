@@ -1,0 +1,205 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]['text':' for JS_PUBLIC_API, JS_PUBLIC_DATA','line_number':12,'multiline':False]['text':' JS::IsArrayAnswer','line_number':14,'multiline':False]['text':' for ObjectIsMarkedBlack','line_number':17,'multiline':False]['text':' for jsid','line_number':18,'multiline':False]['text':' JS::GetClass','line_number':19,'multiline':False]['text':' for Handle, MutableHandle (ptr only)','line_number':20,'multiline':False]['text':' JS::shadow::Object','line_number':21,'multiline':False]['text':' for HandleObject, HandleId, HandleValue, MutableHandleIdVector, MutableHandleValue, MutableHand...','line_number':22,'multiline':False]['text':' for Value, AssertValueIsNotGray, UndefinedValue, ObjectOrNullValue','line_number':23,'multiline':False]['text':'
+ * [SMDOC] Proxy Objects
+ *
+ * A proxy is a JSObject with highly customizable behavior. ES6 specifies a
+ * single kind of proxy, but the customization mechanisms we use to implement
+ * ES6 Proxy objects are also useful wherever an object with weird behavior is
+ * wanted. Proxies are used to implement:
+ *
+ * -   the scope objects used by the Debugger's frame.eval() method
+ *     (see js::GetDebugEnvironment)
+ *
+ * -   the khuey hack, whereby a whole compartment can be blown away
+ *     even if other compartments hold references to objects in it
+ *     (see js::NukeCrossCompartmentWrappers)
+ *
+ * -   XPConnect security wrappers, which protect chrome from malicious content
+ *     (js/xpconnect/wrappers)
+ *
+ * -   DOM objects with special property behavior, like named getters
+ *     (dom/bindings/Codegen.py generates these proxies from WebIDL)
+ *
+ * ### Proxies and internal methods
+ *
+ * ES2019 specifies 13 internal methods. The runtime semantics of just about
+ * everything a script can do to an object is specified in terms of these
+ * internal methods. For example:
+ *
+ *     JS code                      ES6 internal method that gets called
+ *     ---------------------------  --------------------------------
+ *     obj.prop                     obj.[[Get]](obj, "prop")
+ *     "prop" in obj                obj.[[HasProperty]]("prop")
+ *     new obj()                    obj.[[Construct]](<empty argument List>)
+ *
+ * With regard to the implementation of these internal methods, there are three
+ * very different kinds of object in SpiderMonkey.
+ *
+ * 1.  Native objects cover most objects and contain both internal slots and
+ *     properties. JSClassOps and ObjectOps may be used to override certain
+ *     default behaviors.
+ *
+ * 2.  Proxy objects are composed of internal slots and a ProxyHandler. The
+ *     handler contains C++ methods that can implement these standard (and
+ *     non-standard) internal methods. JSClassOps and ObjectOps for the base
+ *     ProxyObject invoke the handler methods as appropriate.
+ *
+ * 3.  Objects with custom layouts like TypedObjects. These rely on JSClassOps
+ *     and ObjectOps to implement internal methods.
+ *
+ * Native objects with custom JSClassOps / ObjectOps are used when the object
+ * behaves very similar to a normal object such as the ArrayObject and it's
+ * length property. Most usages wrapping a C++ or other type should prefer
+ * using a Proxy. Using the proxy approach makes it much easier to create an
+ * ECMAScript and JIT compatible object, particularly if using an appropriate
+ * base class.
+ *
+ * Just about anything you do to a proxy will end up going through a C++
+ * virtual method call. Possibly several. There's no reason the JITs and ICs
+ * can't specialize for particular proxies, based on the handler; but currently
+ * we don't do much of this, so the virtual method overhead typically is
+ * actually incurred.
+ *
+ * ### The proxy handler hierarchy
+ *
+ * A major use case for proxies is to forward each internal method call to
+ * another object, known as its target. The target can be an arbitrary JS
+ * object. Not every proxy has the notion of a target, however.
+ *
+ * To minimize code duplication, a set of abstract proxy handler classes is
+ * provided, from which other handlers may inherit. These abstract classes are
+ * organized in the following hierarchy:
+ *
+ *     BaseProxyHandler
+ *     |
+ *     ForwardingProxyHandler    // has a target and forwards internal methods
+ *     |
+ *     Wrapper                   // can be unwrapped to reveal target
+ *     |                         // (see js::CheckedUnwrap)
+ *     |
+ *     CrossCompartmentWrapper   // target is in another compartment;
+ *                               // implements membrane between compartments
+ *
+ * Example: Some DOM objects (including all the arraylike DOM objects) are
+ * implemented as proxies. Since these objects don't need to forward operations
+ * to any underlying JS object, BaseDOMProxyHandler directly subclasses
+ * BaseProxyHandler.
+ *
+ * Gecko's security wrappers are examples of cross-compartment wrappers.
+ *
+ * ### Proxy prototype chains
+ *
+ * While most ECMAScript internal methods are handled by simply calling the
+ * handler method, the [[GetPrototypeOf]] / [[SetPrototypeOf]] behaviors may
+ * follow one of two models:
+ *
+ * 1.  A concrete prototype object (or null) is passed to object construction
+ *     and ordinary prototype read and write applies. The prototype-related
+ *     handler hooks are never called in this case. The [[Prototype]] slot is
+ *     used to store the current prototype value.
+ *
+ * 2.  TaggedProto::LazyProto is passed to NewProxyObject (or the
+ *     ProxyOptions::lazyProto flag is set). Each read or write of the
+ *     prototype will invoke the handler. This dynamic prototype behavior may
+ *     be useful for wrapper-like objects. If this mode is used the
+ *     getPrototype handler at a minimum must be implemented.
+ *
+ *     NOTE: In this mode the [[Prototype]] internal slot is unavailable and
+ *           must be simulated if needed. This is non-standard, but an
+ *           appropriate handler can hide this implementation detail.
+ *
+ * One subtlety here is that ECMAScript has a notion of "ordinary" prototypes.
+ * An object that doesn't override [[GetPrototypeOf]] is considered to have an
+ * ordinary prototype. The getPrototypeIfOrdinary handler must be implemented
+ * by you or your base class. Typically model 1 will be considered "ordinary"
+ * and model 2 will not.
+ ','line_number':31,'multiline':True]['text':'
+ * BaseProxyHandler is the most generic kind of proxy handler. It does not make
+ * any assumptions about the target. Consequently, it does not provide any
+ * default implementation for most methods. As a convenience, a few high-level
+ * methods, like get() and set(), are given default implementations that work by
+ * calling the low-level methods, like getOwnPropertyDescriptor().
+ *
+ * Important: If you add a method here, you should probably also add a
+ * Proxy::foo entry point with an AutoEnterPolicy. If you don't, you need an
+ * explicit override for the method in SecurityWrapper. See bug 945826 comment
+ * 0.
+ ','line_number':147,'multiline':True]['text':'
+   * Sometimes it's desirable to designate groups of proxy handlers as
+   * "similar". For this, we use the notion of a "family": A consumer-provided
+   * opaque pointer that designates the larger group to which this proxy
+   * belongs.
+   *
+   * If it will never be important to differentiate this proxy from others as
+   * part of a distinct group, nullptr may be used instead.
+   ','line_number':160,'multiline':True]['text':'
+   * Proxy handlers can use mHasPrototype to request the following special
+   * treatment from the JS engine:
+   *
+   *   - When mHasPrototype is true, the engine never calls these methods:
+   *     has, set, enumerate, iterate.  Instead, for these operations,
+   *     it calls the "own" methods like getOwnPropertyDescriptor, hasOwn,
+   *     defineProperty, getOwnEnumerablePropertyKeys, etc.,
+   *     and consults the prototype chain if needed.
+   *
+   *   - When mHasPrototype is true, the engine calls handler->get() only if
+   *     handler->hasOwn() says an own property exists on the proxy. If not,
+   *     it consults the prototype chain.
+   *
+   * This is useful because it frees the ProxyHandler from having to implement
+   * any behavior having to do with the prototype chain.
+   ','line_number':171,'multiline':True]['text':'
+   * All proxies indicate whether they have any sort of interesting security
+   * policy that might prevent the caller from doing something it wants to
+   * the object. In the case of wrappers, this distinction is used to
+   * determine whether the caller may strip off the wrapper if it so desires.
+   ','line_number':190,'multiline':True]['text':'
+     * Called on creation of a proxy to determine whether its finalize
+     * method can be finalized on the background thread.
+     ','line_number':214,'multiline':True]['text':'
+     * Nursery allocation is allowed if and only if it is safe to not
+     * run |finalize| when the ProxyObject dies.
+     ','line_number':222,'multiline':True]['text':' Policy enforcement methods.
+   *
+   * enter() allows the policy to specify whether the caller may perform |act|
+   * on the proxy's |id| property. In the case when |act| is CALL, |id| is
+   * generally JSID_VOID.  The |mayThrow| parameter indicates whether a
+   * handler that wants to throw custom exceptions when denying should do so
+   * or not.
+   *
+   * The |act| parameter to enter() specifies the action being performed.
+   * If |bp| is false, the method suggests that the caller throw (though it
+   * may still decide to squelch the error).
+   *
+   * We make these OR-able so that assertEnteredPolicy can pass a union of them.
+   * For example, get{,Own}PropertyDescriptor is invoked by calls to ::get()
+   * ::set(), in addition to being invoked on its own, so there are several
+   * valid Actions that could have been entered.
+   ','line_number':229,'multiline':True]['text':' Standard internal methods. ','line_number':259,'multiline':True]['text':'
+   * These methods are standard, but the engine does not normally call them.
+   * They're opt-in. See "Proxy prototype chains" above.
+   *
+   * getPrototype() crashes if called. setPrototype() throws a TypeError.
+   ','line_number':272,'multiline':True]['text':' Non-standard but conceptual kin to {g,s}etPrototype, so these live here. ','line_number':284,'multiline':True]['text':'
+   * These standard internal methods are implemented, as a convenience, so
+   * that ProxyHandler subclasses don't have to provide every single method.
+   *
+   * The base-class implementations work by calling getOwnPropertyDescriptor()
+   * and going up the [[Prototype]] chain if necessary. The algorithm for this
+   * follows what is defined for Ordinary Objects in the ES spec.
+   * They do not follow any standard. When in doubt, override them.
+   ','line_number':296,'multiline':True]['text':' Use the ProxyExpando object for private fields, rather than taking the','line_number':314,'multiline':False]['text':' normal get/set/defineField paths.','line_number':315,'multiline':False]['text':'
+   * [[Call]] and [[Construct]] are standard internal methods but according
+   * to the spec, they are not present on every object.
+   *
+   * SpiderMonkey never calls a proxy's call()/construct() internal method
+   * unless isCallable()/isConstructor() returns true for that proxy.
+   *
+   * BaseProxyHandler::isCallable()/isConstructor() always return false, and
+   * BaseProxyHandler::call()/construct() crash if called. So if you're
+   * creating a kind of that is never callable, you don't have to override
+   * anything, but otherwise you probably want to override all four.
+   ','line_number':318,'multiline':True]['text':' SpiderMonkey extensions. ','line_number':335,'multiline':True]['text':' Allow proxies, wrappers in particular, to specify callability at runtime.','line_number':362,'multiline':False]['text':' Note: These do not take const JSObject*, but they do in spirit.','line_number':363,'multiline':False]['text':'       We are not prepared to do this, as there's little const correctness','line_number':364,'multiline':False]['text':'       in the external APIs that handle proxies.','line_number':365,'multiline':False]['text':' Proxy slot layout','line_number':384,'multiline':False]['text':' -----------------','line_number':385,'multiline':False]['text':'','line_number':386,'multiline':False]['text':' Every proxy has a ProxyValueArray that contains the following Values:','line_number':387,'multiline':False]['text':'','line_number':388,'multiline':False]['text':' - The expando slot. This is used to hold private fields should they be','line_number':389,'multiline':False]['text':'   stamped into a non-forwarding proxy type.','line_number':390,'multiline':False]['text':' - The private slot.','line_number':391,'multiline':False]['text':' - The reserved slots. The number of slots is determined by the proxy's Class.','line_number':392,'multiline':False]['text':'','line_number':393,'multiline':False]['text':' Proxy objects store a pointer to the reserved slots (ProxyReservedSlots*).','line_number':394,'multiline':False]['text':' The ProxyValueArray and the private slot can be accessed using','line_number':395,'multiline':False]['text':' ProxyValueArray::fromReservedSlots or ProxyDataLayout::values.','line_number':396,'multiline':False]['text':'','line_number':397,'multiline':False]['text':' Storing a pointer to ProxyReservedSlots instead of ProxyValueArray has a','line_number':398,'multiline':False]['text':' number of advantages. In particular, it means JS::GetReservedSlot and','line_number':399,'multiline':False]['text':' JS::SetReservedSlot can be used with both proxies and native objects. This','line_number':400,'multiline':False]['text':' works because the ProxyReservedSlots* pointer is stored where native objects','line_number':401,'multiline':False]['text':' store their dynamic slots pointer.','line_number':402,'multiline':False]['text':' static ','line_number':450,'multiline':True]['text':' All proxies share the same data layout. Following the object's shape and','line_number':455,'multiline':False]['text':' type, the proxy has a ProxyDataLayout structure with a pointer to an array','line_number':456,'multiline':False]['text':' of values and the proxy's handler. This is designed both so that proxies can','line_number':457,'multiline':False]['text':' be easily swapped with other objects (via RemapWrapper) and to mimic the','line_number':458,'multiline':False]['text':' layout of other objects (proxies and other objects have the same size) so','line_number':459,'multiline':False]['text':' that common code can access either type of object.','line_number':460,'multiline':False]['text':'','line_number':461,'multiline':False]['text':' See GetReservedOrProxyPrivateSlot below.','line_number':462,'multiline':False]['text':' Trigger a barrier before writing the slot.','line_number':498,'multiline':False]['text':' namespace detail','line_number':506,'multiline':False]['text':' Trigger a barrier before writing the slot.','line_number':553,'multiline':False]['text':' protected constructor for subclass ','line_number':567,'multiline':True]['text':' We want to throw an exception if all of the following are true:','line_number':612,'multiline':False]['text':' * The policy disallowed access.','line_number':613,'multiline':False]['text':' * The policy set rv to false, indicating that we should throw.','line_number':614,'multiline':False]['text':' * The caller did not instruct us to ignore exceptions.','line_number':615,'multiline':False]['text':' * The policy did not throw itself.','line_number':616,'multiline':False]['text':' no-op constructor for subclass','line_number':630,'multiline':False]['text':' NB: We explicitly don't track the entered action here, because sometimes','line_number':648,'multiline':False]['text':' set() methods do an implicit get() during their implementation, leading','line_number':649,'multiline':False]['text':' to spurious assertions.','line_number':650,'multiline':False]['text':' This operator needs to be deleted explicitly, otherwise Visual C++ will','line_number':665,'multiline':False]['text':' create it automatically when it is part of the export JS API. In that','line_number':666,'multiline':False]['text':' case, compile would fail because HandleId is not allowed to be assigned','line_number':667,'multiline':False]['text':' and consequently instantiation of assign operator of mozilla::Maybe','line_number':668,'multiline':False]['text':' would fail. See bug 1325351 comment 16. Copy constructor is removed at','line_number':669,'multiline':False]['text':' the same time for consistency.','line_number':670,'multiline':False]['text':' For now assert each Proxy Class has at least 1 reserved slot. This is','line_number':710,'multiline':False]['text':' not a hard requirement, but helps catch Classes that need an explicit','line_number':711,'multiline':False]['text':' JSCLASS_HAS_RESERVED_SLOTS since bug 1360523.','line_number':712,'multiline':False]['text':' ProxyValueArray must fit inline in the object, so assert the number of','line_number':719,'multiline':False]['text':' slots does not exceed MAX_FIXED_SLOTS.','line_number':720,'multiline':False]['text':' Proxies must not have the JSCLASS_SKIP_NURSERY_FINALIZE flag set: they','line_number':724,'multiline':False]['text':' always have finalizers, and whether they can be nursery allocated is','line_number':725,'multiline':False]['text':' controlled by the canNurseryAllocate() method on the proxy handler.','line_number':726,'multiline':False]['text':' Converts a proxy into a DeadObjectProxy that will throw exceptions on all','line_number':745,'multiline':False]['text':' access. This will run the proxy's finalizer to perform clean-up before the','line_number':746,'multiline':False]['text':' conversion happens.','line_number':747,'multiline':False]['text':' This is a variant of js::NukeNonCCWProxy() for CCWs. It should only be called','line_number':750,'multiline':False]['text':' on CCWs that have been removed from CCW tables.','line_number':751,'multiline':False]['text':' namespace js ','line_number':755,'multiline':True]['text':' js_Proxy_h ','line_number':757,'multiline':True]

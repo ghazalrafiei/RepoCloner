@@ -1,0 +1,66 @@
+['text':' The Registerizer performs scalar replacement by looking for common Stores and
+Loads to a single item in a buffer and replacing them with a local temporary
+scalar which is cheaper to write.
+
+For example it can replace:
+
+{
+  A[0] = 0;
+  for(const auto x : c10::irange(10)) {
+    A[0] = (A[0]) + x;
+  }
+}
+
+with:
+
+{
+  int A_ = 0;
+  for(const auto x : c10::irange(10)) {
+    A_ = x + A_;
+  }
+  A[0] = A_;
+}
+
+This is particularly useful on GPUs when parallelizing, since after replacing
+loops with metavars we have a lot of accesses like this. ','line_number':19,'multiline':True]['text':'  Holds analysis information about accesses to a specific range of a
+ buffer, including the number of loads and stores and the lowest common parent
+ Block.
+ ','line_number':47,'multiline':True]['text':' NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)','line_number':51,'multiline':False]['text':' NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)','line_number':55,'multiline':False]['text':' Adds a Store to this access, which is in the provided scope.','line_number':68,'multiline':False]['text':' Adds a Load to this access, which occurs in the usage Stmt in the provided','line_number':71,'multiline':False]['text':' scope.','line_number':72,'multiline':False]['text':' Merge another AccessInfo into this one.','line_number':78,'multiline':False]['text':' Returns true if the other AccessInfo's bounds may overlap this one.','line_number':81,'multiline':False]['text':' Returns true if the indices of this access depend on the provided Var.','line_number':84,'multiline':False]['text':' Clone this AccessInfo, and set this as the new accesses' hiddenAccess.','line_number':87,'multiline':False]['text':' print for debugging.','line_number':91,'multiline':False]['text':' Holds state relating to the scalar variable we will insert to replace some','line_number':167,'multiline':False]['text':' number of loads and stores.','line_number':168,'multiline':False]['text':' Whether or not this access is overlapped in the first Stmt it appears. This','line_number':188,'multiline':False]['text':' means we cannot use it's first Store as the initializer.','line_number':189,'multiline':False]['text':' The cost in real ops that this access represents, to enable','line_number':192,'multiline':False]['text':' filtering accesses that wont save any loads or stores.','line_number':193,'multiline':False]['text':' The actual Stores and Loads which represent this access.','line_number':197,'multiline':False]['text':' Be careful with these, any mutator will invalidate these pointers.','line_number':198,'multiline':False]['text':' An identifier representing the conditional block, if any, this access','line_number':202,'multiline':False]['text':' depends on.','line_number':203,'multiline':False]['text':' An identifier representing the order this access was first encountered, for','line_number':206,'multiline':False]['text':' sorting returned results.','line_number':207,'multiline':False]['text':' Sometimes when traversing the tree we need to record what would happen if','line_number':210,'multiline':False]['text':' we hoisted an access, but sometimes it doesn't work out. This lets us','line_number':211,'multiline':False]['text':' "undo" some mutation and return to the internal hidden AccessInfo.','line_number':212,'multiline':False]['text':' It will be removed after any further additions to this AccessInfo.','line_number':213,'multiline':False]['text':' Represents a scope block and holds all accesses contained within it.','line_number':222,'multiline':False]['text':' NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)','line_number':225,'multiline':False]['text':' Map of map to access, narrowing by Buf then by hash(Buf+Indices).','line_number':265,'multiline':False]['text':' This allows us to find a candidate access easily, and also check for','line_number':266,'multiline':False]['text':' overlap with other accesses to the same buf. Buf ->','line_number':267,'multiline':False]['text':'    Hash ->','line_number':268,'multiline':False]['text':'        Access','line_number':269,'multiline':False]['text':' The Block object this scope represents.','line_number':273,'multiline':False]['text':' The enclosing scope object.','line_number':276,'multiline':False]['text':' An identifier representing the condition block this scope depends on.','line_number':279,'multiline':False]['text':' A set of variables local to this scope (e.g. loop vars).','line_number':282,'multiline':False]['text':' Analyzes the graph and collects accesses to the same symbolic tensor element
+ * which can be replaced by a single local scalar.
+ *
+ * This works by recursively walking the tree in postfix order, building sets of
+ * accesses to the same symbolic element by scope and then merging lower scopes
+ * into their enclosing scope.
+ *
+ * It is safe to move two accesses of the same Tensor element to a local scalar
+ * Var if between all usages of the element there are no other Loads or Stores
+ * that may refer to it. In the comments I refer to this as overlapping the
+ * access, or "cutting" the existing AccessInfo. In the case where a candidate
+ * for registerization is cut, it may be possible to finalize the access early
+ * by writing it back to the Tensor and then create a new scalar variable after
+ * the overlapping access is complete. We will attempt to do this when it saves
+ * memory accesses.
+ *
+ * There are a few cases that make this more challenging:
+ *
+ *  - For: Loops change the number of real usages of a buffer by the loop
+ * extent, but only if we can pull the definition and finalization of the scalar
+ * variable out of the loop block.
+ *
+ * - Cond: Conditions complicate lifting scalars out of internal scopes.
+ * Generally we cannot lift an access outside of a conditional scope unless
+ * there is already a reference to that same access at the higher scope, since
+ * we don't know if the condition was guarding an array access not safe at the
+ * higher scope. In the comments I refer to this as the condition "hiding" the
+ * access, and the outer access "unhiding" it.
+ *
+ * - IfThenElse: Same situation as Cond, except since IfThenElse is an Expr
+ * rather than a Stmt we cannot insert the scalar definition or finalizer
+ * within the conditional scope. Accesses inside an IfThenElse can be safely
+ * combined with external accesses but cannot exist completely within.
+ *
+ * - Let: Accesses dependent on local variables via Let Stmts, or loop vars,
+ * cannot be raised outside of the scope of the dependent var.
+ ','line_number':286,'multiline':True]['text':' A stack of enclosing Stmts for tracking the usage Stmt of Loads.','line_number':367,'multiline':False]['text':' The current scope being analyzed.','line_number':370,'multiline':False]['text':' Replaces each registerizable access with a Scalar variable, including
+ * definition, initializer and finalizer.
+ ','line_number':379,'multiline':True]['text':' NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)','line_number':384,'multiline':False]['text':' Creates the various ReplacerScope objects and builds internal maps.','line_number':404,'multiline':False]['text':' State relating to the accesses yet to be replaced.','line_number':407,'multiline':False]['text':' Holds the set of Stores that should be pulled into an initializer, so they','line_number':413,'multiline':False]['text':' can be eliminated.','line_number':414,'multiline':False]['text':' Tracks the number of times we've seen each buffer, so we can name the','line_number':417,'multiline':False]['text':' scalar Vars appropriately.','line_number':418,'multiline':False]['text':' namespace registerizer','line_number':424,'multiline':False]['text':' Apply scalar replacement to all accesses in s.','line_number':426,'multiline':False]['text':' To produce safe code, this must occur after handling parallelized axes and','line_number':427,'multiline':False]['text':' atomics.','line_number':428,'multiline':False]['text':' namespace tensorexpr','line_number':431,'multiline':False]['text':' namespace jit','line_number':432,'multiline':False]['text':' namespace torch','line_number':433,'multiline':False]

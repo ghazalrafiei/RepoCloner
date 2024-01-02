@@ -1,0 +1,120 @@
+['text':' -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]['text':' A class for optional values and in-place lazy construction. ','line_number':7,'multiline':True]['text':' for placement new','line_number':12,'multiline':False]['text':' You would think that poisoning Maybe instances could just be a call','line_number':45,'multiline':False]['text':' to mozWritePoison.  Unfortunately, using a simple call to','line_number':46,'multiline':False]['text':' mozWritePoison generates poor code on MSVC for small structures.  The','line_number':47,'multiline':False]['text':' generated code contains (always not-taken) branches and does a bunch','line_number':48,'multiline':False]['text':' of setup for `rep stos{l,q}`, even though we know at compile time','line_number':49,'multiline':False]['text':' exactly how many words we're poisoning.  Instead, we're going to','line_number':50,'multiline':False]['text':' force MSVC to generate the code we want via recursive templates.','line_number':51,'multiline':False]['text':' Write the given poisonValue into p at offset*sizeof(uintptr_t).','line_number':53,'multiline':False]['text':' All done!','line_number':71,'multiline':False]['text':' We can't generate inline code for large structures, though, because we'll','line_number':75,'multiline':False]['text':' blow out recursive template instantiation limits, and the code would be','line_number':76,'multiline':False]['text':' bloated to boot.  So provide a fallback to the out-of-line poisoner.','line_number':77,'multiline':False]['text':' not bool -- guarantees minimal space consumption','line_number':244,'multiline':False]['text':' Copy and move operations are no-ops, since copying is moving is implemented','line_number':258,'multiline':False]['text':' by Maybe_CopyMove_Enabler.','line_number':259,'multiline':False]['text':' This alias works around a compiler bug described here:','line_number':267,'multiline':False]['text':' https://developercommunity.visualstudio.com/t/Explicit-destructor-call-inside-a-templa/1470165','line_number':268,'multiline':False]['text':' not bool -- guarantees minimal space consumption','line_number':280,'multiline':False]['text':' namespace detail','line_number':294,'multiline':False]['text':'
+ * Maybe is a container class which contains either zero or one elements. It
+ * serves two roles. It can represent values which are *semantically* optional,
+ * augmenting a type with an explicit 'Nothing' value. In this role, it provides
+ * methods that make it easy to work with values that may be missing, along with
+ * equality and comparison operators so that Maybe values can be stored in
+ * containers. Maybe values can be constructed conveniently in expressions using
+ * type inference, as follows:
+ *
+ *   void doSomething(Maybe<Foo> aFoo) {
+ *     if (aFoo)                  // Make sure that aFoo contains a value...
+ *       aFoo->takeAction();      // and then use |aFoo->| to access it.
+ *   }                            // |*aFoo| also works!
+ *
+ *   doSomething(Nothing());      // Passes a Maybe<Foo> containing no value.
+ *   doSomething(Some(Foo(100))); // Passes a Maybe<Foo> containing |Foo(100)|.
+ *
+ * You'll note that it's important to check whether a Maybe contains a value
+ * before using it, using conversion to bool, |isSome()|, or |isNothing()|. You
+ * can avoid these checks, and sometimes write more readable code, using
+ * |valueOr()|, |ptrOr()|, and |refOr()|, which allow you to retrieve the value
+ * in the Maybe and provide a default for the 'Nothing' case.  You can also use
+ * |apply()| to call a function only if the Maybe holds a value, and |map()| to
+ * transform the value in the Maybe, returning another Maybe with a possibly
+ * different type.
+ *
+ * Maybe's other role is to support lazily constructing objects without using
+ * dynamic storage. A Maybe directly contains storage for a value, but it's
+ * empty by default. |emplace()|, as mentioned above, can be used to construct a
+ * value in Maybe's storage.  The value a Maybe contains can be destroyed by
+ * calling |reset()|; this will happen automatically if a Maybe is destroyed
+ * while holding a value.
+ *
+ * It's a common idiom in C++ to use a pointer as a 'Maybe' type, with a null
+ * value meaning 'Nothing' and any other value meaning 'Some'. You can convert
+ * from such a pointer to a Maybe value using 'ToMaybe()'.
+ *
+ * Maybe is inspired by similar types in the standard library of many other
+ * languages (e.g. Haskell's Maybe and Rust's Option). In the C++ world it's
+ * very similar to std::optional, which was proposed for C++14 and originated in
+ * Boost. The most important differences between Maybe and std::optional are:
+ *
+ *   - std::optional<T> may be compared with T. We deliberately forbid that.
+ *   - std::optional has |valueOr()|, equivalent to Maybe's |valueOr()|, but
+ *     lacks corresponding methods for |refOr()| and |ptrOr()|.
+ *   - std::optional lacks |map()| and |apply()|, making it less suitable for
+ *     functional-style code.
+ *   - std::optional lacks many convenience functions that Maybe has. Most
+ *     unfortunately, it lacks equivalents of the type-inferred constructor
+ *     functions |Some()| and |Nothing()|.
+ ','line_number':300,'multiline':True]['text':'*
+   * Maybe<T> can be copy-constructed from a Maybe<U> if T is constructible from
+   * a const U&.
+   ','line_number':383,'multiline':True]['text':'*
+   * Maybe<T> can be move-constructed from a Maybe<U> if T is constructible from
+   * a U&&.
+   ','line_number':395,'multiline':True]['text':' Methods that check whether this Maybe contains a value ','line_number':445,'multiline':True]['text':' Returns the contents of this Maybe<T> by value. Unsafe unless |isSome()|.
+   ','line_number':450,'multiline':True]['text':'*
+   * Move the contents of this Maybe<T> out of internal storage and return it
+   * without calling the destructor. The internal storage is also reset to
+   * avoid multiple calls. Unsafe unless |isSome()|.
+   ','line_number':456,'multiline':True]['text':'*
+   * Returns the value (possibly |Nothing()|) by moving it out of this Maybe<T>
+   * and leaving |Nothing()| in its place.
+   ','line_number':468,'multiline':True]['text':'
+   * Returns the contents of this Maybe<T> by value. If |isNothing()|, returns
+   * the default value provided.
+   *
+   * Note: If the value passed to aDefault is not the result of a trivial
+   * expression, but expensive to evaluate, e.g. |valueOr(ExpensiveFunction())|,
+   * use |valueOrFrom| instead, e.g.
+   * |valueOrFrom([arg] { return ExpensiveFunction(arg); })|. This ensures
+   * that the expensive expression is only evaluated when its result will
+   * actually be used.
+   ','line_number':474,'multiline':True]['text':'
+   * Returns the contents of this Maybe<T> by value. If |isNothing()|, returns
+   * the value returned from the function or functor provided.
+   ','line_number':493,'multiline':True]['text':' Returns the contents of this Maybe<T> by pointer. Unsafe unless |isSome()|.
+   ','line_number':505,'multiline':True]['text':'
+   * Returns the contents of this Maybe<T> by pointer. If |isNothing()|,
+   * returns the default value provided.
+   ','line_number':510,'multiline':True]['text':'
+   * Returns the contents of this Maybe<T> by pointer. If |isNothing()|,
+   * returns the value returned from the function or functor provided.
+   ','line_number':528,'multiline':True]['text':' Returns the contents of this Maybe<T> by ref. Unsafe unless |isSome()|. ','line_number':551,'multiline':True]['text':'
+   * Returns the contents of this Maybe<T> by ref. If |isNothing()|, returns
+   * the default value provided.
+   ','line_number':557,'multiline':True]['text':'
+   * Returns the contents of this Maybe<T> by ref. If |isNothing()|, returns the
+   * value returned from the function or functor provided.
+   ','line_number':575,'multiline':True]['text':' If |isSome()|, runs the provided function or functor on the contents of
+   * this Maybe. ','line_number':600,'multiline':True]['text':'
+   * If |isSome()|, runs the provided function and returns the result wrapped
+   * in a Maybe. If |isNothing()|, returns an empty Maybe value with the same
+   * value type as what the provided function would have returned.
+   ','line_number':618,'multiline':True]['text':' If |isSome()|, empties this Maybe and destroys its contents. ','line_number':639,'multiline':True]['text':'
+   * Constructs a T value in-place in this empty Maybe<T>'s storage. The
+   * arguments to |emplace()| are the parameters to T's constructor.
+   ','line_number':650,'multiline':True]['text':' Methods that check whether this Maybe contains a value ','line_number':684,'multiline':True]['text':' Deliberately not defining value and ptr accessors, as these may be','line_number':697,'multiline':False]['text':' confusing on a reference-typed Maybe.','line_number':698,'multiline':False]['text':' XXX Should we define refOr?','line_number':700,'multiline':False]['text':'
+ * Some() creates a Maybe<T> value containing the provided T value. If T has a
+ * move constructor, it's used to make this as efficient as possible.
+ *
+ * Some() selects the type of Maybe it returns by removing any const, volatile,
+ * or reference qualifiers from the type of the value you pass to it. This gives
+ * it more intuitive behavior when used in expressions, but it also means that
+ * if you need to construct a Maybe value that holds a const, volatile, or
+ * reference value, you need to use emplace() instead.
+ ','line_number':846,'multiline':True]['text':'
+ * Two Maybe<T> values are equal if
+ * - both are Nothing, or
+ * - both are Some, and the values they contain are equal.
+ ','line_number':881,'multiline':True]['text':'
+ * We support comparison to Nothing to allow reasonable expressions like:
+ *   if (maybeValue == Nothing()) { ... }
+ ','line_number':902,'multiline':True]['text':'
+ * Maybe<T> values are ordered in the same way T values are ordered, except that
+ * Nothing comes before anything else.
+ ','line_number':926,'multiline':True]['text':' namespace mozilla','line_number':972,'multiline':False]['text':' mozilla_Maybe_h ','line_number':974,'multiline':True]

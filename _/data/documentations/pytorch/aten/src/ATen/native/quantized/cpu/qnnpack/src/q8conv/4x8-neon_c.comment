@@ -1,0 +1,37 @@
+['text':'
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree.
+ ','line_number':1,'multiline':True]['text':' Assumes that kernel_zero_points is an array padded with necessary elements','line_number':28,'multiline':False]['text':' in order to make it multiple of 8.','line_number':29,'multiline':False]['text':' Doing 2 VLD1 instead of 1 VLD2 because A75 has higher latency','line_number':524,'multiline':False]['text':' 8 vs. 5 for VLD2 with both VLD1 and VLD2 having throughput of','line_number':525,'multiline':False]['text':' 2 per cycle. So probably this is better.','line_number':526,'multiline':False]['text':'
+   * Convert int32_t input to FP32 and multiply by FP32 scale.
+   * Both operations involve statistically unbiased roundings:
+   * - Large int32_t values can't be exactly represented as FP32. The
+   * conversion instruction in ARM NEON would round it to nearest FP32 value
+   * with ties to even.
+   * - Product of two FP32 values is generally not exactly representation as
+   * an FP32 value, and will be rounded to nearest FP32 value with ties to
+   * even.
+   ','line_number':536,'multiline':True]['text':'
+   * Leverage "Floating-point Convert to Signed integer, rounding to nearest
+   * with ties to even" instruction. This is an ARMv8 instruction (always
+   * available in AArch64), which saturates result on overflow. We don't need
+   * to specifically consider saturated results, they will be clamped at the
+   * last stage.
+   ','line_number':566,'multiline':True]['text':'
+   * ARMv7 NEON offers only a floating-point to integer conversion instruction
+   * with rounding towards zero. In lieu of conversion instruction with
+   * rounding-to-nearest-even, we use a magic trick of adding a large number
+   * (1.5 * 2**23) to scaled value to cause rounding to integer, and then
+   * substracing this magic number as integer. This trick works only in a
+   * limited range (absolute value of input must be less than 2**22), so
+   * generally we have to clamp input to this range before using the magic.
+   * However, clamping to any smaller range works just as well, and thus we
+   * clamp to [qmin - zero point, qmax - zero point] range so that after we
+   * add zero point to the result, it gets into target [qmin, qmax] range.
+   ','line_number':610,'multiline':True]['text':'
+   * Conversion to integer using the "magic trick". Rounding is performed in
+   * the output of addition operation, and result is rounded to nearest even
+   * integer with ties to even.
+   ','line_number':639,'multiline':True]

@@ -1,0 +1,75 @@
+['text':'
+ *    Stack-less Just-In-Time compiler
+ *
+ *    Copyright Zoltan Herczeg (hzmester@freemail.hu). All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are
+ * permitted provided that the following conditions are met:
+ *
+ *   1. Redistributions of source code must retain the above copyright notice, this list of
+ *      conditions and the following disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above copyright notice, this list
+ *      of conditions and the following disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER(S) AND CONTRIBUTORS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT
+ * SHALL THE COPYRIGHT HOLDER(S) OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ ','line_number':1,'multiline':True]['text':'
+   This file contains a simple executable memory allocator
+
+   It is assumed, that executable code blocks are usually medium (or sometimes
+   large) memory blocks, and the allocator is not too frequently called (less
+   optimized than other allocators). Thus, using it as a generic allocator is
+   not suggested.
+
+   How does it work:
+     Memory is allocated in continuous memory areas called chunks by alloc_chunk()
+     Chunk format:
+     [ block ][ block ] ... [ block ][ block terminator ]
+
+   All blocks and the block terminator is started with block_header. The block
+   header contains the size of the previous and the next block. These sizes
+   can also contain special values.
+     Block size:
+       0 - The block is a free_block, with a different size member.
+       1 - The block is a block terminator.
+       n - The block is used at the moment, and the value contains its size.
+     Previous block size:
+       0 - This is the first block of the memory chunk.
+       n - The size of the previous block.
+
+   Using these size values we can go forward or backward on the block chain.
+   The unused blocks are stored in a chain list pointed by free_blocks. This
+   list is useful if we need to find a suitable memory area when the allocator
+   is called.
+
+   When a block is freed, the new free block is connected to its adjacent free
+   blocks if possible.
+
+     [ free block ][ used block ][ free block ]
+   and "used block" is freed, the three blocks are connected together:
+     [           one big free block           ]
+','line_number':27,'multiline':True]['text':' --------------------------------------------------------------------- ','line_number':64,'multiline':True]['text':'  System (OS) functions                                                ','line_number':65,'multiline':True]['text':' --------------------------------------------------------------------- ','line_number':66,'multiline':True]['text':' 64 KByte. ','line_number':68,'multiline':True]['text':'
+   alloc_chunk / free_chunk :
+     * allocate executable system memory chunks
+     * the size is always divisible by CHUNK_SIZE
+   SLJIT_ALLOCATOR_LOCK / SLJIT_ALLOCATOR_UNLOCK :
+     * provided as part of sljitUtils
+     * only the allocator requires this lock, sljit is fully thread safe
+       as it only uses local variables
+','line_number':75,'multiline':True]['text':' this is a linux extension available since kernel 3.11 ','line_number':95,'multiline':True]['text':' this is a GNU extension, make sure to use -D_GNU_SOURCE ','line_number':117,'multiline':True]['text':'
+	 * the previous trimming might had left an empty string if TMPDIR="/"
+	 * so work around the problem below
+	 ','line_number':153,'multiline':True]['text':'
+ * MAP_REMAPDUP is a NetBSD extension available sinde 8.0, make sure to
+ * adjust your feature macros (ex: -D_NETBSD_SOURCE) as needed
+ ','line_number':221,'multiline':True]['text':' NetBSD ','line_number':250,'multiline':True]['text':' --------------------------------------------------------------------- ','line_number':260,'multiline':True]['text':'  Common functions                                                     ','line_number':261,'multiline':True]['text':' --------------------------------------------------------------------- ','line_number':262,'multiline':True]['text':' We just cut a block from the end of the free block. ','line_number':334,'multiline':True]['text':' Cut the allocated space into a free and a used block. ','line_number':374,'multiline':True]['text':' All space belongs to this allocation. ','line_number':386,'multiline':True]['text':' Connecting free blocks together if possible. ','line_number':408,'multiline':True]['text':' If header->prev_size == 0, free_block will equal to header.
+	   In this case, free_block->header.size will be > 0. ','line_number':410,'multiline':True]['text':' The whole chunk is free. ','line_number':431,'multiline':True]['text':' If this block is freed, we still have (allocated_size / 2) free space. ','line_number':433,'multiline':True]

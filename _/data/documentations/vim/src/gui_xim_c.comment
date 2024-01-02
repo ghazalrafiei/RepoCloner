@@ -1,0 +1,108 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]['text':'
+ * gui_xim.c: functions for the X Input Method
+ ','line_number':10,'multiline':True]['text':'
+ * XIM often causes trouble.  Define XIM_DEBUG to get a log of XIM callbacks
+ * in the "xim.log" file.
+ ','line_number':41,'multiline':True]['text':' #define XIM_DEBUG','line_number':45,'multiline':False]['text':' 'imactivatefunc' callback function','line_number':85,'multiline':False]['text':' 'imstatusfunc' callback function','line_number':86,'multiline':False]['text':' FIXME: Don't execute user function in unsafe situation.','line_number':126,'multiline':False]['text':' FIXME: :py print 'xxx' is shown duplicate result.','line_number':129,'multiline':False]['text':' Use silent to avoid it.','line_number':130,'multiline':False]['text':'
+ * Mark the global 'imactivatefunc' and 'imstatusfunc' callbacks with "copyID"
+ * so that they are not garbage collected.
+ ','line_number':153,'multiline':True]['text':' IM current status','line_number':175,'multiline':False]['text':'
+ * Set preedit_start_col to the current cursor position.
+ ','line_number':177,'multiline':True]['text':' Prevent that preediting marks the buffer as changed.','line_number':187,'multiline':False]['text':' IM is enabled for current mode','line_number':191,'multiline':False]['text':' cursor offset in characters','line_number':193,'multiline':False]['text':' number of characters after cursor','line_number':194,'multiline':False]['text':' apparently only used in gui_x11.c','line_number':248,'multiline':False]['text':' Convert from 'termencoding' (always "utf-8") to 'encoding'','line_number':259,'multiline':False]['text':' blank out the pointer if necessary','line_number':271,'multiline':False]['text':' fontsize was given in points.  Convert it into that in pixels','line_number':339,'multiline':False]['text':' to use with CSS.','line_number':340,'multiline':False]['text':' blank out the pointer if necessary','line_number':431,'multiline':False]['text':'
+ * Move the cursor left by "num_move_back" characters.
+ * Note that ins_left() checks im_is_preediting() to avoid breaking undo for
+ * these K_LEFT keys.
+ ','line_number':463,'multiline':True]['text':'
+ * Update the mode and cursor while in an IM callback.
+ ','line_number':486,'multiline':True]['text':'
+ * Callback invoked when the user finished preediting.
+ * Put the final string into the input buffer.
+ ','line_number':503,'multiline':True]['text':' The imhangul module doesn't reset the preedit string before','line_number':525,'multiline':False]['text':' committing.  Call im_delete_preedit() to work around that.','line_number':526,'multiline':False]['text':' Indicate that preediting has finished.','line_number':529,'multiline':False]['text':' The thing which setting "preedit_start_col" to MAXCOL means that','line_number':536,'multiline':False]['text':' "preedit_start_col" will be set forcedly when calling','line_number':537,'multiline':False]['text':' preedit_changed_cb() next time.','line_number':538,'multiline':False]['text':' "preedit_start_col" should not reset with MAXCOL on this part. Vim','line_number':539,'multiline':False]['text':' is simulating the preediting by using add_to_input_str(). when','line_number':540,'multiline':False]['text':' preedit begin immediately before committed, the typebuf is not','line_number':541,'multiline':False]['text':' flushed to screen, then it can't get correct "preedit_start_col".','line_number':542,'multiline':False]['text':' Thus, it should calculate the cells by adding cells of the committed','line_number':543,'multiline':False]['text':' string.','line_number':544,'multiline':False]['text':' Is this a single character that matches a keypad key that's just','line_number':560,'multiline':False]['text':' been pressed?  If so, we don't want it to be entered as such - let','line_number':561,'multiline':False]['text':' us carry on processing the raw keycode so that it may be used in','line_number':562,'multiline':False]['text':' mappings as <kSomething>.','line_number':563,'multiline':False]['text':' We're currently processing a keypad or other special key','line_number':566,'multiline':False]['text':' It's a match - don't do it here','line_number':569,'multiline':False]['text':' Not a match','line_number':575,'multiline':False]['text':' Inserting chars while "im_is_active" is set does not cause a','line_number':585,'multiline':False]['text':' change of buffer.  When the chars are committed the buffer must be','line_number':586,'multiline':False]['text':' marked as changed.','line_number':587,'multiline':False]['text':' This flag is used in changed() at next call.','line_number':591,'multiline':False]['text':'
+ * Callback invoked after start to the preedit.
+ ','line_number':599,'multiline':True]['text':'
+ * Callback invoked after end to the preedit.
+ ','line_number':615,'multiline':True]['text':' Indicate that preediting has finished','line_number':626,'multiline':False]['text':' Removal of this line suggested by Takuhiro Nishioka.  Fixes that IM was','line_number':632,'multiline':False]['text':' switched off unintentionally.  We now use preedit_is_active (added by','line_number':633,'multiline':False]['text':' SungHyun Nam).','line_number':634,'multiline':False]['text':'
+ * Callback invoked after changes to the preedit string.  If the preedit
+ * string was empty before, remember the preedit start column so we know
+ * where to apply feedback attributes.  Delete the previous preedit string
+ * if there was one, save the new preedit cursor offset, and put the new
+ * string into the input buffer.
+ *
+ * TODO: The pragmatic "put into input buffer" approach used here has
+ *       several fundamental problems:
+ *
+ * - The characters in the preedit string are subject to remapping.
+ *   That's broken, only the finally committed string should be remapped.
+ *
+ * - There is a race condition involved:  The retrieved value for the
+ *   current cursor position will be wrong if any unprocessed characters
+ *   are still queued in the input buffer.
+ *
+ * - Due to the lack of synchronization between the file buffer in memory
+ *   and any typed characters, it's practically impossible to implement the
+ *   "retrieve_surrounding" and "delete_surrounding" signals reliably.  IM
+ *   modules for languages such as Thai are likely to rely on this feature
+ *   for proper operation.
+ *
+ * Conclusions:  I think support for preediting needs to be moved to the
+ * core parts of Vim.  Ideally, until it has been committed, the preediting
+ * string should only be displayed and not affect the buffer content at all.
+ * The question how to deal with the synchronization issue still remains.
+ * Circumventing the input buffer is probably not desirable.  Anyway, I think
+ * implementing "retrieve_surrounding" is the only hard problem.
+ *
+ * One way to solve all of this in a clean manner would be to queue all key
+ * press/release events "as is" in the input buffer, and apply the IM filtering
+ * at the receiving end of the queue.  This, however, would have a rather large
+ * impact on the code base.  If there is an easy way to force processing of all
+ * remaining input from within the "retrieve_surrounding" signal handler, this
+ * might not be necessary.  Gotta ask on vim-dev for opinions.
+ ','line_number':642,'multiline':True]['text':' just in case','line_number':702,'multiline':False]['text':' If preedit_start_col is MAXCOL set it to the current cursor position.','line_number':719,'multiline':False]['text':' Urgh, this breaks if the input buffer isn't empty now','line_number':724,'multiline':False]['text':' If at the start position (after typing backspace)','line_number':731,'multiline':False]['text':' preedit_start_col must be reset.','line_number':732,'multiline':False]['text':' Compute the end of the preediting area: "preedit_end_col".','line_number':738,'multiline':False]['text':' According to the documentation of','line_number':739,'multiline':False]['text':' gtk_im_context_get_preedit_string(), the cursor_pos output argument','line_number':740,'multiline':False]['text':' returns the offset in bytes.  This is unfortunately not true -- real','line_number':741,'multiline':False]['text':' life shows the offset is in characters, and the GTK+ source code','line_number':742,'multiline':False]['text':' agrees with me.  Will file a bug later.','line_number':743,'multiline':False]['text':' These offsets are used as counters when generating <BS> and','line_number':753,'multiline':False]['text':' <Del> to delete the preedit string.  So don't count composing','line_number':754,'multiline':False]['text':' characters unless 'delcombine' is enabled.','line_number':755,'multiline':False]['text':' This is essentially the same as im_preedit_trailing, except','line_number':765,'multiline':False]['text':' composing characters are not counted even if p_deco is set.','line_number':766,'multiline':False]['text':'
+ * Translate the Pango attributes at iter to Vim highlighting attributes.
+ * Ignore attributes not supported by Vim highlighting.  This shouldn't have
+ * too much impact -- right now we handle even more attributes than necessary
+ * for the IM modules I tested with.
+ ','line_number':786,'multiline':True]['text':' Assume inverse if black background is requested','line_number':817,'multiline':False]['text':'
+ * Retrieve the highlighting attributes at column col in the preedit string.
+ * Return -1 if not in preediting mode or if col is out of range.
+ ','line_number':825,'multiline':True]['text':' Get the byte index as used by PangoAttrIterator','line_number':845,'multiline':False]['text':' Extract all relevant attributes from the list.','line_number':857,'multiline':False]['text':'
+ * Convert the string argument to keyval and state for GdkEventKey.
+ * If str is valid return TRUE, otherwise FALSE.
+ *
+ * See 'imactivatekey' for documentation of the format.
+ ','line_number':923,'multiline':True]['text':' Parse modifier keys','line_number':939,'multiline':False]['text':'
+ * Return TRUE if p_imak is valid, otherwise FALSE.  As a special case, an
+ * empty string is also regarded as valid.
+ *
+ * Note: The numerical key value of p_imak is cached if it was valid; thus
+ * boldly assuming im_xim_isvalid_imactivate() will always be called whenever
+ * 'imak' changes.  This is currently the case but not obvious -- should
+ * probably rename the function for clarity.
+ ','line_number':969,'multiline':True]['text':' unreffed by gdk_event_free()','line_number':1000,'multiline':False]['text':' needed for XIM','line_number':1006,'multiline':False]['text':' For consistency, also send the corresponding release event.','line_number':1013,'multiline':False]['text':' Workaround GTK2 XIM 'feature' that always converts keypad keys to','line_number':1068,'multiline':False]['text':' chars., even when not part of an IM sequence (ref. feature of','line_number':1069,'multiline':False]['text':' gdk/gdkkeyuni.c).','line_number':1070,'multiline':False]['text':' Flag any keypad keys that might represent a single char.','line_number':1071,'multiline':False]['text':' If this (on its own - i.e., not part of an IM sequence) is','line_number':1072,'multiline':False]['text':' committed while we're processing one of these keys, we can ignore','line_number':1073,'multiline':False]['text':' that commit and go ahead & process it ourselves.  That way we can','line_number':1074,'multiline':False]['text':' still distinguish keypad keys for use in mappings.','line_number':1075,'multiline':False]['text':' Also add GDK_space to make <S-Space> work.','line_number':1076,'multiline':False]['text':' When typing fFtT, XIM may be activated. Thus it must pass','line_number':1101,'multiline':False]['text':' gtk_im_context_filter_keypress() in Normal mode.','line_number':1102,'multiline':False]['text':' And while doing :sh too.','line_number':1103,'multiline':False]['text':' Filter 'imactivatekey' and map it to CTRL-^.  This way, Vim is','line_number':1108,'multiline':False]['text':' always aware of the current status of IM, and can even emulate','line_number':1109,'multiline':False]['text':' the activation key for modules that don't support one.','line_number':1110,'multiline':False]['text':' Require the state of the 3 most used modifiers to match exactly.','line_number':1116,'multiline':False]['text':' Otherwise e.g. <S-C-space> would be unusable for other purposes','line_number':1117,'multiline':False]['text':' if the IM activate key is <S-space>.','line_number':1118,'multiline':False]['text':' Don't send it a second time on GDK_KEY_RELEASE.','line_number':1126,'multiline':False]['text':' ":lmap" mappings exists, toggle use of mappings.','line_number':1134,'multiline':False]['text':' Don't filter events through the IM context if IM isn't active','line_number':1152,'multiline':False]['text':' right now.  Unlike with GTK+ 1.2 we cannot rely on the IM module','line_number':1153,'multiline':False]['text':' not doing anything before the activation key was sent.','line_number':1154,'multiline':False]['text':' Some XIM send following sequence:','line_number':1161,'multiline':False]['text':' 1. preedited string.','line_number':1162,'multiline':False]['text':' 2. committed string.','line_number':1163,'multiline':False]['text':' 3. line changed key.','line_number':1164,'multiline':False]['text':' 4. preedited string.','line_number':1165,'multiline':False]['text':' 5. remove preedited string.','line_number':1166,'multiline':False]['text':' if 3, Vim can't move back the above line for 5.','line_number':1167,'multiline':False]['text':' thus, this part should not parse the key.','line_number':1168,'multiline':False]['text':' If XIM tried to commit a keypad key as a single char.,','line_number':1177,'multiline':False]['text':' ignore it so we can use the keypad key 'raw', for mappings.','line_number':1178,'multiline':False]['text':' We had a keypad key, and XIM tried to thieve it','line_number':1180,'multiline':False]['text':' This is supposed to fix a problem with iBus, that space','line_number':1183,'multiline':False]['text':' characters don't work in input mode.','line_number':1184,'multiline':False]['text':' Normal processing','line_number':1187,'multiline':False]['text':' !FEAT_GUI_GTK','line_number':1217,'multiline':False]['text':' XIM should be active in the current','line_number':1219,'multiline':False]['text':' mode','line_number':1220,'multiline':False]['text':' XIM is really being used for Vim','line_number':1221,'multiline':False]['text':'
+ * Switch using XIM on/off.  This is used by the code that changes "State".
+ * When 'imactivatefunc' is defined use that function instead.
+ ','line_number':1227,'multiline':True]['text':' If 'imdisable' is set, XIM is never active.','line_number':1236,'multiline':False]['text':' There is a problem in switching XIM off when preediting is used,','line_number':1240,'multiline':False]['text':' and it is not clear how this can be solved.  For now, keep XIM on','line_number':1241,'multiline':False]['text':' all the time, like it was done in Vim 5.8.','line_number':1242,'multiline':False]['text':' Remember the active state, it is needed when Vim gets keyboard focus.','line_number':1260,'multiline':False]['text':'
+ * Adjust using XIM for gaining or losing keyboard focus.  Also called when
+ * "xim_is_active" changes.
+ ','line_number':1265,'multiline':True]['text':' XIM only gets focus when the Vim window has keyboard focus and XIM has','line_number':1275,'multiline':False]['text':' been set active for the current mode.','line_number':1276,'multiline':False]['text':'
+ * Set the XIM to the current cursor position.
+ ','line_number':1301,'multiline':True]['text':' hide XIM cursor','line_number':1319,'multiline':False]['text':' arbitrary invisible position','line_number':1321,'multiline':False]['text':' This is supposed to be useful to obtain characters through','line_number':1495,'multiline':False]['text':' XmbLookupString() without really using a XIM.','line_number':1496,'multiline':False]['text':' Only give this message when verbose is set, because too many people','line_number':1503,'multiline':False]['text':' got this message when they didn't want to use a XIM.','line_number':1504,'multiline':False]['text':' Only give this message when verbose is set, because too many people','line_number':1581,'multiline':False]['text':' got this message when they didn't want to use a XIM.','line_number':1582,'multiline':False]['text':' A crash was reported when trying to pass gui.norm_font as XNFontSet,','line_number':1597,'multiline':False]['text':' thus that has been removed.  Hopefully the default works...','line_number':1598,'multiline':False]['text':' FEAT_GUI_X11','line_number':1658,'multiline':False]['text':'
+ * Get IM status.  When IM is on, return TRUE.  Else return FALSE.
+ * FIXME: This doesn't work correctly: Having focus doesn't always mean XIM is
+ * active, when not having focus XIM may still be active (e.g., when using a
+ * tear-off menu item).
+ ','line_number':1660,'multiline':True]['text':' !FEAT_GUI_GTK','line_number':1676,'multiline':False]['text':'
+ * Set up the status area.
+ *
+ * This should use a separate Widget, but that seems not possible, because
+ * preedit_area and status_area should be set to the same window as for the
+ * text input.  Unfortunately this means the status area pollutes the text
+ * window...
+ ','line_number':1679,'multiline':True]['text':' to get status_area width','line_number':1702,'multiline':False]['text':' off-the-spot','line_number':1738,'multiline':False]['text':' over-the-spot','line_number':1752,'multiline':False]['text':' !defined(FEAT_XIM)','line_number':1793,'multiline':False]['text':' FEAT_XIM','line_number':1838,'multiline':False]

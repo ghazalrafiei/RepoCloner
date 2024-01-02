@@ -1,0 +1,129 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]['text':'
+*******************************************************************************
+*
+*   Copyright (C) 1999-2014, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+*******************************************************************************
+*   file name:  store.c
+*   encoding:   UTF-8
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 2003-02-06
+*   created by: Ram Viswanadha
+*
+','line_number':3,'multiline':True]['text':'
+ * StringPrep profile file format ------------------------------------
+ *
+ * The file format prepared and written here contains a 16-bit trie and a mapping table.
+ *
+ * Before the data contents described below, there are the headers required by
+ * the udata API for loading ICU data. Especially, a UDataInfo structure
+ * precedes the actual data. It contains platform properties values and the
+ * file format version.
+ *
+ * The following is a description of format version 2.
+ *
+ * Data contents:
+ *
+ * The contents is a parsed, binary form of RFC3454 and possibly
+ * NormalizationCorrections.txt depending on the options specified on the profile.
+ *
+ * Any Unicode code point from 0 to 0x10ffff can be looked up to get
+ * the trie-word, if any, for that code point. This means that the input
+ * to the lookup are 21-bit unsigned integers, with not all of the
+ * 21-bit range used.
+ *
+ * *.spp files customarily begin with a UDataInfo structure, see udata.h and .c.
+ * After that there are the following structures:
+ *
+ * int32_t indexes[_SPREP_INDEX_TOP];           -- _SPREP_INDEX_TOP=16, see enum in sprpimpl.h file
+ *
+ * UTrie stringPrepTrie;                        -- size in bytes=indexes[_SPREP_INDEX_TRIE_SIZE]
+ *
+ * uint16_t mappingTable[];                     -- Contains the sequecence of code units that the code point maps to
+ *                                                 size in bytes = indexes[_SPREP_INDEX_MAPPING_DATA_SIZE]
+ *
+ * The indexes array contains the following values:
+ *  indexes[_SPREP_INDEX_TRIE_SIZE]                  -- The size of the StringPrep trie in bytes
+ *  indexes[_SPREP_INDEX_MAPPING_DATA_SIZE]          -- The size of the mappingTable in bytes
+ *  indexes[_SPREP_NORM_CORRECTNS_LAST_UNI_VERSION]  -- The index of Unicode version of last entry in NormalizationCorrections.txt
+ *  indexes[_SPREP_ONE_UCHAR_MAPPING_INDEX_START]    -- The starting index of 1 UChar  mapping index in the mapping table
+ *  indexes[_SPREP_TWO_UCHARS_MAPPING_INDEX_START]   -- The starting index of 2 UChars mapping index in the mapping table
+ *  indexes[_SPREP_THREE_UCHARS_MAPPING_INDEX_START] -- The starting index of 3 UChars mapping index in the mapping table
+ *  indexes[_SPREP_FOUR_UCHARS_MAPPING_INDEX_START]  -- The starting index of 4 UChars mapping index in the mapping table
+ *  indexes[_SPREP_OPTIONS]                          -- Bit set of options to turn on in the profile, e.g: USPREP_NORMALIZATION_ON, USPREP_CHECK_BIDI_ON
+ *
+ *
+ * StringPrep Trie :
+ *
+ * The StringPrep tries is a 16-bit trie that contains data for the profile.
+ * Each code point is associated with a value (trie-word) in the trie.
+ *
+ * - structure of data words from the trie
+ *
+ *  i)  A value greater than or equal to _SPREP_TYPE_THRESHOLD (0xFFF0)
+ *      represents the type associated with the code point
+ *      if(trieWord >= _SPREP_TYPE_THRESHOLD){
+ *          type = trieWord - 0xFFF0;
+ *      }
+ *      The type can be :
+ *             USPREP_UNASSIGNED
+ *             USPREP_PROHIBITED
+ *             USPREP_DELETE
+ *
+ *  ii) A value less than _SPREP_TYPE_THRESHOLD means the type is USPREP_MAP and
+ *      contains distribution described below
+ *
+ *      0       -  ON : The code point is prohibited (USPREP_PROHIBITED). This is to allow for codepoint that are both prohibited and mapped.
+ *      1       -  ON : The value in the next 14 bits is an index into the mapping table
+ *                 OFF: The value in the next 14 bits is an delta value from the code point
+ *      2..15   -  Contains data as described by bit 1. If all bits are set
+ *                 (value = _SPREP_MAX_INDEX_VALUE) then the type is USPREP_DELETE
+ *
+ *
+ * Mapping Table:
+ * The data in mapping table is sorted according to the length of the mapping sequence.
+ * If the type of the code point is USPREP_MAP and value in trie word is an index, the index
+ * is compared with start indexes of sequence length start to figure out the length according to
+ * the following algorithm:
+ *
+ *              if(       index >= indexes[_SPREP_ONE_UCHAR_MAPPING_INDEX_START] &&
+ *                        index < indexes[_SPREP_TWO_UCHARS_MAPPING_INDEX_START]){
+ *                   length = 1;
+ *               }else if(index >= indexes[_SPREP_TWO_UCHARS_MAPPING_INDEX_START] &&
+ *                        index < indexes[_SPREP_THREE_UCHARS_MAPPING_INDEX_START]){
+ *                   length = 2;
+ *               }else if(index >= indexes[_SPREP_THREE_UCHARS_MAPPING_INDEX_START] &&
+ *                        index < indexes[_SPREP_FOUR_UCHARS_MAPPING_INDEX_START]){
+ *                   length = 3;
+ *               }else{
+ *                   // The first position in the mapping table contains the length
+ *                   // of the sequence
+ *                   length = mappingTable[index++];
+ *
+ *               }
+ *
+ ','line_number':38,'multiline':True]['text':' file data ---------------------------------------------------------------- ','line_number':132,'multiline':True]['text':' indexes[] value names ','line_number':133,'multiline':True]['text':' dummy UDataInfo cf. udata.h ','line_number':137,'multiline':True]['text':' dummy dataFormat ','line_number':147,'multiline':True]['text':' dummy formatVersion ','line_number':148,'multiline':True]['text':' dummy dataVersion ','line_number':149,'multiline':True]['text':' we skip the first index in mapping data ','line_number':157,'multiline':True]['text':' the current index into the data trie ','line_number':158,'multiline':True]['text':' maximum length of mapping string ','line_number':159,'multiline':True]['text':' UDataInfo cf. udata.h ','line_number':162,'multiline':True]['text':' dataFormat="SPRP" ','line_number':172,'multiline':True]['text':' formatVersion ','line_number':173,'multiline':True]['text':' dataVersion (Unicode version) ','line_number':174,'multiline':True]['text':' initialize the two tries ','line_number':205,'multiline':True]['text':' Callback for deleting the value from the hashtable ','line_number':221,'multiline':True]['text':' Callback for hashing the entry ','line_number':228,'multiline':True]['text':' Callback for comparing two entries ','line_number':233,'multiline':True]['text':' minimum mapping length ','line_number':248,'multiline':True]['text':'initialize the mapping data ','line_number':258,'multiline':True]['text':' store the start of indexes ','line_number':268,'multiline':True]['text':' Assume that index[] is used according to the enums defined ','line_number':270,'multiline':True]['text':' turn on the 2nd bit to signal that the following bits contain an index ','line_number':286,'multiline':True]['text':' figure out if the code point has type already stored ','line_number':293,'multiline':True]['text':' turn on the first bit in trie word ','line_number':297,'multiline':True]['text':'
+                         * the codepoint has value something other than prohibited
+                         * and a mapping .. error!
+                         ','line_number':300,'multiline':True]['text':' now set the value in the trie ','line_number':309,'multiline':True]['text':' written the trie word for the codepoint... increment the count','line_number':315,'multiline':True]['text':' sanity check are we exceeding the max number allowed ','line_number':318,'multiline':True]['text':' copy the mapping data ','line_number':325,'multiline':True]['text':' write the length ','line_number':326,'multiline':True]['text':' the cast here is safe since we donot expect the length to be > 65535 ','line_number':328,'multiline':True]['text':' copy the contents to mappindData array ','line_number':331,'multiline':True]['text':' If this happens there is a bug in the computation of the mapping data size in storeMapping() ','line_number':335,'multiline':True]['text':' set the last length for range check ','line_number':344,'multiline':True]['text':' initialize the hashtable ','line_number':367,'multiline':True]['text':' figure out if the code point has type already stored ','line_number':373,'multiline':True]['text':' turn on the first bit in trie word ','line_number':377,'multiline':True]['text':'
+             * the codepoint has value something other than prohibited
+             * and a mapping .. error!
+             ','line_number':380,'multiline':True]['text':' figure out the real length ','line_number':389,'multiline':True]['text':' make sure that the value of trieWord is less than the threshold ','line_number':396,'multiline':True]['text':' now set the value in the trie ','line_number':398,'multiline':True]['text':' value is set so just return ','line_number':403,'multiline':True]['text':' calculate the delta ','line_number':412,'multiline':True]['text':' make sure that the second bit is OFF ','line_number':420,'multiline':True]['text':' make sure that the value of trieWord is less than the threshold ','line_number':425,'multiline':True]['text':' now set the value in the trie ','line_number':427,'multiline':True]['text':' value is set so just return ','line_number':432,'multiline':True]['text':'
+         * if the delta is not in the given range or if the trieWord is larger than the threshold
+         * just fall through for storing the mapping in the mapping table
+         ','line_number':436,'multiline':True]['text':' suppress compiler warnings about unused variable','line_number':470,'multiline':False]['text':' the top 4 bits contain the value ','line_number':477,'multiline':True]['text':'
+                 * A mapping is stored in the trie word
+                 * and the only other possible type that a
+                 * code point can have is USPREP_PROHIBITED
+                 *
+                 ','line_number':482,'multiline':True]['text':' turn on the 0th bit in the savedTrieWord ','line_number':489,'multiline':True]['text':' the downcast is safe since we only save 16 bit values ','line_number':492,'multiline':True]['text':' make sure that the value of trieWord is less than the threshold ','line_number':495,'multiline':True]['text':' now set the value in the trie ','line_number':497,'multiline':True]['text':' value is set so just return ','line_number':502,'multiline':True]['text':' if savedTrieWord == trieWord .. fall through and set the value ','line_number':513,'multiline':True]['text':' folding value: just store the offset (16 bits) if there is any non-0 entry ','line_number':528,'multiline':True]['text':' #if !UCONFIG_NO_IDNA ','line_number':550,'multiline':True]['text':' sort and add mapping data ','line_number':569,'multiline':True]['text':' write the data ','line_number':591,'multiline':True]['text':' finish up ','line_number':611,'multiline':True]['text':' done with writing the data .. close the hashtable ','line_number':625,'multiline':True]['text':' #if !UCONFIG_NO_IDNA ','line_number':643,'multiline':True]['text':'
+ * Hey, Emacs, please set the following:
+ *
+ * Local Variables:
+ * indent-tabs-mode: nil
+ * End:
+ *
+ ','line_number':645,'multiline':True]

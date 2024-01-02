@@ -1,0 +1,50 @@
+['text':'*
+ *    Copyright (C) 2020-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':' Pull nested types to top-level scope','line_number':78,'multiline':False]['text':' Utility functions to use when finding servers','line_number':87,'multiline':False]['text':' Convert to micros so we don't lose information if under a ms','line_number':116,'multiline':False]['text':' namespace','line_number':159,'multiline':False]['text':'
+ * The concurrency control for this class is outlined below:
+ *
+ * The _mutex member variable is used to protect access to the _outstandingQueries list. This list
+ * is accessed when the RSM instance cannot immediately satisfy a query.
+ *
+ * The TopologyManager holds a pointer to the current topology, and it is responsible for making
+ * sure that concurrent access to topology is safe. In practice, this means that methods that access
+ * the topology information should first obtain a copy of the current topology information (via
+ * _currentTopology) and maintain a copy of it in it's stack so that the TopologyDescription will
+ * not be destroyed.
+ *
+ * Additionally, the atomic bool value _isDropped is used to determine if we are shutting down. In
+ * the getHostsOrRefresh method, _isDropped is checked in the normal case when we can satisfy a
+ * query immediately, and if not, the mutex is taken to add the query to the outstanding list. This
+ * implies that getHostsOrRefresh should avoid accessing any mutable state before the lock is taken
+ * when enqueing the outstanding query.
+ *
+ * All child classes (_topologyManager, _serverMonitor, _pingMonitor, _eventsPublisher) handle their
+ * own concurrency control, and effectively provide serialized access to their respective
+ * functionality. Once they are shutdown in the drop() method the operations exposed via their api
+ * are effectively no-ops.
+ ','line_number':162,'multiline':True]['text':' Maintain order of original seed list','line_number':200,'multiline':False]['text':' StreamableReplicaSetMonitor cannot be used with kSingle type, thus we know that the type is','line_number':212,'multiline':False]['text':' kReplicaSetNoPrimary. We need to save the expected set name to avoid the case when the','line_number':213,'multiline':False]['text':' provided seed address contains a ReplicaSet with different name (deployment mistake).','line_number':214,'multiline':False]['text':' `drop` is idempotent and a duplicate call from ReplicaSetMonitorManager::removeMonitor() is','line_number':221,'multiline':False]['text':' safe.','line_number':222,'multiline':False]['text':' We do a random shuffle when we get the hosts so we can just pick the first one','line_number':324,'multiline':False]['text':' In the fast case (stable topology), we avoid mutex acquisition.','line_number':343,'multiline':False]['text':' start counting from the beginning of the operation','line_number':348,'multiline':False]['text':' try to satisfy query immediately','line_number':352,'multiline':False]['text':' Fail fast on timeout or cancellation.','line_number':368,'multiline':False]['text':' We check if we are closed under the mutex here since someone could have called','line_number':379,'multiline':False]['text':' close() concurrently with the code above.','line_number':380,'multiline':False]['text':' try to satisfy the query again while holding both the StreamableRSM mutex and','line_number':384,'multiline':False]['text':' TopologyManager mutex to avoid missing any topology change that has occurred','line_number':385,'multiline':False]['text':' since the last check.','line_number':386,'multiline':False]['text':' Make the deadline task cancelable for when the query is satisfied or when the input','line_number':410,'multiline':False]['text':' cancelToken is canceled.','line_number':411,'multiline':False]['text':' Add the query to the list of outstanding queries.','line_number':415,'multiline':False]['text':' After a deadline or when the input cancellation token is canceled, cancel this query. If the','line_number':418,'multiline':False]['text':' query completes first, the deadlineCancelSource will be used to cancel this task.','line_number':419,'multiline':False]['text':' If the deadline was reached or cancellation occurred on the input cancellation token,','line_number':422,'multiline':False]['text':' mark the query as canceled. Otherwise, the deadlineCancelSource must have been','line_number':423,'multiline':False]['text':' canceled due to the query completing successfully.','line_number':424,'multiline':False]['text':' Mark query as done, and if it wasn't already done, remove it from the list of','line_number':427,'multiline':False]['text':' outstanding queries.','line_number':428,'multiline':False]['text':' Check that the RSM hasn't been dropped (and _outstandingQueries has not','line_number':436,'multiline':False]['text':' been cleared) before erasing.','line_number':437,'multiline':False]['text':' Call outside of the lock since this may generate a topology change event.','line_number':518,'multiline':False]['text':' NOTE: the format here must be consistent for backwards compatibility','line_number':605,'multiline':False]['text':' intentionally not camelCase','line_number':641,'multiline':False]['text':' Notify external components if there are membership changes in the topology.','line_number':682,'multiline':False]['text':' No confirmed hosts yet, just send list of hosts that are routable base on type.','line_number':705,'multiline':False]['text':' The previous primary was unable to reach consensus for the config with','line_number':731,'multiline':False]['text':' higher version and it was abandoned after failover.','line_number':732,'multiline':False]['text':' After the inital handshake, hello responses should not update the RTT with durationMs.','line_number':744,'multiline':False]['text':' Note that a possible performance optimization is:','line_number':810,'multiline':False]['text':' instead of calling _getHosts for every outstanding query, we could','line_number':811,'multiline':False]['text':' first group into equivalence classes then call _getHosts once per class.','line_number':812,'multiline':False]['text':' Iterate through the outstanding queries and try to resolve them via calls to _getHosts. If we','line_number':819,'multiline':False]['text':' succeed in resolving a query, the query is removed from the list. If a query has already been','line_number':820,'multiline':False]['text':' canceled, or there are no results, it will be skipped. Cancellation logic elsewhere will','line_number':821,'multiline':False]['text':' handle removing the canceled queries from the list.','line_number':822,'multiline':False]['text':' If query has not been canceled yet, try to satisfy it.','line_number':826,'multiline':False]['text':' The query was canceled, so skip to the next entry without erasing it.','line_number':841,'multiline':False]['text':' Results were not available, so skip to the next entry without erasing it.','line_number':845,'multiline':False]['text':' The query was canceled, so skip to the next entry without erasing it.','line_number':850,'multiline':False]['text':' If there remain unresolved queries, enable expedited mode.','line_number':855,'multiline':False]['text':' namespace mongo','line_number':872,'multiline':False]

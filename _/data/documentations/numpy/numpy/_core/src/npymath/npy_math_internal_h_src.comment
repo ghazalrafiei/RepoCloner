@@ -1,0 +1,186 @@
+['text':'
+ * vim:syntax=c
+ * A small module to implement missing C99 math capabilities required by numpy
+ *
+ * Please keep this independent of python ! Only basic types (npy_longdouble)
+ * can be used, otherwise, pure C, without any use of Python facilities
+ *
+ * How to add a function to this section
+ * -------------------------------------
+ *
+ * Say you want to add `foo`, these are the steps and the reasons for them.
+ *
+ * 1) Add foo to the appropriate list in the configuration system. The
+ *    lists can be found in numpy/_core/setup.py lines 63-105. Read the
+ *    comments that come with them, they are very helpful.
+ *
+ * 2) The configuration system will define a macro HAVE_FOO if your function
+ *    can be linked from the math library. The result can depend on the
+ *    optimization flags as well as the compiler, so can't be known ahead of
+ *    time. If the function can't be linked, then either it is absent, defined
+ *    as a macro, or is an intrinsic (hardware) function.
+ *
+ *    i) Undefine any possible macros:
+ *
+ *    #ifdef foo
+ *    #undef foo
+ *    #endif
+ *
+ *    ii) Avoid as much as possible to declare any function here. Declaring
+ *    functions is not portable: some platforms define some function inline
+ *    with a non standard identifier, for example, or may put another
+ *    identifier which changes the calling convention of the function. If you
+ *    really have to, ALWAYS declare it for the one platform you are dealing
+ *    with:
+ *
+ *    Not ok:
+ *        double exp(double a);
+ *
+ *    Ok:
+ *        #ifdef SYMBOL_DEFINED_WEIRD_PLATFORM
+ *        double exp(double);
+ *        #endif
+ *
+ * Some of the code is taken from msun library in FreeBSD, with the following
+ * notice:
+ *
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ ','line_number':1,'multiline':True]['text':' for __popcnt','line_number':58,'multiline':False]['text':' Magic binary numbers used by bit_count
+ * For type T, the magic numbers are computed as follows:
+ * Magic[0]: 01 01 01 01 01 01... = (T)~(T)0/3
+ * Magic[1]: 0011 0011 0011...    = (T)~(T)0/15  * 3
+ * Magic[2]: 00001111 00001111... = (T)~(T)0/255 * 15
+ * Magic[3]: 00000001 00000001... = (T)~(T)0/255
+ *
+ * Counting bits set, in parallel
+ * Based on: https://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
+ *
+ * Generic Algorithm for type T:
+ * a = a - ((a >> 1) & (T)~(T)0/3);
+ * a = (a & (T)~(T)0/15*3) + ((a >> 2) & (T)~(T)0/15*3);
+ * a = (a + (a >> 4)) & (T)~(T)0/255*15;
+ * c = (T)(a * ((T)~(T)0/255)) >> (sizeof(T) - 1) * CHAR_BIT;
+','line_number':61,'multiline':True]['text':'
+ *****************************************************************************
+ **                    BLOCKLIST-ABLE BASIC MATH FUNCTIONS                  **
+ *****************************************************************************
+ ','line_number':84,'multiline':True]['text':' The following functions can be blocked, even for doubles ','line_number':90,'multiline':True]['text':' Original code by Konrad Hinsen.  ','line_number':92,'multiline':True]['text':' Taken from FreeBSD mlib, adapted for numpy
+ *
+ * XXX: we could be a bit faster by reusing high/low words for inf/nan
+ * classification instead of calling npy_isinf/npy_isnan: we should have some
+ * macros for this, though, instead of doing it manually
+ ','line_number':93,'multiline':True]['text':' special value result ','line_number':105,'multiline':True]['text':'
+         * fallback implementation copied from python3.4 math.log2
+         * provides int(log(2**i)) == i for i 1-64 in default rounding mode.
+         *
+         * We want log2(m * 2**e) == log(m) / log(2) + e.  Care is needed when
+         * x is just greater than 1.0: in that case e is 1, log(m) is negative,
+         * and we get significant cancellation error from the addition of
+         * log(m) / log(2) to e.  The slight rewrite of the expression below
+         * avoids this problem.
+         ','line_number':109,'multiline':True]['text':' Taken from FreeBSD mlib, adapted for numpy
+ *
+ * XXX: we could be a bit faster by reusing high/low words for inf/nan
+ * classification instead of calling npy_isinf/npy_isnan: we should have some
+ * macros for this, though, instead of doing it manually
+ ','line_number':131,'multiline':True]['text':' XXX: we should have this in npy_math.h ','line_number':137,'multiline':True]['text':' if x or y is nan, return nan ','line_number':153,'multiline':True]['text':' atan(+-0,+anything)=+-0 ','line_number':166,'multiline':True]['text':' atan(+0,-anything) = pi ','line_number':167,'multiline':True]['text':' atan(-0,-anything) =-pi ','line_number':168,'multiline':True]['text':' atan(+INF,+INF) ','line_number':179,'multiline':True]['text':' atan(-INF,+INF) ','line_number':180,'multiline':True]['text':'atan(+INF,-INF)','line_number':181,'multiline':True]['text':'atan(-INF,-INF)','line_number':182,'multiline':True]['text':' atan(+...,+INF) ','line_number':186,'multiline':True]['text':' atan(-...,+INF) ','line_number':187,'multiline':True]['text':' atan(+...,-INF) ','line_number':188,'multiline':True]['text':' atan(-...,-INF) ','line_number':189,'multiline':True]['text':' compute y/x ','line_number':198,'multiline':True]['text':' |y/x| >  2**60 ','line_number':200,'multiline':True]['text':' 0 > |y|/x > -2**-60 ','line_number':204,'multiline':True]['text':' safe to do y/x ','line_number':206,'multiline':True]['text':' atan(+,+) ','line_number':210,'multiline':True]['text':' atan(-,+) ','line_number':211,'multiline':True]['text':' atan(+,-) ','line_number':212,'multiline':True]['text':' case 3 ','line_number':213,'multiline':True]['text':' atan(-,-) ','line_number':214,'multiline':True]['text':'
+ *
+ * sin, cos, tan
+ * sinh, cosh, tanh,
+ * fabs, floor, ceil, rint, trunc
+ * sqrt, log10, log, exp, expm1
+ * asin, acos, atan,
+ * asinh, acosh, atanh
+ *
+ * hypot, atan2, pow, fmod, modf
+ * ldexp, frexp, cbrt
+ *
+ * We assume the above are always available in their double versions.
+ *
+ * NOTE: some facilities may be available as macro only  instead of functions.
+ * For simplicity, we define our own functions and undef the macros. We could
+ * instead test for the macro, but I am lazy to do that for now.
+ ','line_number':255,'multiline':True]['text':'
+ * Decorate all the math functions which are available on the current platform
+ ','line_number':275,'multiline':True]['text':'*begin repeat
+ * #type = npy_longdouble, npy_double, npy_float#
+ * #TYPE = LONGDOUBLE, DOUBLE, FLOAT#
+ * #c = l,,f#
+ * #C = L,,F#
+ ','line_number':279,'multiline':True]['text':'
+ * On arm64 macOS, there's a bug with sin, cos, and tan where they don't
+ * raise "invalid" when given INFINITY as input.
+ ','line_number':291,'multiline':True]['text':'*begin repeat1
+ * #kind = sin,cos,tan#
+ * #TRIG_WORKAROUND = WORKAROUND_APPLE_TRIG_BUG*3#
+ ','line_number':301,'multiline':True]['text':'*end repeat1*','line_number':315,'multiline':True]['text':'*end repeat*','line_number':319,'multiline':True]['text':' Blocklist-able C99 functions ','line_number':321,'multiline':True]['text':'*begin repeat
+ * #type = npy_float,npy_longdouble#
+ * #TYPE = FLOAT,LONGDOUBLE#
+ * #c = f,l#
+ * #C = F,L#
+ ','line_number':323,'multiline':True]['text':'*begin repeat1
+ * #kind = exp,log2,sqrt#
+ * #KIND = EXP,LOG2,SQRT#
+ ','line_number':336,'multiline':True]['text':'*end repeat1*','line_number':358,'multiline':True]['text':'*begin repeat1
+ * #kind = atan2,hypot,pow#
+ * #KIND = ATAN2,HYPOT,POW#
+ ','line_number':361,'multiline':True]['text':'*end repeat1*','line_number':381,'multiline':True]['text':'*end repeat*','line_number':404,'multiline':True]['text':'
+ * Non standard functions
+ ','line_number':410,'multiline':True]['text':'*begin repeat
+ * #type = npy_float, npy_double, npy_longdouble#
+ * #TYPE = FLOAT, DOUBLE, LONGDOUBLE#
+ * #c = f, ,l#
+ * #C = F, ,L#
+ ','line_number':414,'multiline':True]['text':' Handles infinities of the same sign without warnings ','line_number':470,'multiline':True]['text':' NaNs ','line_number':482,'multiline':True]['text':' Handles infinities of the same sign without warnings ','line_number':491,'multiline':True]['text':' NaNs ','line_number':503,'multiline':True]['text':'
+ * Wrapper function for remainder edge cases
+ * Internally calls npy_divmod*
+ ','line_number':509,'multiline':True]['text':'
+         * in2 == 0 (and not NaN): normal fmod will give the correct
+         * result (always NaN). `divmod` may set additional FPE for the
+         * division by zero creating an inf.
+         ','line_number':518,'multiline':True]['text':'
+         * in2 == 0 (and not NaN): normal division will give the correct
+         * result (Inf or NaN). `divmod` may set additional FPE for the modulo
+         * evaluating to NaN.
+         ','line_number':535,'multiline':True]['text':'
+ * Python version of divmod.
+ *
+ * The implementation is mostly copied from cpython 3.5.
+ ','line_number':548,'multiline':True]['text':' b == 0 (not NaN): return result of fmod. For IEEE is nan ','line_number':560,'multiline':True]['text':' a - mod should be very nearly an integer multiple of b ','line_number':565,'multiline':True]['text':' adjust fmod result to conform to Python convention of remainder ','line_number':568,'multiline':True]['text':' if mod is zero ensure correct sign ','line_number':576,'multiline':True]['text':' snap quotient to nearest integral value ','line_number':580,'multiline':True]['text':' if div is zero ensure correct sign ','line_number':587,'multiline':True]['text':'*end repeat*','line_number':600,'multiline':True]['text':'*begin repeat
+ *
+ * #type = npy_uint, npy_ulong, npy_ulonglong#
+ * #c = u,ul,ull#
+ ','line_number':602,'multiline':True]['text':'*end repeat*','line_number':625,'multiline':True]['text':'*begin repeat
+ *
+ * #type = (npy_int, npy_long, npy_longlong)*2#
+ * #c = (,l,ll)*2#
+ * #func=gcd*3,lcm*3#
+ ','line_number':627,'multiline':True]['text':'*end repeat*','line_number':638,'multiline':True]['text':' Unlike LCM and GCD, we need byte and short variants for the shift operators,
+ * since the result is dependent on the width of the type
+ ','line_number':640,'multiline':True]['text':'*begin repeat
+ *
+ * #type = byte, short, int, long, longlong#
+ * #c = hh,h,,l,ll#
+ ','line_number':643,'multiline':True]['text':'*begin repeat1
+ *
+ * #u         = u,#
+ * #is_signed = 0,1#
+ ','line_number':648,'multiline':True]['text':' preserve the sign bit ','line_number':671,'multiline':True]['text':'*end repeat1*','line_number':678,'multiline':True]['text':'*end repeat*','line_number':679,'multiline':True]['text':'*begin repeat
+ *
+ * #type  = ubyte, ushort, uint, ulong, ulonglong#
+ * #STYPE = BYTE,  SHORT,  INT,  LONG,  LONGLONG#
+ * #c     = hh,    h,      ,     l,     ll#
+ ','line_number':682,'multiline':True]['text':'*begin repeat1
+ * #len = 8, 16, 32, 64#
+ ','line_number':690,'multiline':True]['text':'*end repeat1*','line_number':695,'multiline':True]['text':' use built-in popcount if present, else use our implementation ','line_number':711,'multiline':True]['text':' no builtin __popcnt64 for 32 bits ','line_number':715,'multiline':True]['text':' split 64 bit number into two 32 bit ints and return sum of counts ','line_number':718,'multiline':True]['text':'*end repeat*','line_number':728,'multiline':True]['text':'*begin repeat
+ *
+ * #type = byte, short, int, long, longlong#
+ * #c    = hh,   h,     ,    l,    ll#
+ ','line_number':730,'multiline':True]['text':' Return popcount of abs(a) ','line_number':738,'multiline':True]['text':'*end repeat*','line_number':741,'multiline':True]

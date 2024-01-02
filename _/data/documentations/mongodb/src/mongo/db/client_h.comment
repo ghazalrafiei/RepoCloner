@@ -1,0 +1,175 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':' @file db/client.h
+
+   "Client" represents a connection to the database (the server-side) and corresponds
+   to an open socket (or logical connection if pooling on sockets) from a client.
+
+   todo: switch to asio...this will fit nicely with that.
+','line_number':30,'multiline':True]['text':'*
+ * The database's concept of an outside "client".
+ ','line_number':73,'multiline':True]['text':'*
+     * These tags classify the connections associated with Clients and reasons to keep them open.
+     * When closing connections, these tags can be used to filter out the type of connections that
+     * should be kept open.
+     *
+     * Clients that are not yet classified yet are marked as kPending. The classification occurs
+     * during the processing of "hello" commands.
+     ','line_number':78,'multiline':True]['text':' Client's connections should be closed.','line_number':88,'multiline':False]['text':' Client's connection should be kept open on replication member rollback or removal.','line_number':91,'multiline':False]['text':' Client is internal and their max wire version is not less than the max wire version of','line_number':94,'multiline':False]['text':' this server. Connection should be kept open.','line_number':95,'multiline':False]['text':' Client is external and connection should be kept open.','line_number':98,'multiline':False]['text':' Client has not been classified yet and should be kept open.','line_number':101,'multiline':False]['text':'* Used as a placeholder argument to avoid specifying a session. ','line_number':104,'multiline':True]['text':'*
+     * Creates a Client object and stores it in TLS for the current thread.
+     *
+     * If `session` is non-null, then it will be used to augment the thread name
+     * and for reporting purposes. Its ref count will be bumped by this Client.
+     ','line_number':109,'multiline':True]['text':'*
+     * Moves client into the thread_local for this thread. After this call, Client::getCurrent
+     * and cc() will return client.get(). The client will be destroyed when the thread exits
+     * or the ThreadClient RAII helper exits its scope.
+     ','line_number':119,'multiline':True]['text':'*
+     * Releases the client being managed by the thread_local for this thread. After this call
+     * cc() will crash the server and Client::getCurrent() will return nullptr until either
+     * Client::initThread() or Client::setCurrent() is called.
+     *
+     * The client will be released to the caller.
+     ','line_number':126,'multiline':True]['text':'*
+     * Overwrites the Service for this client. To be used by the replica set endpoint only.
+     ','line_number':153,'multiline':True]['text':'*
+     * Returns the Service that owns this client.
+     ','line_number':160,'multiline':True]['text':'*
+     * Returns true if this client is connected to the router port of a mongod with router role.
+     ','line_number':167,'multiline':True]['text':'*
+     * Returns the ServiceContext that owns this client session context.
+     ','line_number':174,'multiline':True]['text':'*
+     * Returns the Session to which this client is bound, if any.
+     ','line_number':181,'multiline':True]['text':' Ensures stability of everything under the client object, most notably the associated','line_number':203,'multiline':False]['text':' OperationContext.','line_number':204,'multiline':False]['text':'*
+     * Makes a new operation context representing an operation on this client.  At most
+     * one operation context may be in scope on a client at a time.
+     *
+     * If provided, the LogicalSessionId links this operation to a logical session.
+     ','line_number':215,'multiline':True]['text':'*
+     * Gets the operation context active on this client, or nullptr if there is no such context.
+     *
+     * It is an error to call this method on an unlocked client, or to use the value returned
+     * by this method while the client is not locked.
+     ','line_number':223,'multiline':True]['text':' TODO(spencer): SERVER-10228 SERVER-14779 Remove this/move it fully into OperationContext.','line_number':233,'multiline':False]['text':'*
+     * Used to mark system operations that are not allowed to be killed by the stepdown
+     * thread. This should only be called once per Client and only from system connections. The
+     * Client should be locked by the caller. We should minimize the usage of this function because
+     * improper usage could lead to a deadlock. More context comes as follows.
+     *
+     * How does this kill operation process work?
+     * To be more clear, the kill operation is actually an interruption. In order to get the RSTL
+     * lock during stepUp/stepDown, the replication coordinator will start a RstlKillOpThread to
+     * interrupt all threads that may block it for the RSTL lock. The RstlKillOpThread will loop
+     * through all threads and find out the threads that have ever taken a global lock in S/X/IX
+     * mode. It will interrupt these threads by interrupting their opCtx, which will cause an
+     * InterruptedDueToReplStateChange error to be thrown when the thread checks interruption on the
+     * opCtx. In addition to those threads hold global locks, a thread could also be interrupted if
+     * it is explicitly marked as alwaysInterruptAtStepDownOrUp or waiting on prepare conflicts.
+     *
+     * What should I consider if I introduced a new thread?
+     * - Whether the new thread ever takes any global lock in S/IX/X mode? If not, the stepdown
+     *   thread won't interrupt the new thread so we should leave it as killable. Even if the thread
+     *   takes global lock, the best practice should be making the new thread killable and handle
+     *   the interruption properly.
+     * - It's always better to write the code in a way that can catch the
+     *   InterruptedDueToReplStateChange error and recover from there. This helps make the thread
+     *   killable in a safer way and can prevent deadlock from unkillable thread.
+     * - If the thread has to be unkillable, it would be helpful to leave the reason in a comment so
+     *   if it becomes an issue, it will be easier to find the cause.
+     ','line_number':255,'multiline':True]['text':' This can only be changed once for system operations.','line_number':283,'multiline':False]['text':'*
+     * Used to determine whether a system operation is allowed to be killed by the stepdown thread.
+     * The Client should be locked by the caller.
+     ','line_number':289,'multiline':True]['text':' Should only be called on system operations.','line_number':294,'multiline':False]['text':'*
+     * Checks if there is an active currentOp associated with this client.
+     * The definition of active varies between User and System connections.
+     * Note that the caller must hold the client lock.
+     ','line_number':303,'multiline':True]['text':'*
+     * Signal the client's OperationContext that it has been killed.
+     * Any future OperationContext on this client will also receive a kill signal.
+     ','line_number':310,'multiline':True]['text':'*
+     * Get the state for killing the client's OperationContext.
+     ','line_number':316,'multiline':True]['text':'*
+     * Whether this client supports the hello command, which indicates that the server
+     * can return "not primary" error messages.
+     ','line_number':323,'multiline':True]['text':'*
+     * Will be set to true if the client sent { helloOk: true } when opening a
+     * connection to the server. Defaults to false.
+     ','line_number':331,'multiline':True]['text':'*
+     * Sets the error code that operations associated with this client will be killed with if the
+     * underlying ingress session disconnects.
+     ','line_number':347,'multiline':True]['text':'*
+     * Atomically set all of the connection tags specified in the 'tagsToSet' bit field. If the
+     * 'kPending' tag is set, indicating that no tags have yet been specified for the connection,
+     * this function also clears that tag as part of the same atomic operation.
+     *
+     * The 'kPending' tag is only for new connections; callers should not set it directly.
+     ','line_number':359,'multiline':True]['text':'*
+     * Atomically clears all of the connection tags specified in the 'tagsToUnset' bit field. If
+     * the 'kPending' tag is set, indicating that no tags have yet been specified for the session,
+     * this function also clears that tag as part of the same atomic operation.
+     ','line_number':368,'multiline':True]['text':'*
+     * Loads the connection tags, passes them to 'mutateFunc' and then stores the result of that
+     * call as the new connection tags, all in one atomic operation.
+     *
+     * In order to ensure atomicity, 'mutateFunc' may get called multiple times, so it should not
+     * perform expensive computations or operations with side effects.
+     *
+     * If the 'kPending' tag is set originally, mutateTags() will unset it regardless of the result
+     * of the 'mutateFunc' call. The 'kPending' tag is only for new connections; callers should
+     * never try to set it.
+     ','line_number':375,'multiline':True]['text':'*
+     * Sets the active operation context on this client to "opCtx".
+     ','line_number':395,'multiline':True]['text':' Description for the client (e.g. conn8)','line_number':405,'multiline':False]['text':' > 0 for things "conn", 0 otherwise','line_number':408,'multiline':False]['text':' Protects the contents of the Client (such as changing the OperationContext, etc)','line_number':411,'multiline':False]['text':' Whether this client is running as DBDirectClient','line_number':414,'multiline':False]['text':' If != NULL, then contains the currently active OperationContext','line_number':417,'multiline':False]['text':' If the active system client operation is allowed to be killed.','line_number':420,'multiline':False]['text':' Whether this client used { helloOk: true } when opening its connection, indicating that','line_number':427,'multiline':False]['text':' it supports the hello command.','line_number':428,'multiline':False]['text':' Whether this client is connected to the router port of a mongod with router role.','line_number':431,'multiline':False]['text':' Indicates that this client is internal to the cluster.','line_number':436,'multiline':False]['text':'*
+ * RAII-style Client helper to manage its lifecycle.
+ * Instantiates a client on the current thread, which remains bound to this thread so long as the
+ * instance of ThreadClient is in scope.
+ *
+ * Swapping the managed Client by ThreadClient with AlternativeClientRegion is permitted so long as
+ * the AlternativeClientRegion is not used beyond the scope of ThreadClient.
+ *
+ * Calling Client::releaseCurrent() is not permitted on a Client managed by the ThreadClient and
+ * will invariant once ThreadClient goes out of scope.
+ ','line_number':444,'multiline':True]['text':'*
+     * The overload set for this constructor bears some explanation.
+     * The primary fully-populated parameter list is:
+     *     StringData desc
+     *     Service* service
+     *     std::shared_ptr<transport::Session> session
+     *
+     * However, a full set of 2 variations on this constructor are accepted.
+     *
+     * A) The `desc` can be omitted, and will default to `getThreadName()`.
+     *
+     * B) The `session` can be omitted, and will default to `Client::noSession()`.
+     ','line_number':457,'multiline':True]['text':'* A) Repeat, with `desc` omitted. ','line_number':472,'multiline':True]['text':'* B) Repeat all previous constructors, with `session` omitted. ','line_number':476,'multiline':True]['text':'*
+ * Utility class to temporarily swap which client is bound to the running thread.
+ *
+ * Use this class to bind a client to the current thread for the duration of the
+ * AlternativeClientRegion's lifetime, restoring the prior client, if any, at the
+ * end of the block.
+ ','line_number':498,'multiline':True]['text':'* get the Client object for this thread. ','line_number':529,'multiline':True]['text':' namespace mongo','line_number':533,'multiline':False]

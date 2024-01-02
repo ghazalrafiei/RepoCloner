@@ -1,0 +1,122 @@
+['text':'
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+ ','line_number':1,'multiline':True]['text':'-****************************************
+*  Dependencies
+*****************************************','line_number':19,'multiline':True]['text':' PLATFORM_POSIX_VERSION, ZSTD_NANOSLEEP_SUPPORT, ZSTD_SETPRIORITY_SUPPORT ','line_number':22,'multiline':True]['text':' size_t, ptrdiff_t ','line_number':23,'multiline':True]['text':' stat, utime ','line_number':24,'multiline':True]['text':' stat, chmod ','line_number':25,'multiline':True]['text':' U64 ','line_number':26,'multiline':True]['text':'-************************************************************
+* Avoid fseek()'s 2GiB barrier with MSVC, macOS, *BSD, MinGW
+**************************************************************','line_number':29,'multiline':True]['text':' No point defining Large file for 64 bit ','line_number':34,'multiline':True]['text':'-*************************************************
+*  Sleep & priority functions: Windows - Posix - others
+**************************************************','line_number':43,'multiline':True]['text':' Unix-like operating system ','line_number':52,'multiline':True]['text':' sleep ','line_number':53,'multiline':True]['text':' necessarily defined in platform.h ','line_number':55,'multiline':True]['text':' disabled ','line_number':58,'multiline':True]['text':' setpriority ','line_number':61,'multiline':True]['text':' disabled ','line_number':64,'multiline':True]['text':' unknown non-unix operating system ','line_number':67,'multiline':True]['text':' disabled ','line_number':68,'multiline':True]['text':' disabled ','line_number':69,'multiline':True]['text':' disabled ','line_number':70,'multiline':True]['text':'-****************************************
+*  Compiler specifics
+*****************************************','line_number':74,'multiline':True]['text':' disable: message #177: function was declared but never referenced, useful with UTIL_STATIC ','line_number':78,'multiline':True]['text':' C99 ','line_number':82,'multiline':True]['text':' this version may generate warnings for unused static functions; disable the relevant warning ','line_number':87,'multiline':True]['text':'-****************************************
+*  Console log
+*****************************************','line_number':91,'multiline':True]['text':'*
+ * Displays a message prompt and returns success (0) if first character from stdin
+ * matches any from acceptableLetters. Otherwise, returns failure (1) and displays abortMsg.
+ * If any of the inputs are stdin itself, then automatically return failure (1).
+ ','line_number':96,'multiline':True]['text':'-****************************************
+*  File functions
+*****************************************','line_number':104,'multiline':True]['text':' windows support ','line_number':116,'multiline':True]['text':'*
+ * Calls platform's equivalent of stat() on filename and writes info to statbuf.
+ * Returns success (1) or failure (0).
+ *
+ * UTIL_fstat() is like UTIL_stat() but takes an optional fd that refers to the
+ * file in question. It turns out that this can be meaningfully faster. If fd is
+ * -1, behaves just like UTIL_stat() (i.e., falls back to using the filename).
+ ','line_number':126,'multiline':True]['text':'*
+ * Instead of getting a file's stats, this updates them with the info in the
+ * provided stat_t. Currently sets owner, group, atime, and mtime. Will only
+ * update this info for regular files.
+ *
+ * UTIL_setFDStat() also takes an fd, and will preferentially use that to
+ * indicate which file to modify, If fd is -1, it will fall back to using the
+ * filename.
+ ','line_number':137,'multiline':True]['text':'*
+ * Set atime to now and mtime to the st_mtim in statbuf.
+ *
+ * Directly wraps utime() or utimensat(). Returns -1 on error.
+ * Does not validate filename is valid.
+ ','line_number':149,'multiline':True]['text':'
+ * These helpers operate on a pre-populated stat_t, i.e., the result of
+ * calling one of the above functions.
+ ','line_number':157,'multiline':True]['text':'*
+ * Like chmod(), but only modifies regular files. Provided statbuf may be NULL,
+ * in which case this function will stat() the file internally, in order to
+ * check whether it should be modified.
+ *
+ * If fd is -1, fd is ignored and the filename is used.
+ ','line_number':168,'multiline':True]['text':'
+ * In the absence of a pre-existing stat result on the file in question, these
+ * functions will do a stat() call internally and then use that result to
+ * compute the needed information.
+ ','line_number':178,'multiline':True]['text':'*
+ * Returns with the given file descriptor is a console.
+ * Allows faking whether stdin/stdout/stderr is a console
+ * using UTIL_fake*IsConsole().
+ ','line_number':192,'multiline':True]['text':'*
+ * Pretends that stdin/stdout/stderr is a console for testing.
+ ','line_number':199,'multiline':True]['text':'*
+ * Emit traces for functions that read, or modify file metadata.
+ ','line_number':206,'multiline':True]['text':'*
+ * Take @size in bytes,
+ * prepare the components to pretty-print it in a scaled way.
+ * The components in the returned struct should be passed in
+ * precision, value, suffix order to a "%.*f%s" format string.
+ * Output policy is sensible to @g_utilDisplayLevel,
+ * for verbose mode (@g_utilDisplayLevel >= 4),
+ * does not scale down.
+ ','line_number':215,'multiline':True]['text':'-****************************************
+ *  Lists of Filenames
+ *****************************************','line_number':239,'multiline':True]['text':' fileNames are stored in this buffer (or are read-only) ','line_number':245,'multiline':True]['text':' nb of fileNames ','line_number':246,'multiline':True]['text':'! UTIL_createFileNamesTable_fromFileName() :
+ *  read filenames from @inputFileName, and store them into returned object.
+ * @return : a FileNamesTable*, or NULL in case of error (ex: @inputFileName doesn't exist).
+ *  Note: inputFileSize must be less than 50MB
+ ','line_number':250,'multiline':True]['text':'! UTIL_assembleFileNamesTable() :
+ *  This function takes ownership of its arguments, @filenames and @buf,
+ *  and store them inside the created object.
+ *  note : this function never fails,
+ *         it will rather exit() the program if internal allocation fails.
+ * @return : resulting FileNamesTable* object.
+ ','line_number':258,'multiline':True]['text':'! UTIL_freeFileNamesTable() :
+ *  This function is compatible with NULL argument and never fails.
+ ','line_number':268,'multiline':True]['text':'! UTIL_mergeFileNamesTable():
+ * @return : FileNamesTable*, concatenation of @table1 and @table2
+ *  note: @table1 and @table2 are consumed (freed) by this operation
+ ','line_number':273,'multiline':True]['text':'! UTIL_expandFNT() :
+ *  read names from @fnt, and expand those corresponding to directories
+ *  update @fnt, now containing only file names,
+ *  note : in case of error, @fnt[0] is NULL
+ ','line_number':281,'multiline':True]['text':'! UTIL_createFNT_fromROTable() :
+ *  copy the @filenames pointer table inside the returned object.
+ *  The names themselves are still stored in their original buffer, which must outlive the object.
+ * @return : a FileNamesTable* object,
+ *        or NULL in case of error
+ ','line_number':288,'multiline':True]['text':'! UTIL_allocateFileNamesTable() :
+ *  Allocates a table of const char*, to insert read-only names later on.
+ *  The created FileNamesTable* doesn't hold a buffer.
+ * @return : FileNamesTable*, or NULL, if allocation fails.
+ ','line_number':297,'multiline':True]['text':'! UTIL_searchFileNamesTable() :
+ *  Searched through entries in FileNamesTable for a specific name.
+ * @return : index of entry if found or -1 if not found
+ ','line_number':304,'multiline':True]['text':'! UTIL_refFilename() :
+ *  Add a reference to read-only name into @fnt table.
+ *  As @filename is only referenced, its lifetime must outlive @fnt.
+ *  Internal table must be large enough to reference a new member,
+ *  otherwise its UB (protected by an `assert()`).
+ ','line_number':310,'multiline':True]['text':' UTIL_createExpandedFNT() is only active if UTIL_HAS_CREATEFILELIST is defined.
+ * Otherwise, UTIL_createExpandedFNT() is a shell function which does nothing
+ * apart from displaying a warning message.
+ ','line_number':319,'multiline':True]['text':' opendir, readdir require POSIX.1-2001 ','line_number':325,'multiline':True]['text':' do not define UTIL_HAS_CREATEFILELIST ','line_number':329,'multiline':True]['text':'! UTIL_createExpandedFNT() :
+ *  read names from @filenames, and expand those corresponding to directories.
+ *  links are followed or not depending on @followLinks directive.
+ * @return : an expanded FileNamesTable*, where each name is a file
+ *        or NULL in case of error
+ ','line_number':332,'multiline':True]['text':'-****************************************
+ *  System
+ *****************************************','line_number':345,'multiline':True]['text':' UTIL_H_MODULE ','line_number':359,'multiline':True]

@@ -1,0 +1,42 @@
+['text':'*
+ * DynamicType is designed as a low dependency type system for TorchScript. The
+ * existing JIT types are used for both compilation and runtime, which makes
+ * sense for server contexts because we often compile and run the model in
+ * the same process, however this doesn't hold for mobile devices where we
+ * always compiles a model ahead of time, therefore there will be dependencies
+ * which are not needed, but built with mobile runtime causing binary size
+ * bloat, by design. Every basic type like Int, Bool or String will bring their
+ * vtable, typeinfo, constructor, destructor and even more data from their
+ * specializations for STL types to the binary causing a long tail bloat.
+ *
+ * The core problem is about the complexity to implement and maintain a single
+ * type system for both analysis and execution purposes. Although they should
+ * have the exactly same semantics, in practice implement a unified abstraction
+ * adds conceptual and representational overhead for both sides of the world.
+ *
+ * To address the issues, DynamicType implements a minimal subset of JIT types
+ * and uses a generic algorithm to test all subtyping relations. To achieve
+ * this, we assign each dynamic type a single integer tag to represent its
+ * semantics. More specifically, a dynamic type is defined as a set of "control
+ * bits" and "data bits", where control bits describe the special behavior when
+ * testing a type and data bits map to identity of each nominal type. We use bit
+ * operations to perform all the tests.
+ *
+ * For example, a "covariant bit" is a control bit used to describe if a type
+ * is covariant, right now the most used one is tuple type, and in addition to
+ * the control bit, tuple type's data bit is the 8th bit from the LSB. Control
+ * bits start from MSB and data bits start from LSB.
+ *
+ * If two types are equal, then they are subtype of each other, also if the bits
+ * from one type tag is subset of the other tag, it automatically becomes a
+ * subtype of the other. This simplifies the subtyping logic a lot, and over the
+ * long term it is possible to adopt this scheme on the server side as well.
+ * Special cases can be added but they generally should not take too much code
+ * size.
+ *
+ * DynamicType may or may not inherit from c10::Type because it's not the core
+ * requirement of DynamicType to interface with existing JIT types, but we might
+ * want to inherit from c10::Type to reduce the migration cost.
+ ','line_number':76,'multiline':True]['text':'*
+   * A implementation detail to support NamedTuple.
+   ','line_number':119,'multiline':True]['text':' TODO Change Ptr to DynamicTypePtr when all migrations are done.','line_number':132,'multiline':False]['text':' Should be used only on the server side to restore static type information.','line_number':173,'multiline':False]['text':' namespace c10','line_number':233,'multiline':False]['text':' namespace c10','line_number':238,'multiline':False]

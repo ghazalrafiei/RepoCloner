@@ -1,0 +1,52 @@
+['text':' stringlib: fastsearch implementation taken from CPython ','line_number':4,'multiline':True]['text':' fast search/count implementation, based on a mix between boyer-
+   moore and horspool, with a few more bells and whistles on the top.
+   for some more background, see:
+   https://web.archive.org/web/20201107074620/http://effbot.org/zone/stringlib.htm ','line_number':16,'multiline':True]['text':' note: fastsearch may access s[n], but this is being checked for in this
+   implementation, because NumPy strings are not NULL-terminated.
+   also, the count mode returns -1 if there cannot possibly be a match
+   in the target string, and 0 if it has actually checked for matches,
+   but didn't find any. callers beware! ','line_number':21,'multiline':True]['text':' If the strings are long enough, use Crochemore and Perrin's Two-Way
+   algorithm, which has worst-case O(n) runtime and best-case O(n/k).
+   Also compute a table of shifts to achieve O(n/k) in more cases,
+   and often (data dependent) deduce larger shifts than pure C&P can
+   deduce. See stringlib_find_two_way_notes.txt in this folder for a
+   detailed explanation. ','line_number':27,'multiline':True]['text':' Change to a 1 to see logging comments walk through the algorithm. ','line_number':94,'multiline':True]['text':' Do a lexicographic search. Essentially this:
+           >>> max(needle[i:] for i in range(len(needle)+1))
+       Also find the period of the right half.   ','line_number':114,'multiline':True]['text':' The period of the right half.','line_number':120,'multiline':False]['text':' each loop increases candidate + k + max_suffix','line_number':124,'multiline':False]['text':' check if the suffix at candidate is better than max_suffix','line_number':127,'multiline':False]['text':' Fell short of max_suffix.','line_number':129,'multiline':False]['text':' The next k + 1 characters are non-increasing','line_number':130,'multiline':False]['text':' from candidate, so they won't start a maximal suffix.','line_number':131,'multiline':False]['text':' We've ruled out any period smaller than what's','line_number':134,'multiline':False]['text':' been scanned since max_suffix.','line_number':135,'multiline':False]['text':' Keep scanning the equal strings','line_number':140,'multiline':False]['text':' Matched a whole period.','line_number':144,'multiline':False]['text':' Start matching the next period.','line_number':145,'multiline':False]['text':' Did better than max_suffix, so replace it.','line_number':151,'multiline':False]['text':' Do a "critical factorization", making it so that:
+       >>> needle = (left := needle[:cut]) + (right := needle[cut:])
+       where the "local period" of the cut is maximal.
+
+       The local period of the cut is the minimal length of a string w
+       such that (left endswith w or w endswith left)
+       and (right startswith w or w startswith left).
+
+       The Critical Factorization Theorem says that this maximal local
+       period is the global period of the string.
+
+       Crochemore and Perrin (1991) show that this cut can be computed
+       as the later of two cuts: one that gives a lexicographically
+       maximal right half, and one that gives the same with the
+       with respect to a reversed alphabet-ordering.
+
+       This is what we want to happen:
+           >>> x = "GCAGAGAG"
+           >>> cut, period = factorize(x)
+           >>> x[:cut], (right := x[cut:])
+           ('GC', 'AGAGAG')
+           >>> period  # right half period
+           2
+           >>> right[period:] == right[:-period]
+           True
+
+       This is how the local period lines up in the above example:
+                GC | AGAGAG
+           AGAGAGC = AGAGAGC
+       The length of this minimal repetition is 7, which is indeed the
+       period of the original string. ','line_number':168,'multiline':True]['text':' Take the later cut.','line_number':204,'multiline':False]['text':' unused','line_number':255,'multiline':False]['text':' A lower bound on the period','line_number':258,'multiline':False]['text':' The gap between the last character and the previous','line_number':260,'multiline':False]['text':' occurrence of an equivalent character (modulo TABLE_SIZE)','line_number':261,'multiline':False]['text':' Fill up a compressed Boyer-Moore "Bad Character" table','line_number':272,'multiline':False]['text':' Crochemore and Perrin's (1991) Two-Way algorithm.','line_number':290,'multiline':False]['text':' See http://www-igm.univ-mlv.fr/~lecroq/string/node26.html#SECTION00260','line_number':291,'multiline':False]['text':' A mismatch has been identified to the right','line_number':343,'multiline':False]['text':' of where i will next start, so we can jump','line_number':344,'multiline':False]['text':' at least as far as if the mismatch occurred','line_number':345,'multiline':False]['text':' on the first comparison.','line_number':346,'multiline':False]['text':' candidate match ','line_number':486,'multiline':True]['text':' got a match! ','line_number':494,'multiline':True]['text':' miss: check if next character is part of pattern ','line_number':505,'multiline':True]['text':' skip: check if next character is part of pattern ','line_number':514,'multiline':True]['text':' candidate match ','line_number':548,'multiline':True]['text':' got a match! ','line_number':556,'multiline':True]['text':' miss: check if next character is part of pattern ','line_number':578,'multiline':True]['text':' skip: check if next character is part of pattern ','line_number':587,'multiline':True]['text':' create compressed boyer-moore delta 1 table ','line_number':603,'multiline':True]['text':' process pattern[0] outside the loop ','line_number':607,'multiline':True]['text':' process pattern[:0:-1] ','line_number':609,'multiline':True]['text':' candidate match ','line_number':619,'multiline':True]['text':' got a match! ','line_number':626,'multiline':True]['text':' miss: check if previous character is part of pattern ','line_number':629,'multiline':True]['text':' skip: check if previous character is part of pattern ','line_number':638,'multiline':True]['text':' look for special cases ','line_number':676,'multiline':True]['text':' use special case for 1-character strings ','line_number':681,'multiline':True]['text':' 33% threshold, but don't overflow. ','line_number':696,'multiline':True]['text':' For larger problems where the needle isn't a huge
+               percentage of the size of the haystack, the relatively
+               expensive O(m) startup cost of the two-way algorithm
+               will surely pay off. ','line_number':697,'multiline':True]['text':' To ensure that we have good worst-case behavior,
+               here's an adaptive version of the algorithm, where if
+               we match O(m) characters without any matches of the
+               entire needle, then we predict that the startup cost of
+               the two-way algorithm will probably be worth it. ','line_number':709,'multiline':True]['text':' FAST_RSEARCH ','line_number':718,'multiline':True]['text':' _NPY_CORE_SRC_UMATH_STRING_FASTSEARCH_H_ ','line_number':723,'multiline':True]

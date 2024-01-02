@@ -1,0 +1,270 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * __curhs_file_cursor_open --
+ *     Open a new history store table cursor, internal function.
+ ','line_number':18,'multiline':True]['text':'
+         * Propagate the checkpoint setting to the history cursor. Use the indicated history store
+         * checkpoint. If that's null, it means there is no history store checkpoint to read and we
+         * aren't supposed to come here.
+         ','line_number':32,'multiline':True]['text':' History store cursors should always ignore tombstones. ','line_number':49,'multiline':True]['text':'
+ * __wt_curhs_cache --
+ *     Cache a new history store table cursor. Open and then close a history store cursor without
+ *     saving it in the session.
+ ','line_number':59,'multiline':True]['text':'
+     * Make sure this session has a cached history store cursor, otherwise we can deadlock with a
+     * session wanting exclusive access to a handle: that session will have a handle list write lock
+     * and will be waiting on eviction to drain, we'll be inside eviction waiting on a handle list
+     * read lock to open a history store cursor.
+     *
+     * The test for the no-reconciliation flag is necessary because the session may already be doing
+     * history store operations and if we open/close the existing history store cursor, we can
+     * affect those already-running history store operations by changing the cursor state. When
+     * doing history store operations, we set the no-reconciliation flag, use it as short-hand to
+     * avoid that problem. This doesn't open up the window for the deadlock because setting the
+     * no-reconciliation flag limits eviction to in-memory splits.
+     *
+     * The test for the connection's default session is because there are known problems with using
+     * cached cursors from the default session. The metadata does not have history store content and
+     * is commonly handled specially. We won't need a history store cursor if we are evicting
+     * metadata.
+     *
+     * FIXME-WT-6037: This isn't reasonable and needs a better fix.
+     ','line_number':72,'multiline':True]['text':'
+ * __curhs_compare --
+ *     WT_CURSOR->compare method for the history store cursor type.
+ ','line_number':101,'multiline':True]['text':'
+ * __curhs_file_cursor_next --
+ *     Execute a next operation on a history store cursor with the appropriate isolation level.
+ ','line_number':121,'multiline':True]['text':'
+ * __curhs_file_cursor_prev --
+ *     Execute a prev operation on a history store cursor with the appropriate isolation level.
+ ','line_number':134,'multiline':True]['text':'
+ * __curhs_file_cursor_search_near --
+ *     Execute a search near operation on a history store cursor with the appropriate isolation
+ *     level.
+ ','line_number':147,'multiline':True]['text':'
+ * __curhs_set_key_ptr --
+ *     Copy the key buffer pointer from file cursor to the history store cursor.
+ ','line_number':162,'multiline':True]['text':'
+ * __curhs_set_value_ptr --
+ *     Copy the value buffer pointer from file cursor to the history store cursor.
+ ','line_number':175,'multiline':True]['text':'
+ * __curhs_search --
+ *     Search the history store for a given key and position the cursor on it.
+ ','line_number':188,'multiline':True]['text':'
+     * Turn off cursor-order checks in all cases on search. The search/search-near functions turn
+     * them back on after a successful search.
+     ','line_number':203,'multiline':True]['text':'
+ * __curhs_next --
+ *     WT_CURSOR->next method for the history store cursor type.
+ ','line_number':229,'multiline':True]['text':'
+     * We need to check if the history store record is visible to the current session. If not, the
+     * __curhs_next_visible() will also keep iterating forward through the records until it finds a
+     * visible record or bail out if records stop satisfying the fields set in cursor.
+     ','line_number':246,'multiline':True]['text':'
+ * __curhs_prev --
+ *     WT_CURSOR->prev method for the history store cursor type.
+ ','line_number':264,'multiline':True]['text':'
+     * We need to check if the history store record is visible to the current session. If not, the
+     * __curhs_prev_visible() will also keep iterating backwards through the records until it finds
+     * a visible record or bail out if records stop satisfying the fields set in cursor.
+     ','line_number':281,'multiline':True]['text':'
+ * __curhs_close --
+ *     WT_CURSOR->close method for the history store cursor type.
+ ','line_number':299,'multiline':True]['text':'
+ * __curhs_reset --
+ *     Reset a history store cursor.
+ ','line_number':325,'multiline':True]['text':'
+ * __curhs_set_key --
+ *     WT_CURSOR->set_key method for the history store cursor type.
+ ','line_number':358,'multiline':True]['text':'
+ * __curhs_prev_visible --
+ *     Check the visibility of the current history store record. If it is not visible, find the
+ *     previous visible history store record.
+ ','line_number':421,'multiline':True]['text':'
+         * Stop before crossing over to the next btree except when the
+         * WT_CURSTD_HS_READ_ACROSS_BTREE flag is set. This flag is needed when we try to place the
+         * cursor at the end of the btree range. In that case, We first place the cursor at the
+         * smallest record that has a larger btree and then move the cursor backwards to the end of
+         * the target btree range.
+         ','line_number':448,'multiline':True]['text':'
+         * Keys are sorted in an order, skip the ones before the desired key, and bail out if we
+         * have crossed over the desired key and not found the record we are looking for.
+         ','line_number':461,'multiline':True]['text':'
+         * Don't check the visibility of the record if we want to read any history store record,
+         * even with a globally visible tombstone.
+         ','line_number':473,'multiline':True]['text':'
+         * If the stop time pair on the tombstone in the history store is already globally visible,
+         * it is outdated and we must skip it rather than returning NOTFOUND. Subsequent entries
+         * might have later stop times and we might need to return one of them.
+         ','line_number':480,'multiline':True]['text':'
+         * Don't check the visibility of the record if we want to read any history store record that
+         * is not obsolete.
+         ','line_number':490,'multiline':True]['text':'
+         * If we are using a history store cursor and haven't set the WT_CURSTD_HS_READ_COMMITTED
+         * flag then we must have a snapshot, assert that we do.
+         ','line_number':497,'multiline':True]['text':'
+             * If the stop time point of a record is visible to us, we won't be able to see anything
+             * for this entire key.
+             ','line_number':504,'multiline':True]['text':' If the start time point is visible to us, let's return that record. ','line_number':515,'multiline':True]['text':'
+ * __curhs_next_visible --
+ *     Check the visibility of the current history store record. If it is not visible, find the next
+ *     visible history store record.
+ ','line_number':525,'multiline':True]['text':'
+         * Stop before crossing over to the next btree except when the
+         * WT_CURSTD_HS_READ_ACROSS_BTREE flag is set. This flag is needed when we try to place the
+         * cursor at the end of the btree range. In that case, We first place the cursor at the
+         * smallest record that has a larger btree and then move the cursor backwards to the end of
+         * the target btree range.
+         ','line_number':552,'multiline':True]['text':'
+         * Keys are sorted in an order, skip the ones before the desired key, and bail out if we
+         * have crossed over the desired key and not found the record we are looking for.
+         ','line_number':565,'multiline':True]['text':'
+         * Don't check the visibility of the record if we want to read any history store record,
+         * even with a globally visible tombstone.
+         ','line_number':577,'multiline':True]['text':'
+         * If the stop time pair on the tombstone in the history store is already globally visible,
+         * it is outdated and we must skip it rather than returning NOTFOUND. Subsequent entries
+         * might have later stop times and we might need to return one of them.
+         ','line_number':584,'multiline':True]['text':'
+         * Don't check the visibility of the record if we want to read any history store record that
+         * is not obsolete.
+         ','line_number':594,'multiline':True]['text':'
+         * If we are using a history store cursor and haven't set the WT_CURSTD_HS_READ_COMMITTED
+         * flag then we must have a snapshot, assert that we do.
+         ','line_number':601,'multiline':True]['text':'
+         * If the stop time point of a record is visible to us, check the next one.
+         ','line_number':607,'multiline':True]['text':' If the start time point is visible to us, let's return that record. ','line_number':613,'multiline':True]['text':'
+ * __wt_curhs_search_near_before --
+ *     Set the cursor position at the requested position or before it.
+ ','line_number':623,'multiline':True]['text':'
+     * If the btree id is set alone, it is not possible to position the cursor at a place that is
+     * smaller than set search key, therefore assert that the key must be set to use this function.
+     ','line_number':630,'multiline':True]['text':'
+ * __wt_curhs_search_near_after --
+ *     Set the cursor position at the requested position or after it.
+ ','line_number':638,'multiline':True]['text':'
+ * __curhs_search_near_helper --
+ *     Helper function to set the cursor position based on search criteria.
+ ','line_number':648,'multiline':True]['text':'
+         * If we want to land on a key that is smaller or equal to the specified key, keep walking
+         * backwards as there may be content inserted concurrently.
+         ','line_number':663,'multiline':True]['text':'
+                 * Exit if we have found a key that is smaller than or equal to the specified key.
+                 ','line_number':672,'multiline':True]['text':'
+         * If we want to land on a key that is larger or equal to the specified key, keep walking
+         * forwards as there may be content inserted concurrently.
+         ','line_number':680,'multiline':True]['text':' Exit if we have found a key that is larger than or equal to the specified key. ','line_number':689,'multiline':True]['text':'
+ * __curhs_search_near --
+ *     WT_CURSOR->search_near method for the history store cursor type.
+ ','line_number':701,'multiline':True]['text':' At least we have the btree id set. ','line_number':727,'multiline':True]['text':' Reset cursor if we get WT_NOTFOUND. ','line_number':730,'multiline':True]['text':'
+         * We placed the file cursor after or exactly at the search key. Try first to walk forwards
+         * to see if we can find a visible record. If nothing is visible, try to walk backwards.
+         ','line_number':734,'multiline':True]['text':'
+             * When walking backwards, first ensure we walk back to the specified btree or key space
+             * as we may have crossed the boundary. Do that in a loop as there may be content
+             * inserted concurrently.
+             ','line_number':740,'multiline':True]['text':' We are back in the specified btree range. ','line_number':749,'multiline':True]['text':' We are back in the specified key range. ','line_number':757,'multiline':True]['text':'
+                     * We're comparing the entire history store key (as opposed to just the data
+                     * store component) because ordering can be different between the data store and
+                     * history store due to packing. Since we know we're NOT in the specified key
+                     * range due to the check above, checking whether we're before or after the full
+                     * history store key that we're running a `search near` on will tell us whether
+                     * we're before or after the specified key range.
+                     *
+                     * If we're before the specified key range, that means nothing is visible to us
+                     * in the specified key range and we should terminate the search.
+                     ','line_number':761,'multiline':True]['text':'
+                 * We are now smaller than the btree range, which indicates nothing is visible to us
+                 * in the specified btree range.
+                 ','line_number':779,'multiline':True]['text':'
+             * Keep looking for the first visible update in the specified range when walking
+             * backwards.
+             ','line_number':789,'multiline':True]['text':'
+             * We can't find anything visible when first walking forwards so we must have found an
+             * update that is smaller than the specified key.
+             ','line_number':794,'multiline':True]['text':'
+             * We find an update when walking forwards. If initially we landed on the same key as
+             * the specified key, we need to compare the keys to see where we are now. Otherwise, we
+             * must have found a key that is larger than the specified key.
+             ','line_number':801,'multiline':True]['text':'
+         * We placed the file cursor before the search key. Try first to walk backwards to see if we
+         * can find a visible record. If nothing is visible, try to walk forwards.
+         ','line_number':813,'multiline':True]['text':'
+             * When walking forwards, first ensure we walk back to the specified btree or key space
+             * as we may have crossed the boundary. Do that in a loop as there may be content
+             * inserted concurrently.
+             ','line_number':819,'multiline':True]['text':' We are back in the specified btree range. ','line_number':828,'multiline':True]['text':' We are back in the specified key range. ','line_number':836,'multiline':True]['text':'
+                     * We're comparing the entire history store key (as opposed to just the data
+                     * store component) because ordering can be different between the data store and
+                     * history store due to packing. Since we know we're NOT in the specified key
+                     * range due to the check above, checking whether we're before or after the full
+                     * history store key that we're running a `search near` on will tell us whether
+                     * we're before or after the specified key range.
+                     *
+                     * If we're after the specified key range, that means nothing is visible to us
+                     * in the specified key range and we should terminate the search.
+                     ','line_number':840,'multiline':True]['text':'
+                 * We are now larger than the btree range, which indicates nothing is visible to us
+                 * in the specified btree range.
+                 ','line_number':858,'multiline':True]['text':'
+             * Keep looking for the first visible update in the specified range when walking
+             * forwards.
+             ','line_number':868,'multiline':True]['text':'
+             * We can't find anything visible when first walking backwards so we must have found an
+             * update that is larger than the specified key.
+             ','line_number':873,'multiline':True]['text':'
+ * __curhs_set_value --
+ *     WT_CURSOR->set_value method for the history store cursor type.
+ ','line_number':904,'multiline':True]['text':'
+ * __curhs_insert --
+ *     WT_CURSOR->insert method for the history store cursor type.
+ ','line_number':935,'multiline':True]['text':'
+     * Disable bulk loads into history store. This would normally occur when updating a record with
+     * a cursor however the history store doesn't use cursor update, so we do it here.
+     ','line_number':957,'multiline':True]['text':'
+     * The actual record to be inserted into the history store. Set the current update start time
+     * point as the commit time point to the history store record.
+     ','line_number':963,'multiline':True]['text':'
+     * Allocate a tombstone only when there is a valid stop time point, and insert the standard
+     * update as the update after the tombstone.
+     ','line_number':972,'multiline':True]['text':' We should not see a tombstone with max transaction id. ','line_number':977,'multiline':True]['text':'
+         * Insert a delete record to represent stop time point for the actual record to be inserted.
+         * Set the stop time point as the commit time point of the history store delete record.
+         ','line_number':979,'multiline':True]['text':' We no longer own the update memory, the page does; don't free it under any circumstances. ','line_number':1002,'multiline':True]['text':' Do a search again and call next to check the key order. ','line_number':1006,'multiline':True]['text':' We can get not found if the inserted history store record is obsolete. ','line_number':1008,'multiline':True]['text':'
+         * If a globally visible tombstone is inserted and the page is evicted during search_near
+         * then the key would be removed. Hence, a search_near would return a non-zero exact value.
+         * Therefore, check that exact is zero before calling next.
+         ','line_number':1012,'multiline':True]['text':' Insert doesn't maintain a position across calls, clear resources. ','line_number':1023,'multiline':True]['text':'
+ * __curhs_remove_int --
+ *     Remove a record from the history store.
+ ','line_number':1030,'multiline':True]['text':'
+     * Since we're using internal functions to modify the row structure, we need to manually set the
+     * comparison to an exact match.
+     ','line_number':1046,'multiline':True]['text':' Add a tombstone with WT_TXN_NONE transaction id and WT_TS_NONE timestamps. ','line_number':1051,'multiline':True]['text':'
+ * __curhs_remove --
+ *     WT_CURSOR->remove method for the history store cursor type.
+ ','line_number':1068,'multiline':True]['text':' Remove must be called with cursor positioned. ','line_number':1087,'multiline':True]['text':' We must still hold the cursor position after the remove call. ','line_number':1092,'multiline':True]['text':' Invalidate the previous value but we will hold on to the position of the key. ','line_number':1095,'multiline':True]['text':'
+ * __curhs_update --
+ *     WT_CURSOR->update method for the history store cursor type.
+ ','line_number':1107,'multiline':True]['text':' Update must be called with cursor positioned. ','line_number':1128,'multiline':True]['text':'
+     * Only valid scenario to update the history store is to add the stop timestamp. Any other case
+     * should fail.
+     ','line_number':1132,'multiline':True]['text':' The tombstone to represent the stop time window. ','line_number':1139,'multiline':True]['text':' Connect the tombstone to the update. ','line_number':1153,'multiline':True]['text':'
+     * Since we're using internal functions to modify the row structure, we need to manually set the
+     * comparison to an exact match.
+     ','line_number':1156,'multiline':True]['text':' Make the updates and if we fail, search and try again. ','line_number':1161,'multiline':True]['text':'
+ * __curhs_range_truncate --
+ *     Discard a cursor range from the history store tree.
+ ','line_number':1179,'multiline':True]['text':'
+ * __wt_curhs_range_truncate --
+ *     Discard a cursor range from the history store tree.
+ ','line_number':1209,'multiline':True]['text':'
+ * __wt_curhs_open --
+ *     Initialize a history store cursor.
+ ','line_number':1227,'multiline':True]['text':' get-key ','line_number':1234,'multiline':True]['text':' get-value ','line_number':1235,'multiline':True]['text':' get-raw-key-value ','line_number':1236,'multiline':True]['text':' set-key ','line_number':1237,'multiline':True]['text':' set-value ','line_number':1238,'multiline':True]['text':' compare ','line_number':1239,'multiline':True]['text':' equals ','line_number':1240,'multiline':True]['text':' next ','line_number':1241,'multiline':True]['text':' prev ','line_number':1242,'multiline':True]['text':' reset ','line_number':1243,'multiline':True]['text':' search ','line_number':1244,'multiline':True]['text':' search-near ','line_number':1245,'multiline':True]['text':' insert ','line_number':1246,'multiline':True]['text':' modify ','line_number':1247,'multiline':True]['text':' update ','line_number':1248,'multiline':True]['text':' remove ','line_number':1249,'multiline':True]['text':' reserve ','line_number':1250,'multiline':True]['text':' reconfigure ','line_number':1251,'multiline':True]['text':' largest_key ','line_number':1252,'multiline':True]['text':' bound ','line_number':1253,'multiline':True]['text':' cache ','line_number':1254,'multiline':True]['text':' reopen ','line_number':1255,'multiline':True]['text':' checkpoint ID ','line_number':1256,'multiline':True]['text':' close ','line_number':1257,'multiline':True]['text':' Open the file cursor for operations on the regular history store .','line_number':1272,'multiline':True]

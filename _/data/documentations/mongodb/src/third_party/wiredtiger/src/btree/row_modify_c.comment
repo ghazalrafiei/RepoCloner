@@ -1,0 +1,137 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * __wt_page_modify_alloc --
+ *     Allocate a page's modification structure.
+ ','line_number':11,'multiline':True]['text':' Initialize the spinlock for the page. ','line_number':23,'multiline':True]['text':'
+     * Multiple threads of control may be searching and deciding to modify a page. If our modify
+     * structure is used, update the page's memory footprint, else discard the modify structure,
+     * another thread did the work.
+     ','line_number':26,'multiline':True]['text':'
+ * __wt_row_modify --
+ *     Row-store insert, update and delete.
+ ','line_number':39,'multiline':True]['text':'
+     * We should have one of the following:
+     * - A full update list to instantiate.
+     * - An update to append to the existing update list.
+     * - A key/value pair to create an update with and append to the update list.
+     * - A key with no value to create a reserved or tombstone update to append to the update list.
+     *
+     * A "full update list" is distinguished from "an update" by checking whether it has a "next"
+     * update. The modify type should only be set if no update list provided.
+     ','line_number':69,'multiline':True]['text':' If we don't yet have a modify structure, we'll need one. ','line_number':86,'multiline':True]['text':'
+     * Modify: allocate an update array as necessary, build a WT_UPDATE structure, and call a
+     * serialized function to insert the WT_UPDATE structure.
+     *
+     * Insert: allocate an insert array as necessary, build a WT_INSERT and WT_UPDATE structure
+     * pair, and call a serialized function to insert the WT_INSERT structure.
+     ','line_number':90,'multiline':True]['text':' Allocate an update array as necessary. ','line_number':99,'multiline':True]['text':' Set the WT_UPDATE array reference. ','line_number':102,'multiline':True]['text':' Make sure the modify can proceed. ','line_number':108,'multiline':True]['text':' Allocate a WT_UPDATE structure and transaction ID. ','line_number':112,'multiline':True]['text':' Avoid WT_CURSOR.update data copy. ','line_number':118,'multiline':True]['text':'
+             * We only update history store records in three cases:
+             *  1) Delete the record with a tombstone with WT_TS_NONE.
+             *  2) Update the record's stop time point if the prepared update written to the data
+             * store is committed.
+             *  3) Reinsert an update that has been deleted by a prepared rollback.
+             ','line_number':121,'multiline':True]['text':' If there are existing updates, append them after the new updates. ','line_number':140,'multiline':True]['text':'
+             * If we restore an update chain in update restore eviction, there should be no update
+             * on the existing update chain.
+             ','line_number':145,'multiline':True]['text':'
+             * We can either put multiple new updates or a single update on the update chain.
+             *
+             * Set the "old" entry to the second update in the list so that the serialization
+             * function succeeds in swapping the first update into place.
+             ','line_number':152,'multiline':True]['text':'
+         * Point the new WT_UPDATE item to the next element in the list. If we get it right, the
+         * serialization function lock acts as our memory barrier to flush this write.
+         ','line_number':163,'multiline':True]['text':' Serialize the update. ','line_number':169,'multiline':True]['text':'
+         * Allocate the insert array as necessary.
+         *
+         * We allocate an additional insert array slot for insert keys sorting less than any key on
+         * the page. The test to select that slot is baroque: if the search returned the first page
+         * slot, we didn't end up processing an insert list, and the comparison value indicates the
+         * search key was smaller than the returned slot, then we're using the smallest-key insert
+         * slot. That's hard, so we set a flag.
+         ','line_number':172,'multiline':True]['text':' Allocate the WT_INSERT_HEAD structure as necessary. ','line_number':185,'multiline':True]['text':' Choose a skiplist depth for this insert. ','line_number':189,'multiline':True]['text':'
+         * Allocate a WT_INSERT/WT_UPDATE pair and transaction ID, and update the cursor to
+         * reference it (the WT_INSERT_HEAD might be allocated, the WT_INSERT was allocated).
+         ','line_number':192,'multiline':True]['text':' Avoid a data copy in WT_CURSOR.update. ','line_number':205,'multiline':True]['text':'
+             * We either insert a tombstone with a standard update or only a standard update to the
+             * history store if we write a prepared update to the data store.
+             ','line_number':208,'multiline':True]['text':'
+         * If there was no insert list during the search, the cursor's information cannot be
+         * correct, search couldn't have initialized it.
+         *
+         * Otherwise, point the new WT_INSERT item's skiplist to the next elements in the insert
+         * list (which we will check are still valid inside the serialization function).
+         *
+         * The serial mutex acts as our memory barrier to flush these writes before inserting them
+         * into the list.
+         ','line_number':224,'multiline':True]['text':' Insert the WT_INSERT structure. ','line_number':243,'multiline':True]['text':'
+     * If the update was successful, add it to the in-memory log.
+     *
+     * We will enter this code if we are doing cursor operations (upd_arg == NULL). We may fail
+     * here. However, we have already successfully inserted the updates to the update chain. In this
+     * case, don't free the allocated memory in error handling. Leave them to the rollback logic to
+     * do the cleanup.
+     *
+     * If we are calling for internal purposes (upd_arg != NULL), we skip this code. Therefore, we
+     * cannot fail after we have inserted the updates to the update chain. The caller of this
+     * function can safely free the updates if it receives an error return.
+     ','line_number':250,'multiline':True]['text':'
+         * Set the key in the transaction operation to be used in case this transaction is prepared
+         * to retrieve the update corresponding to this operation.
+         ','line_number':266,'multiline':True]['text':'
+         * Let the rollback logic to do the cleanup if we have inserted the update to the update
+         * chain.
+         ','line_number':275,'multiline':True]['text':'
+             * Remove the update from the current transaction, don't try to modify it on rollback.
+             ','line_number':280,'multiline':True]['text':' Free any allocated insert list object. ','line_number':286,'multiline':True]['text':' Discard any allocated update, unless we failed after linking it into page memory. ','line_number':291,'multiline':True]['text':'
+             * When prepending a list of updates to an update chain, we link them together; sever
+             * that link so our callers list doesn't point into page memory.
+             ','line_number':295,'multiline':True]['text':'
+ * __wt_row_insert_alloc --
+ *     Row-store insert: allocate a WT_INSERT structure and fill it in.
+ ','line_number':307,'multiline':True]['text':'
+     * Allocate the WT_INSERT structure, next pointers for the skip list, and room for the key. Then
+     * copy the key into place.
+     ','line_number':318,'multiline':True]['text':'
+ * __wt_update_obsolete_check --
+ *     Check for obsolete updates and force evict the page if the update list is too long.
+ ','line_number':335,'multiline':True]['text':' If we can't lock it, don't scan, that's okay. ','line_number':354,'multiline':True]['text':'
+     * This function identifies obsolete updates, and truncates them from the rest of the chain;
+     * because this routine is called from inside a serialization function, the caller has
+     * responsibility for actually freeing the memory.
+     *
+     * Walk the list of updates, looking for obsolete updates at the end.
+     *
+     * Only updates with globally visible, self-contained data can terminate update chains.
+     ','line_number':358,'multiline':True]['text':'
+         * WiredTiger internal operations such as Rollback to stable and prepare transaction
+         * rollback adds a globally visible tombstone to the update chain to remove the entire key.
+         * Treating these globally visible tombstones as obsolete and trimming update list can cause
+         * problems if the update chain is getting accessed somewhere. To avoid this problem, skip
+         * these globally visible tombstones from the update obsolete check were generated from
+         * prepare transaction rollback and not from RTS, because there are no concurrent operations
+         * run in parallel to the RTS to be affected.
+         ','line_number':371,'multiline':True]['text':' Cannot truncate the updates if we need to remove the updates from the history store. ','line_number':391,'multiline':True]['text':'
+     * We cannot discard this WT_UPDATE structure, we can only discard WT_UPDATE structures
+     * subsequent to it, other threads of control will terminate their walk in this element. Save a
+     * reference to the list we will discard, and terminate the list.
+     ','line_number':396,'multiline':True]['text':'
+         * No need to use a compare and swap because we have obtained a lock at the start of the
+         * function.
+         ','line_number':402,'multiline':True]['text':'
+         * Decrement the dirty byte count while holding the page lock, else we can race with
+         * checkpoints cleaning a page.
+         ','line_number':408,'multiline':True]['text':'
+     * Force evict a page when there are more than WT_THOUSAND updates to a single item. Increasing
+     * the minSnapshotHistoryWindowInSeconds to 300 introduced a performance regression in which the
+     * average number of updates on a single item was approximately 1000 in write-heavy workloads.
+     * This is why we use WT_THOUSAND here.
+     ','line_number':420,'multiline':True]['text':'
+         * If the list is long, don't retry checks on this page until the transaction state has
+         * moved forwards.
+         ','line_number':434,'multiline':True]

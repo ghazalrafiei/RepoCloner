@@ -1,0 +1,124 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]['text':'*
+     * For use as general mutex or readers/writers lock, outside the general multi-granularity
+     * model. A ResourceMutex is not affected by yielding and two phase locking semantics inside
+     * WUOWs. Lock with ResourceLock, SharedLock or ExclusiveLock. Uses same fairness as other
+     * LockManager locks.
+     ','line_number':52,'multiline':True]['text':'*
+         * Each instantiation of this class allocates a new ResourceId.
+         ','line_number':62,'multiline':True]['text':'*
+     * General purpose RAII wrapper for a resource managed by the lock manager
+     *
+     * See LockMode for the supported modes. Unlike DBLock/Collection lock, this will not do
+     * any additional checks/upgrades or global locking. Use ResourceLock for locking
+     * resources other than RESOURCE_GLOBAL, RESOURCE_DATABASE and RESOURCE_COLLECTION.
+     ','line_number':77,'multiline':True]['text':'*
+         * Acquires lock on this specified resource in the specified mode.
+         *
+         * If 'deadline' is provided, we will wait until 'deadline' for the lock to be granted.
+         * Otherwise, this parameter defaults to an infinite deadline.
+         *
+         * This function may throw an exception if it is interrupted.
+         ','line_number':108,'multiline':True]['text':'*
+     * Obtains a ResourceMutex for exclusive use.
+     ','line_number':130,'multiline':True]['text':' Lock/unlock overloads to allow ExclusiveLock to be used with condition_variable-like','line_number':138,'multiline':False]['text':' utilities such as stdx::condition_variable_any and waitForConditionOrInterrupt','line_number':139,'multiline':False]['text':'*
+     * Obtains a ResourceMutex for shared/non-exclusive use. This uses MODE_IS rather than MODE_S
+     * to take advantage of optimizations in the lock manager for intent modes. This is OK as
+     * this just has to conflict with exclusive locks.
+     ','line_number':150,'multiline':True]['text':'*
+     * The interrupt behavior is used to tell a lock how to handle an interrupted lock acquisition.
+     ','line_number':161,'multiline':True]['text':' Throw the interruption exception.','line_number':165,'multiline':False]['text':' Suppress the exception, but leave unlocked such that a call to isLocked()','line_number':166,'multiline':False]['text':' returns false.','line_number':167,'multiline':False]['text':'*
+     * Global lock.
+     *
+     * Grabs global resource lock. Allows further (recursive) acquisition of the global lock
+     * in any mode, see LockMode. An outermost GlobalLock, when not in a WriteUnitOfWork, calls
+     * abandonSnapshot() on destruction. This allows the storage engine to release resources, such
+     * as snapshots or locks, that it may have acquired during the transaction.
+     ','line_number':175,'multiline':True]['text':'*
+         * A GlobalLock without a deadline defaults to Date_t::max() and an InterruptBehavior of
+         * kThrow.
+         ','line_number':185,'multiline':True]['text':'*
+         * A GlobalLock with a deadline requires the interrupt behavior to be explicitly defined.
+         ','line_number':192,'multiline':True]['text':'*
+         * Constructor helper functions, to handle skipping or taking the RSTL lock.
+         ','line_number':215,'multiline':True]['text':'*
+     * Global exclusive lock
+     *
+     * Allows exclusive write access to all databases and collections, blocking all other
+     * access. Allows further (recursive) acquisition of the global lock in any mode,
+     * see LockMode.
+     ','line_number':233,'multiline':True]['text':'*
+     * Global shared lock
+     *
+     * Allows concurrent read access to all databases and collections, blocking any writers.
+     * Allows further (recursive) acquisition of the global lock in shared (S) or intent-shared
+     * (IS) mode, see LockMode.
+     ','line_number':248,'multiline':True]['text':'*
+     *  Tenant lock.
+     *
+     *  Controls access to resources belonging to a tenant.
+     *
+     * This lock supports four modes (see Lock_Mode):
+     *   MODE_IS: concurrent access to tenant's resources, requiring further database read locks
+     *   MODE_IX: concurrent access to tenant's resources, requiring further database read or write
+     * locks
+     *   MODE_S: shared read access to tenant's resources, blocking any writers
+     *   MODE_X: exclusive access to tenant's resources, blocking all other readers and writers.
+     ','line_number':265,'multiline':True]['text':'*
+     * Database lock.
+     *
+     * This lock supports four modes (see Lock_Mode):
+     *   MODE_IS: concurrent database access, requiring further collection read locks
+     *   MODE_IX: concurrent database access, requiring further collection read or write locks
+     *   MODE_S:  shared read access to the database, blocking any writers
+     *   MODE_X:  exclusive access to the database, blocking all other readers and writers
+     *
+     * For MODE_IS or MODE_S also acquires global lock in intent-shared (IS) mode, and
+     * for MODE_IX or MODE_X also acquires global lock in intent-exclusive (IX) mode.
+     * For storage engines that do not support collection-level locking, MODE_IS will be
+     * upgraded to MODE_S and MODE_IX will be upgraded to MODE_X.
+     *
+     * If the database belongs to a tenant, then acquires a tenant lock before the database lock.
+     * For 'mode' MODE_IS or MODE_S acquires tenant lock in intent-shared (IS) mode, otherwise,
+     * acquires a tenant lock in intent-exclusive (IX) mode. A different, stronger tenant lock mode
+     * to acquire can be specified with 'tenantLockMode' parameter. Passing boost::none for the
+     * tenant lock mode does not skip the tenant lock, but indicates that the tenant lock in default
+     * mode should be acquired.
+     ','line_number':295,'multiline':True]['text':' May be changed through relockWithMode. The global lock mode won't change though,','line_number':347,'multiline':False]['text':' because we never change from IS/S to IX/X or vice versa, just convert locks from','line_number':348,'multiline':False]['text':' IX -> X.','line_number':349,'multiline':False]['text':' Acquires the global lock on our behalf.','line_number':352,'multiline':False]['text':' Acquires the tenant lock on behalf of this DB lock.','line_number':355,'multiline':False]['text':'*
+     * Collection lock.
+     *
+     * This lock supports four modes (see Lock_Mode):
+     *   MODE_IS: concurrent collection access, requiring read locks
+     *   MODE_IX: concurrent collection access, requiring read or write locks
+     *   MODE_S:  shared read access to the collection, blocking any writers
+     *   MODE_X:  exclusive access to the collection, blocking all other readers and writers
+     *
+     * An appropriate DBLock must already be held before locking a collection: it is an error,
+     * checked with a dassert(), to not have a suitable database lock before locking the collection.
+     ','line_number':359,'multiline':True]['text':' namespace mongo','line_number':390,'multiline':False]

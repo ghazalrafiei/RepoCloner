@@ -1,0 +1,144 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]['text':' Functions for reading and writing integers in various endiannesses. ','line_number':7,'multiline':True]['text':'
+ * The classes LittleEndian and BigEndian expose static methods for
+ * reading and writing 16-, 32-, and 64-bit signed and unsigned integers
+ * in their respective endianness.  The addresses read from or written
+ * to may be misaligned (although misaligned accesses may incur
+ * architecture-specific performance costs).  The naming scheme is:
+ *
+ * {Little,Big}Endian::{read,write}{Uint,Int}<bitsize>
+ *
+ * For instance, LittleEndian::readInt32 will read a 32-bit signed
+ * integer from memory in little endian format.  Similarly,
+ * BigEndian::writeUint16 will write a 16-bit unsigned integer to memory
+ * in big-endian format.
+ *
+ * The class NativeEndian exposes methods for conversion of existing
+ * data to and from the native endianness.  These methods are intended
+ * for cases where data needs to be transferred, serialized, etc.
+ * swap{To,From}{Little,Big}Endian byteswap a single value if necessary.
+ * Bulk conversion functions are also provided which optimize the
+ * no-conversion-needed case:
+ *
+ * - copyAndSwap{To,From}{Little,Big}Endian;
+ * - swap{To,From}{Little,Big}EndianInPlace.
+ *
+ * The *From* variants are intended to be used for reading data and the
+ * *To* variants for writing data.
+ *
+ * Methods on NativeEndian work with integer data of any type.
+ * Floating-point data is not supported.
+ *
+ * For clarity in networking code, "Network" may be used as a synonym
+ * for "Big" in any of the above methods or class names.
+ *
+ * As an example, reading a file format header whose fields are stored
+ * in big-endian format might look like:
+ *
+ * class ExampleHeader
+ * {
+ * private:
+ *   uint32_t mMagic;
+ *   uint32_t mLength;
+ *   uint32_t mTotalRecords;
+ *   uint64_t mChecksum;
+ *
+ * public:
+ *   ExampleHeader(const void* data)
+ *   {
+ *     const uint8_t* ptr = static_cast<const uint8_t*>(data);
+ *     mMagic = BigEndian::readUint32(ptr); ptr += sizeof(uint32_t);
+ *     mLength = BigEndian::readUint32(ptr); ptr += sizeof(uint32_t);
+ *     mTotalRecords = BigEndian::readUint32(ptr); ptr += sizeof(uint32_t);
+ *     mChecksum = BigEndian::readUint64(ptr);
+ *   }
+ *   ...
+ * };
+ ','line_number':9,'multiline':True]['text':'
+ * Our supported compilers provide architecture-independent macros for this.
+ * Yes, there are more than two values for __BYTE_ORDER__.
+ ','line_number':88,'multiline':True]['text':' As of this writing, MSVC only targets little-endian architectures.','line_number':104,'multiline':False]['text':' In C++20, we have a future-proof endianness check available.','line_number':108,'multiline':False]['text':'
+ * We need wrappers here because free functions with default template
+ * arguments and/or partial specialization of function templates are not
+ * supported by all the compilers we use.
+ ','line_number':129,'multiline':True]['text':'*
+   * Assert that the memory regions [aDest, aDest+aCount) and
+   * [aSrc, aSrc+aCount] do not overlap.  aCount is given in bytes.
+   ','line_number':191,'multiline':True]['text':'*
+   * Return |aValue| converted from SourceEndian encoding to DestEndian
+   * encoding.
+   ','line_number':210,'multiline':True]['text':'*
+   * Convert |aCount| elements at |aPtr| from SourceEndian encoding to
+   * DestEndian encoding.
+   ','line_number':222,'multiline':True]['text':'*
+   * Write |aCount| elements to the unaligned address |aDest| in DestEndian
+   * format, using elements found at |aSrc| in SourceEndian format.
+   ','line_number':238,'multiline':True]['text':'*
+   * Write |aCount| elements to |aDest| in DestEndian format, using elements
+   * found at the unaligned address |aSrc| in SourceEndian format.
+   ','line_number':264,'multiline':True]['text':'* Read a uint16_t in ThisEndian endianness from |aPtr| and return it. ','line_number':294,'multiline':True]['text':'* Read a uint32_t in ThisEndian endianness from |aPtr| and return it. ','line_number':299,'multiline':True]['text':'* Read a uint64_t in ThisEndian endianness from |aPtr| and return it. ','line_number':304,'multiline':True]['text':'* Read a uintptr_t in ThisEndian endianness from |aPtr| and return it. ','line_number':309,'multiline':True]['text':'* Read an int16_t in ThisEndian endianness from |aPtr| and return it. ','line_number':314,'multiline':True]['text':'* Read an int32_t in ThisEndian endianness from |aPtr| and return it. ','line_number':319,'multiline':True]['text':'* Read an int64_t in ThisEndian endianness from |aPtr| and return it. ','line_number':324,'multiline':True]['text':'* Read an intptr_t in ThisEndian endianness from |aPtr| and return it. ','line_number':329,'multiline':True]['text':'* Write |aValue| to |aPtr| using ThisEndian endianness. ','line_number':334,'multiline':True]['text':'* Write |aValue| to |aPtr| using ThisEndian endianness. ','line_number':337,'multiline':True]['text':'* Write |aValue| to |aPtr| using ThisEndian endianness. ','line_number':340,'multiline':True]['text':'* Write |aValue| to |aPtr| using ThisEndian endianness. ','line_number':343,'multiline':True]['text':'* Write |aValue| to |aPtr| using ThisEndian endianness. ','line_number':348,'multiline':True]['text':'* Write |aValue| to |aPtr| using ThisEndian endianness. ','line_number':351,'multiline':True]['text':'* Write |aValue| to |aPtr| using ThisEndian endianness. ','line_number':354,'multiline':True]['text':'* Write |aValue| to |aPtr| using ThisEndian endianness. ','line_number':357,'multiline':True]['text':'
+   * Converts a value of type T to little-endian format.
+   *
+   * This function is intended for cases where you have data in your
+   * native-endian format and you need it to appear in little-endian
+   * format for transmission.
+   ','line_number':360,'multiline':True]['text':'
+   * Copies |aCount| values of type T starting at |aSrc| to |aDest|, converting
+   * them to little-endian format if ThisEndian is Big.  |aSrc| as a typed
+   * pointer must be aligned; |aDest| need not be.
+   *
+   * As with memcpy, |aDest| and |aSrc| must not overlap.
+   ','line_number':372,'multiline':True]['text':'
+   * Likewise, but converts values in place.
+   ','line_number':385,'multiline':True]['text':'
+   * Converts a value of type T to big-endian format.
+   ','line_number':393,'multiline':True]['text':'
+   * Copies |aCount| values of type T starting at |aSrc| to |aDest|, converting
+   * them to big-endian format if ThisEndian is Little.  |aSrc| as a typed
+   * pointer must be aligned; |aDest| need not be.
+   *
+   * As with memcpy, |aDest| and |aSrc| must not overlap.
+   ','line_number':401,'multiline':True]['text':'
+   * Likewise, but converts values in place.
+   ','line_number':414,'multiline':True]['text':'
+   * Synonyms for the big-endian functions, for better readability
+   * in network code.
+   ','line_number':422,'multiline':True]['text':'
+   * Converts a value of type T from little-endian format.
+   ','line_number':443,'multiline':True]['text':'
+   * Copies |aCount| values of type T starting at |aSrc| to |aDest|, converting
+   * them to little-endian format if ThisEndian is Big.  |aDest| as a typed
+   * pointer must be aligned; |aSrc| need not be.
+   *
+   * As with memcpy, |aDest| and |aSrc| must not overlap.
+   ','line_number':451,'multiline':True]['text':'
+   * Likewise, but converts values in place.
+   ','line_number':464,'multiline':True]['text':'
+   * Converts a value of type T from big-endian format.
+   ','line_number':472,'multiline':True]['text':'
+   * Copies |aCount| values of type T starting at |aSrc| to |aDest|, converting
+   * them to big-endian format if ThisEndian is Little.  |aDest| as a typed
+   * pointer must be aligned; |aSrc| need not be.
+   *
+   * As with memcpy, |aDest| and |aSrc| must not overlap.
+   ','line_number':480,'multiline':True]['text':'
+   * Likewise, but converts values in place.
+   ','line_number':493,'multiline':True]['text':'
+   * Synonyms for the big-endian functions, for better readability
+   * in network code.
+   ','line_number':501,'multiline':True]['text':'*
+   * Read a value of type T, encoded in endianness ThisEndian from |aPtr|.
+   * Return that value encoded in native endianness.
+   ','line_number':522,'multiline':True]['text':'*
+   * Write a value of type T, in native endianness, to |aPtr|, in ThisEndian
+   * endianness.
+   ','line_number':536,'multiline':True]['text':' namespace detail ','line_number':575,'multiline':True]['text':'
+   * These functions are intended for cases where you have data in your
+   * native-endian format and you need the data to appear in the appropriate
+   * endianness for transmission, serialization, etc.
+   ','line_number':588,'multiline':True]['text':'
+   * These functions are intended for cases where you have data in the
+   * given endianness (e.g. reading from disk or a file-format) and you
+   * need the data to appear in native-endian format for processing.
+   ','line_number':603,'multiline':True]['text':' namespace mozilla ','line_number':621,'multiline':True]['text':' mozilla_EndianUtils_h ','line_number':623,'multiline':True]

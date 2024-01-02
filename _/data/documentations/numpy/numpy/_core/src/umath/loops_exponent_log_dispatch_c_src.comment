@@ -1,0 +1,227 @@
+['text':'@targets
+ ** $maxopt baseline
+ ** (avx2 fma3) avx512f avx512_skx
+ *','line_number':1,'multiline':True]['text':' Provides the various *_LOOP macros','line_number':18,'multiline':False]['text':' TODO: tweak & replace raw SIMD with NPYV','line_number':22,'multiline':False]['text':'*******************************************************************************
+ ** bunch of helper functions used in ISA_exp/log_FLOAT
+ *******************************************************************************','line_number':24,'multiline':True]['text':'*
+     * For somehow MSVC commit aggressive optimization lead
+     * to raises 'RuntimeWarning: RuntimeWarning: overflow encountered in exp'
+     *
+     * the issue mainly caused by '_mm512_maskz_loadu_ps', we need to
+     * investigate about it while moving to NPYV.
+     ','line_number':28,'multiline':True]['text':'
+     * Special handling of denormals:
+     * 1) Multiply denormal elements with 2**100 (0x71800000)
+     * 2) Get the 8 bits of unbiased exponent
+     * 3) Subtract 100 from exponent of denormals
+     ','line_number':141,'multiline':True]['text':'
+     * The volatile is probably unnecessary now since we compile clang with
+     * `-ftrapping-math`: https://github.com/numpy/numpy/issues/18005
+     ','line_number':152,'multiline':True]['text':'
+     * Special handling of denormals:
+     * 1) Multiply denormal elements with 2**100 (0x71800000)
+     * 2) Get the 23 bits of mantissa
+     * 3) Mantissa for denormals is not affected by the multiplication
+     ','line_number':172,'multiline':True]['text':'
+     * The volatile is probably unnecessary now since we compile clang with
+     * `-ftrapping-math`: https://github.com/numpy/numpy/issues/18005
+     ','line_number':183,'multiline':True]['text':'
+     * Handle denormals (which occur when quadrant <= -125):
+     * 1) This function computes poly*(2^quad) by adding the exponent of
+     poly to quad
+     * 2) When quad <= -125, the output is a denormal and the above logic
+     breaks down
+     * 3) To handle such cases, we split quadrant: -125 + (quadrant + 125)
+     * 4) poly*(2^-125) is computed the usual way
+     * 5) 2^(quad-125) can be computed by: 2 << abs(quad-125)
+     * 6) The final div operation generates the denormal
+     ','line_number':202,'multiline':True]['text':'keep quadrant >= -126','line_number':221,'multiline':False]['text':' SIMD_AVX2_FMA3','line_number':238,'multiline':False]['text':' SIMD_AVX512F','line_number':372,'multiline':False]['text':'*******************************************************************************
+ ** Defining the SIMD kernels
+ *******************************************************************************','line_number':374,'multiline':True]['text':'*begin repeat
+ * #ISA = FMA, AVX512F#
+ * #isa = fma, avx512#
+ * #vtype = __m256, __m512#
+ * #vsize = 256, 512#
+ * #BYTES = 32, 64#
+ * #NUM_LANES = 8, 16#
+ * #mask = __m256, __mmask16#
+ * #vsub = , _mask#
+ * #or_masks =_mm256_or_ps, _mm512_kor#
+ * #and_masks =_mm256_and_ps, _mm512_kand#
+ * #xor_masks =_mm256_xor_ps, _mm512_kxor#
+ * #fmadd = _mm256_fmadd_ps, _mm512_fmadd_ps#
+ * #mask_to_int = _mm256_movemask_ps, npyv_tobits_b32#
+ * #full_mask= 0xFF, 0xFFFF#
+ * #masked_store = _mm256_maskstore_ps, _mm512_mask_storeu_ps#
+ * #cvtps_epi32 = _mm256_cvtps_epi32, #
+ * #CHK = SIMD_AVX2_FMA3, SIMD_AVX512F#
+ ','line_number':377,'multiline':True]['text':'
+ * Vectorized Cody-Waite range reduction technique
+ * Performs the reduction step x* = x - y*C in three steps:
+ * 1) x* = x - y*c1
+ * 2) x* = x - y*c2
+ * 3) x* = x - y*c3
+ * c1, c2 are exact floating points, c3 = C - c1 - c2 simulates higher precision
+ ','line_number':397,'multiline':True]['text':'
+ * Vectorized implementation of exp using AVX2 and AVX512:
+ * 1) if x >= xmax; return INF (overflow)
+ * 2) if x <= xmin; return 0.0f (underflow)
+ * 3) Range reduction (using Coyd-Waite):
+ *      a) y = x - k*ln(2); k = rint(x/ln(2)); y \in [0, ln(2)]
+ * 4) Compute exp(y) = P/Q, ratio of 2 polynomials P and Q
+ *      b) P = 5th order and Q = 2nd order polynomials obtained from Remez's
+ *      algorithm (mini-max polynomial approximation)
+ * 5) Compute exp(x) = exp(y) * 2^k
+ * 6) Max ULP error measured across all 32-bit FP's = 2.52 (x = 0xc2781e37)
+ * 7) Max relative error measured across all 32-bit FP's= 2.1264E-07 (for the
+ * same x = 0xc2781e37)
+ ','line_number':413,'multiline':True]['text':'
+     * Note: while generally indices are npy_intp, we ensure that our maximum index
+     * will fit in an int32 as a precondition for this function via
+     * IS_OUTPUT_BLOCKABLE_UNARY
+     ','line_number':438,'multiline':True]['text':' Load up frequently used constants ','line_number':448,'multiline':True]['text':' round to nearest ','line_number':506,'multiline':True]['text':' Cody-Waite's range reduction algorithm ','line_number':510,'multiline':True]['text':'
+         * compute val = poly * 2^quadrant; which is same as adding the
+         * exponent of quadrant to the exponent of poly. quadrant is an int,
+         * so extracting exponent is simply extracting 8 bits.
+         ','line_number':522,'multiline':True]['text':'
+         * elem > xmax; return inf
+         * elem < xmin; return 0.0f
+         * elem = +/- nan, return nan
+         ','line_number':529,'multiline':True]['text':'
+ * Vectorized implementation of log using AVX2 and AVX512
+ * 1) if x < 0.0f; return -NAN (invalid input)
+ * 2) Range reduction: y = x/2^k;
+ *      a) y = normalized mantissa, k is the exponent (0.5 <= y < 1)
+ * 3) Compute log(y) = P/Q, ratio of 2 polynomials P and Q
+ *      b) P = 5th order and Q = 5th order polynomials obtained from Remez's
+ *      algorithm (mini-max polynomial approximation)
+ * 5) Compute log(x) = log(y) + k*ln(2)
+ * 6) Max ULP error measured across all 32-bit FP's = 3.83 (x = 0x3f486945)
+ * 7) Max relative error measured across all 32-bit FP's = 2.359E-07 (for same
+ * x = 0x3f486945)
+ ','line_number':554,'multiline':True]['text':'
+     * Note: while generally indices are npy_intp, we ensure that our maximum index
+     * will fit in an int32 as a precondition for this function via
+     * IS_OUTPUT_BLOCKABLE_UNARY
+     ','line_number':577,'multiline':True]['text':' Load up frequently used constants ','line_number':587,'multiline':True]['text':' set x = normalized mantissa ','line_number':641,'multiline':True]['text':' if x < sqrt(2) {exp = exp-1; x = 2*x} ','line_number':645,'multiline':True]['text':' x = x - 1 ','line_number':651,'multiline':True]['text':' Polynomial approximation for log(1+x) ','line_number':654,'multiline':True]['text':'
+         * x < 0.0f; return -NAN
+         * x = +/- NAN; return NAN
+         * x = 0.0f; return -INF
+         ','line_number':668,'multiline':True]['text':' @CHK@','line_number':692,'multiline':False]['text':'*end repeat*','line_number':693,'multiline':True]['text':'*begin repeat
+ * #func = exp, log#
+ * #default_val = 0, 1#
+ ','line_number':696,'multiline':True]['text':'*end repeat*','line_number':729,'multiline':True]['text':'
+ * Vectorized implementation of exp double using AVX512
+ * Reference: Tang, P.T.P., "Table-driven implementation of the
+ *  exponential function in IEEE floating-point
+ *  arithmetic," ACM Transactions on Mathematical
+ *  Software, vol. 15, pp. 144-157, 1989.
+ * 1) if x > mTH_max or x is INF; return INF (overflow)
+ * 2) if x < mTH_min; return 0.0f (underflow)
+ * 3) if abs(x) < mTH_nearzero; return 1.0f + x
+ * 4) if x is Nan; return Nan
+ * 5) Range reduction:
+ *    x = (32m + j)ln2 / 32 + r; r in [-ln2/64, ln2/64]
+ * 6) exp(r) - 1 is approximated by a polynomial function p(r)
+ *    exp(x) = 2^m(2^(j/32) + 2^(j/32)p(r));
+ ','line_number':733,'multiline':True]['text':' z = x * 32/ln2 ','line_number':828,'multiline':True]['text':' round to nearest ','line_number':831,'multiline':True]['text':' r = (x + kd*mNegL1) + kd*mNegL2 ','line_number':836,'multiline':True]['text':' Polynomial approximation for exp(r) - 1 ','line_number':841,'multiline':True]['text':' Get 2^(j/32) from lookup table ','line_number':850,'multiline':True]['text':'
+         * s = top + tail;
+         * exp(x) = 2^m * (top + (tail + s * p));
+         ','line_number':857,'multiline':True]['text':' return special cases ','line_number':866,'multiline':True]['text':'
+     * Don't count on the compiler for cast between mask and int registers.
+     * On gcc7 with flags -march>=nocona -O3 can cause FP stack overflow
+     * which may lead to putting NaN into certain HW/FP calculations.
+     *
+     * For more details, please check the comments in:
+     * - https://github.com/numpy/numpy/issues/20356
+     ','line_number':880,'multiline':True]['text':'
+ * Vectorized implementation of log double using AVX512
+ * Reference:
+ * [1] Tang, Ping Tak Peter. Table-lookup algorithms for elementary functions
+ *     and their error analysis. No. CONF-9106103-1. Argonne National Lab.,
+ *     IL (USA), 1991.
+ * [2] Tang, Ping-Tak Peter. "Table-driven implementation of the logarithm
+ *     function in IEEE floating-point arithmetic." ACM Transactions on
+ *     Mathematical Software (TOMS) 16.4 (1990): 378-400.
+ * [3] Muller, Jean-Michel. "Elementary functions: algorithms and
+ *     implementation." (2016).
+ * 1) if x = 0; return -INF
+ * 2) if x < 0; return NAN
+ * 3) if x is INF; return INF
+ * 4) if x is NAN; return NAN
+ * 5) if x on (1.0 - 0x1p-4, 1.0 + 0x1.09p-4), calling npy_log()
+ * 6) Range reduction:
+ *    log(x) = log(2^m * z)
+ *           = mln2 + log(z)
+ * 7) log(z) = log(z / c_k) + log(c_k);
+ *    where c_k = 1 + k/64, k = 0,1,...,64
+ *    s.t. |x - c_k| <= 1/128 when x on[1,2].
+ * 8) r = 2(x - c_k)/(x + c_k)
+ *    log(x/c_k) = log((1 + r/2) / (1 - r/2))
+ *               = p(r)
+ *               = 2((r/2) + 1/3*(r/2)^3 + 1/5*(r/2)^5 + ...)
+ ','line_number':896,'multiline':True]['text':' LLVM has a bug where AVX-512F intrinsic `_mm512_mask_mul_pd` emits an
+ * unmasked operation with a masked store.  This can cause FP exceptions to
+ * occur for the lanes that are suppose to have been masked.
+ *
+ * See https://bugs.llvm.org/show_bug.cgi?id=51988
+ *
+ * Note, this affects LLVM based compilers like Apple Clang, Clang, and Intel's
+ * ICX.
+ ','line_number':924,'multiline':True]['text':' Apple Clang','line_number':935,'multiline':False]['text':' Apple Clang after v11','line_number':937,'multiline':False]['text':' Clang, not Apple Clang','line_number':941,'multiline':False]['text':' Clang v9+','line_number':943,'multiline':False]['text':' Load lookup table data ','line_number':981,'multiline':True]['text':'*begin repeat
+     * #i = 0, 1, 2, 3, 4, 5, 6, 7#
+     ','line_number':982,'multiline':True]['text':'*end repeat*','line_number':989,'multiline':True]['text':' call glibc when x on [1.0 - 0x1p-4, 1.0 + 0x1.09p-4] ','line_number':1012,'multiline':True]['text':' Normalize x when it is denormal ','line_number':1029,'multiline':True]['text':'
+             * x = 2^k * z; where z in range [1,2]
+             ','line_number':1044,'multiline':True]['text':' c = i/64 + 1 ','line_number':1054,'multiline':True]['text':' u = 2 * (z - c) / (z + c) ','line_number':1058,'multiline':True]['text':' v = u * u ','line_number':1062,'multiline':True]['text':' log(z/c) = u + u*v*(A1 + v*(A2 + v*(A3 + v*A4))) ','line_number':1065,'multiline':True]['text':' Load lookup table data ','line_number':1072,'multiline':True]['text':'
+             * log(x) = k * ln2_hi + c_hi +
+             *          k * ln2_lo + c_lo +
+             *          log(z/c)
+             ','line_number':1080,'multiline':True]['text':' return special cases ','line_number':1092,'multiline':True]['text':' call glibc's log func when x around 1.0f ','line_number':1101,'multiline':True]['text':' SIMD_AVX512F_NOCLANG_BUG','line_number':1127,'multiline':False]['text':' NPY_CAN_LINK_SVML','line_number':1128,'multiline':False]['text':'*begin repeat
+ * #type = npy_float, npy_double#
+ * #TYPE = FLOAT, DOUBLE#
+ * #num_lanes = 16, 8#
+ * #vsuffix = ps, pd#
+ * #mask = __mmask16, __mmask8#
+ * #vtype1 = __m512, __m512d#
+ * #vtype2 = __m512i, __m256i#
+ * #scale = 4, 8#
+ * #vindextype = __m512i, __m256i#
+ * #vindexsize = 512, 256#
+ * #vindexload = _mm512_loadu_si512, _mm256_loadu_si256#
+ * #vtype2_load = _mm512_maskz_loadu_epi32, _mm256_maskz_loadu_epi32#
+ * #vtype2_gather = _mm512_mask_i32gather_epi32, _mm256_mmask_i32gather_epi32#
+ * #vtype2_store = _mm512_mask_storeu_epi32, _mm256_mask_storeu_epi32#
+ * #vtype2_scatter = _mm512_mask_i32scatter_epi32, _mm256_mask_i32scatter_epi32#
+ * #setzero = _mm512_setzero_epi32, _mm256_setzero_si256#
+ ','line_number':1131,'multiline':True]['text':'
+     * Note: while generally indices are npy_intp, we ensure that our maximum index
+     * will fit in an int32 as a precondition for this function via
+     * IS_BINARY_SMALL_STEPS_AND_NOMEMOVERLAP
+     ','line_number':1163,'multiline':True]['text':' scatter! ','line_number':1207,'multiline':True]['text':'
+     * Note: while generally indices are npy_intp, we ensure that our maximum index
+     * will fit in an int32 as a precondition for this function via
+     * IS_BINARY_SMALL_STEPS_AND_NOMEMOVERLAP
+     ','line_number':1232,'multiline':True]['text':'
+         * The x86 instructions vpgetmant and vpgetexp do not conform
+         * with NumPy's output for special floating points: NAN, +/-INF, +/-0.0
+         * We mask these values with spmask to avoid invalid exceptions.
+         ','line_number':1262,'multiline':True]['text':'*end repeat*','line_number':1294,'multiline':True]['text':' SIMD_AVX512_SKX','line_number':1295,'multiline':False]['text':'*******************************************************************************
+ ** Defining ufunc inner functions
+ *******************************************************************************','line_number':1298,'multiline':True]['text':'*begin repeat
+ * #func = exp, log#
+ * #scalarf = npy_expf, npy_logf#
+ ','line_number':1301,'multiline':True]['text':' third arg in `IS_OUTPUT_BLOCKABLE_UNARY` is dummy','line_number':1309,'multiline':False]['text':' TODO: get ride of this macro during the move to NPYV','line_number':1310,'multiline':False]['text':'
+             * We use the AVX function to compute exp/log for scalar elements as well.
+             * This is needed to ensure the output of strided and non-strided
+             * cases match. SIMD code handles strided input cases, but not
+             * strided output.
+             ','line_number':1316,'multiline':True]['text':'*end repeat*','line_number':1332,'multiline':True]['text':'*begin repeat
+ * #func = exp, log#
+ * #scalar = npy_exp, npy_log#
+ ','line_number':1334,'multiline':True]['text':' SIMD_AVX512F_NOCLANG_BUG','line_number':1361,'multiline':False]['text':' NPY_CAN_LINK_SVML','line_number':1362,'multiline':False]['text':'*end repeat*','line_number':1369,'multiline':True]['text':'*begin repeat
+ * Float types
+ *  #type = npy_float, npy_double#
+ *  #TYPE = FLOAT, DOUBLE#
+ *  #c = f, #
+ *  #C = F, #
+ ','line_number':1371,'multiline':True]['text':'*end repeat*','line_number':1408,'multiline':True]

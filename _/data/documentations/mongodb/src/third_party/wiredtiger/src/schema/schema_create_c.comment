@@ -1,0 +1,254 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * __wt_direct_io_size_check --
+ *     Return a size from the configuration, complaining if it's insufficient for direct I/O.
+ ','line_number':11,'multiline':True]['text':'
+     * This function exists as a place to hang this comment: if direct I/O is configured, page sizes
+     * must be at least as large as any buffer alignment as well as a multiple of the alignment.
+     * Linux gets unhappy if you configure direct I/O and then don't do I/O in alignments and units
+     * of its happy place. Ideally, we'd fail if an application set an allocation size incompatible
+     * with the direct I/O size, while silently adjusting internal files using a default allocation
+     * size, but this function is too far down in the call stack to distinguish between the two. We
+     * document that setting a larger buffer alignment than the allocation size silently increases
+     * the allocation size: direct I/O isn't a heavily used feature, that should be sufficient.
+     ','line_number':30,'multiline':True]['text':'
+ * __check_imported_ts --
+ *     Check the aggregated timestamps for each checkpoint in a file that we've imported. By
+ *     default, we're not allowed to import files with timestamps ahead of the oldest timestamp
+ *     since a subsequent rollback to stable could result in data loss and historical reads could
+ *     yield unexpected values. Therefore, this function should return non-zero to callers to
+ *     signify that this is the case. If configured, it is possible to import files with timestamps
+ *     smaller than or equal to the stable timestamp. However, there is no history migrated with the
+ *     files and thus reading historical versions will not work.
+ ','line_number':55,'multiline':True]['text':' Now iterate over each checkpoint and compare the aggregate timestamps with our oldest. ','line_number':86,'multiline':True]['text':'
+         * No need to check "newest stop" here as "newest stop durable" serves that purpose. When a
+         * file has at least one record without a stop timestamp, "newest stop" will be set to max
+         * whereas "newest stop durable" refers to the newest non-max timestamp which is more useful
+         * to us in terms of comparing with oldest.
+         ','line_number':94,'multiline':True]['text':'
+ * __create_file_block_manager --
+ *     Create a new file in the block manager, and track it.
+ ','line_number':115,'multiline':True]['text':'
+     * Track the creation of this file.
+     *
+     * If something down the line fails, we're going to need to roll this back. Specifically do NOT
+     * track the op in the import case since we do not want to wipe a data file just because we fail
+     * to import it.
+     ','line_number':125,'multiline':True]['text':'
+ * __create_file --
+ *     Create a new 'file:' object.
+ ','line_number':138,'multiline':True]['text':' Check if the file already exists. ','line_number':167,'multiline':True]['text':'
+         * Regardless of the 'exclusive' flag, we should raise an error if we try to import an
+         * existing URI rather than just silently returning.
+         ','line_number':169,'multiline':True]['text':'
+     * At this moment the uri doesn't exist in the metadata. In scenarios like, the database folder
+     * is copied without a checkpoint into another location and trying to recover from it leads to
+     * that history store file exists on disk but not as part of metadata. As we recreate the
+     * history store file on every restart to ensure that history store file is present. Make sure
+     * to remove the already exist history store file in the directory.
+     ','line_number':179,'multiline':True]['text':' Sanity check the allocation size. ','line_number':192,'multiline':True]['text':'
+     * If we are importing an existing object rather than creating a new one, there are two possible
+     * scenarios. Either (1) the file configuration string from the source database metadata is
+     * specified in the input config string, or (2) the import.repair option is set and we need to
+     * reconstruct the configuration metadata from the file.
+     ','line_number':195,'multiline':True]['text':'
+         * Create the file for tiered storage. It is required because we switched to a new file
+         * during the import process.
+         ','line_number':202,'multiline':True]['text':' First verify that the data to import exists on disk. ','line_number':214,'multiline':True]['text':'
+                 * The string may be enclosed by delimiters (e.g. braces, quotes, parentheses) to
+                 * avoid configuration string characters acting as separators. Discard the first and
+                 * last characters in this case.
+                 ','line_number':224,'multiline':True]['text':'
+                 * FIXME-WT-7735: Importing a tiered table is not yet allowed.
+                 ','line_number':234,'multiline':True]['text':'
+                 * If there is a file metadata provided, reconstruct the incremental backup
+                 * information as the imported file was not part of any backup.
+                 ','line_number':241,'multiline':True]['text':'
+                 * If there is no file metadata provided, the user should be specifying a "repair".
+                 * To prevent mistakes with API usage, we should return an error here rather than
+                 * inferring a repair.
+                 ','line_number':248,'multiline':True]['text':' Create the file. ','line_number':260,'multiline':True]['text':'
+     * If creating an ordinary file, update the file ID and current version numbers and strip
+     * checkpoint LSN from the extracted metadata. If importing an existing file, incremental backup
+     * information is reconstructed inside import repair or when grabbing file metadata.
+     ','line_number':263,'multiline':True]['text':' Try to recreate the associated metadata from the imported data source. ','line_number':280,'multiline':True]['text':' Strip any configuration settings that should not be persisted. ','line_number':284,'multiline':True]['text':'
+         * Ensure that the timestamps in the imported data file are not in the future relative to
+         * the configured global timestamp.
+         ','line_number':290,'multiline':True]['text':'
+     * Open the file to check that it was setup correctly. We don't need to pass the configuration,
+     * we just wrote the collapsed configuration into the metadata file, and it's going to be
+     * read/used by underlying functions.
+     *
+     * Turn off bulk-load for imported files.
+     ','line_number':303,'multiline':True]['text':'
+ * __wt_schema_colgroup_source --
+ *     Get the URI of the data source for a column group.
+ ','line_number':329,'multiline':True]['text':'
+         * If we're using tiered storage, the default is not file unless the user explicitly turns
+         * off using tiered storage for this create. Otherwise the default prefix is tiered.
+         ','line_number':351,'multiline':True]['text':'
+ * __create_import_cmp_uri --
+ *     Qsort function: sort the import entries array by uri.
+ ','line_number':374,'multiline':True]['text':'
+ * __create_import_cmp_id --
+ *     Qsort function: sort the import entries array by file id.
+ ','line_number':389,'multiline':True]['text':'
+ * __wt_find_import_metadata --
+ *     Find metadata entry by URI in session's import list. The list must already be sorted by uri.
+ ','line_number':412,'multiline':True]['text':'
+ * __schema_is_tiered_storage_shared --
+ *     Check whether the table is configured for tiered storage, and if so, whether the tiered table
+ *     is shared.
+ ','line_number':436,'multiline':True]['text':'
+     * The tiered storage shared table needs to have two column groups that point to the
+     * underlying active and shared files. The following checks are carried out to determine
+     * whether the table can be created as a tiered storage shared table or not based on
+     * the table creation configuration.
+     *
+     * A table is not a shared if any of the following are true:
+     * 1. The table configuration does not specify an underlying source.
+     * 2. The table configuration does not specify an underlying type of the storage.
+     * 3. The connection is not configured for tiered storage or the table is not
+     *    configured for tiered storage.
+     * 4. The connection is not configured for tiered storage shared or the table is
+     *    not configured for tiered storage shared.
+     ','line_number':446,'multiline':True]['text':'
+ * __schema_tiered_shared_colgroup_source --
+ *     Get the tiered storage shared URI of the data source for a column group. For a shared tiered
+ *     table named table:name the active table is always file:name.wt and the shared table is
+ *     tiered:name which points to the shared components.
+ ','line_number':476,'multiline':True]['text':'
+ * __create_colgroup --
+ *     Create a column group.
+ ','line_number':502,'multiline':True]['text':'
+     * Make sure the column group is referenced from the table, converting not-found errors to
+     * EINVAL for the application.
+     ','line_number':552,'multiline':True]['text':'
+     * A simple table have default one column group except the tiered storage shared table that will
+     * have default 2 column groups.
+     ','line_number':561,'multiline':True]['text':' Get the column group name. ','line_number':567,'multiline':True]['text':' Check if the column group already exists. ','line_number':574,'multiline':True]['text':' Find the first NULL entry in the cfg stack. ','line_number':582,'multiline':True]['text':' Add the source to the colgroup config before collapsing. ','line_number':586,'multiline':True]['text':' Use the import configuration, it should have key and value format configurations. ','line_number':604,'multiline':True]['text':' Calculate the key/value formats: these go into the source config. ','line_number':607,'multiline':True]['text':' Reset the last filled configuration for the next column group. ','line_number':631,'multiline':True]['text':'
+ * __wt_schema_index_source --
+ *     Get the URI of the data source for an index.
+ ','line_number':649,'multiline':True]['text':'
+ * __fill_index --
+ *     Fill the index from the current contents of the table.
+ ','line_number':681,'multiline':True]['text':'
+     * If the column groups have not been completely created, there cannot be data inserted yet, and
+     * we're done.
+     ','line_number':697,'multiline':True]['text':'
+ * __create_index --
+ *     Create an index.
+ ','line_number':719,'multiline':True]['text':'
+     * Note: it would be better to keep the table exclusive here, while changing its indexes. We
+     * don't because some operation we perform below reacquire the table handle (such as opening a
+     * cursor on the table in order to fill the index). If we keep the handle exclusive here, those
+     * operations wanting ordinary access will conflict, leading to errors. At the same time, we
+     * don't want to allow table cursors that have already been fully opened to remain open across
+     * this call.
+     *
+     * Temporarily getting the table exclusively serves the purpose of ensuring that cursors on the
+     * table that are already open must at least be closed before this call proceeds.
+     ','line_number':757,'multiline':True]['text':' Check if the index already exists. ','line_number':781,'multiline':True]['text':' Add the source name to the index config before collapsing. ','line_number':796,'multiline':True]['text':'
+         * Custom extractors must supply a key format; convert not-found errors to EINVAL for the
+         * application.
+         ','line_number':802,'multiline':True]['text':' Calculate the key/value formats. ','line_number':811,'multiline':True]['text':'
+     * Count the public columns using the declared columns for normal indices or the key format for
+     * custom extractors.
+     ','line_number':816,'multiline':True]['text':'
+     * The key format for an index is somewhat subtle: the application specifies a set of columns
+     * that it will use for the key, but the engine usually adds some hidden columns in order to
+     * derive the primary key. These hidden columns are part of the source's key_format, which we
+     * are calculating now, but not part of an index cursor's key_format.
+     ','line_number':833,'multiline':True]['text':'
+         * If the primary key column is already in the secondary key, don't add it again.
+         ','line_number':842,'multiline':True]['text':' Index values are empty: all columns are packed into the index key. ','line_number':855,'multiline':True]['text':'
+     * Construct the index key format, or append the primary key columns for custom extractors.
+     ','line_number':863,'multiline':True]['text':' Check for a record number index key, which makes no sense. ','line_number':869,'multiline':True]['text':' Make sure that the configuration is valid. ','line_number':889,'multiline':True]['text':' If there is data in the table, fill the index. ','line_number':892,'multiline':True]['text':'
+ * __create_table --
+ *     Create a table.
+ ','line_number':909,'multiline':True]['text':' Check if the table already exists. ','line_number':940,'multiline':True]['text':'
+         * Regardless of the 'exclusive' flag, we should raise an error if we try to import an
+         * existing URI rather than just silently returning.
+         ','line_number':942,'multiline':True]['text':'
+         * If this is an import but not a repair, check that the exported table metadata is provided
+         * in the config.
+         ','line_number':954,'multiline':True]['text':' Try to recreate the associated metadata from the imported data source. ','line_number':971,'multiline':True]['text':' Concatenate the metadata base string with the tiered storage shared string. ','line_number':992,'multiline':True]['text':'
+     * Open the table to check that it was setup correctly. Keep the handle exclusive until it is
+     * released at the end of the call.
+     ','line_number':1015,'multiline':True]['text':'
+ * __tiered_metadata_insert --
+ *     Wrapper function to insert the tiered object metadata entry.
+ ','line_number':1038,'multiline':True]['text':'
+ * __create_object --
+ *     Create a tiered object for the given name.
+ ','line_number':1055,'multiline':True]['text':'
+ * __wt_tiered_tree_create --
+ *     Create a tiered tree structure for the given name.
+ ','line_number':1070,'multiline':True]['text':'
+ * __create_tiered --
+ *     Create a tiered tree structure for the given name.
+ ','line_number':1086,'multiline':True]['text':' Check if the tiered table already exists. ','line_number':1107,'multiline':True]['text':'
+     * We're creating a tiered table. Set the initial tiers list to empty. Opening the table will
+     * cause us to create our first file or tiered object.
+     ','line_number':1115,'multiline':True]['text':'
+             * By default use the connection level bucket and prefix. Then we add in any user
+             * configuration that may override the system one.
+             ','line_number':1125,'multiline':True]['text':'
+ * __create_data_source --
+ *     Create a custom data source.
+ ','line_number':1159,'multiline':True]['text':'
+     * Check to be sure the key/value formats are legal: the underlying data source doesn't have
+     * access to the functions that check.
+     ','line_number':1170,'multiline':True]['text':'
+     * User-specified collators aren't supported for data-source objects.
+     ','line_number':1179,'multiline':True]['text':'
+ * __create_meta_entry_worker --
+ *     Worker function for metadata file reader procedure. The function populates the import list
+ *     with entries related to the import URI.
+ ','line_number':1189,'multiline':True]['text':' Get suffix of the key. ','line_number':1206,'multiline':True]['text':'
+     * We want to skip unrelated entries. We have stripped out the URI prefixes and want to get all
+     * the entries that match the URI. This check will match overlapping entries (i.e. if we're
+     * importing table:name but name123 also exists) but should reduce the resources needed for the
+     * list of possible entries.
+     ','line_number':1211,'multiline':True]['text':'
+     * We are not checking if the entry already exists in the metadata. It will be handled later in
+     * the appropriate create call.
+     ','line_number':1220,'multiline':True]['text':' Grow the entries array if needed. ','line_number':1225,'multiline':True]['text':' Populate the next entry. ','line_number':1229,'multiline':True]['text':'
+ * __create_fix_file_ids --
+ *     Update file IDs in the import list according to the session's next file ID field. Certain
+ *     entries in the import list have same file ID and we need to preserve this relationships.
+ ','line_number':1248,'multiline':True]['text':' Sort the array of entries by file ID. ','line_number':1266,'multiline':True]['text':' Iterate over the array and assign a new ID to each entry. ','line_number':1270,'multiline':True]['text':' Skip entries without file id. ','line_number':1272,'multiline':True]['text':' Generate a new file ID. ','line_number':1276,'multiline':True]['text':' Update config with the new file ID. ','line_number':1282,'multiline':True]['text':'
+ * __create_parse_export --
+ *     Parse export metadata file and populate array of name/config entries related to uri. The
+ *     array is sorted by entry name. Caller is responsible to free any memory allocated for the
+ *     import list.
+ ','line_number':1295,'multiline':True]['text':' Open the specified metadata file and iterate over the key value pairs. ','line_number':1309,'multiline':True]['text':' Fix file IDs so that they fit into the recipient system. ','line_number':1315,'multiline':True]['text':' Sort the array by name. We will use binary search later to get config string. ','line_number':1318,'multiline':True]['text':'
+ * __schema_create_config_check --
+ *     Detects any invalid config combinations for schema create.
+ ','line_number':1325,'multiline':True]['text':'
+     * If tiered storage is configured at the connection level and the user has not configured
+     * tiered_storage.name to be none, then the object being created is a tiered object.
+     ','line_number':1344,'multiline':True]['text':' The import.file_metadata configuration is incompatible with tiered storage. ','line_number':1353,'multiline':True]['text':'
+     * If the type configuration is set to anything but "file" while using tiered storage we must
+     * fail the operation.
+     ','line_number':1358,'multiline':True]['text':'
+ * __schema_create --
+ *     Process a WT_SESSION::create operation for all supported types.
+ ','line_number':1371,'multiline':True]['text':'
+     * We track create operations: if we fail in the middle of creating a complex object, we want to
+     * back it all out.
+     ','line_number':1396,'multiline':True]['text':' This method is called recursively. Clear the flag only in the call that set it. ','line_number':1404,'multiline':True]['text':' Get suffix of the URI. ','line_number':1414,'multiline':True]['text':'
+ * __wt_schema_create --
+ *     Process a WT_SESSION::create operation for all supported types.
+ ','line_number':1469,'multiline':True]['text':'
+     * We should be calling this function with the schema lock, but we cannot verify it here because
+     * we can re-enter this function with the internal session. If we get here using the internal
+     * session, we cannot check whether we own the lock, as it would be locked by the outer session.
+     * We can thus only check whether the lock is acquired, as opposed to, whether the lock is
+     * acquired by us.
+     ','line_number':1479,'multiline':True]

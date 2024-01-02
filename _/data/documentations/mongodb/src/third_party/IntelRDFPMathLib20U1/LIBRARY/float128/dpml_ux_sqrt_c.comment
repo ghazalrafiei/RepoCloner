@@ -1,0 +1,141 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]['text':' Conflict with sqrt_macros.h ','line_number':34,'multiline':True]['text':' Restore original definition ','line_number':36,'multiline':True]['text':'
+** The following routine computes either sqrt(x) or 1/sqrt(x) for an unpacked
+** argument x = 2^(2n-d)*f', f' in [1/2, 1), and d = 0 or 1.  Defining
+** f = f'/2^d, the basic approach is to convert the high bits of f' to double
+** precision and index into the sqrt table to evaluate a polynomial,
+**  p(f') ~ 1/sqrt(f), good to about 28 bits.  Then carefully perform a Newton's
+** iteration to produce an approximation to sqrt(f) or 1/sqrt(f) good to about
+** 72 bits.  This result (represented by two double precision values) is then
+** converted to integers and stored as the high 64 bits of the unpacked x-float
+** result.  Call this result s.  Then sqrt(x) or 1/sqrt(x) is computed
+** via a Newton's iteration in unpacked format as:
+**
+**		t <-- f*s
+**		d <-- (3 - t*s)/2
+**		if (sqrt)
+**		    result <-- t*d
+**		else
+**		    result <-- s*d
+**
+','line_number':49,'multiline':True]['text':'
+    ** Given x = 2^(2n-d)*f', where d = 0 or 1 and f' is in the interval
+    ** [1/2,1), the first step is to get an approximation to f' as a floating
+    ** point value.  We will use f' in a polynomial evaluation to approximate
+    ** 1/sqrt(f), where f = f'/2^d.  As part of the Newton's iterations we
+    ** will need f_hi as the high 24 bits of f and f_lo as the high 53 bits
+    ** of f - f_hi.
+    ','line_number':85,'multiline':True]['text':' this code is *WRONG* ','line_number':112,'multiline':True]['text':' This is actually f' at this point ','line_number':128,'multiline':True]['text':' 
+    ** Now compute a polynomial in f to obtain an approximation to 1/sqrt(f'),
+    ** call it g.
+    **
+    ** Get index into the square root polynomial coefficient table as the 
+    ** low exponent bit and the high fraction bits and calculate g.
+    **
+    ** There is a little bit of a problem with using the DPML sqrt tables.
+    ** Specifically, the table assume that f' is normalized between 1/2 and
+    ** 2, so that the polynomials from the table yield a result in the
+    ** interval ( 1/sqrt(2), sqrt(2) ].  For a floating point implementation,
+    ** this is not a problem, but for fixed point, the interval crosses an
+    ** exponent boundary.  It is much easier in fixed point to normalize
+    ** between 1/4 and 1, with the result in the interval ( 1, 2 ] ( We
+    ** actually force the interval to be (1, 2)).  The following table
+    ** summerizes the "skew" problem and solution:
+    **
+    **		Exponent				 "Swapped"
+    **		 parity	    table gives	   We want	table gives
+    **		---------  ------------  ------------	------------
+    **		   even	    1/sqrt(f)    1/sqrt(f)	1/sqrt(2f)
+    **		   odd	   1/sqrt(2f)    sqrt2/sqrt(f)	1/sqrt(f)
+    **
+    ** The sqrt table is divide into two halves, depending on the parity
+    ** of the exponent.  If we "swap" the sense of the parity, we can
+    ** get the result we need by multiplying by sqrt(2).
+    ','line_number':132,'multiline':True]['text':'
+    ** Given g ~ 1/sqrt(f), we want to compute
+    ** 
+    **		g_lo = (g/8)*(1 - f*g^2)*(7 - 3*f*g^2)
+    ** 
+    ** However, computing g_lo is somewhat problematic, since there is
+    ** a potential for a massive loss of significance when computing
+    ** 1 - f*g^2.  To deal with this problem, we introduce the quantity, t,
+    ** defined by:
+    ** 
+    ** 		t <-- (double)((float) f*g)
+    **
+    ** and reduce g to only 24 significant bits
+    ','line_number':169,'multiline':True]['text':'
+    ** Note that f*g and t are essentially the same values up to about
+    ** 24 bits.  Then we can write
+    ** 
+    **		w = 1 - f*g^2
+    **	 	  = 1 - (f*g)*g
+    ** 		  = 1 - [t + (f*g - t)]*g
+    **	 	  = (1 - t*g) - (f*g - t)*g
+    **	 	  ~ (1 - t*g) - [(f_hi + f_lo)*g - t]*g
+    **	 	  = (1 - t*g) - [(f_hi*g - t) + f_lo*g]*g
+    ** 
+    ** Note that since g, t and f_hi have at most 24 significant bits,
+    ** and since f*g ~ t, the products t*g and f_hi*g as well as the
+    ** sums 1 - t*g and f_hi*g - t are all exact.  This basicly
+    ** reduces the roundoff error in computing 1 - f*g^2 to a few lsbs.
+    ** With the above in mind, we compute g_lo as
+    ** 
+    **
+    **		g_lo = {g*[(7/16) - ((3/16)*f)*(g*g)]} * w
+    ','line_number':188,'multiline':True]['text':'
+    ** At this point, g + g_lo approximates 1/sqrt(f) to roughly 72 bits
+    ** and g_hi contains at most 24 significant bits.
+    **
+    ** The next step is to convert g + g_lo to an unpacked x-float value
+    ** rounding g + g_lo to 64 bits.  This is done a little differently
+    ** depending on the size of the integer format.  Also, we must be careful
+    ** to insure that the approximation is in the interval [1, 2)
+    ','line_number':212,'multiline':True]['text':'
+    ** Get the current approximation, s, into unpacked format and compute
+    ** 3 - x*s^2
+    ','line_number':238,'multiline':True]['text':'
+    ** Depending on the evaluation, multiply by s/2 or x*s/2
+    ','line_number':252,'multiline':True]['text':'
+        ** Now we have to fool around with the low digit of the result to
+        ** insure that correct rounding takes place.  If the result is 
+        ** sufficiently far away from the half way case, the PACK routine will
+        ** do the correct rounding.  However, "too close to call", we need
+        ** to force the low bits of the result to insure PACK does the right
+        ** thing.  We do this by looking at the sign of the difference
+        ** argument - (result + 1/2lsb)^2.
+        ','line_number':294,'multiline':True]['text':' too close to the middle.  Check sign of difference ','line_number':307,'multiline':True]['text':'
+** The following two routines implement the user level functions sqrtl and
+** rsqrtl calling C_UX_SQRT
+','line_number':328,'multiline':True]['text':'
+** UX_HYPOT computes the sqrt(x^2 + y^2) for unpacked x-float arguments
+** x and y.
+','line_number':372,'multiline':True]['text':'
+** F_HYPOT_NAME is the user lever hypot function
+','line_number':397,'multiline':True]['text':' Not Used ','line_number':428,'multiline':True]['text':' data 1 ','line_number':473,'multiline':True]['text':' data 2 ','line_number':474,'multiline':True]['text':' data 3 ','line_number':475,'multiline':True]['text':' data 4 ','line_number':476,'multiline':True]['text':' Index 0: mapping for x ','line_number':482,'multiline':True]['text':' Index 1: class-to-index mapping ','line_number':488,'multiline':True]['text':' Index 2: y class-to-index mapping for x = +/- zero ','line_number':500,'multiline':True]['text':' Index 3: y class-to-index mapping for x = +/- norm or denorm ','line_number':514,'multiline':True]['text':' Index 4: y class-to-index mapping for x = +/- Inf ','line_number':528,'multiline':True]['text':' Print various powers of 2 ','line_number':544,'multiline':True]

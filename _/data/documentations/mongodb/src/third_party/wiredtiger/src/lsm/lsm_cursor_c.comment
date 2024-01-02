@@ -1,0 +1,316 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]['text':'
+ * __wt_clsm_request_switch --
+ *     Request an LSM tree switch for a cursor operation.
+ ','line_number':23,'multiline':True]['text':'
+         * Check that we are up-to-date: don't set the switch if the tree has changed since we last
+         * opened cursors: that can lead to switching multiple times when only one switch is
+         * required, creating very small chunks.
+         ','line_number':38,'multiline':True]['text':'
+ * __wt_clsm_await_switch --
+ *     Wait for a switch to have completed in the LSM tree
+ ','line_number':55,'multiline':True]['text':'
+     * If there is no primary chunk, or a chunk has overflowed the hard limit, which either means a
+     * worker thread has fallen behind or there has just been a user-level checkpoint, wait until
+     * the tree changes.
+     *
+     * We used to switch chunks in the application thread here, but that is problematic because
+     * there is a transaction in progress and it could roll back, leaving the metadata inconsistent.
+     ','line_number':69,'multiline':True]['text':'
+ * __clsm_enter_update --
+ *     Make sure an LSM cursor is ready to perform an update.
+ ','line_number':85,'multiline':True]['text':'
+     * In LSM there are multiple btrees active at one time. The tree switch code needs to use btree
+     * API methods, and it wants to operate on the btree for the primary chunk. Set that up now.
+     *
+     * If the primary chunk has grown too large, set a flag so the worker thread will switch when it
+     * gets a chance to avoid introducing high latency into application threads. Don't do this
+     * indefinitely: if a chunk grows twice as large as the configured size, block until it can be
+     * switched.
+     ','line_number':113,'multiline':True]['text':' If there was no overflow, we're done. ','line_number':131,'multiline':True]['text':' Request a switch. ','line_number':136,'multiline':True]['text':' If we only overflowed the soft limit, we're done. ','line_number':139,'multiline':True]['text':'
+ * __clsm_enter --
+ *     Start an operation on an LSM cursor, update if the tree has changed.
+ ','line_number':148,'multiline':True]['text':' Merge cursors never update. ','line_number':165,'multiline':True]['text':' Check if the cursor looks up-to-date. ','line_number':175,'multiline':True]['text':' Update the maximum transaction ID in the primary chunk. ','line_number':179,'multiline':True]['text':'
+             * Ensure that there is a transaction snapshot active.
+             ','line_number':181,'multiline':True]['text':'
+             * Switching the tree will update the generation before updating the switch transaction.
+             * We test the transaction in clsm_enter_update. Now test the disk generation to avoid
+             * races.
+             ','line_number':188,'multiline':True]['text':'
+             * Figure out how many updates are required for snapshot isolation.
+             *
+             * This is not a normal visibility check on the maximum transaction ID in each chunk:
+             * any transaction ID that overlaps with our snapshot is a potential conflict.
+             *
+             * Note that the pinned ID is correct here: it tracks concurrent transactions excluding
+             * special transactions such as checkpoint (which we can't conflict with because
+             * checkpoint only writes the metadata, which is not an LSM tree).
+             ','line_number':199,'multiline':True]['text':'
+         * Stop when we are up-to-date, as long as this is:
+         *   - a snapshot isolation update and the cursor is set up for
+         *     that;
+         *   - an update operation with a primary chunk, or
+         *   - a read operation and the cursor is open for reading.
+         ','line_number':224,'multiline':True]['text':'
+         * Opening this LSM cursor has opened a number of btree cursors, ensure other code doesn't
+         * think this is the first cursor in a session.
+         ','line_number':243,'multiline':True]['text':'
+ * __clsm_leave --
+ *     Finish an operation on an LSM cursor.
+ ','line_number':255,'multiline':True]['text':'
+ * We need a tombstone to mark deleted records, and we use the special value below for that purpose.
+ * We use two 0x14 (Device Control 4) bytes to minimize the likelihood of colliding with an
+ * application-chosen encoding byte, if the application uses two leading DC4 byte for some reason,
+ * we'll do a wasted data copy each time a new value is inserted into the object.
+ ','line_number':273,'multiline':True]['text':'
+ * __clsm_deleted --
+ *     Check whether the current value is a tombstone.
+ ','line_number':281,'multiline':True]['text':'
+ * __clsm_deleted_encode --
+ *     Encode values that are in the encoded name space.
+ ','line_number':292,'multiline':True]['text':'
+     * If value requires encoding, get a scratch buffer of the right size and create a copy of the
+     * data with the first byte of the tombstone appended.
+     ','line_number':302,'multiline':True]['text':'
+ * __clsm_deleted_decode --
+ *     Decode values that start with the tombstone.
+ ','line_number':323,'multiline':True]['text':'
+     * Take care with this check: when an LSM cursor is used for a merge, and/or to create a Bloom
+     * filter, it is valid to return the tombstone value.
+     ','line_number':330,'multiline':True]['text':'
+ * __clsm_close_cursors --
+ *     Close any btree cursors that are not needed.
+ ','line_number':339,'multiline':True]['text':'
+     * Walk the cursors, closing any we don't need. Note that the exit condition here is special,
+     * don't use WT_FORALL_CURSORS, and be careful with unsigned integer wrapping.
+     ','line_number':357,'multiline':True]['text':'
+ * __clsm_resize_chunks --
+ *     Allocates an array of unit objects for each chunk.
+ ','line_number':375,'multiline':True]['text':' Don't allocate more iterators if we don't need them. ','line_number':384,'multiline':True]['text':'
+ * __clsm_free_chunks --
+ *     Allocates an array of unit objects for each chunk.
+ ','line_number':396,'multiline':True]['text':'
+ * __clsm_open_cursors --
+ *     Open cursors for the current set of files.
+ ','line_number':411,'multiline':True]['text':'
+     * Ensure that any snapshot update has cursors on the right set of chunks to guarantee
+     * visibility is correct.
+     ','line_number':441,'multiline':True]['text':'
+     * Query operations need a full set of cursors. Overwrite cursors do queries in service of
+     * updates.
+     ','line_number':448,'multiline':True]['text':'
+     * If the key is pointing to memory that is pinned by a chunk cursor, take a copy before closing
+     * cursors.
+     ','line_number':462,'multiline':True]['text':' Merge cursors have already figured out how many chunks they need. ','line_number':474,'multiline':True]['text':'
+         * We may have raced with another merge completing. Check that we're starting at the right
+         * offset in the chunk array.
+         ','line_number':480,'multiline':True]['text':' We have to find the start chunk: merge locked it. ','line_number':490,'multiline':True]['text':'
+         * If we are only opening the cursor for updates, only open the primary chunk, plus any
+         * other chunks that might be required to detect snapshot isolation conflicts.
+         ','line_number':497,'multiline':True]['text':'
+             * Keep going until all updates in the next chunk are globally visible. Copy the maximum
+             * transaction IDs into the cursor as we go.
+             ','line_number':504,'multiline':True]['text':' Check how many cursors are already open. ','line_number':519,'multiline':True]['text':' If the cursor isn't open yet, we're done. ','line_number':524,'multiline':True]['text':' Easy case: the URIs don't match. ','line_number':528,'multiline':True]['text':'
+             * Make sure the checkpoint config matches when not using a custom data source.
+             ','line_number':532,'multiline':True]['text':' Make sure the Bloom config matches. ','line_number':542,'multiline':True]['text':' Spurious generation bump? ','line_number':547,'multiline':True]['text':'
+         * Close any cursors we no longer need.
+         *
+         * Drop the LSM tree lock while we do this: if the cache is full, we may block while closing
+         * a cursor. Save the generation number and retry if it has changed under us.
+         ','line_number':553,'multiline':True]['text':' Detach from our old primary. ','line_number':585,'multiline':True]['text':' Open the cursors for chunks that have changed. ','line_number':593,'multiline':True]['text':' Copy the maximum transaction ID. ','line_number':599,'multiline':True]['text':'
+         * Read from the checkpoint if the file has been written. Once all cursors switch, the
+         * in-memory tree can be evicted.
+         ','line_number':603,'multiline':True]['text':'
+         * XXX kludge: we may have an empty chunk where no checkpoint was written. If so, try to
+         * open the ordinary handle on that chunk instead.
+         ','line_number':612,'multiline':True]['text':'
+         * Setup all cursors other than the primary to only do conflict checks on insert operations.
+         * This allows us to execute inserts on non-primary chunks as a way of checking for write
+         * conflicts with concurrent updates.
+         ','line_number':623,'multiline':True]['text':' Child cursors always use overwrite and raw mode. ','line_number':635,'multiline':True]['text':' Setup the count values for each chunk in the chunks ','line_number':639,'multiline':True]['text':' The last chunk is our new primary. ','line_number':643,'multiline':True]['text':'
+         * If the primary is not yet set as the primary, do that now. Note that eviction was
+         * configured off when the underlying object was created, which is what we want, leave it
+         * alone.
+         *
+         * We don't have to worry about races here: every thread that modifies the tree will have to
+         * come through here, at worse we set the flag repeatedly. We don't use a WT_BTREE handle
+         * flag, however, we could race doing the read-modify-write of the flags field.
+         *
+         * If something caused the chunk to be closed and reopened since it was created, we can no
+         * longer use it as a primary chunk and we need to force a switch. We detect the tree was
+         * created when it was opened by checking the "original" flag.
+         ','line_number':648,'multiline':True]['text':' Check that all cursors are open as expected. ','line_number':671,'multiline':True]['text':' Make sure the first cursor is open. ','line_number':677,'multiline':True]['text':' Easy case: the URIs should match. ','line_number':681,'multiline':True]['text':'
+                 * Make sure the checkpoint config matches when not using a custom data source.
+                 ','line_number':685,'multiline':True]['text':' Make sure the Bloom config matches. ','line_number':697,'multiline':True]['text':'
+ * __wt_clsm_init_merge --
+ *     Initialize an LSM cursor for a merge.
+ ','line_number':711,'multiline':True]['text':'
+ * __clsm_get_current --
+ *     Find the smallest / largest of the cursors and copy its key/value.
+ ','line_number':734,'multiline':True]['text':'
+ * __clsm_compare --
+ *     WT_CURSOR->compare implementation for the LSM cursor type.
+ ','line_number':786,'multiline':True]['text':' There's no need to sync with the LSM tree, avoid WT_LSM_ENTER. ','line_number':797,'multiline':True]['text':'
+     * Confirm both cursors refer to the same source and have keys, then compare the keys.
+     ','line_number':801,'multiline':True]['text':'
+ * __clsm_position_chunk --
+ *     Position a chunk cursor.
+ ','line_number':816,'multiline':True]['text':'
+         * With higher isolation levels, where we have stable reads, we're done: the cursor is now
+         * positioned as expected.
+         *
+         * With read-uncommitted isolation, a new record could have appeared in between the search
+         * and stepping forward / back. In that case, keep going until we see a key in the expected
+         * range.
+         ','line_number':835,'multiline':True]['text':'
+ * __clsm_next --
+ *     WT_CURSOR->next method for the LSM cursor type.
+ ','line_number':852,'multiline':True]['text':' If we aren't positioned for a forward scan, get started. ','line_number':873,'multiline':True]['text':' We just positioned *at* the key, now move. ','line_number':889,'multiline':True]['text':'
+         * If there are multiple cursors on that key, move them forward.
+         ','line_number':894,'multiline':True]['text':' Move the smallest cursor forward. ','line_number':910,'multiline':True]['text':' Find the cursor(s) with the smallest key. ','line_number':915,'multiline':True]['text':'
+ * __clsm_random_chunk --
+ *     Pick a chunk at random, weighted by the size of all chunks. Weighting proportional to
+ *     documents avoids biasing towards small chunks. Then return the cursor on the chunk we have
+ *     picked.
+ ','line_number':926,'multiline':True]['text':'
+     * If the tree is empty we cannot do a random lookup, so return a WT_NOTFOUND.
+     ','line_number':937,'multiline':True]['text':'
+ * __clsm_next_random --
+ *     WT_CURSOR->next method for the LSM cursor type when configured with next_random.
+ ','line_number':960,'multiline':True]['text':'
+         * This call to next_random on the chunk can potentially end in WT_NOTFOUND if the chunk we
+         * picked is empty. We want to retry in that case.
+         ','line_number':982,'multiline':True]['text':'
+         * Search near the current key to resolve any tombstones and position to a valid document.
+         * If we see a WT_NOTFOUND here that is valid, as the tree has no documents visible to us.
+         ','line_number':992,'multiline':True]['text':' We have found a valid doc. Set that we are now positioned ','line_number':1000,'multiline':True]['text':'
+ * __clsm_prev --
+ *     WT_CURSOR->prev method for the LSM cursor type.
+ ','line_number':1009,'multiline':True]['text':' If we aren't positioned for a reverse scan, get started. ','line_number':1030,'multiline':True]['text':' We just positioned *at* the key, now move. ','line_number':1046,'multiline':True]['text':'
+         * If there are multiple cursors on that key, move them backwards.
+         ','line_number':1051,'multiline':True]['text':' Move the largest cursor backwards. ','line_number':1067,'multiline':True]['text':' Find the cursor(s) with the largest key. ','line_number':1072,'multiline':True]['text':'
+ * __clsm_reset_cursors --
+ *     Reset any positioned chunk cursors. If the skip parameter is non-NULL, that cursor is about
+ *     to be used, so there is no need to reset it.
+ ','line_number':1083,'multiline':True]['text':' Fast path if the cursor is not positioned. ','line_number':1095,'multiline':True]['text':'
+ * __clsm_reset --
+ *     WT_CURSOR->reset method for the LSM cursor type.
+ ','line_number':1114,'multiline':True]['text':'
+     * Don't use the normal __clsm_enter path: that is wasted work when all we want to do is give up
+     * our position.
+     ','line_number':1125,'multiline':True]['text':' In case we were left positioned, clear that. ','line_number':1135,'multiline':True]['text':'
+ * __clsm_lookup --
+ *     Position an LSM cursor.
+ ','line_number':1142,'multiline':True]['text':' If there is a Bloom filter, see if we can skip the read. ','line_number':1164,'multiline':True]['text':' Update stats: the active chunk can't have a bloom filter. ','line_number':1190,'multiline':True]['text':'
+ * __clsm_search --
+ *     WT_CURSOR->search method for the LSM cursor type.
+ ','line_number':1212,'multiline':True]['text':'
+ * __clsm_search_near --
+ *     WT_CURSOR->search_near method for the LSM cursor type.
+ ','line_number':1240,'multiline':True]['text':'
+     * search_near is somewhat fiddly: we can't just use a nearby key from the in-memory chunk
+     * because there could be a closer key on disk.
+     *
+     * As we search down the chunks, we stop as soon as we find an exact match. Otherwise, we
+     * maintain the smallest cursor larger than the search key and the largest cursor smaller than
+     * the search key. At the end, we prefer the larger cursor, but if no record is larger, position
+     * on the last record in the tree.
+     ','line_number':1265,'multiline':True]['text':' Do we have an exact match? ','line_number':1284,'multiline':True]['text':'
+         * Prefer larger cursors. There are two reasons: (1) we expect prefix searches to be a
+         * common case (as in our own indices); and (2) we need a way to unambiguously know we have
+         * the "closest" result.
+         ','line_number':1291,'multiline':True]['text':'
+         * We are trying to find the smallest cursor greater than the search key.
+         ','line_number':1305,'multiline':True]['text':'
+     * At this point, we either have an exact match, or closest is the smallest cursor larger than
+     * the search key, or it is NULL if the search key is larger than any record in the tree.
+     ','line_number':1317,'multiline':True]['text':'
+     * If we land on a deleted item, try going forwards or backwards to find one that isn't deleted.
+     * If the whole tree is empty, we'll end up with WT_NOTFOUND, as expected.
+     ','line_number':1323,'multiline':True]['text':'
+             * We have a key pointing at memory that is pinned by the current chunk cursor. In the
+             * unlikely event that we have to reopen cursors to move to the next record, make sure
+             * the cursor flags are set so a copy is made before the current chunk cursor releases
+             * its position.
+             ','line_number':1338,'multiline':True]['text':'
+             * We call __clsm_next here as we want to advance forward. If we are a random LSM cursor
+             * calling next on the cursor will not advance as we intend.
+             ','line_number':1346,'multiline':True]['text':'
+         * We call prev directly here as cursor->prev may be "invalid" if this is a random cursor.
+         ','line_number':1359,'multiline':True]['text':'
+ * __clsm_put --
+ *     Put an entry into the in-memory tree, trigger a file switch if necessary.
+ ','line_number':1381,'multiline':True]['text':'
+     * Clear the existing cursor position. Don't clear the primary cursor: we're about to use it
+     * anyway.
+     ','line_number':1401,'multiline':True]['text':' If necessary, set the position for future scans. ','line_number':1408,'multiline':True]['text':' Check if we need to keep updating old chunks. ','line_number':1413,'multiline':True]['text':'
+     * Update the record count. It is in a shared structure, but it's only approximate, so don't
+     * worry about protecting access.
+     *
+     * Throttle if necessary. Every 100 update operations on each cursor, check if throttling is
+     * required. Don't rely only on the shared counter because it can race, and because for some
+     * workloads, there may not be enough records per chunk to get effective throttling.
+     ','line_number':1430,'multiline':True]['text':'
+ * __clsm_insert --
+ *     WT_CURSOR->insert method for the LSM cursor type.
+ ','line_number':1451,'multiline':True]['text':'
+     * It isn't necessary to copy the key out after the lookup in this case because any non-failed
+     * lookup results in an error, and a failed lookup leaves the original key intact.
+     ','line_number':1471,'multiline':True]['text':'
+     * WT_CURSOR.insert doesn't leave the cursor positioned, and the application may want to free
+     * the memory used to configure the insert; don't read that memory again (matching the
+     * underlying file object cursor insert semantics).
+     ','line_number':1485,'multiline':True]['text':'
+ * __clsm_update --
+ *     WT_CURSOR->update method for the LSM cursor type.
+ ','line_number':1499,'multiline':True]['text':'
+         * Copy the key out, since the insert resets non-primary chunk cursors which our lookup may
+         * have landed on.
+         ','line_number':1521,'multiline':True]['text':'
+     * Set the cursor to reference the internal key/value of the positioned cursor.
+     ','line_number':1530,'multiline':True]['text':'
+ * __clsm_remove --
+ *     WT_CURSOR->remove method for the LSM cursor type.
+ ','line_number':1547,'multiline':True]['text':' Remember if the cursor is currently positioned. ','line_number':1562,'multiline':True]['text':'
+     * Remove fails if the key doesn't exist, do a search first. This requires a second pair of LSM
+     * enter/leave calls as we search the full stack, but updates are limited to the top-level.
+     ','line_number':1569,'multiline':True]['text':'
+     * Copy the key out, since the insert resets non-primary chunk cursors which our lookup may have
+     * landed on.
+     ','line_number':1578,'multiline':True]['text':'
+     * If the cursor was positioned, it stays positioned with a key but no value, otherwise, there's
+     * no position, key or value. This isn't just cosmetic, without a reset, iteration on this
+     * cursor won't start at the beginning/end of the table.
+     ','line_number':1585,'multiline':True]['text':'
+ * __clsm_reserve --
+ *     WT_CURSOR->reserve method for the LSM cursor type.
+ ','line_number':1602,'multiline':True]['text':'
+     * Copy the key out, since the insert resets non-primary chunk cursors which our lookup may have
+     * landed on.
+     ','line_number':1623,'multiline':True]['text':'
+     * The application might do a WT_CURSOR.get_value call when we return, so we need a value and
+     * the underlying functions didn't set one up. For various reasons, those functions may not have
+     * done a search and any previous value in the cursor might race with WT_CURSOR.reserve (and in
+     * cases like LSM, the reserve never encountered the original key). For simplicity, repeat the
+     * search here.
+     ','line_number':1634,'multiline':True]['text':'
+ * __wt_clsm_close --
+ *     WT_CURSOR->close method for the LSM cursor type.
+ ','line_number':1644,'multiline':True]['text':'
+     * Don't use the normal __clsm_enter path: that is wasted work when closing, and the cursor may
+     * never have been used.
+     ','line_number':1655,'multiline':True]['text':' In case we were somehow left positioned, clear that. ','line_number':1666,'multiline':True]['text':'
+ * __wt_clsm_open --
+ *     WT_SESSION->open_cursor method for LSM cursors.
+ ','line_number':1676,'multiline':True]['text':' get-key ','line_number':1685,'multiline':True]['text':' get-value ','line_number':1686,'multiline':True]['text':' get-value ','line_number':1687,'multiline':True]['text':' set-key ','line_number':1688,'multiline':True]['text':' set-value ','line_number':1689,'multiline':True]['text':' compare ','line_number':1690,'multiline':True]['text':' equals ','line_number':1691,'multiline':True]['text':' next ','line_number':1692,'multiline':True]['text':' prev ','line_number':1693,'multiline':True]['text':' reset ','line_number':1694,'multiline':True]['text':' search ','line_number':1695,'multiline':True]['text':' search-near ','line_number':1696,'multiline':True]['text':' insert ','line_number':1697,'multiline':True]['text':' modify ','line_number':1698,'multiline':True]['text':' update ','line_number':1699,'multiline':True]['text':' remove ','line_number':1700,'multiline':True]['text':' reserve ','line_number':1701,'multiline':True]['text':' reconfigure ','line_number':1702,'multiline':True]['text':' largest_key ','line_number':1703,'multiline':True]['text':' bound ','line_number':1704,'multiline':True]['text':' cache ','line_number':1705,'multiline':True]['text':' reopen ','line_number':1706,'multiline':True]['text':' checkpoint ID ','line_number':1707,'multiline':True]['text':' close ','line_number':1708,'multiline':True]['text':' Get the LSM tree. ','line_number':1736,'multiline':True]['text':'
+     * Check whether the exclusive open for a bulk load succeeded, and if it did ensure that it's
+     * safe to bulk load into the tree.
+     ','line_number':1739,'multiline':True]['text':' Flag any errors from the tree get. ','line_number':1745,'multiline':True]['text':' Make sure we have exclusive access if and only if we want it ','line_number':1748,'multiline':True]['text':'
+     * The tree's dsk_gen starts at one, so starting the cursor on zero will force a call into
+     * open_cursors on the first operation.
+     ','line_number':1762,'multiline':True]['text':' If the next_random option is set, configure a random cursor ','line_number':1768,'multiline':True]
