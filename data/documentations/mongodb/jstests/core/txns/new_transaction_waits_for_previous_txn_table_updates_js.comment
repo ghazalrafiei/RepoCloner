@@ -1,0 +1,69 @@
+['text':'*
+ * Tests that a new transaction on a session waits for the previous transaction's transaction table
+ * write to be storage-committed before setting the read timestamp of readConcern: snapshot
+ * transactions to the all_durable timestamp.
+ *
+ * This test creates a situation equivalent to the following:
+ * 1. Thread 1 prepares txn0 at time 5
+ * 2. Thread 2 starts new txn1 that blocks on txn0 since it is on the same session
+ * 3. Thread 3 opens oplog hole at time 8 (createCollection)
+ * 4. Thread 1 commits txn0 at time 6, but the commit oplog entry (and transaction table update) is
+ * written at time 9
+ * 5. On thread 2, txn1 should wait until txn0's transaction table update at time 9 becomes durable
+ * so that when we open the storage transaction at the all_durable, we will open it at time 9
+ * instead of time 7.
+ *
+ * If we did not wait, the latter would get a write conflict when writing to the txn table because
+ * it's reading from time 7 and doesn't see the write from time 9.
+ *
+ * @tags: [
+ *  # The test runs commands that are not allowed with security token: endSession,
+ *  # prepareTransaction.
+ *  not_allowed_with_signed_security_token,
+ *  uses_transactions,
+ *  uses_prepare_transaction,
+ *  uses_parallel_shell,
+ *  # 'setDefaultRWConcern' is not supposed to be run on shard nodes.
+ *  command_not_supported_in_serverless,
+ * ]
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Launches a parallel shell to start a new transaction on the session with the given lsid. It
+ * performs an insert and then commits. Assumes that there will be an already-prepared transaction
+ * on the session, and blocks using a failpoint until the transaction in the parallel shell has
+ * begun to block behind the prepared transaction.
+ ','line_number':35,'multiline':True]
+['text':' Turn on failpoint that the parallel shell will hit when blocked on prepare.','line_number':43,'multiline':False]
+['text':' Use txnNumber : 1 since the active txnNumber will be 0.','line_number':48,'multiline':False]
+['text':' Try to do an insert in a new transaction on the same session.  Note that we're','line_number':50,'multiline':False]
+['text':' manually including the lsid and stmtId instead of using the session object directly','line_number':51,'multiline':False]
+['text':' since there's no way to share a session with the parallel shell.','line_number':52,'multiline':False]
+['text':' Launch a parallel shell to start a new transaction, insert a document, and commit. These','line_number':67,'multiline':False]
+['text':' operations should block behind the previous prepared transaction on the session.','line_number':68,'multiline':False]
+['text':' Wait until parallel shell insert is blocked on prepare.','line_number':72,'multiline':False]
+['text':' Disable failpoint to allow the parallel shell to continue - it should still be blocked on','line_number':75,'multiline':False]
+['text':' prepare. This is needed in a finally block so that if something fails we're guaranteed to','line_number':76,'multiline':False]
+['text':' turn this failpoint off, so that it doesn't cause problems for subsequent tests.','line_number':77,'multiline':False]
+['text':' Turn on failpoint that the createCollection will hit after reserving an oplog slot.','line_number':85,'multiline':False]
+['text':' Make sure we specify the collection we are testing on to avoid triggering the failpoint','line_number':86,'multiline':False]
+['text':' on unrelated createCollection commands that happen to run concurrently.','line_number':87,'multiline':False]
+['text':' Launch a parallel shell. This thread will hang until we release the failpoint.','line_number':96,'multiline':False]
+['text':'*
+ * Common variables and setup.
+ ','line_number':104,'multiline':True]
+['text':' The default WC is majority and this test can't satisfy majority writes.','line_number':114,'multiline':False]
+['text':' Start and prepare a transaction, txn0.','line_number':124,'multiline':False]
+['text':' Launch a concurrent transaction, txn1, which should block behind the active prepared','line_number':129,'multiline':False]
+['text':' transaction.','line_number':130,'multiline':False]
+['text':' Try to create a collection, which reserves an oplog slot. This oplog slot should be after the','line_number':133,'multiline':False]
+['text':' prepare oplog entry because we have already successfully prepared txn0 and returned a','line_number':134,'multiline':False]
+['text':' prepareTimestamp.','line_number':135,'multiline':False]
+['text':' Commit the original transaction - this should allow the parallel shell with txn1 to continue','line_number':138,'multiline':False]
+['text':' and start a new transaction.','line_number':139,'multiline':False]
+['text':' Note that we are not using PrepareHelpers.commitTransaction because it calls','line_number':140,'multiline':False]
+['text':' commitTransaction twice, and the second call races with txn1.','line_number':141,'multiline':False]
+['text':' Release this failpoint so that the createCollection command can finish.','line_number':145,'multiline':False]
+['text':' txn1 should be able to commit without getting a WriteConflictError.','line_number':149,'multiline':False]
+['text':' createCollection command fails with the expected error code, 51267.','line_number':152,'multiline':False]
+['text':' Unsetting CWWC is not allowed, so explicitly restore the default write concern to be majority','line_number':157,'multiline':False]
+['text':' by setting CWWC to {w: majority}.','line_number':158,'multiline':False]

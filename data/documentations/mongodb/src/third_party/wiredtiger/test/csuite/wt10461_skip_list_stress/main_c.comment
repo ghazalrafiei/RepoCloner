@@ -1,0 +1,110 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]
+['text':'
+ * This test reproduces WT-10461 in which platforms with weak memory models such as ARM
+ * can insert items into a skiplist using an incorrect next_stack. Upper levels of
+ * the next_stack should always point to larger keys than lower levels of the stack
+ * but we can violate this constraint if we have the following (simplified) scenario:
+ *
+ * 1. Four keys are added to the same insert list: A, B, C, and D. The keys are ordered
+ *    such that A < B < C < D
+ * 2. Keys A and D are already present in the insert list. Keys B and C are inserted
+ *    at the same time with C inserted slightly earlier.
+ * 3. As C is being inserted A's next_stack pointers - previously pointing at D - will
+ *    be updated to point to C. These pointers are updated from the bottom of A's
+ *    next_stack upwards.
+ * 4. As B is preparing to be inserted it builds its own next_stack by choosing pointers
+ *    from the top of A's next_stack and moving downwards.
+ * 5. Provided that pointers in step 3 are written bottom up and pointers in step 4 are
+ *    read top down the resulting pointers in B's next_stack will be consistent, but if
+ *    pointers are read out of order in step 4 (due to weak memory models being more
+ *    lenient about ordering of reads from memory) B can set an old pointer to key D
+ *    in a lower level and then set a newer pointer to C in an upper level violating our
+ *    constraint that upper levels in next_stacks must point to larger keys than lower
+ *    levels.
+ *
+ * To reproduce the above we set up a scenario with a skip list containing keys "0" (A)
+ * and "99999" (D). New keys are continually inserted in a decreasing order to represent
+ * the insertion of C, while in a parallel thread we emulate the insertion of B by continually
+ * calling __wt_search_insert for key "00". Note that we're not actually inserting B here,
+ * just repeating the critical section of B's insertion where the out of order read can occur.
+ * We run this __wt_search_insert in parallel across as many threads as possible to increase
+ * the chance of the error firing.
+ ','line_number':29,'multiline':True]
+['text':'
+ * usage --
+ *     Print a usage message.
+ ','line_number':76,'multiline':True]
+['text':'
+ * insert_key --
+ *     Helper function to insert a key. For this test we only care about keys and insert a dummy
+ *     value.
+ ','line_number':87,'multiline':True]
+['text':'
+ * thread_search_insert_run --
+ *     Find the insert list under test and then continually build a list of skiplist pointers as if
+ *     we were going to insert a new key. This function does not insert a new key though as we want
+ *     to stress the construction of the next_stack built by the function. If out-of-order reads
+ *     occur as a result of this function call it is caught by an assertion in __wt_search_insert.
+ *
+ * !!!! Note !!!! This function is not a proper usage of the WT API. It's white box and accesses
+ *     internal WiredTiger functions in order to directly stress the __wt_search_insert function.
+ ','line_number':100,'multiline':True]
+['text':'
+     * Position the cursor on our insert list under stress. We know "0" is present as we inserted
+     * during test setup.
+     ','line_number':122,'multiline':True]
+['text':'
+     * We need the session to have a dhandle set so that __wt_search_insert can access
+     * `session->dhandle->handle->collator`. This would already be set if we were calling
+     * __wt_search_insert through the proper channels.
+     ','line_number':131,'multiline':True]
+['text':'
+     * Set up our key to __wt_search_insert on. It'll always sit just after the first item in the
+     * skiplist.
+     ','line_number':138,'multiline':True]
+['text':'
+ * run --
+ *     Setup the skiplist under stress, spin up search_insert threads to run in parallel, and then
+ *     start inserting keys in decreasing order.
+ ','line_number':158,'multiline':True]
+['text':'
+     * We want this whole test to run on a single insert list. Set a very large memory_page_max to
+     * prevent the page from splitting.
+     ','line_number':182,'multiline':True]
+['text':' Insert keys A and D from the description at the top of the file. ','line_number':190,'multiline':True]
+['text':'
+     * Wait for search_insert threads to be up and running. We have one insert thread and everything
+     * else is a search_insert thread.
+     ','line_number':194,'multiline':True]
+['text':' All keys use leading zeros. Otherwise "2" is consider larger than "11". ','line_number':209,'multiline':True]
+['text':'
+ * main --
+ *     Stress test for out-of-order reads in __wt_search_insert on platforms with weak memory
+ *     ordering.
+ ','line_number':228,'multiline':True]

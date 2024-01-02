@@ -1,0 +1,98 @@
+['text':' Run (numel + 1) threads...','line_number':79,'multiline':False]
+['text':' Run nrows threads...','line_number':112,'multiline':False]
+['text':' namespace','line_number':121,'multiline':False]
+['text':' certain utiliy functions are usable from sparse COO.','line_number':124,'multiline':False]
+['text':' Note that this could be wildly imbalanced if the sparsity pattern varies a lot between rows.','line_number':217,'multiline':False]
+['text':'
+    Reductions on sparse CSR tensors using masked semantics.
+
+    - To support a reduction operator on a CSR tensor with CUDA storage, define
+
+template <typename scalar_t>
+struct Reduction...Op {
+  __device__ __forceinline__ scalar_t operator()(const scalar_t a, const scalar_t b) const {
+    return a ... b;
+  }
+  __device__ __forceinline__ scalar_t identity() const { return ...; }
+  __forceinline__ scalar_t identity_cpu() const { return ...; }
+};
+
+
+Tensor _sparse_csr_..._cuda(const Tensor& input, IntArrayRef dims_to_sum, bool keepdim, c10::optional<ScalarType> dtype) {
+  ...
+      result = reduce_sparse_csr_cuda_template<scalar_t>(input_, dims_to_sum, keepdim, Reduction...Op<scalar_t>());
+  ...
+  return result;
+}
+
+      and add the following
+
+        - func: _sparse_csr_op.dim_dtype(Tensor self, int[1] dim, bool keepdim=False, *, ScalarType? dtype=None) -> Tensor
+          dispatch:
+            SparseCsrCUDA: _sparse_csr_..._cuda
+
+      to native_functions.yaml
+  ','line_number':318,'multiline':True]
+['text':'
+    Consider the following sparse tensor:
+
+      1 * * * *
+      * * * 2 *
+      * * 3 * *
+      * * * * *
+      4 * 5 * *
+
+    that has CSR representation
+
+      crow_indices = [0, 1, 2, 3, 3, 5]
+      col_indices = [0, 3, 2, 0, 2]
+      values = [1, 2, 3, 4, 5]
+
+    Reduction with dim=0 results:
+
+      rop(1,4) * rop(3,5) 2 *
+
+    that has CSR representation
+
+      new_crow_indices = [0, 3]
+      new_col_indices = [0, 2, 3]
+      new_values = [rop(1, 4], rop(3, 5), 2]
+
+    In general, the CSR representation data can be computed as follows:
+
+      nnz = col_indices.numel()
+      new_col_indices = col_indices.unique(sorted=True, return_inverse=False)
+      new_nnz = new_col_indices.numel()
+      new_crow_indices = [0, new_nnz]
+      new_values.resize(new_nnz)
+
+      for i in range(new_nnz):
+          v = identity
+          col = new_col_indices[i]
+          for j in range(nnz):
+              if col == col_indices[j]:
+                  v = rop(v, values[j])
+          new_values[i] = v
+
+    Notice this algorithm is different from the one used on CPU data.
+  ','line_number':375,'multiline':True]
+['text':' Set `is_cuda` = `true` in acc_type in CPU backend. Because the accumulate type','line_number':429,'multiline':False]
+['text':' of float should be float in current scenario. In CUDA, float is the accumulate type','line_number':430,'multiline':False]
+['text':' of float, while in CPU, double is the accumulate type of float.','line_number':431,'multiline':False]
+['text':'
+    The algorithm of computing reduce of a CSR tensor along the last
+    dimension is explained in the comment of the
+    reduce_sparse_csr_dim1_cpu_template function.
+  ','line_number':505,'multiline':True]
+['text':' Set `is_cuda` = `true` in acc_type in CPU backend. Because the accumulate type','line_number':520,'multiline':False]
+['text':' of float should be float in current scenario. In CUDA, float is the accumulate type','line_number':521,'multiline':False]
+['text':' of float, while in CPU, double is the accumulate type of float.','line_number':522,'multiline':False]
+['text':'includeBool=','line_number':576,'multiline':True]
+['text':' effective after gh-29137 has been resolved','line_number':610,'multiline':False]
+['text':' after gh-29137 is resolved, delete this if-block','line_number':625,'multiline':False]
+['text':' namespace','line_number':650,'multiline':False]
+['text':' Set `is_cuda` = `true` in acc_type in CPU backend. Because the accumulate type','line_number':658,'multiline':False]
+['text':' of float should be float in current scenario. In CUDA, float is the accumulate type','line_number':659,'multiline':False]
+['text':' of float, while in CPU, double is the accumulate type of float.','line_number':660,'multiline':False]
+['text':' namespace native','line_number':680,'multiline':False]
+['text':' namespace at','line_number':681,'multiline':False]

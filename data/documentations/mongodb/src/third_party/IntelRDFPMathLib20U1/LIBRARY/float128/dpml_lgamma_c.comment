@@ -1,0 +1,271 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]
+['text':'
+     * Lgamma(x) is defined as the log(|gamma(x)|), where gamma(x) is defined
+     * for positive x as
+     *
+     *      gamma(x) = integral{ 0 to infinity | t^(x-1)e^t dt }
+     *
+     * From the definition of gamma(x) it follows that
+     *
+     *              x*gamma(x) = gamma(x+1)             (1)
+     *
+     * and the limit as x --> +0 of gamma(x) = +infinity.  Equation (1) can be
+     * used to extend gamma(x) to negitive numbers by recursively applying:
+     *
+     *      gamma(-x) = gamma(1 - x)/(-x)               (2)
+     *
+     * Since gamma(0) = + infinity, it follows that gamma(n) is undefined for
+     * any non-positive integer.  An alternative extension of gamma to negative
+     * arguments is the reflection fomula
+     *
+     *      gamma(-x) = -pi/(sin(pi*x)*gamma(1 + x))     (3)
+     *
+     * Evalutation of lgamma(x) suffers potential loss of significance at
+     * its zeros or alternatively, when |gamma(x)| = 1.  From the definition
+     * of gamma and (1) we see that |gamma(x)| = 1 for positive x only at
+     * x = 1 and 2.  From equation (2), we see that |gamma(x)| = 1 when x
+     * is a negative integer  +/- epsilon, where epsilon is on the order
+     * of 1/n!.
+     *
+     * Computation of lgamma(x) is based on two identities:
+     *
+     *                                    zeta(2)-1      zeta(3)-1
+     *   lgamma(1+x) = (1-G)x - ln(1+x) + ---------x^2 - ---------x^3 + ...
+     *                                        2              3
+     *
+     *                     zeta(n)-1      
+     *                     ---------(-x)^n ...                    (4)
+     *                         n
+     *
+     *               = -ln(1+x) + x*Q(x)
+     *
+     * where G is Euler's constant and zeta(n) is the Reimann zeta function:
+     *
+     *                             1     1     1
+     *              zeta(n) = 1 + --- + --- + --- + ...
+     *                            2^n   3^n   4^n
+     *
+     * and Stirlings asymtotic approximation to gamma(x):
+     *
+     *                   1                      1            1       1
+     *      lgamma(x) ~ ---ln(2*pi) - x + (x - ---)*ln(x) + ---*phi(---)    (5)
+     *                   2                      2            x      x^2
+     *
+     *           1      B(2)     B(4)     B(6)      B(8)
+     *      phi(---) = ----- - ------- + ------- - ------- .....         (6)
+     *          x^2     2*1    4*3*x^2   6*5*x^4   8*7*x^6
+     *
+     * where B(n) is the n-th bernoulli number.
+     ','line_number':53,'multiline':True]
+['text':'
+     * The following macro defines an mphoc routine that finds a root of
+     * the function f between x_0 and x_1 to precsion p and returns the
+     * result in y.
+     ','line_number':130,'multiline':True]
+['text':'
+     * lgamma(x) will overflow for large positive values of x.  Note that 
+     * For large negative values of x, x is a negative integer, and hence
+     * the function is not defined.  To compute the overflow threshold
+     * we need to solve the equatation lgamma(x) = MP_MAX_FLOAT + 1/2 lsb
+     * and rounding down the result to working precision.  We do this using
+     * the macro FIND_ROOT defined above with f = lgamma(x) - MP_MAX_FLOAT + 
+     * 1/2 lsb.  To find the starting values we note that lgamma is ~ x*log(x)
+     * and assume that x = 2^k/k*log(2).  Then x*log(x) ~ MP_MAX_FLOAT when
+     * k = F_MAX_BIN_EXP
+     ','line_number':158,'multiline':True]
+['text':'
+     * For large values of x, it is most efficient to use equation (5).
+     * When x is very large, 1/x^2 will underflow.  However, long before
+     * the underflow threshold is reached, (1/x)*phi(1/x^2) will become
+     * insignificant when compared with the other terms in (5). 
+     * Consequently, we should stop computing z(x) = (1/x)*phi(1/x^2) when
+     * x is big enough.  This is more efficient and avoids the underflow.
+     *
+     * z(x) will be insignificant when z(x)/lgamma(x) < 1/2^(F_PRECISION + 1),
+     * or when
+     *
+     *   (1 - 2^-(F_PRECISION+1))*lgamma(x)-.5*ln(2*pi)+x-(x-.5)*ln(x) < 0
+     *
+     * Using the macro, FIND_ROOT, we determine an x that satisfies the above.
+     ','line_number':183,'multiline':True]
+['text':'
+     * Using equation (5) requires the constant .5*ln(2*pi)
+     ','line_number':216,'multiline':True]
+['text':'
+     * For suitably large negative x, we would like to a computation
+     * based on equation (3).
+     *
+     *  lgamma(-x) = ln|gamma(-x)|
+     *             = ln|-pi/(sin(pi*x)*x*gamma(x))|
+     *             = ln(pi) - ln|sin(pi*x)| - ln(x) - ln(gamma(x))
+     *             = ln(pi) - ln|sin(pi*x)| - ln(x) - lgamma(x)
+     *             = ln(pi) - ln|sin(pi*x)| - ln(x) - lgamma(x)
+     *
+     * combined with (5) this gives:
+     *
+     *  lgamma(-x) ~ ln(pi) - ln|sin(pi*x)| - ln(x) - 
+     *                [.5*ln(2*pi) - x + (x - .5)*ln(x) + phi(x)/x]
+     *             ~ .5*ln(pi/2) - ln|sin(pi*x)| + x - (x + .5)*ln(x) - phi(x)/x
+     *
+     *  Consequently, we also need the constants .5*ln(pi/2) and pi
+     ','line_number':223,'multiline':True]
+['text':'
+     * When x is not large, the computation of lgamma is based on equations
+     * (1) and (2).  Specifically, let
+     *
+     *          lgamma(n+x) = log(F(n,x)) + x*Q(x)
+     *
+     * where Q(x) is defined by equation (4).  From equation (1) it follows
+     * that
+     *
+     *          lgamma(n+1+x) = log((n+x)*gamma(n+x)
+     *                        = log(n+x) + lgamma(n+x)
+     *                        = log(n+x) + log(F(n,x)) + x*Q(x)
+     *                        = log[(n+x)*F(n,x)] + x*Q(x)
+     *
+     * From the above and equation (4) it follows that F(1,x) = 1+x and 
+     * F(n+1, x) = (n+x)*F(n,x).  Note the F(n,x) is define for both
+     * negative and positive integers.
+     *
+     * Since we know the range of our x value for this evaluation we can
+     * increase the accuracy of the computation of x*Q(x) by performing
+     * the following transformation:
+     *
+     *      Given Q(x) = p(x)/q(x), define R(X) as 
+     *  
+     *          Q(x) = 1/2 - R(x)
+     *
+     *      This yields
+     *
+     *          R(x) = p(x) - q(x)/2
+     *                 -------------
+     *                    q(x)
+     *
+     * Now x*Q(x) can be computed as x*(1/2 - R(x)), or rather x*(1/2) - x*R(x)
+     * which forces, x*(1/2), the most significant term, to be exact.
+     *
+     *
+     *    NOTE: We need coefficients for Q and phi.  From (4) we obtain
+     *    Q by approximating 
+     *
+     *           (lgamma(1+x) + ln(1 + x))/x
+     *
+     *    on the interval [-.5, .5].  A rational approximation for Q
+     *    has competative performance on ALPHA with a polynomial
+     *    approximation.
+     *
+     *    From (5) we obtain phi by approximating
+     *
+     *           x * [lgamma(x) - .5*ln(2*pi) + x - (x - .5)*ln(x)]
+     *
+     *    on the range [8,max_val], where max_val is the largest
+     *    value of x which will be evaluated by phi (i.e. for X>x, phi(x)
+     *    is insignificant to the other terms of the sum in (5).
+     ','line_number':250,'multiline':True]
+['text':' logx1(x) is more accurate than ln(x) for |x| < 1/MP_RADIX ','line_number':312,'multiline':True]
+['text':' To shorten our search time we'll make some initial estimates based
+       on experience.  (These estimates are on the low side to assure we
+       don't over step the optimal degree)
+    ','line_number':320,'multiline':True]
+['text':' Extract denominator coefficients ','line_number':345,'multiline':True]
+['text':' Extract numerator coefficients ','line_number':350,'multiline':True]
+['text':' Generate constants for Phi ','line_number':357,'multiline':True]
+['text':' B2(0)/2  where B2(x) = x^2 - x + 1/6 ','line_number':367,'multiline':True]
+['text':' This is temporary until mp_remes is corrected ','line_number':374,'multiline':True]
+['text':'
+     * Print out defines for polynomial and rational approximations
+     ','line_number':400,'multiline':True]
+['text':' screen for NaNs, infinities, zeros & denorms ','line_number':488,'multiline':True]
+['text':'
+     * Initialize the SIGNGAM to 1 and send large arguments to asymtotic
+     * region.  Note the choice of asymtotic region being |x| >= 8 is
+     * fairly arbitrary and need not be symetric.  As the lower bound of
+     * the asymtotic region increases, the more multiplies are performed
+     * in computing F(n,x).  Eventually, it is faster to use the asymtotic
+     * approximations.  Experimentally, it appears that the asymtotic
+     * regions are not as accurate.  However, that might be caused by a
+     * sloppy implementation in that region.
+     *
+     * For the non-asymtotic region, we need to compute rint(x).  Get 1/2
+     * with the correct sign now.
+     ','line_number':491,'multiline':True]
+['text':' For small x, get i = rint(x), y = x - i ','line_number':512,'multiline':True]
+['text':'
+     * Compute F(n,x) and take its log.  In most cases this switch statement
+     * is faster than a loop.
+     ','line_number':518,'multiline':True]
+['text':' Fall through ','line_number':527,'multiline':True]
+['text':' Fall through ','line_number':531,'multiline':True]
+['text':' Fall through ','line_number':535,'multiline':True]
+['text':' Fall through ','line_number':539,'multiline':True]
+['text':' Fall through ','line_number':543,'multiline':True]
+['text':' Fall through ','line_number':547,'multiline':True]
+['text':' Fall through ','line_number':551,'multiline':True]
+['text':' Fall through ','line_number':555,'multiline':True]
+['text':'
+             * Since all of the negative cases come through here, we need
+             * to check for integer values and set signgam correctly;
+             ','line_number':558,'multiline':True]
+['text':' Fall through ','line_number':580,'multiline':True]
+['text':' Fall through ','line_number':584,'multiline':True]
+['text':' Fall through ','line_number':588,'multiline':True]
+['text':' Fall through ','line_number':592,'multiline':True]
+['text':' Fall through ','line_number':596,'multiline':True]
+['text':'
+     * OK - just need to compute rational approximation and we're done.
+     ','line_number':605,'multiline':True]
+['text':'
+     * In this region we compute lgamma using an asymtotic expansion.
+     * If x is really big, we don't need phi(x), so we can skip it.
+     ','line_number':613,'multiline':True]
+['text':' If x is reaally, really big, result will overflow ','line_number':632,'multiline':True]
+['text':'
+     * Here we are dealing with large negative arguments we need to
+     * determine an integer n, such that n <= x < n+1.  The parity
+     * of n determines whether SIGNGAM is + or - 1.  Also, we are
+     * going to compute log(|sin(pi*x)|).  If we can find and integer
+     * k such that k = rint(x) and define y = x - k, then log(|sin(pi*x)|)
+     * = log(sin(|y|*pi)).  We begin by using "+ big - big" to determine
+     * k and y.
+     ','line_number':641,'multiline':True]
+['text':' x is so big that it must be an integer ','line_number':654,'multiline':True]
+['text':'
+     * get the low fraction bits of y. These are the same as the low
+     * bits of k
+     ','line_number':658,'multiline':True]
+['text':' Figure out n so we can set signgam correctly, and get |y| ','line_number':667,'multiline':True]
+['text':' OK compute aymtotic polynomial approximation for lgamma(|x|) ','line_number':677,'multiline':True]
+['text':' Get log(|sin(pi*x)|) and remainder of asymtotic approximation ','line_number':682,'multiline':True]
+['text':' Note:  The code below assumes that SIGNGAM has already been set to 1.
+              Thus, we only bother to set it here when gamma(x) is known to be
+              negative.
+    ','line_number':695,'multiline':True]
+['text':' fall through ','line_number':718,'multiline':True]
+['text':' +-denorm ','line_number':724,'multiline':True]

@@ -1,0 +1,135 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __wt_col_modify --
+ *     Column-store delete, insert, and update.
+ ','line_number':13,'multiline':True]
+['text':'
+     * We should have one of the following:
+     * - A full update list to instantiate.
+     * - An update to append to the existing update list.
+     * - A key/value pair to create an update with and append to the update list.
+     * - A key with no value to create a reserved or tombstone update to append to the update list.
+     *
+     * A "full update list" is distinguished from "an update" by checking whether it has a "next"
+     * update.
+     ','line_number':44,'multiline':True]
+['text':' If we don't yet have a modify structure, we'll need one. ','line_number':60,'multiline':True]
+['text':'
+         * There's a chance the application specified a record past the last record on the page. If
+         * that's the case and we're inserting a new WT_INSERT/WT_UPDATE pair, it goes on the append
+         * list, not the update list. Also, an out-of-band recno implies an append operation, we're
+         * allocating a new row. Ignore any information obtained from the search.
+         ','line_number':65,'multiline':True]
+['text':' Since on this path we never set append, make sure we aren't appending. ','line_number':81,'multiline':True]
+['text':'
+     * If modifying a record not previously modified, but which is in the same update slot as a
+     * previously modified record, cursor.ins will not be set because there's no list of update
+     * records for this recno, but cursor.ins_head will be set to point to the correct update slot.
+     * Acquire the necessary insert information, then create a new update entry and link it into the
+     * existing list. We get here if a page has a single cell representing multiple records (the
+     * records have the same value), and then a record in the cell is updated or removed, creating
+     * the update list for the cell, and then a cursor iterates into that same cell to update/remove
+     * a different record. We find the correct slot in the update array, but we don't find an update
+     * list (because it doesn't exist), and don't have the information we need to do the insert.
+     * Normally, we wouldn't care (we could fail and do a search for the record which would
+     * configure everything for the insert), but range truncation does this pattern for every record
+     * in the cell, and the performance is terrible. For that reason, catch it here.
+     ','line_number':91,'multiline':True]
+['text':'
+                 * The test below is for cursor.compare set to 0 and cursor.ins set: cursor.compare
+                 * wasn't set by the search we just did, and has an unknown value. Clear cursor.ins
+                 * to avoid the test.
+                 ','line_number':111,'multiline':True]
+['text':'
+     * Modify a column-store entry. If modifying a previously modified record, cursor.ins will point
+     * to the correct update list; create a new update and link it into the already existing list.
+     * Otherwise, we have to insert a new insert/update pair into the column-store insert list.
+     ','line_number':121,'multiline':True]
+['text':' Make sure the modify can proceed. ','line_number':129,'multiline':True]
+['text':' Allocate a WT_UPDATE structure and transaction ID. ','line_number':132,'multiline':True]
+['text':' Avoid WT_CURSOR.update data copy. ','line_number':138,'multiline':True]
+['text':' If there are existing updates, append them after the new updates. ','line_number':143,'multiline':True]
+['text':'
+             * If we restore an update chain in update restore eviction, there should be no update
+             * on the existing update chain.
+             ','line_number':148,'multiline':True]
+['text':'
+             * We can either put multiple new updates or a single update on the update chain.
+             *
+             * Set the "old" entry to the second update in the list so that the serialization
+             * function succeeds in swapping the first update into place.
+             ','line_number':155,'multiline':True]
+['text':'
+         * Point the new WT_UPDATE item to the next element in the list. If we get it right, the
+         * serialization function lock acts as our memory barrier to flush this write.
+         ','line_number':166,'multiline':True]
+['text':' Serialize the update. ','line_number':172,'multiline':True]
+['text':' Make sure the modify can proceed. ','line_number':175,'multiline':True]
+['text':' Allocate the append/update list reference as necessary. ','line_number':179,'multiline':True]
+['text':' Allocate the WT_INSERT_HEAD structure as necessary. ','line_number':191,'multiline':True]
+['text':' Choose a skiplist depth for this insert. ','line_number':195,'multiline':True]
+['text':'
+         * Allocate a WT_INSERT/WT_UPDATE pair and transaction ID, and update the cursor to
+         * reference it (the WT_INSERT_HEAD might be allocated, the WT_INSERT was allocated).
+         ','line_number':198,'multiline':True]
+['text':'
+         * Check for insert split and checkpoint races in column-store: it's easy (as opposed to in
+         * row-store) and a difficult bug to otherwise diagnose.
+         ','line_number':206,'multiline':True]
+['text':' Avoid WT_CURSOR.update data copy. ','line_number':220,'multiline':True]
+['text':'
+         * If there was no insert list during the search, or there was no search because the record
+         * number has not been allocated yet, the cursor's information cannot be correct, search
+         * couldn't have initialized it.
+         *
+         * Otherwise, point the new WT_INSERT item's skiplist to the next elements in the insert
+         * list (which we will check are still valid inside the serialization function).
+         *
+         * The serial mutex acts as our memory barrier to flush these writes before inserting them
+         * into the list.
+         ','line_number':227,'multiline':True]
+['text':' Append or insert the WT_INSERT structure. ','line_number':247,'multiline':True]
+['text':'
+     * If the update was successful, add it to the in-memory log.
+     *
+     * We will enter this code if we are doing cursor operations (upd_arg == NULL). We may fail
+     * here. However, we have already successfully inserted the updates to the update chain. In this
+     * case, don't free the allocated memory in error handling. Leave them to the rollback logic to
+     * do the cleanup.
+     *
+     * If we are calling for internal purposes (upd_arg != NULL), we skip this code. Therefore, we
+     * cannot fail after we have inserted the updates to the update chain. The caller of this
+     * function can safely free the updates if it receives an error return.
+     ','line_number':258,'multiline':True]
+['text':'
+         * In case of append, the recno (key) for the value is assigned now. Set the key in the
+         * transaction operation to be used in case this transaction is prepared to retrieve the
+         * update corresponding to this operation.
+         ','line_number':274,'multiline':True]
+['text':'
+         * Let the rollback logic to do the cleanup if we have inserted the update to the update
+         * chain.
+         ','line_number':284,'multiline':True]
+['text':'
+             * Remove the update from the current transaction; don't try to modify it on rollback.
+             ','line_number':289,'multiline':True]
+['text':' Free any allocated insert list object. ','line_number':295,'multiline':True]
+['text':' Discard any allocated update, unless we failed after linking it into page memory. ','line_number':300,'multiline':True]
+['text':'
+             * When prepending a list of updates to an update chain, we link them together; sever
+             * that link so our callers list doesn't point into page memory.
+             ','line_number':304,'multiline':True]
+['text':'
+ * __col_insert_alloc --
+ *     Column-store insert: allocate a WT_INSERT structure and fill it in.
+ ','line_number':316,'multiline':True]
+['text':'
+     * Allocate the WT_INSERT structure and skiplist pointers, then copy the record number into
+     * place.
+     ','line_number':327,'multiline':True]

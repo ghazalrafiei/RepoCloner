@@ -1,0 +1,1031 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __wt_reconcile --
+ *     Reconcile an in-memory page into its on-disk format, and write it.
+ ','line_number':25,'multiline':True]
+['text':'
+     * Sanity check flags.
+     *
+     * If we try to do eviction using transaction visibility, we had better have a snapshot. This
+     * doesn't apply to checkpoints: there are (rare) cases where we write data at read-uncommitted
+     * isolation.
+     ','line_number':48,'multiline':True]
+['text':' Can't do history store eviction for history store itself or for metadata. ','line_number':60,'multiline':True]
+['text':' Flag as unused for non diagnostic builds. ','line_number':63,'multiline':True]
+['text':' It's an error to be called with a clean page. ','line_number':66,'multiline':True]
+['text':'
+     * Reconciliation acquires and releases pages, and in rare cases that page release triggers
+     * eviction. If the page is dirty, eviction can trigger reconciliation, and we re-enter this
+     * code. Reconciliation isn't re-entrant, so we need to ensure that doesn't happen.
+     ','line_number':69,'multiline':True]
+['text':'
+     * Reconciliation locks the page for two reasons:
+     *    Reconciliation reads the lists of page updates, obsolete updates
+     * cannot be discarded while reconciliation is in progress;
+     *    In-memory splits: reconciliation of an internal page cannot handle
+     * a child page splitting during the reconciliation.
+     ','line_number':77,'multiline':True]
+['text':'
+     * Now that the page is locked, if attempting to evict it, check again whether eviction is
+     * permitted. The page's state could have changed while we were waiting to acquire the lock
+     * (e.g., the page could have split).
+     ','line_number':87,'multiline':True]
+['text':'
+     * Reconcile the page. The reconciliation code unlocks the page as soon as possible, and returns
+     * that information.
+     ','line_number':95,'multiline':True]
+['text':' If writing a page in service of compaction, we're done, clear the flag. ','line_number':101,'multiline':True]
+['text':'
+     * Track the longest reconciliation and time spent in each reconciliation stage, ignoring races
+     * (it's just a statistic).
+     ','line_number':110,'multiline':True]
+['text':'
+ * __reconcile_save_evict_state --
+ *     Save the transaction state that causes history to be pinned, whether reconciliation succeeds
+ *     or fails.
+ ','line_number':138,'multiline':True]
+['text':'
+     * During eviction, save the transaction state that causes history to be pinned, regardless of
+     * whether reconciliation succeeds or fails. There is usually no point retrying eviction until
+     * this state changes.
+     ','line_number':152,'multiline':True]
+['text':'
+     * Check that transaction time always moves forward for a given page. If this check fails,
+     * reconciliation can free something that a future reconciliation will need.
+     ','line_number':164,'multiline':True]
+['text':'
+ * __reconcile_post_wrapup --
+ *     Do the last things necessary after wrapping up the reconciliation. Called whether or not the
+ *     reconciliation fails, with different error-path behavior in the parent.
+ ','line_number':173,'multiline':True]
+['text':' Ensure that we own the lock before unlocking the page, as we unlock it unconditionally. ','line_number':186,'multiline':True]
+['text':' Release the reconciliation lock. ','line_number':191,'multiline':True]
+['text':' Update statistics. ','line_number':195,'multiline':True]
+['text':' Clean up the reconciliation structure. ','line_number':215,'multiline':True]
+['text':'
+     * When threads perform eviction, don't cache block manager structures (even across calls), we
+     * can have a significant number of threads doing eviction at the same time with large items.
+     * Ignore checkpoints, once the checkpoint completes, all unnecessary session resources will be
+     * discarded.
+     ','line_number':218,'multiline':True]
+['text':'
+         * Clean up the underlying block manager memory too: it's not reconciliation, but threads
+         * discarding reconciliation structures want to clean up the block manager's structures as
+         * well, and there's no obvious place to do that.
+         ','line_number':225,'multiline':True]
+['text':'
+ * __reconcile --
+ *     Reconcile an in-memory page into its on-disk format, and write it.
+ ','line_number':240,'multiline':True]
+['text':' Save the eviction state. ','line_number':260,'multiline':True]
+['text':' Initialize the reconciliation structure for each new run. ','line_number':263,'multiline':True]
+['text':' Only update if we are in the first entry into eviction. ','line_number':267,'multiline':True]
+['text':' Reconcile the page. ','line_number':271,'multiline':True]
+['text':'
+         * It's important we wrap this call in a page index guard, the ikey on the ref may still be
+         * pointing into the internal page's memory. We want to prevent eviction of the internal
+         * page for the duration.
+         ','line_number':286,'multiline':True]
+['text':'
+     * If we failed, don't bail out yet; we still need to update stats and tidy up.
+     ','line_number':301,'multiline':True]
+['text':'
+     * If eviction didn't use any updates and didn't split or delete the page, it didn't make
+     * progress. Give up rather than silently succeeding in doing no work: this way threads know to
+     * back off forced eviction rather than spinning.
+     *
+     * Do not return an error if we are syncing the file with eviction disabled or as part of a
+     * checkpoint.
+     ','line_number':305,'multiline':True]
+['text':'
+     * If we fail the reconciliation prior to calling __rec_write_wrapup then we can clean up our
+     * state and return an error.
+     *
+     * If we fail the reconciliation after calling __rec_write_wrapup then we must panic as
+     * inserting updates to the history store and then failing can leave us in a bad state.
+     ','line_number':320,'multiline':True]
+['text':'
+         * This return statement covers non-panic error scenarios; any failure beyond this point is
+         * a panic. Conversely, no return prior to this point should use the "err" label.
+         ','line_number':332,'multiline':True]
+['text':' Wrap up the page reconciliation. Panic on failure. ','line_number':339,'multiline':True]
+['text':'
+     * Root pages are special, splits have to be done, we can't put it off as the parent's problem
+     * any more.
+     ','line_number':344,'multiline':True]
+['text':'
+     * Otherwise, mark the page's parent dirty. Don't mark the tree dirty: if this reconciliation is
+     * in service of a checkpoint, it's cleared the tree's dirty flag, and we don't want to set it
+     * again as part of that walk.
+     ','line_number':355,'multiline':True]
+['text':'
+ * __rec_write_page_status --
+ *     Set the page status after reconciliation.
+ ','line_number':368,'multiline':True]
+['text':'
+     * Track the page's maximum transaction ID (used to decide if we can evict a clean page and
+     * discard its history).
+     ','line_number':383,'multiline':True]
+['text':'
+     * Track the tree's maximum transaction ID (used to decide if it's safe to discard the tree) and
+     * maximum timestamp.
+     ','line_number':390,'multiline':True]
+['text':'
+     * Set the page's status based on whether or not we cleaned the page.
+     ','line_number':399,'multiline':True]
+['text':'
+         * The page remains dirty.
+         *
+         * Any checkpoint call cleared the tree's modified flag before writing pages, so we must
+         * explicitly reset it. We insert a barrier after the change for clarity (the requirement is
+         * the flag be set before a subsequent checkpoint reads it, and as the current checkpoint is
+         * waiting on this reconciliation to complete, there's no risk of that happening).
+         ','line_number':403,'multiline':True]
+['text':'
+         * Eviction should only be here if allowing writes to history store or in the in-memory
+         * eviction case. Otherwise, we must be reconciling the metadata (which does not allow
+         * history store content).
+         ','line_number':416,'multiline':True]
+['text':'
+         * We set the page state to mark it as having been dirtied for the first time prior to
+         * reconciliation. A failed atomic cas indicates that an update has taken place during
+         * reconciliation.
+         *
+         * The page only might be clean; if the page state is unchanged since reconciliation
+         * started, it's clean.
+         *
+         * If the page state changed, the page has been written since reconciliation started and
+         * remains dirty (that can't happen when evicting, the page is exclusively locked).
+         ','line_number':425,'multiline':True]
+['text':'
+ * __rec_root_write --
+ *     Handle the write of a root page.
+ ','line_number':444,'multiline':True]
+['text':'
+     * If a single root page was written (either an empty page or there was a 1-for-1 page swap),
+     * we've written root and checkpoint, we're done. Clear the result of the reconciliation, a root
+     * page never has the structures that would normally be associated with (at least), the
+     * replaced-object flag. If the root page split, write the resulting WT_REF array. We already
+     * have an infrastructure for writing pages, create a fake root page and write it instead of
+     * adding code to write blocks based on the list of blocks resulting from a multiblock
+     * reconciliation.
+     *
+     ','line_number':460,'multiline':True]
+['text':' Page is empty ','line_number':471,'multiline':True]
+['text':' 1-for-1 page swap ','line_number':472,'multiline':True]
+['text':' Multiple blocks ','line_number':475,'multiline':True]
+['text':'
+     * Create a new root page, initialize the array of child references, mark it dirty, then write
+     * it.
+     *
+     * Don't count the eviction of this page as progress, checkpoint can repeatedly create and
+     * discard these pages.
+     ','line_number':484,'multiline':True]
+['text':'
+         * There's special error handling required when re-instantiating pages in memory; it's not
+         * needed here, asserted for safety.
+         ','line_number':496,'multiline':True]
+['text':'
+     * We maintain a list of pages written for the root in order to free the backing blocks the next
+     * time the root is written.
+     ','line_number':510,'multiline':True]
+['text':'
+     * Mark the page dirty. Don't mark the tree dirty: if this reconciliation is in service of a
+     * checkpoint, it's cleared the tree's dirty flag, and we don't want to set it again as part of
+     * that walk.
+     ','line_number':516,'multiline':True]
+['text':'
+     * Fake up a reference structure, and write the next root page.
+     ','line_number':524,'multiline':True]
+['text':'
+ * __rec_init --
+ *     Initialize the reconciliation structure.
+ ','line_number':535,'multiline':True]
+['text':'
+     * Reconciliation is not re-entrant, make sure that doesn't happen. Our caller sets
+     * WT_SESSION_IMPL.WT_SESSION_NO_RECONCILE to prevent it, but it's been a problem in the past,
+     * check to be sure.
+     ','line_number':553,'multiline':True]
+['text':' Connect pointers/buffers. ','line_number':566,'multiline':True]
+['text':' Disk buffers need to be aligned for writing. ','line_number':570,'multiline':True]
+['text':' Remember the configuration. ','line_number':575,'multiline':True]
+['text':'
+     * Save the transaction generations before reading the page. These are all ordered reads, but we
+     * only need one.
+     ','line_number':579,'multiline':True]
+['text':' Track that the page is being reconciled and if it is exclusive (e.g. eviction). ','line_number':589,'multiline':True]
+['text':'
+     * Update the page state to indicate that all currently installed updates will be included in
+     * this reconciliation if it would mark the page clean.
+     *
+     * Add a write barrier to make it more likely that a thread adding an update will see this state
+     * change.
+     ','line_number':594,'multiline':True]
+['text':'
+     * Cache the oldest running transaction ID. This is used to check whether updates seen by
+     * reconciliation have committed. We keep a cached copy to avoid races where a concurrent
+     * transaction could abort while reconciliation is examining its updates. This way, any
+     * transaction running when reconciliation starts is considered uncommitted.
+     ','line_number':604,'multiline':True]
+['text':'
+     * Cache the pinned timestamp and oldest id, these are used to when we clear obsolete timestamps
+     * and ids from time windows later in reconciliation.
+     ','line_number':613,'multiline':True]
+['text':'
+     * The checkpoint transaction doesn't pin the oldest txn id, therefore the global last_running
+     * can move beyond the checkpoint transaction id. When reconciling the metadata, we have to take
+     * checkpoints into account.
+     ','line_number':620,'multiline':True]
+['text':' When operating on the history store table, we should never try history store eviction. ','line_number':630,'multiline':True]
+['text':'
+     * History store table eviction is configured when eviction gets aggressive, adjust the flags
+     * for cases we don't support.
+     ','line_number':634,'multiline':True]
+['text':' Track the page's maximum transaction/timestamp. ','line_number':641,'multiline':True]
+['text':' Track if updates were used and/or uncommitted. ','line_number':645,'multiline':True]
+['text':' Track if the page can be marked clean. ','line_number':648,'multiline':True]
+['text':' Track overflow items. ','line_number':651,'multiline':True]
+['text':' Track empty values. ','line_number':654,'multiline':True]
+['text':' The list of saved updates is reused. ','line_number':658,'multiline':True]
+['text':' The list of updates to be deleted from the history store. ','line_number':662,'multiline':True]
+['text':' The list of pages we've written. ','line_number':665,'multiline':True]
+['text':'
+     * Dictionary compression only writes repeated values once. We grow the dictionary as necessary,
+     * always using the largest size we've seen.
+     *
+     * Reset the dictionary.
+     *
+     * Sanity check the size: 100 slots is the smallest dictionary we use.
+     ','line_number':673,'multiline':True]
+['text':'
+     * Prefix compression discards repeated prefix bytes from row-store leaf page keys.
+     ','line_number':686,'multiline':True]
+['text':'
+     * Suffix compression shortens internal page keys by discarding trailing bytes that aren't
+     * necessary for tree navigation. We don't do suffix compression if there is a custom collator
+     * because we don't know what bytes a custom collator might use. Some custom collators (for
+     * example, a collator implementing reverse ordering of strings), won't have any problem with
+     * suffix compression: if there's ever a reason to implement suffix compression for custom
+     * collators, we can add a setting to the collator, configured when the collator is added, that
+     * turns on suffix compression.
+     ','line_number':693,'multiline':True]
+['text':'
+     * The fake cursor used to figure out modified update values points to the enclosing WT_REF as a
+     * way to access the page, and also needs to set the format.
+     ','line_number':712,'multiline':True]
+['text':' Clear stats related data. ','line_number':720,'multiline':True]
+['text':'
+     * When removing a key due to a tombstone with a durable timestamp of "none", also remove the
+     * history store contents associated with that key. It's safe to do even if we fail
+     * reconciliation after the removal, the history store content must be obsolete in order for us
+     * to consider removing the key.
+     *
+     * Ignore if this is metadata, as metadata doesn't have any history.
+     *
+     * Some code paths, such as schema removal, involve deleting keys in metadata and assert that
+     * they shouldn't open new dhandles. In those cases we won't ever need to blow away history
+     * store content, so we can skip this.
+     ','line_number':725,'multiline':True]
+['text':'
+ * If we allocated the reconciliation structure and there was an error, clean up. If our caller
+ * passed in a structure, they own it.
+ ','line_number':741,'multiline':True]
+['text':'
+ * __rec_cleanup --
+ *     Clean up after a reconciliation run, except for structures cached across runs.
+ ','line_number':758,'multiline':True]
+['text':' Reconciliation is not re-entrant, make sure that doesn't happen. ','line_number':784,'multiline':True]
+['text':'
+ * __rec_destroy --
+ *     Clean up the reconciliation structure.
+ ','line_number':790,'multiline':True]
+['text':'
+ * __rec_destroy_session --
+ *     Clean up the reconciliation structure, session version.
+ ','line_number':832,'multiline':True]
+['text':'
+ * __rec_write --
+ *     Write a block, with optional diagnostic checks.
+ ','line_number':842,'multiline':True]
+['text':' Checkpoint calls are different than standard calls. ','line_number':860,'multiline':True]
+['text':' In-memory databases shouldn't write pages. ','line_number':866,'multiline':True]
+['text':'
+         * We're passed a table's disk image. Decompress if necessary and verify the image. Always
+         * check the in-memory length for accuracy.
+         ','line_number':870,'multiline':True]
+['text':'
+             * Return an error rather than assert because the test suite tests that the error hits.
+             ','line_number':890,'multiline':True]
+['text':'
+             * Return an error rather than assert because the test suite tests that the error hits.
+             ','line_number':899,'multiline':True]
+['text':'
+ * __rec_leaf_page_max_slvg --
+ *     Figure out the maximum leaf page size for a salvage reconciliation.
+ ','line_number':911,'multiline':True]
+['text':'
+         * Column-store pages can grow if there are missing records (that is, we lost a chunk of the
+         * range, and have to write deleted records). Fixed-length objects are a problem, if there's
+         * a big missing range, we could theoretically have to write large numbers of missing
+         * objects.
+         *
+         * The code in rec_col.c already figured this out for us, including both space for missing
+         * chunks of the namespace and space for time windows, so we will take what it says. Thus,
+         * we shouldn't come here.
+         ','line_number':928,'multiline':True]
+['text':'
+         * Column-store pages can grow if there are missing records (that is, we lost a chunk of the
+         * range, and have to write deleted records). Variable-length objects aren't usually a
+         * problem because we can write any number of deleted records in a single page entry because
+         * of the RLE, we just need to ensure that additional entry fits.
+         ','line_number':941,'multiline':True]
+['text':'
+         * Row-store pages can't grow, salvage never does anything other than reduce the size of a
+         * page read from disk.
+         ','line_number':950,'multiline':True]
+['text':'
+     * Default size for variable-length column-store and row-store pages during salvage is the
+     * maximum leaf page size.
+     ','line_number':957,'multiline':True]
+['text':'
+     * The page we read from the disk should be smaller than the page size we just calculated, check
+     * out of paranoia.
+     ','line_number':964,'multiline':True]
+['text':'
+     * Salvage is the backup plan: don't let this fail.
+     ','line_number':971,'multiline':True]
+['text':'
+ * __wt_split_page_size --
+ *     Given a split percentage, calculate split page size in bytes.
+ ','line_number':977,'multiline':True]
+['text':'
+     * Ideally, the split page size is some percentage of the maximum page size rounded to an
+     * allocation unit (round to an allocation unit so we don't waste space when we write).
+     ','line_number':987,'multiline':True]
+['text':' Don't overflow. ','line_number':991,'multiline':True]
+['text':'
+     * Respect the configured split percentage if the calculated split size is either zero or a full
+     * page. The user has either configured an allocation size that matches the page size, or a
+     * split percentage that is close to zero or one hundred. Rounding is going to provide a worse
+     * outcome than having a split point that doesn't fall on an allocation size boundary in those
+     * cases.
+     ','line_number':994,'multiline':True]
+['text':'
+ * __rec_split_chunk_init --
+ *     Initialize a single chunk structure.
+ ','line_number':1007,'multiline':True]
+['text':' Don't touch the key item memory, that memory is reused. ','line_number':1015,'multiline':True]
+['text':' Don't touch the key item memory, that memory is reused. ','line_number':1021,'multiline':True]
+['text':'
+     * Allocate and clear the disk image buffer.
+     *
+     * Don't touch the disk image item memory, that memory is reused.
+     *
+     * Clear the disk page header to ensure all of it is initialized, even the unused fields.
+     ','line_number':1027,'multiline':True]
+['text':'
+     * For fixed-length column-store, poison the rest of the buffer. This helps verify ensure that
+     * all the bytes in the buffer are explicitly set and not left uninitialized.
+     ','line_number':1038,'multiline':True]
+['text':'
+ * __wt_rec_split_init --
+ *     Initialization for the reconciliation split functions.
+ ','line_number':1050,'multiline':True]
+['text':' FUTURE: primary_size should probably also be 32 bits. ','line_number':1058,'multiline':True]
+['text':'
+     * The maximum leaf page size governs when an in-memory leaf page splits into multiple on-disk
+     * pages; however, salvage can't be allowed to split, there's no parent page yet. If we're doing
+     * salvage, override the caller's selection of a maximum page size, choosing a page size that
+     * ensures we won't split.
+     *
+     * For FLCS, the salvage page size can get very large indeed if pieces of the namespace have
+     * vanished, so don't second-guess the caller, who's figured it out for us.
+     ','line_number':1069,'multiline':True]
+['text':'
+     * Set the page sizes.
+     *
+     * Only fixed-length column store pages use auxiliary space; this is where time windows are
+     * placed. r->page_size is the complete page size; we'll use r->space_avail to track how much
+     * more primary space is remaining, and r->aux_space_avail to track how much more auxiliary
+     * space there is.
+     *
+     * Because (for FLCS) we need to start writing time windows into the auxiliary space before we
+     * know for sure how much bitmap data there is, we always start the time window data at a fixed
+     * offset from the page start: the place where it goes naturally if the page is full. If the
+     * page is not full (and there was at least one timestamp to write), we waste the intervening
+     * unused space. Odd-sized pages are supposed to be rare (ideally only the last page in the
+     * tree, though currently there are some other ways they can appear) so only a few KB is wasted
+     * and not enough to be particularly concerned about.
+     *
+     * For FLCS, primary_size will always be the tree's configured maximum leaf page size, except
+     * for pages created or rewritten during salvage, which might be larger. (This is not ideal,
+     * because once created larger they cannot be split again later, but for the moment at least it
+     * isn't readily avoided.)
+     ','line_number':1081,'multiline':True]
+['text':'
+     * If we have to split, we want to choose a smaller page size for the split pages, because
+     * otherwise we could end up splitting one large packed page over and over. We don't want to
+     * pick the minimum size either, because that penalizes an application that did a bulk load and
+     * subsequently inserted a few items into packed pages. Currently defaulted to 75%, but I have
+     * no empirical evidence that's "correct".
+     *
+     * The maximum page size may be a multiple of the split page size (for example, there's a
+     * maximum page size of 128KB, but because the table is active and we don't want to split a lot,
+     * the split size is 20KB). The maximum page size may NOT be an exact multiple of the split page
+     * size.
+     *
+     * It's lots of work to build these pages and don't want to start over when we reach the maximum
+     * page size (it's painful to restart after creating overflow items and compacted data, for
+     * example, as those items have already been written to disk). So, the loop calls the helper
+     * functions when approaching a split boundary, and we save the information at that point. We
+     * also save the boundary information at the minimum split size. We maintain two chunks (each
+     * boundary represents a chunk that gets written as a page) in the memory, writing out the older
+     * one to the disk as a page when we need to make space for a new chunk. On reaching the last
+     * chunk, if it turns out to be smaller than the minimum split size, we go back into the
+     * penultimate chunk and split at this minimum split size boundary. This moves some data from
+     * the penultimate chunk to the last chunk, hence increasing the size of the last page written
+     * without decreasing the penultimate page size beyond the minimum split size.
+     *
+     * FLCS pages are different, because they have two pieces: bitmap data ("primary") and time
+     * window data ("auxiliary"); the bitmap data is supposed to be a fixed amount per page. FLCS
+     * pages therefore split based on the bitmap size, and the time window data comes along for the
+     * ride no matter how large it is. If the time window data gets larger than expected (it can at
+     * least in theory get rather large), we have to realloc the page image.
+     *
+     * Finally, all this doesn't matter at all for salvage; as noted above, in salvage we can't
+     * split at all.
+     ','line_number':1105,'multiline':True]
+['text':'
+     * Ensure the disk image buffer is large enough for the max object, as corrected by the
+     * underlying block manager.
+     *
+     * Since we want to support split_size values larger than the page size (to allow for
+     * adjustments based on the compression), this buffer should be the greater of split_size and
+     * page_size, then aligned to the next allocation size boundary. The latter shouldn't be an
+     * issue, but it's a possible scenario if, for example, the compression engine is expected to
+     * give us 5x compression and gives us nothing at all.
+     ','line_number':1153,'multiline':True]
+['text':' Initialize the first split chunk. ','line_number':1167,'multiline':True]
+['text':' Starting record number, entries, first free byte. ','line_number':1172,'multiline':True]
+['text':' New page, compression off. ','line_number':1183,'multiline':True]
+['text':' Set the first chunk's key. ','line_number':1186,'multiline':True]
+['text':'
+ * __rec_is_checkpoint --
+ *     Return if we're writing a checkpoint.
+ ','line_number':1200,'multiline':True]
+['text':'
+     * Check to see if we're going to create a checkpoint.
+     *
+     * This function exists as a place to hang this comment.
+     *
+     * Any time we write the root page of the tree without splitting we are creating a checkpoint
+     * (and have to tell the underlying block manager so it creates and writes the additional
+     * information checkpoints require). However, checkpoints are completely consistent, and so we
+     * have to resolve information about the blocks we're expecting to free as part of the
+     * checkpoint, before writing the checkpoint. In short, we don't do checkpoint writes here;
+     * clear the boundary information as a reminder and create the checkpoint during wrapup.
+     ','line_number':1211,'multiline':True]
+['text':'
+ * __rec_split_row_promote --
+ *     Key promotion for a row-store.
+ ','line_number':1226,'multiline':True]
+['text':'
+     * For a column-store, the promoted key is the recno and we already have a copy. For a
+     * row-store, it's the first key on the page, a variable-length byte string, get a copy.
+     *
+     * This function is called from the split code at each split boundary, but that means we're not
+     * called before the first boundary, and we will eventually have to get the first key explicitly
+     * when splitting a page.
+     *
+     * For the current slot, take the last key we built, after doing suffix compression. The "last
+     * key we built" describes some process: before calling the split code, we must place the last
+     * key on the page before the boundary into the "last" key structure, and the first key on the
+     * page after the boundary into the "current" key structure, we're going to compare them for
+     * suffix compression.
+     *
+     * Suffix compression is a hack to shorten keys on internal pages. We only need enough bytes in
+     * the promoted key to ensure searches go to the correct page: the promoted key has to be larger
+     * than the last key on the leaf page preceding it, but we don't need any more bytes than that.
+     * In other words, we can discard any suffix bytes not required to distinguish between the key
+     * being promoted and the last key on the leaf page preceding it. This can only be done for the
+     * first level of internal pages, you cannot repeat suffix truncation as you split up the tree,
+     * it loses too much information.
+     *
+     * Note #1: if the last key on the previous page was an overflow key, we don't have the
+     * in-memory key against which to compare, and don't try to do suffix compression. The code for
+     * that case turns suffix compression off for the next key, we don't have to deal with it here.
+     ','line_number':1243,'multiline':True]
+['text':'
+     * Note #2: if we skipped updates, an update key may be larger than the last key stored in the
+     * previous block (probable for append-centric workloads). If there are skipped updates and we
+     * cannot evict the page, check for one larger than the last key and smaller than the current
+     * key.
+     ','line_number':1275,'multiline':True]
+['text':' Compare against the current key, it must be less. ','line_number':1292,'multiline':True]
+['text':' Compare against the last key, it must be greater. ','line_number':1297,'multiline':True]
+['text':'
+             * The saved updates are in key-sort order so the entry we're looking for is either the
+             * last or the next-to- last one in the list. Once we've compared an entry against the
+             * last key on the page, we're done.
+             ','line_number':1302,'multiline':True]
+['text':'
+     * The largest key on the last block must sort before the current key, so we'll either find a
+     * larger byte value in the current key, or the current key will be a longer key, and the
+     * interesting byte is one past the length of the shorter key.
+     ','line_number':1310,'multiline':True]
+['text':'
+ * __wt_rec_split_grow --
+ *     Grow the split buffer.
+ ','line_number':1334,'multiline':True]
+['text':' gcc -Werror=maybe-uninitialized, with -O3 ','line_number':1345,'multiline':True]
+['text':' The free space is tracked with a pointer; convert to an integer. ','line_number':1349,'multiline':True]
+['text':' Convert the free space back to pointers. ','line_number':1362,'multiline':True]
+['text':' Adjust the available space. ','line_number':1367,'multiline':True]
+['text':' Reallocating an FLCS page increases the auxiliary space. ','line_number':1369,'multiline':True]
+['text':'
+ * __rec_split_fix_shrink --
+ *     Consider eliminating the empty space on an FLCS page.
+ ','line_number':1380,'multiline':True]
+['text':' Total size of page. ','line_number':1390,'multiline':True]
+['text':' Size of the entire primary data area, including headers. ','line_number':1393,'multiline':True]
+['text':' Size of the empty space. ','line_number':1396,'multiline':True]
+['text':' Size of the auxiliary data. ','line_number':1399,'multiline':True]
+['text':'
+     * Arbitrary criterion: if the empty space is bigger than the auxiliary data, memmove the
+     * auxiliary data, on the assumption that the cost of the memmove is outweighed by the cost of
+     * taking checksums of, writing out, and reading back in a bunch of useless empty space.
+     ','line_number':1402,'multiline':True]
+['text':' Source: current auxiliary start. ','line_number':1408,'multiline':True]
+['text':' Destination: immediately after the primary data with space for the auxiliary header. ','line_number':1411,'multiline':True]
+['text':' The move span should be the empty data size. ','line_number':1414,'multiline':True]
+['text':' Do the move. ','line_number':1417,'multiline':True]
+['text':' Update the tracking information. ','line_number':1420,'multiline':True]
+['text':' The minimum number of entries before we'll split a row-store internal page. ','line_number':1428,'multiline':True]
+['text':'
+ * __wt_rec_split --
+ *     Handle the page reconciliation bookkeeping. (Did you know "bookkeeper" has 3 doubled letters
+ *     in a row? Sweet-tooth does, too.)
+ ','line_number':1431,'multiline':True]
+['text':'
+     * We should never split during salvage, and we're about to drop core because there's no parent
+     * page.
+     ','line_number':1445,'multiline':True]
+['text':'
+     * We can get here if the first key/value pair won't fit. Grow the buffer to contain the current
+     * item if we haven't already consumed a reasonable portion of a split chunk. This logic should
+     * not trigger for FLCS, because FLCS splits happen at very definite places; and if it does, the
+     * interaction between here and there will corrupt the database, so assert otherwise.
+     *
+     * If we're promoting huge keys into an internal page, we might be about to write an internal
+     * page with too few items, which isn't good for tree depth or search. Grow the buffer to
+     * contain the current item if we don't have enough items to split an internal page.
+     ','line_number':1453,'multiline':True]
+['text':' All page boundaries reset the dictionary. ','line_number':1472,'multiline':True]
+['text':' Set the entries, timestamps and size for the just finished chunk. ','line_number':1475,'multiline':True]
+['text':' This must come after the shrink call, which can change the offset. ','line_number':1480,'multiline':True]
+['text':'
+     * Normally we keep two chunks in memory at a given time, and we write the previous chunk at
+     * each boundary, switching the previous and current check references. The exception is when
+     * doing a bulk load.
+     ','line_number':1490,'multiline':True]
+['text':' Initialize the next chunk, including the key. ','line_number':1510,'multiline':True]
+['text':' Reset tracking information. ','line_number':1516,'multiline':True]
+['text':'
+         * In the first chunk, we use the passed-in primary size, whatever it is, as the size for
+         * the bitmap data; the auxiliary space follows it. It might be larger than the configured
+         * maximum leaf page size if we're in salvage. For the second and subsequent chunks, we
+         * aren't in salvage so always use the maximum leaf page size; that will produce the fixed
+         * size pages we want.
+         ','line_number':1521,'multiline':True]
+['text':'
+     * Set the space available to another split-size and minimum split-size chunk. For FLCS,
+     * min_space_avail and min_split_size are both left as zero.
+     ','line_number':1533,'multiline':True]
+['text':'
+     * We may have declined the split as described above, in which case grow the buffer based on the
+     * next key/value pair's length. In the internal page minimum-key case, we could grow more than
+     * a single key/value pair's length to avoid repeatedly calling this function, but we'd prefer
+     * not to have internal pages that are larger than they need to be, and repeatedly trying to
+     * split means we will split as soon as we can.
+     *
+     * Also, overflow values can be larger than the maximum page size but still be "on-page". If the
+     * next key/value pair is larger than space available after a split has happened (in other
+     * words, larger than the maximum page size), create a page sized to hold that one key/value
+     * pair. This generally splits the page into key/value pairs before a large object, the object,
+     * and key/value pairs after the object. It's possible other key/value pairs will also be
+     * aggregated onto the bigger page before or after, if the page happens to hold them, but it
+     * won't necessarily happen that way.
+     ','line_number':1544,'multiline':True]
+['text':'
+ * __wt_rec_split_crossing_bnd --
+ *     Save the details for the minimum split size boundary or call for a split.
+ ','line_number':1565,'multiline':True]
+['text':'
+     * If crossing the minimum split size boundary, store the boundary details at the current
+     * location in the buffer. If we are crossing the split boundary at the same time, possible when
+     * the next record is large enough, just split at this point.
+     ','line_number':1572,'multiline':True]
+['text':'
+         * If the first record doesn't fit into the minimum split size, we end up here. Write the
+         * record without setting a boundary here. We will get the opportunity to setup a boundary
+         * before writing out the next record.
+         ','line_number':1579,'multiline':True]
+['text':' All page boundaries reset the dictionary. ','line_number':1597,'multiline':True]
+['text':' We are crossing a split boundary ','line_number':1603,'multiline':True]
+['text':'
+ * __rec_split_finish_process_prev --
+ *     If the two split chunks together fit in a single page, merge them into one. If they do not
+ *     fit in a single page but the last is smaller than the minimum desired, move some data from
+ *     the penultimate chunk to the last chunk and write out the previous/penultimate. Finally,
+ *     update the pointer to the current image buffer. After this function exits, we will have one
+ *     (last) buffer in memory, pointed to by the current image pointer.
+ ','line_number':1607,'multiline':True]
+['text':'
+     * The sizes in the chunk include the header, so when calculating the combined size, be sure not
+     * to include the header twice.
+     ','line_number':1630,'multiline':True]
+['text':' This won't work for FLCS pages, so make sure we don't get here by accident. ','line_number':1637,'multiline':True]
+['text':'
+         * We have two boundaries, but the data in the buffers can fit a single page. Merge the
+         * boundaries and create a single chunk.
+         ','line_number':1640,'multiline':True]
+['text':'
+         * At this point, there is only one disk image in the memory, the previous chunk. Update the
+         * current chunk to that chunk, discard the unused chunk.
+         ','line_number':1651,'multiline':True]
+['text':' This won't work for FLCS pages, so make sure we don't get here by accident. ','line_number':1662,'multiline':True]
+['text':'
+         * The last chunk, pointed to by the current image pointer, has less than the minimum data.
+         * Let's move any data more than the minimum from the previous image into the current.
+         *
+         * Grow the current buffer if it is not large enough.
+         ','line_number':1665,'multiline':True]
+['text':'
+         * Shift the contents of the current buffer to make space for the data that will be
+         * prepended into the current buffer. Copy the data from the previous buffer to the start of
+         * the current.
+         ','line_number':1676,'multiline':True]
+['text':' Update boundary information ','line_number':1686,'multiline':True]
+['text':' Write out the previous image ','line_number':1699,'multiline':True]
+['text':'
+ * __wt_rec_split_finish --
+ *     Finish processing a page.
+ ','line_number':1703,'multiline':True]
+['text':'
+     * We're done reconciling, write the final page. We may arrive here with no entries to write if
+     * the page was entirely empty or if nothing on the page was visible to us.
+     *
+     * Pages with skipped or not-yet-globally visible updates aren't really empty; otherwise, the
+     * page is truly empty and we will merge it into its parent during the parent's reconciliation.
+     *
+     * Checkpoint never writes uncommitted changes to disk and only saves the updates to move older
+     * updates to the history store. Thus it can consider the reconciliation done if there are no
+     * more entries left to write. This will also remove its reference entry from its parent.
+     ','line_number':1710,'multiline':True]
+['text':' Set the number of entries and size for the just finished chunk. ','line_number':1724,'multiline':True]
+['text':' This must come after the shrink call, which can change the offset. ','line_number':1729,'multiline':True]
+['text':'
+     *  Potentially reconsider a previous chunk.
+     *
+     * Skip for FLCS because (a) pages can be combined only if the combined bitmap data size is in
+     * range, not the overall page size (which requires entirely different logic) and (b) this
+     * cannot happen because we only split when we've fully filled the previous page. This is true
+     * even when in-memory splits give us odd page sizes to work with -- some of those might be
+     * mergeable (though more likely not) but we can't see them on this code path. So instead just
+     * write the previous chunk out.
+     ','line_number':1739,'multiline':True]
+['text':' Write the remaining data/last page. ','line_number':1756,'multiline':True]
+['text':'
+ * __rec_supd_move --
+ *     Move a saved WT_UPDATE list from the per-page cache to a specific block's list.
+ ','line_number':1760,'multiline':True]
+['text':'
+ * __rec_split_write_supd --
+ *     Check if we've saved updates that belong to this block, and move any to the per-block
+ *     structure.
+ ','line_number':1783,'multiline':True]
+['text':'
+     * Check if we've saved updates that belong to this block, and move any to the per-block
+     * structure.
+     *
+     * This code requires a key be filled in for the next block (or the last block flag be set, if
+     * there's no next block).
+     *
+     * The last block gets all remaining saved updates.
+     ','line_number':1802,'multiline':True]
+['text':'
+     * Get the saved update's key and compare it with the block's key range. If the saved update
+     * list belongs with the block we're about to write, move it to the per-block memory. Check only
+     * to the first update that doesn't go with the block, they must be in sorted order.
+     *
+     * The other chunk will have the key for the next page, that's what we compare against.
+     ','line_number':1818,'multiline':True]
+['text':'
+         * If there are updates that weren't moved to the block, shuffle them to the beginning of
+         * the cached list (we maintain the saved updates in sorted order, new saved updates must be
+         * appended to the list).
+         ','line_number':1850,'multiline':True]
+['text':' Account for the remaining update memory. ','line_number':1857,'multiline':True]
+['text':' Note: ins is never NULL for column-store ','line_number':1859,'multiline':True]
+['text':'
+ * __rec_set_page_write_gen --
+ *     Initialize the page write generation number.
+ ','line_number':1874,'multiline':True]
+['text':'
+     * We increment the block's write generation so it's easy to identify newer versions of blocks
+     * during salvage. (It's common in WiredTiger, at least for the default block manager, for
+     * multiple blocks to be internally consistent with identical first and last keys, so we need a
+     * way to know the most recent state of the block. We could check which leaf is referenced by a
+     * valid internal page, but that implies salvaging internal pages, which I don't want to do, and
+     * it's not as good anyway, because the internal page may not have been written after the leaf
+     * page was updated. So, write generations it is.
+     *
+     * The write generation number should be increased atomically to prevent it from moving backward
+     * when it is updated simultaneously.
+     *
+     * Other than salvage, the write generation number is used to reset the stale transaction id's
+     * present on the page upon server restart.
+     ','line_number':1881,'multiline':True]
+['text':'
+ * __rec_split_write_header --
+ *     Initialize a disk page's header.
+ ','line_number':1899,'multiline':True]
+['text':' Set the all/none zero-length value flags. ','line_number':1921,'multiline':True]
+['text':' Set the fast-truncate proxy cell information flag. ','line_number':1929,'multiline':True]
+['text':' Clear the memory owned by the block manager. ','line_number':1937,'multiline':True]
+['text':'
+ * __rec_compression_adjust --
+ *     Adjust the pre-compression page size based on compression results.
+ ','line_number':1941,'multiline':True]
+['text':'
+     * Changing the pre-compression size updates a shared memory location
+     * and it's not uncommon to be pushing out large numbers of pages from
+     * the same file. If compression creates a page larger than the target
+     * size, decrease the pre-compression size. If compression creates a
+     * page smaller than the target size, increase the pre-compression size.
+     * Once we get under the target size, try and stay there to minimize
+     * shared memory updates, but don't go over the target size, that means
+     * we're writing bad page sizes.
+     *	Writing a shared memory location without a lock and letting it
+     * race, minor trickiness so we only read and write the value once.
+     ','line_number':1956,'multiline':True]
+['text':'
+         * The compressed size is GT the page maximum. Check if the pre-compression size is larger
+         * than the maximum. If 10% of the page size larger than the maximum, decrease it by that
+         * amount. Else if it's not already at the page maximum, set it there.
+         *
+         * Note we're using 10% of the maximum page size as our test for when to adjust the
+         * pre-compression size as well as the amount by which we adjust it. Not updating the value
+         * when it's close to the page size keeps us from constantly updating a shared memory
+         * location, and 10% of the page size is an OK step value as well, so we use it in both
+         * cases.
+         ','line_number':1972,'multiline':True]
+['text':'
+         * The compressed size is LTE the page maximum.
+         *
+         * Don't increase the pre-compressed size on the last block, the last block might be tiny.
+         *
+         * If the compressed size is less than the page maximum by 10%, increase the pre-compression
+         * size by 10% of the page, or up to the maximum in-memory image size.
+         *
+         * Note we're using 10% of the maximum page size... see above.
+         ','line_number':1991,'multiline':True]
+['text':'
+ * __rec_split_write --
+ *     Write a disk block out for the split helper functions.
+ ','line_number':2015,'multiline':True]
+['text':'
+     * If reconciliation requires multiple blocks and checkpoint is running we'll eventually fail,
+     * unless we're the checkpoint thread. Big pages take a lot of writes, avoid wasting work.
+     ','line_number':2038,'multiline':True]
+['text':' Make sure there's enough room for another write. ','line_number':2045,'multiline':True]
+['text':' Initialize the address (set the addr type for the parent). ','line_number':2049,'multiline':True]
+['text':' Set the key. ','line_number':2069,'multiline':True]
+['text':' Check if there are saved updates that might belong to this block. ','line_number':2075,'multiline':True]
+['text':' Initialize the page header(s). ','line_number':2079,'multiline':True]
+['text':'
+     * If we are writing the whole page in our first/only attempt, it might be a checkpoint
+     * (checkpoints are only a single page, by definition). Checkpoints aren't written here, the
+     * wrapup functions do the write.
+     *
+     * Track the buffer with the image. (This is bad layering, but we can't write the image until
+     * the wrapup code, and we don't have a code path from here to there.)
+     ','line_number':2087,'multiline':True]
+['text':'
+     * If configured for an in-memory database, we can't actually write it. Instead, we will
+     * re-instantiate the page using the disk image and any list of updates we skipped.
+     ','line_number':2108,'multiline':True]
+['text':' Check the eviction flag as checkpoint also saves updates. ','line_number':2115,'multiline':True]
+['text':'
+         * XXX If no entries were used, the page is empty and we can only restore eviction/restore
+         * or history store updates against empty row-store leaf pages, column-store modify attempts
+         * to allocate a zero-length array.
+         ','line_number':2117,'multiline':True]
+['text':' If we need to restore the page to memory, copy the disk image. ','line_number':2125,'multiline':True]
+['text':' Write the disk image and get an address. ','line_number':2132,'multiline':True]
+['text':' Adjust the pre-compression page size based on compression results. ','line_number':2142,'multiline':True]
+['text':' Update the per-page reconciliation time statistics now that we've written something. ','line_number':2150,'multiline':True]
+['text':'
+     * The I/O routines verify all disk images we write, but there are paths in reconciliation that
+     * don't do I/O. Verify those images, too.
+     ','line_number':2155,'multiline':True]
+['text':'
+     * If re-instantiating this page in memory (either because eviction wants to, or because we
+     * skipped updates to build the disk image), save a copy of the disk image.
+     ','line_number':2164,'multiline':True]
+['text':' Whether we wrote or not, clear the accumulated time statistics. ','line_number':2171,'multiline':True]
+['text':'
+ * __wt_bulk_init --
+ *     Bulk insert initialization.
+ ','line_number':2177,'multiline':True]
+['text':'
+     * Bulk-load is only permitted on newly created files, not any empty file -- see the checkpoint
+     * code for a discussion.
+     ','line_number':2191,'multiline':True]
+['text':'
+     * Get a reference to the empty leaf page; we have exclusive access so we can take a copy of the
+     * page, confident the parent won't split.
+     ','line_number':2198,'multiline':True]
+['text':'
+ * __wt_bulk_wrapup --
+ *     Bulk insert cleanup.
+ ','line_number':2215,'multiline':True]
+['text':' Mark the page's parent and the tree dirty. ','line_number':2252,'multiline':True]
+['text':'
+ * __rec_split_discard --
+ *     Discard the pages resulting from a previous split.
+ ','line_number':2265,'multiline':True]
+['text':'
+     * A page that split is being reconciled for the second, or subsequent time; discard underlying
+     * block space used in the last reconciliation that is not being reused for this reconciliation.
+     ','line_number':2280,'multiline':True]
+['text':'
+         * If the page was re-written free the backing disk blocks used in the previous write. The
+         * page may instead have been a disk image with associated saved updates: ownership of the
+         * disk image is transferred when rewriting the page in-memory and there may not have been
+         * saved updates. We've gotten this wrong a few times, so use the existence of an address to
+         * confirm backing blocks we care about, and free any disk image/saved updates.
+         ','line_number':2291,'multiline':True]
+['text':'
+     * This routine would be trivial, and only walk a single page freeing any blocks written to
+     * support the split, except for root splits. In the case of root splits, we have to cope with
+     * multiple pages in a linked list, and we also have to discard overflow items written for the
+     * page.
+     ','line_number':2306,'multiline':True]
+['text':'
+ * __rec_split_dump_keys --
+ *     Dump out the split keys in verbose mode.
+ ','line_number':2321,'multiline':True]
+['text':'
+ * __rec_write_wrapup --
+ *     Finish the reconciliation.
+ ','line_number':2351,'multiline':True]
+['text':'
+     * If using the history store table eviction path and we found updates that weren't globally
+     * visible when reconciling this page, copy them into the database's history store. This can
+     * fail, so try before clearing the page's previous reconciliation state.
+     ','line_number':2373,'multiline':True]
+['text':'
+     * Wrap up overflow tracking. If we are about to create a checkpoint, the system must be
+     * entirely consistent at that point (the underlying block manager is presumably going to do
+     * some action to resolve the list of allocated/free/whatever blocks that are associated with
+     * the checkpoint).
+     ','line_number':2385,'multiline':True]
+['text':'
+     * This page may have previously been reconciled, and that information is now about to be
+     * replaced. Make sure it's discarded at some point, and clear the underlying modification
+     * information, we're creating a new reality.
+     ','line_number':2393,'multiline':True]
+['text':'
+             * The page has never been reconciled before, free the original
+             * address blocks (if any).  The "if any" is for empty trees
+             * created when a new tree is opened or previously deleted pages
+             * instantiated in memory.
+             *
+             * The exception is root pages are never tracked or free'd, they
+             * are checkpoints, and must be explicitly dropped.
+             ','line_number':2399,'multiline':True]
+['text':' Page deleted ','line_number':2413,'multiline':True]
+['text':' Multiple blocks ','line_number':2415,'multiline':True]
+['text':'
+                                * Discard the multiple replacement blocks.
+                                ','line_number':2416,'multiline':True]
+['text':' 1-for-1 page swap ','line_number':2421,'multiline':True]
+['text':'
+                             * Discard the replacement leaf page's blocks.
+                             *
+                             * The exception is root pages are never tracked or free'd, they are
+                             * checkpoints, and must be explicitly dropped.
+                             ','line_number':2422,'multiline':True]
+['text':' Discard the replacement page's address and disk image. ','line_number':2431,'multiline':True]
+['text':' Reset the reconciliation state. ','line_number':2440,'multiline':True]
+['text':' Page delete ','line_number':2447,'multiline':True]
+['text':'
+         * If this is the root page, we need to create a sync point. For a page to be empty, it has
+         * to contain nothing at all, which means it has no records of any kind and is durable.
+         ','line_number':2450,'multiline':True]
+['text':'
+         * If the page was empty, we want to discard it from the tree by discarding the parent's key
+         * when evicting the parent. Mark the page as deleted, then return success, leaving the page
+         * in memory. If the page is subsequently modified, that is OK, we'll just reconcile it
+         * again.
+         ','line_number':2460,'multiline':True]
+['text':' 1-for-1 page swap ','line_number':2468,'multiline':True]
+['text':'
+         * Because WiredTiger's pages grow without splitting, we're replacing a single page with
+         * another single page most of the time.
+         *
+         * If in-memory, or saving/restoring changes for this page and there's only one block,
+         * there's nothing to write. Set up a single block as if to split, then use that disk image
+         * to rewrite the page in memory. This is separate from simple replacements where eviction
+         * has decided to retain the page in memory because the latter can't handle update lists and
+         * splits can.
+         ','line_number':2469,'multiline':True]
+['text':'
+         * We may have a root page, create a sync point. (The write code ignores root page updates,
+         * leaving that work to us.)
+         ','line_number':2487,'multiline':True]
+['text':' Page split ','line_number':2504,'multiline':True]
+['text':' Optionally display the actual split keys in verbose mode. ','line_number':2510,'multiline':True]
+['text':'
+     * If the page has post-instantiation delete information, we don't need it any more. Note: this
+     * is the only place in the system that potentially touches ref->page_del without locking the
+     * ref. There are two other pieces of code it can interact with: transaction rollback and parent
+     * internal page reconciliation. We use __wt_free_page_del here and in transaction rollback to
+     * make the deletion atomic. Reconciliation of the parent is locked out for the following
+     * reasons: first, if we are evicting the leaf here, eviction has the ref locked, and the parent
+     * will wait for it; and if we are checkpointing the leaf, we can't simultaneously be
+     * checkpointing the parent, and we can't be evicting the parent either because internal pages
+     * can't be evicted while they have in-memory children.
+     ','line_number':2524,'multiline':True]
+['text':'
+         * Unfortunately, it seems we need to lock the ref at this point. Ultimately the page_del
+         * structure and the instantiated flag need to both be cleared simultaneously (otherwise
+         * instantiated == false and page_del not NULL violates the intended invariant and other
+         * code can assert) and there are several other places that can still be interacting with
+         * the page_del structure at this point (even though the page has been instantiated) and we
+         * need to wait for those to finish before discarding it.
+         *
+         * Note: if we're in eviction, the ref is already locked.
+         ','line_number':2536,'multiline':True]
+['text':' Check the instantiated flag again in case it got cleared while we waited. ','line_number':2552,'multiline':True]
+['text':'
+ * __rec_write_err --
+ *     Finish the reconciliation on error.
+ ','line_number':2565,'multiline':True]
+['text':'
+     * On error, discard blocks we've written, they're unreferenced by the tree. This is not a
+     * question of correctness, we're avoiding block leaks.
+     ','line_number':2576,'multiline':True]
+['text':'
+ * __rec_hs_wrapup --
+ *     Copy all of the saved updates into the database's history store table.
+ ','line_number':2589,'multiline':True]
+['text':'
+     * Sanity check: Can't insert updates into history store from the history store itself or from
+     * the metadata file.
+     ','line_number':2603,'multiline':True]
+['text':'
+     * Delete the updates left in the history store by prepared rollback first before moving updates
+     * to the history store.
+     ','line_number':2610,'multiline':True]
+['text':' Check if there's work to do. ','line_number':2616,'multiline':True]
+['text':'
+ * __wt_rec_cell_build_ovfl --
+ *     Store overflow items in the file, returning the address cookie.
+ ','line_number':2636,'multiline':True]
+['text':' Track if page has overflow items. ','line_number':2657,'multiline':True]
+['text':'
+     * See if this overflow record has already been written and reuse it if possible, otherwise
+     * write a new overflow record.
+     ','line_number':2660,'multiline':True]
+['text':' Allocate a buffer big enough to write the overflow record. ','line_number':2666,'multiline':True]
+['text':' Initialize the buffer: disk header and overflow record. ','line_number':2671,'multiline':True]
+['text':' Write the buffer. ','line_number':2681,'multiline':True]
+['text':'
+         * Track the overflow record (unless it's a bulk load, which by definition won't ever reuse
+         * a record.
+         ','line_number':2686,'multiline':True]
+['text':' Set the callers K/V to reference the overflow record's address. ','line_number':2694,'multiline':True]
+['text':' Build the cell and return. ','line_number':2697,'multiline':True]
+['text':'
+ * __wt_rec_hs_clear_on_tombstone --
+ *     When removing a key due to a tombstone with a durable timestamp of "none", also remove the
+ *     history store contents associated with that key.
+ ','line_number':2706,'multiline':True]
+['text':' We should be passed a recno or a row-store key, but not both. ','line_number':2721,'multiline':True]
+['text':' Open a history store cursor if we don't yet have one. ','line_number':2734,'multiline':True]
+['text':'
+     * From WT_TS_NONE delete/reinsert all the history store content of the key. The test of
+     * WT_REC_CHECKPOINT_RUNNING asks the function to fail with EBUSY if we are trying to evict an
+     * mixed-mode update while a checkpoint is in progress; such eviction can race with the
+     * checkpoint itself and lead to history store inconsistency. (Note: WT_REC_CHECKPOINT_RUNNING
+     * is set only during evictions, and never in the checkpoint thread itself.)
+     ','line_number':2738,'multiline':True]
+['text':' Fail 0.01% of the time. ','line_number':2748,'multiline':True]

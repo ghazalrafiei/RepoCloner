@@ -1,0 +1,197 @@
+['text':'
+ * This header exports the new experimental DType API as proposed in
+ * NEPs 41 to 43.  For background, please check these NEPs.  Otherwise,
+ * this header also serves as documentation for the time being.
+ *
+ * The header includes `_dtype_api.h` which holds most definition while this
+ * header mainly wraps functions for public consumption.
+ *
+ * Please do not hesitate to contact @seberg with questions.  This is
+ * developed together with https://github.com/seberg/experimental_user_dtypes
+ * and those interested in experimenting are encouraged to contribute there.
+ *
+ * To use the functions defined in the header, call::
+ *
+ *     if (import_experimental_dtype_api(version) < 0) {
+ *         return NULL;
+ *     }
+ *
+ * in your module init.  (A version mismatch will be reported, just update
+ * to the correct one, this will alert you of possible changes.)
+ *
+ * The following lists the main symbols currently exported.  Please do not
+ * hesitate to ask for help or clarification:
+ *
+ * - PyUFunc_AddLoopFromSpec:
+ *
+ *     Register a new loop for a ufunc.  This uses the `PyArrayMethod_Spec`
+ *     which must be filled in (see in-line comments).
+ *
+ * - PyUFunc_AddWrappingLoop:
+ *
+ *     Register a new loop which reuses an existing one, but modifies the
+ *     result dtypes.  Please search the internal NumPy docs for more info
+ *     at this point.  (Used for physical units dtype.)
+ *
+ * - PyUFunc_AddPromoter:
+ *
+ *     Register a new promoter for a ufunc.  A promoter is a function stored
+ *     in a PyCapsule (see in-line comments).  It is passed the operation and
+ *     requested DType signatures and can mutate it to attempt a new search
+ *     for a matching loop/promoter.
+ *     I.e. for Numba a promoter could even add the desired loop.
+ *
+ * - PyUFunc_GiveFloatingpointErrors:
+ *
+ *     Signal a floating point error respecting the error signaling setting in
+ *     the NumPy errstate. Takes the name of the operation to use in the error
+ *     message and an integer flag that is one of NPY_FPE_DIVIDEBYZERO,
+ *     NPY_FPE_OVERFLOW, NPY_FPE_UNDERFLOW, NPY_FPE_INVALID. This allows for
+ *     custom floating point error signaling in cast and ufunc implementations
+ *     provided by DTypes without a need to query the errstate or reimplement
+ *     NumPy's error signaling.
+ *
+ * - PyArrayInitDTypeMeta_FromSpec:
+ *
+ *     Initialize a new DType.  It must currently be a static Python C type
+ *     that is declared as `PyArray_DTypeMeta` and not `PyTypeObject`.
+ *     Further, it must subclass `np.dtype` and set its type to
+ *     `PyArrayDTypeMeta_Type` (before calling `PyType_Read()`).
+ *
+ * - PyArray_CommonDType:
+ *
+ *     Find the common-dtype ("promotion") for two DType classes.  Similar
+ *     to `np.result_type`, but works on the classes and not instances.
+ *
+ * - PyArray_PromoteDTypeSequence:
+ *
+ *     Same as CommonDType, but works with an arbitrary number of DTypes.
+ *     This function is smarter and can often return successful and unambiguous
+ *     results when `common_dtype(common_dtype(dt1, dt2), dt3)` would
+ *     depend on the operation order or fail.  Nevertheless, DTypes should
+ *     aim to ensure that their common-dtype implementation is associative
+ *     and commutative!  (Mainly, unsigned and signed integers are not.)
+ *
+ *     For guaranteed consistent results DTypes must implement common-Dtype
+ *     "transitively".  If A promotes B and B promotes C, than A must generally
+ *     also promote C; where "promotes" means implements the promotion.
+ *     (There are some exceptions for abstract DTypes)
+ *
+ * - PyArray_GetDefaultDescr:
+ *
+ *     Given a DType class, returns the default instance (descriptor).
+ *     This is an inline function checking for `singleton` first and only
+ *     calls the `default_descr` function if necessary.
+ *
+ * - PyArray_DoubleDType, etc.:
+ *
+ *     Aliases to the DType classes for the builtin NumPy DTypes.
+ *
+ * WARNING
+ * =======
+ *
+ * By using this header, you understand that this is a fully experimental
+ * exposure.  Details are expected to change, and some options may have no
+ * effect.  (Please contact @seberg if you have questions!)
+ * If the exposure stops working, please file a bug report with NumPy.
+ * Further, a DType created using this API/header should still be expected
+ * to be incompatible with some functionality inside and outside of NumPy.
+ * In this case crashes must be expected.  Please report any such problems
+ * so that they can be fixed before final exposure.
+ * Furthermore, expect missing checks for programming errors which the final
+ * API is expected to have.
+ *
+ * Symbols with a leading underscore are likely to not be included in the
+ * first public version, if these are central to your use-case, please let
+ * us know, so that we can reconsider.
+ *
+ * "Array-like" consumer API not yet under considerations
+ * ======================================================
+ *
+ * The new DType API is designed in a way to make it potentially useful for
+ * alternative "array-like" implementations.  This will require careful
+ * exposure of details and functions and is not part of this experimental API.
+ *
+ * Brief (incompatibility) changelog
+ * =================================
+ *
+ * 2. None (only additions).
+ * 3. New `npy_intp *view_offset` argument for `resolve_descriptors`.
+ *    This replaces the `NPY_CAST_IS_VIEW` flag.  It can be set to 0 if the
+ *    operation is a view, and is pre-initialized to `NPY_MIN_INTP` indicating
+ *    that the operation is not a view.
+ ','line_number':1,'multiline':True]
+['text':'
+ * The contents of PyArrayMethodObject are currently opaque (is there a way
+ * good way to make them be `PyObject *`?)
+ ','line_number':133,'multiline':True]
+['text':'
+ * There must be a better way?! -- Oh well, this is experimental
+ * (my issue with it, is that I cannot undef those helpers).
+ ','line_number':139,'multiline':True]
+['text':' Support for correct multi-file projects: ','line_number':151,'multiline':True]
+['text':'
+     * Just a hack so I don't forget importing as much myself, I spend way too
+     * much time noticing it the first time around :).
+     ','line_number':155,'multiline':True]
+['text':'
+ * The main ufunc registration function.  This adds a new implementation/loop
+ * to a ufunc.  It replaces `PyUFunc_RegisterLoopForType`.
+ ','line_number':179,'multiline':True]
+['text':' Please see the NumPy definitions in `array_method.h` for details on these ','line_number':187,'multiline':True]
+['text':'
+ * Type of the C promoter function, which must be wrapped into a
+ * PyCapsule with name "numpy._ufunc_promoter".
+ *
+ * Note that currently the output dtypes are always NULL unless they are
+ * also part of the signature.  This is an implementation detail and could
+ * change in the future.  However, in general promoters should not have a
+ * need for output dtypes.
+ * (There are potential use-cases, these are currently unsupported.)
+ ','line_number':202,'multiline':True]
+['text':'
+ * Function to register a promoter.
+ *
+ * @param ufunc The ufunc object to register the promoter with.
+ * @param DType_tuple A Python tuple containing DTypes or None matching the
+ *        number of inputs and outputs of the ufunc.
+ * @param promoter A PyCapsule with name "numpy._ufunc_promoter" containing
+ *        a pointer to a `promoter_function`.
+ ','line_number':216,'multiline':True]
+['text':'
+ * Finalize creation of a DTypeMeta.  You must ensure that the DTypeMeta is
+ * a proper subclass.  The DTypeMeta object has additional fields compared to
+ * a normal PyTypeObject!
+ * The only (easy) creation of a new DType is to create a static Type which
+ * inherits `PyArray_DescrType`, sets its type to `PyArrayDTypeMeta_Type` and
+ * uses `PyArray_DTypeMeta` defined above as the C-structure.
+ ','line_number':239,'multiline':True]
+['text':'
+ * *************************************
+ *          WORKING WITH DTYPES
+ * *************************************
+ ','line_number':251,'multiline':True]
+['text':'
+ * NumPy's builtin DTypes:
+ ','line_number':285,'multiline':True]
+['text':' Integers ','line_number':289,'multiline':True]
+['text':' Integer aliases ','line_number':300,'multiline':True]
+['text':' Floats ','line_number':311,'multiline':True]
+['text':' Complex ','line_number':316,'multiline':True]
+['text':' String/Bytes ','line_number':320,'multiline':True]
+['text':' Datetime/Timedelta ','line_number':323,'multiline':True]
+['text':' Object/Void ','line_number':326,'multiline':True]
+['text':' Abstract ','line_number':329,'multiline':True]
+['text':'
+ * ********************************
+ *         Initialization
+ * ********************************
+ *
+ * Import the experimental API, the version must match the one defined in
+ * the header to ensure changes are taken into account. NumPy will further
+ * runtime-check this.
+ * You must call this function to use the symbols defined in this file.
+ ','line_number':334,'multiline':True]
+['text':' already imported. ','line_number':357,'multiline':True]
+['text':' !defined(NO_IMPORT) && !defined(NO_IMPORT_ARRAY) ','line_number':384,'multiline':True]
+['text':' NUMPY_CORE_INCLUDE_NUMPY_EXPERIMENTAL_DTYPE_API_H_ ','line_number':386,'multiline':True]

@@ -1,0 +1,712 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]
+['text':'
+ * config_random_generator --
+ *     For a given seed/RNG combination, generate a seed if not given, and initialize the RNG.
+ ','line_number':63,'multiline':True]
+['text':' See if the seed is already present in the configuration. ','line_number':74,'multiline':True]
+['text':' Initialize the RNG, and potentially the seed. ','line_number':77,'multiline':True]
+['text':' If we generated a seed just now, put it into the configuration file. ','line_number':80,'multiline':True]
+['text':' Make sure the generator is ready. ','line_number':87,'multiline':True]
+['text':'
+ * config_random_generators --
+ *     Initialize our global random generators using provided seeds.
+ ','line_number':91,'multiline':True]
+['text':'
+ * config_random_generators_before_run --
+ *     One use case for predictable replay is to run test/format once with little or no
+ *     configuration values set. test/format rolls the dice and picks the configuration, recording
+ *     it along with the random seeds. If we want to rerun it predictably, we can use the same
+ *     seeds. However, the second run will not need to roll the dice during configuration, so the
+ *     state of the RNG after configuration would be different than after configuration during the
+ *     first run. To make everything line up, we re-seed the generator after the configuration, and
+ *     before execution begins.
+ ','line_number':102,'multiline':True]
+['text':'
+ * config_random --
+ *     Do random configuration on the remaining global or table space.
+ ','line_number':119,'multiline':True]
+['text':'
+         * Don't randomly configure runs.tables if we read a CONFIG file, that prevents us from
+         * turning old-style CONFIG files into multi-table tests.
+         ','line_number':138,'multiline':True]
+['text':' Configure key prefixes only rarely, 5% if the length isn't set explicitly. ','line_number':149,'multiline':True]
+['text':'
+         * Boolean flags are 0 or 1, where the variable's "min" value is the percent chance the flag
+         * is "on" (so "on" if random rolled <= N, otherwise "off").
+         ','line_number':153,'multiline':True]
+['text':'
+ * config_promote --
+ *     Promote a base value to a table.
+ ','line_number':167,'multiline':True]
+['text':'
+ * config_table_am --
+ *     Configure the table's access methods (type and source).
+ ','line_number':183,'multiline':True]
+['text':'
+     * The runs.type configuration allows more than a single type, for example, choosing from either
+     * RS and VLCS but not FLCS. If there's no table value but there was a global value, re-evaluate
+     * the original global specification, not the choice set for the global table.
+     ','line_number':192,'multiline':True]
+['text':' 30% ','line_number':209,'multiline':True]
+['text':' FALLTHROUGH ','line_number':214,'multiline':True]
+['text':' 10% ','line_number':215,'multiline':True]
+['text':' FALLTHROUGH ','line_number':220,'multiline':True]
+['text':' 60% ','line_number':220,'multiline':True]
+['text':' 20% ','line_number':234,'multiline':True]
+['text':' 20% ','line_number':237,'multiline':True]
+['text':'
+             * We currently disable random LSM testing, that is, it can be specified explicitly but
+             * we won't randomly choose LSM as a data_source configuration.
+             *
+             * LSM requires a row-store and backing disk. Don't configure LSM if in-memory,
+             * timestamps or truncation are configured, they result in cache problems.
+             *
+             * FIXME WT-4162: Remove the timestamp test when WT-4162 resolved.
+             ','line_number':239,'multiline':True]
+['text':' FALLTHROUGH ','line_number':259,'multiline':True]
+['text':' 60% ','line_number':262,'multiline':True]
+['text':' If data_source and file_type were both set explicitly, we may still have a mismatch. ','line_number':267,'multiline':True]
+['text':'
+ * config_table --
+ *     Finish initialization of a single table.
+ ','line_number':272,'multiline':True]
+['text':' unused argument ','line_number':281,'multiline':True]
+['text':'
+     * Choose a file format and a data source: they're interrelated (LSM is only compatible with
+     * row-store) and other items depend on them.
+     ','line_number':285,'multiline':True]
+['text':'
+     * Next, for any values set in the base configuration, export them to this table (where this
+     * table doesn't already have a value set). This is done after picking an access method as the
+     * access method is more complicated, the base value might be set to "row,var", to pick from two
+     * possible access methods, and so we do that before blindly taking any already set values from
+     * the base configuration. Also, don't copy the mirror setting, it's more complicated as well.
+     ','line_number':291,'multiline':True]
+['text':'
+     * Build the top-level object name: we're overloading data_source in our configuration, LSM
+     * objects are "tables", but files are tested as well.
+     ','line_number':304,'multiline':True]
+['text':' Fill in random values for the rest of the run. ','line_number':316,'multiline':True]
+['text':' Page sizes are configured using powers-of-two or megabytes, convert them. ','line_number':319,'multiline':True]
+['text':'
+     * Keep the number of rows and keys/values small for in-memory and direct I/O runs (overflow
+     * items aren't an issue for in-memory configurations and it helps prevents cache overflow, and
+     * direct I/O can be so slow the additional I/O for overflow items causes eviction to stall).
+     ','line_number':324,'multiline':True]
+['text':'
+         * Always limit the row count if it's greater than one million and in memory wasn't
+         * explicitly set. Direct IO is always explicitly set, never limit the row count because the
+         * user has taken control.
+         ','line_number':330,'multiline':True]
+['text':'
+     * Limit the rows to one million if the realloc exact and realloc malloc configs are on and not
+     * all explicitly set. Realloc exact config allocates the exact amount of memory, which causes a
+     * new realloc call every time we append to an array. Realloc malloc turns a single realloc call
+     * to a malloc, a memcpy, and a free. The combination of both will significantly slow the
+     * execution.
+     ','line_number':352,'multiline':True]
+['text':'
+     * Non-standalone builds do not support writing fast truncate information to disk, as this
+     * information is required to rollback any unstable fast truncate operation.
+     *
+     * To avoid this problem to occur during the test, disable the truncate operation whenever
+     * timestamp or prepare is enabled.
+     ','line_number':369,'multiline':True]
+['text':'
+     * Key/value minimum/maximum are related, correct unless specified by the configuration. Key
+     * sizes are a row-store consideration: column-store doesn't store keys, a constant of 8 will
+     * reserve a small amount of additional space.
+     ','line_number':381,'multiline':True]
+['text':'
+         * In predictable replay, force the number of rows in a table to be a manageable size so we
+         * can modify key numbers without problems.
+         ','line_number':403,'multiline':True]
+['text':'
+         * We don't support some operations in predictable replay.
+         ','line_number':409,'multiline':True]
+['text':'
+         * We don't support the hs_search stress point with pareto distribution in predictable
+         * replay as it prevents us stopping in time.
+         ','line_number':426,'multiline':True]
+['text':'
+     * If common key prefixes are configured, add prefix compression if no explicit choice was made
+     * and track the largest common key prefix in the run.
+     ','line_number':439,'multiline':True]
+['text':' Column-store tables require special row insert resolution. ','line_number':454,'multiline':True]
+['text':' Only row-store tables support a collation order. ','line_number':458,'multiline':True]
+['text':' Give LSM a final review and flag if there's at least one LSM data source. ','line_number':462,'multiline':True]
+['text':'
+ * config_run --
+ *     Run initialization.
+ ','line_number':469,'multiline':True]
+['text':' Configure the random number generators. ','line_number':476,'multiline':True]
+['text':' Configure the remaining global name space. ','line_number':478,'multiline':True]
+['text':'
+     * Limit the number of tables to REALLOC_MAX_TABLES if realloc exact and realloc malloc are both
+     * on and not all explicitly set to reduce the running time to an acceptable level.
+     ','line_number':480,'multiline':True]
+['text':'
+         * The following config_single has no effect. It is just to overwrite the config in memory
+         * so that we can dump the correct config.
+         ','line_number':488,'multiline':True]
+['text':'
+         * Predictable replays can get extremely slow with throttling.
+         *
+         * FIXME-WT-11782: Investigate why predictable replays get stuck with ops.throttling
+         * enabled. It can indicate a bug in predictable replay or in WiredTiger.
+         ','line_number':500,'multiline':True]
+['text':' Periodically run in-memory. ','line_number':513,'multiline':True]
+['text':' Configure the tables. ','line_number':515,'multiline':True]
+['text':' Order can be important, don't shuffle without careful consideration. ','line_number':517,'multiline':True]
+['text':' Tiered storage ','line_number':518,'multiline':True]
+['text':' Chunk cache ','line_number':519,'multiline':True]
+['text':' Transactions ','line_number':520,'multiline':True]
+['text':' Incremental backup ','line_number':521,'multiline':True]
+['text':' Checkpoints ','line_number':522,'multiline':True]
+['text':' Logging compression ','line_number':523,'multiline':True]
+['text':' Direct I/O ','line_number':524,'multiline':True]
+['text':' Encryption ','line_number':525,'multiline':True]
+['text':' Reset in-memory as needed ','line_number':526,'multiline':True]
+['text':' Reset backward compatibility as needed ','line_number':527,'multiline':True]
+['text':' Mirrors ','line_number':528,'multiline':True]
+['text':' Statistics ','line_number':529,'multiline':True]
+['text':' Compaction ','line_number':530,'multiline':True]
+['text':' Configure the cache last, cache size depends on everything else. ','line_number':532,'multiline':True]
+['text':' Adjust run length if needed. ','line_number':535,'multiline':True]
+['text':'
+ * config_backup_incr --
+ *     Incremental backup configuration.
+ ','line_number':541,'multiline':True]
+['text':'
+     * Incremental backup using log files is incompatible with automatic log removals. Testing log
+     * file removal doesn't seem as useful as testing backup, let the backup configuration override.
+     ','line_number':553,'multiline':True]
+['text':'
+     * Choose a type of incremental backup, where the log remove setting can eliminate incremental
+     * backup based on log files.
+     ','line_number':565,'multiline':True]
+['text':' 30% full backup only ','line_number':570,'multiline':True]
+['text':' 30% log based incremental ','line_number':575,'multiline':True]
+['text':' FALLTHROUGH ','line_number':584,'multiline':True]
+['text':' 40% block based incremental ','line_number':585,'multiline':True]
+['text':'
+ * config_backup_incr_granularity --
+ *     Configuration of block granularity for incremental backup
+ ','line_number':595,'multiline':True]
+['text':'
+     * Three block sizes are interesting. 16MB is the default for WiredTiger and MongoDB. 1MB is the
+     * minimum allowed by MongoDB. Smaller sizes stress block tracking and are good for testing. The
+     * granularity is in units of KB.
+     ','line_number':608,'multiline':True]
+['text':' 50% small size for stress testing ','line_number':616,'multiline':True]
+['text':' 20% 1MB granularity ','line_number':623,'multiline':True]
+['text':' 30% 16MB granularity ','line_number':627,'multiline':True]
+['text':'
+ * config_backward_compatible_table --
+ *     Backward compatibility configuration, per table.
+ ','line_number':638,'multiline':True]
+['text':' unused argument ','line_number':645,'multiline':True]
+['text':'
+ * config_backward_compatible --
+ *     Backward compatibility configuration.
+ ','line_number':658,'multiline':True]
+['text':'
+     * If built in a branch that doesn't support all current options, or creating a database for
+     * such an environment, strip out configurations that won't work.
+     ','line_number':665,'multiline':True]
+['text':'
+ * config_cache --
+ *     Cache configuration.
+ ','line_number':689,'multiline':True]
+['text':' Sum the number of workers. ','line_number':698,'multiline':True]
+['text':' Check if both min and max cache sizes have been specified and if they're consistent. ','line_number':705,'multiline':True]
+['text':'
+     * If it's an in-memory run, size the cache at 2x the maximum initial data set. This calculation
+     * is done in bytes, convert to megabytes before testing against the cache.
+     ','line_number':715,'multiline':True]
+['text':' NOT in MB units, convert for cache test ','line_number':723,'multiline':True]
+['text':'
+     * Maximum internal/leaf page size sanity.
+     *
+     * Ensure we can service at least one operation per-thread concurrently without filling the
+     * cache with pinned pages, that is, every thread consuming an internal page and a leaf page (or
+     * a pair of leaf pages for cursor movements).
+     *
+     * This code is what dramatically increases the cache size when there are lots of threads, it
+     * grows the cache to several megabytes per thread.
+     ','line_number':728,'multiline':True]
+['text':' in MB units, no conversion to cache ','line_number':738,'multiline':True]
+['text':'
+     * Ensure cache size sanity for LSM runs. An LSM tree open requires 3 chunks plus a page for
+     * each participant in up to three concurrent merges. Integrate a thread count into that
+     * calculation by requiring 3 chunks/pages per configured thread. That might be overkill, but
+     * LSM runs are more sensitive to small caches than other runs, and a generous cache avoids
+     * stalls we're not interested in chasing.
+     ','line_number':744,'multiline':True]
+['text':' Give any block cache 20% of the total cache size, over and above the cache. ','line_number':760,'multiline':True]
+['text':' Adjust the dirty eviction settings to reduce test driven cache stuck failures. ','line_number':765,'multiline':True]
+['text':'
+ * config_checkpoint --
+ *     Checkpoint configuration.
+ ','line_number':780,'multiline':True]
+['text':' Choose a checkpoint mode if nothing was specified. ','line_number':787,'multiline':True]
+['text':' 20% ','line_number':793,'multiline':True]
+['text':' 5 % ','line_number':796,'multiline':True]
+['text':' 75% ','line_number':799,'multiline':True]
+['text':'
+ * config_checksum --
+ *     Checksum configuration.
+ ','line_number':805,'multiline':True]
+['text':' Choose a checksum mode if nothing was specified. ','line_number':812,'multiline':True]
+['text':' 40% ','line_number':818,'multiline':True]
+['text':' 10% ','line_number':821,'multiline':True]
+['text':' 10% ','line_number':824,'multiline':True]
+['text':' 40% ','line_number':827,'multiline':True]
+['text':'
+ * config_compression --
+ *     Compression configuration.
+ ','line_number':833,'multiline':True]
+['text':' Ignore logging compression if we're not doing logging. ','line_number':843,'multiline':True]
+['text':' Return if already specified and it's a current compression engine. ','line_number':849,'multiline':True]
+['text':'
+     * Select a compression type from the list of built-in engines. Listed percentages are only
+     * correct if all of the possible engines are compiled in.
+     ','line_number':861,'multiline':True]
+['text':' 15% lz4 ','line_number':870,'multiline':True]
+['text':' 30% snappy ','line_number':880,'multiline':True]
+['text':' 20% zlib ','line_number':888,'multiline':True]
+['text':' 20% zstd ','line_number':896,'multiline':True]
+['text':' 15% no compression ','line_number':902,'multiline':True]
+['text':'
+ * config_directio --
+ *     Direct I/O configuration.
+ ','line_number':911,'multiline':True]
+['text':'
+     * We don't roll the dice and set direct I/O, it has to be set explicitly. If there are any
+     * incompatible configurations set explicitly, turn off direct I/O, otherwise turn off the
+     * incompatible configurations.
+     ','line_number':918,'multiline':True]
+['text':'
+     * Direct I/O may not work with backups, doing copies through the buffer cache after configuring
+     * direct I/O in Linux won't work. If direct I/O is configured, turn off backups.
+     ','line_number':938,'multiline':True]
+['text':' Direct I/O may not work with imports for the same reason as for backups. ','line_number':944,'multiline':True]
+['text':'
+     * Direct I/O may not work with mmap. Theoretically, Linux ignores direct I/O configurations in
+     * the presence of shared cache configurations (including mmap), but we've seen file corruption
+     * and it doesn't make much sense (the library disallows the combination).
+     ','line_number':947,'multiline':True]
+['text':'
+     * Turn off all external programs. Direct I/O is really, really slow on some machines and it can
+     * take hours for a job to run. External programs don't have timers running so it looks like
+     * format just hung, and the 15-minute timeout isn't effective. We could play games to handle
+     * child process termination, but it's not worth the effort.
+     ','line_number':954,'multiline':True]
+['text':' Direct I/O needs buffer alignment to be set automatically. ','line_number':962,'multiline':True]
+['text':'
+ * config_encryption --
+ *     Encryption configuration.
+ ','line_number':966,'multiline':True]
+['text':' Encryption: choose something if encryption wasn't specified. ','line_number':973,'multiline':True]
+['text':' 70% no encryption, 30% rotn ','line_number':977,'multiline':True]
+['text':'
+ * config_fix --
+ *     Fixed-length column-store configuration.
+ ','line_number':984,'multiline':True]
+['text':'
+     * Fixed-length column stores don't support modify operations, and can't be used with
+     * predictable replay with insertions.
+     ','line_number':991,'multiline':True]
+['text':'
+ * config_var --
+ *     Variable-length column-store configuration.
+ ','line_number':999,'multiline':True]
+['text':'
+     * Variable-length column store insertions can't be used with predictable replay.
+     ','line_number':1006,'multiline':True]
+['text':'
+ * config_in_memory --
+ *     Periodically set up an in-memory configuration.
+ ','line_number':1012,'multiline':True]
+['text':'
+     * Configure in-memory before anything else, in-memory has many related requirements. Don't
+     * configure in-memory if there's any incompatible configurations, so we don't have to
+     * reconfigure in-memory every time we configure something like LSM, that's too painful.
+     *
+     * Limit the number of tables in any in-memory run, otherwise it's too easy to blow out the
+     * cache.
+     ','line_number':1019,'multiline':True]
+['text':' Use table[0] to access the global value (RUN_ROWS is a table value). ','line_number':1062,'multiline':True]
+['text':'
+ * config_in_memory_reset --
+ *     In-memory configuration review.
+ ','line_number':1071,'multiline':True]
+['text':' If doing an in-memory run, make sure we haven't configured something that won't work. ','line_number':1078,'multiline':True]
+['text':' Turn off a lot of stuff. ','line_number':1082,'multiline':True]
+['text':'
+ * config_backup_incr_log_compatibility_check --
+ *     Backup incremental log compatibility check.
+ ','line_number':1107,'multiline':True]
+['text':'
+     * Incremental backup using log files is incompatible with automatic log file removal. Disable
+     * logging removal if log incremental backup is set.
+     ','line_number':1114,'multiline':True]
+['text':'
+ * config_lsm_reset --
+ *     LSM configuration review.
+ ','line_number':1126,'multiline':True]
+['text':'
+     * Turn off truncate for LSM runs (some configurations with truncate always result in a
+     * timeout).
+     ','line_number':1133,'multiline':True]
+['text':'
+     * Turn off prepare and timestamps for LSM runs (prepare requires timestamps).
+     *
+     * FIXME: WT-4162.
+     ','line_number':1143,'multiline':True]
+['text':'
+     * LSM does not work with block-based incremental backup, change the incremental backup
+     * mechanism if configured to be block based.
+     ','line_number':1155,'multiline':True]
+['text':'
+ * config_mirrors --
+ *     Configure table mirroring.
+ ','line_number':1167,'multiline':True]
+['text':'
+     * In theory, mirroring should work with predictable replay, although there's some overlap in
+     * functionality. That is, we usually do multiple runs with the same key with predictable replay
+     * and would notice if data was different or missing. We disable it to keep runs simple.
+     ','line_number':1180,'multiline':True]
+['text':' Check for a CONFIG file that's already set up for mirroring. ','line_number':1191,'multiline':True]
+['text':' A custom collator would complicate the cursor traversal when comparing tables. ','line_number':1204,'multiline':True]
+['text':'
+         * Assume that mirroring is already configured if one of the tables has explicitly
+         * configured it on. This isn't optimal since there could still be other tables that haven't
+         * set it at all (and might be usable as extra mirrors), but that's an uncommon scenario and
+         * it lets us avoid a bunch of extra logic around figuring out whether we have an acceptable
+         * minimum number of tables.
+         ','line_number':1207,'multiline':True]
+['text':'
+     * Mirror configuration is potentially confusing: it's a per-table configuration (because it has
+     * to be set for subsequent runs so we can tell which tables are part of the mirror group), but
+     * it's configured on a global basis, causing the random selection of a group of tables for the
+     * mirror group. If it's configured anywhere, it's configured everywhere; otherwise configure it
+     * 20% of the time. Once that's done, turn off all mirroring, it's turned back on for selected
+     * tables.
+     ','line_number':1217,'multiline':True]
+['text':'
+     * We can't mirror if we don't have enough tables. A FLCS table can be a mirror, but it can't be
+     * the source of the bulk-load mirror records. Find the first table we can use as a base.
+     ','line_number':1231,'multiline':True]
+['text':'
+     * We also can't mirror if we don't have enough tables that have allowed mirroring. It's
+     * possible for a table to explicitly set tableX.runs.mirror=0, so check how many tables have
+     * done that and remove them from the count of tables we can use for mirroring.
+     ','line_number':1246,'multiline':True]
+['text':' A custom collator would complicate the cursor traversal when comparing tables. ','line_number':1263,'multiline':True]
+['text':' Good to go: pick the first non-FLCS table that allows mirroring as our base. ','line_number':1266,'multiline':True]
+['text':'
+     * Pick some number of tables to mirror, then turn on mirroring the next (n-1) tables, where
+     * allowed.
+     ','line_number':1275,'multiline':True]
+['text':'
+     * Give each mirror the same number of rows (it's not necessary, we could treat end-of-table on
+     * a mirror as OK, but this lets us assert matching rows).
+     ','line_number':1292,'multiline':True]
+['text':'
+ * config_mirrors_disable_reverse --
+ *     Disable reverse if mirroring enabled.
+ ','line_number':1302,'multiline':True]
+['text':'
+ * config_pct --
+ *     Configure operation percentages.
+ ','line_number':1320,'multiline':True]
+['text':' Operation ','line_number':1328,'multiline':True]
+['text':' Value store ','line_number':1329,'multiline':True]
+['text':' Order of assignment ','line_number':1330,'multiline':True]
+['text':' Enabled for this configuration ','line_number':1331,'multiline':True]
+['text':' We explicitly disable modify operations for predictable replay. ','line_number':1336,'multiline':True]
+['text':'
+     * Walk the list of operations, checking for an illegal configuration and creating a random
+     * order in the list.
+     ','line_number':1358,'multiline':True]
+['text':'
+     * Some older configurations had broken percentages. If summing the explicitly specified
+     * percentages maxes us out, warn and keep running, leaving unspecified operations at 0.
+     ','line_number':1374,'multiline':True]
+['text':'
+     * Walk the list, allocating random numbers of operations in a random order.
+     *
+     * If the "order" field is non-zero, we need to create a value for this operation. Find the
+     * largest order field in the array; if one non-zero order field is found, it's the last entry
+     * and gets the remainder of the operations.
+     ','line_number':1386,'multiline':True]
+['text':'
+ * config_run_length --
+ *     Run length configuration.
+ ','line_number':1418,'multiline':True]
+['text':'
+     * Run-length is configured by a number of operations and a timer.
+     *
+     * If the operation count and the timer are both configured, do nothing. If only the timer is
+     * configured, clear the operations count. If only the operation count is configured, limit the
+     * run to 6 hours. If neither is configured, leave the operations count alone and limit the run
+     * to 30 minutes.
+     *
+     * In other words, if we rolled the dice on everything, do a short run. If we chose a number of
+     * operations but the rest of the configuration means operations take a long time to complete
+     * (for example, a small cache and many worker threads), don't let it run forever.
+     ','line_number':1425,'multiline':True]
+['text':'
+     * There are combinations that can cause out of disk space issues and here we try to prevent
+     * those. CONFIG.stress causes runs.timer to be considered explicit which limits when we can
+     * override the run length to extreme cases.
+     ','line_number':1447,'multiline':True]
+['text':'
+ * config_statistics --
+ *     Statistics configuration.
+ ','line_number':1460,'multiline':True]
+['text':' Sources is only applicable when the mode is all. ','line_number':1467,'multiline':True]
+['text':' 70% of the time set statistics to fast. ','line_number':1472,'multiline':True]
+['text':' 10% of the time use sources if all. ','line_number':1480,'multiline':True]
+['text':'
+ * config_chunk_cache --
+ *     Chunk cache configuration.
+ ','line_number':1486,'multiline':True]
+['text':' Chunk cache does not work unless tiered storage is configured. ','line_number':1498,'multiline':True]
+['text':'
+         * Make sure no configurations related to chunk caching are set if chunk cache is not
+         * enabled.
+         ','line_number':1507,'multiline':True]
+['text':' Enable chunk cache 50% of the time if not explicit set. ','line_number':1520,'multiline':True]
+['text':'
+                 * Alternate between running chunk cache with the 'File' type and the 'DRAM' type.
+                 ','line_number':1541,'multiline':True]
+['text':' Always ensure that capacity greater than chunk_size. ','line_number':1561,'multiline':True]
+['text':'
+ * config_tiered_storage --
+ *     Tiered storage configuration.
+ ','line_number':1566,'multiline':True]
+['text':'
+     * FIXME-WT-9934 If we ever allow tiered storage to be run only locally but with switching
+     * objects, then none becomes a valid option with tiered storage enabled.
+     ','line_number':1577,'multiline':True]
+['text':' Tiered storage requires timestamps. ','line_number':1584,'multiline':True]
+['text':' If we are flushing, we need a checkpoint thread. ','line_number':1588,'multiline':True]
+['text':' FIXME-PM-2530: Salvage and verify are not yet supported for tiered storage. ','line_number':1592,'multiline':True]
+['text':' FIXME-PM-2532: Backup is not yet supported for tiered tables. ','line_number':1596,'multiline':True]
+['text':' FIXME-PM-2538: Compact is not yet supported for tiered tables. ','line_number':1600,'multiline':True]
+['text':' Never try flush to tiered storage unless running with tiered storage. ','line_number':1604,'multiline':True]
+['text':'
+ * config_transaction --
+ *     Transaction configuration.
+ ','line_number':1608,'multiline':True]
+['text':' Predictable replay requires timestamps. ','line_number':1615,'multiline':True]
+['text':' Transaction prepare requires timestamps and is incompatible with logging. ','line_number':1621,'multiline':True]
+['text':' Transaction timestamps are incompatible with implicit transactions, logging and salvage. ','line_number':1629,'multiline':True]
+['text':' FIXME WT-6431 ','line_number':1634,'multiline':True]
+['text':'
+     * Incompatible permanent configurations have been checked, now turn off any incompatible flags.
+     * Honor the choice if something was set explicitly, next retain a configured prepare (it's not
+     * configured often), then match however timestamps are configured.
+     ','line_number':1640,'multiline':True]
+['text':' FIXME WT-6431 ','line_number':1666,'multiline':True]
+['text':' Set a default transaction timeout limit if one is not specified. ','line_number':1684,'multiline':True]
+['text':'
+ * config_error --
+ *     Display configuration information on error.
+ ','line_number':1692,'multiline':True]
+['text':' Display configuration names. ','line_number':1702,'multiline':True]
+['text':'
+ * config_print_one --
+ *     Print out a single configuration setting.
+ ','line_number':1723,'multiline':True]
+['text':' Historic versions of format expect "none", instead of "off", for a few configurations. ','line_number':1732,'multiline':True]
+['text':' Historic versions of format expect log=(archive), not log=(remove). ','line_number':1743,'multiline':True]
+['text':'
+ * config_print_table --
+ *     Print per-table information.
+ ','line_number':1752,'multiline':True]
+['text':' Skip global items. ','line_number':1771,'multiline':True]
+['text':' Skip mismatched objects and configurations. ','line_number':1774,'multiline':True]
+['text':' Skip entries that match any global setting. ','line_number':1783,'multiline':True]
+['text':'
+ * config_print --
+ *     Print configuration information.
+ ','line_number':1793,'multiline':True]
+['text':' Reopening an existing database should leave the existing CONFIG file. ','line_number':1805,'multiline':True]
+['text':' Display global configuration values. ','line_number':1818,'multiline':True]
+['text':' Skip table count if tables not configured (implying an old-style CONFIG file). ','line_number':1820,'multiline':True]
+['text':' Skip mismatched objects and configurations. ','line_number':1824,'multiline':True]
+['text':' Skip mismatched table items if the global table is the only table. ','line_number':1828,'multiline':True]
+['text':' Skip table items if not explicitly set and the global table isn't the only table. ','line_number':1832,'multiline':True]
+['text':' Print everything else. ','line_number':1837,'multiline':True]
+['text':' Display per-table configuration values. ','line_number':1841,'multiline':True]
+['text':' Flush so we're up-to-date on error. ','line_number':1846,'multiline':True]
+['text':'
+ * config_file --
+ *     Read configuration values from a file.
+ ','line_number':1853,'multiline':True]
+['text':'
+     * Turn off multi-table configuration for all configuration files, for backward compatibility.
+     * This doesn't stop multiple table configurations, using either "runs.tables" or an explicit
+     * mention of a table, it only prevents CONFIG files without a table reference from configuring
+     * tables. This should only affect putting some non-table-specific configurations into a file
+     * and running that file as a CONFIG, expecting a multi-table test, and means old-style CONFIG
+     * files don't suddenly turn into multiple table tests.
+     ','line_number':1863,'multiline':True]
+['text':'
+     * Skip whitespace leading up to the configuration. Skip Evergreen timestamps by skipping a pair
+     * of enclosing braces and trailing whitespace. This is fragile: we're in trouble if Evergreen
+     * changes its timestamp format.
+     ','line_number':1876,'multiline':True]
+['text':' Replace any newline character. ','line_number':1882,'multiline':True]
+['text':' Skip any leading whitespace. ','line_number':1889,'multiline':True]
+['text':' Skip any Evergreen timestamp. ','line_number':1894,'multiline':True]
+['text':' Skip any trailing whitespace. ','line_number':1902,'multiline':True]
+['text':' Skip any comments or empty lines. ','line_number':1907,'multiline':True]
+['text':'
+ * config_clear --
+ *     Clear all configuration values.
+ ','line_number':1914,'multiline':True]
+['text':' Clear all allocated configuration data in the tables array. ','line_number':1923,'multiline':True]
+['text':'
+ * config_find --
+ *     Find a specific configuration entry.
+ ','line_number':1934,'multiline':True]
+['text':' Optionally ignore unknown keywords, it makes it easier to run old CONFIG files. ','line_number':1947,'multiline':True]
+['text':'
+ * config_off --
+ *     Turn a configuration value off.
+ ','line_number':1955,'multiline':True]
+['text':'
+ * config_off_all --
+ *     Turn a configuration value off for all possible entries.
+ ','line_number':1970,'multiline':True]
+['text':'
+ * config_table_extend --
+ *     Extend the tables array as necessary.
+ ','line_number':1984,'multiline':True]
+['text':'
+     * Allocate any new tables structures. (We do it this way, rather than reallocating the whole
+     * tables array, because our caller doesn't know we're extending the list of tables, and is
+     * likely holding pointers into the current list of tables. Reallocating the whole array would
+     * require handling reallocation in our caller, and it's not worth the effort.)
+     *
+     * This might be the first extension, reset the base table's ID (for debugging, we should never
+     * be using a table with ID 0).
+     ','line_number':1999,'multiline':True]
+['text':'
+ * config_single --
+ *     Set a single configuration structure value.
+ ','line_number':2016,'multiline':True]
+['text':'
+     * Check for corrupted input. Format has a syntax checking mode and this simplifies that work by
+     * checking for any unexpected characters. It's complicated by wiredtiger.config, as that
+     * configuration option includes JSON characters.
+     ','line_number':2034,'multiline':True]
+['text':' Skip leading white space. ','line_number':2044,'multiline':True]
+['text':'
+     * If configuring a single table, the table argument will be non-NULL. The configuration itself
+     * may include a table reference, in which case we extend the table as necessary and select the
+     * table.
+     ','line_number':2048,'multiline':True]
+['text':' Process backward compatibility configuration. ','line_number':2066,'multiline':True]
+['text':' Find the configuration value, and assert it's not a table/global mismatch. ','line_number':2072,'multiline':True]
+['text':' Ignore tables settings in backward compatible runs. ','line_number':2077,'multiline':True]
+['text':'
+     * Use the data RNG for these options, that's conservative.
+     ','line_number':2086,'multiline':True]
+['text':'
+         * Historically, both "none" and "off" were used for turning off string configurations, now
+         * we only use "off".
+         ','line_number':2092,'multiline':True]
+['text':' Save any global configuration for later table configuration. ','line_number':2109,'multiline':True]
+['text':' Free the previous setting if a configuration has been passed in twice. ','line_number':2117,'multiline':True]
+['text':'
+     * Three possible syntax elements: a number, two numbers separated by a dash, two numbers
+     * separated by an colon. The first is a fixed value, the second is a range where all values are
+     * equally possible, the third is a weighted range where lower values are more likely.
+     ','line_number':2141,'multiline':True]
+['text':'
+     * Get the value and check the range; zero is optionally an out-of-band "don't set this
+     * variable" value.
+     ','line_number':2156,'multiline':True]
+['text':'
+         * Historically, btree.split_pct support ranges < 50; correct the value.
+         *
+         * Historically, btree.key_min allows ranges under the minimum; correct the value
+         ','line_number':2162,'multiline':True]
+['text':'
+             * Roll dice, 50% chance of proceeding to the next larger value, and 5 steps to the
+             * maximum value.
+             ','line_number':2189,'multiline':True]
+['text':'
+ * config_map_file_type --
+ *     Map a file type configuration to a flag.
+ ','line_number':2210,'multiline':True]
+['text':' Accumulate choices. ','line_number':2223,'multiline':True]
+['text':' Allow, but don't require, comma-separators. ','line_number':2235,'multiline':True]
+['text':' Check for a single configuration. ','line_number':2241,'multiline':True]
+['text':'
+     * Handle multiple configurations.
+     *
+     * Fixed-length column-store is 10% in all cases.
+     *
+     * Variable-length column-store is 90% vs. fixed, 30% vs. fixed and row, and 40% vs row.
+     ','line_number':2255,'multiline':True]
+['text':'
+ * config_map_backup_incr --
+ *     Map a incremental backup configuration to a flag.
+ ','line_number':2271,'multiline':True]
+['text':'
+ * config_map_checkpoint --
+ *     Map a checkpoint configuration to a flag.
+ ','line_number':2288,'multiline':True]
+['text':' Checkpoint configuration used to be 1/0, let it continue to work. ','line_number':2295,'multiline':True]
+['text':'
+ * config_explicit --
+ *     Return if a configuration entry is explicitly set (as opposed to being randomly set).
+ ','line_number':2306,'multiline':True]
+['text':' Look up the configuration option. ','line_number':2316,'multiline':True]
+['text':'
+     * If it's a global option, assert our caller didn't ask for a table value, and return if it's
+     * set in the base values.
+     ','line_number':2319,'multiline':True]
+['text':' If checking a single table, the table argument is non-NULL. ','line_number':2328,'multiline':True]
+['text':' Otherwise, check if it's set in the base values or in any table. ','line_number':2332,'multiline':True]
+['text':'
+ * config_file_type --
+ *     Return the file type as a string.
+ ','line_number':2341,'multiline':True]
+['text':'
+ * config_compact --
+ *     Generate compaction related configurations.
+ ','line_number':2361,'multiline':True]
+['text':' Compaction does not work on in-memory databases, disable it. ','line_number':2368,'multiline':True]

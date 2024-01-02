@@ -1,0 +1,278 @@
+['text':' enough.c -- determine the maximum size of inflate's Huffman code tables over
+ * all possible valid and complete prefix codes, subject to a length limit.
+ * Copyright (C) 2007, 2008, 2012, 2018 Mark Adler
+ * Version 1.5  5 August 2018  Mark Adler
+ ','line_number':1,'multiline':True]
+['text':' Version history:
+   1.0   3 Jan 2007  First version (derived from codecount.c version 1.4)
+   1.1   4 Jan 2007  Use faster incremental table usage computation
+                     Prune examine() search on previously visited states
+   1.2   5 Jan 2007  Comments clean up
+                     As inflate does, decrease root for short codes
+                     Refuse cases where inflate would increase root
+   1.3  17 Feb 2008  Add argument for initial root table size
+                     Fix bug for initial root table size == max - 1
+                     Use a macro to compute the history index
+   1.4  18 Aug 2012  Avoid shifts more than bits in type (caused endless loop!)
+                     Clean up comparisons of different types
+                     Clean up code indentation
+   1.5   5 Aug 2018  Clean up code style, formatting, and comments
+                     Show all the codes for the maximum, and only the maximum
+ ','line_number':7,'multiline':True]
+['text':'
+   Examine all possible prefix codes for a given number of symbols and a
+   maximum code length in bits to determine the maximum table size for zlib's
+   inflate. Only complete prefix codes are counted.
+
+   Two codes are considered distinct if the vectors of the number of codes per
+   length are not identical. So permutations of the symbol assignments result
+   in the same code for the counting, as do permutations of the assignments of
+   the bit values to the codes (i.e. only canonical codes are counted).
+
+   We build a code from shorter to longer lengths, determining how many symbols
+   are coded at each length. At each step, we have how many symbols remain to
+   be coded, what the last code length used was, and how many bit patterns of
+   that length remain unused. Then we add one to the code length and double the
+   number of unused patterns to graduate to the next code length. We then
+   assign all portions of the remaining symbols to that code length that
+   preserve the properties of a correct and eventually complete code. Those
+   properties are: we cannot use more bit patterns than are available; and when
+   all the symbols are used, there are exactly zero possible bit patterns left
+   unused.
+
+   The inflate Huffman decoding algorithm uses two-level lookup tables for
+   speed. There is a single first-level table to decode codes up to root bits
+   in length (root == 9 for literal/length codes and root == 6 for distance
+   codes, in the current inflate implementation). The base table has 1 << root
+   entries and is indexed by the next root bits of input. Codes shorter than
+   root bits have replicated table entries, so that the correct entry is
+   pointed to regardless of the bits that follow the short code. If the code is
+   longer than root bits, then the table entry points to a second-level table.
+   The size of that table is determined by the longest code with that root-bit
+   prefix. If that longest code has length len, then the table has size 1 <<
+   (len - root), to index the remaining bits in that set of codes. Each
+   subsequent root-bit prefix then has its own sub-table. The total number of
+   table entries required by the code is calculated incrementally as the number
+   of codes at each bit length is populated. When all of the codes are shorter
+   than root bits, then root is reduced to the longest code length, resulting
+   in a single, smaller, one-level table.
+
+   The inflate algorithm also provides for small values of root (relative to
+   the log2 of the number of symbols), where the shortest code has more bits
+   than root. In that case, root is increased to the length of the shortest
+   code. This program, by design, does not handle that case, so it is verified
+   that the number of symbols is less than 1 << (root + 1).
+
+   In order to speed up the examination (by about ten orders of magnitude for
+   the default arguments), the intermediate states in the build-up of a code
+   are remembered and previously visited branches are pruned. The memory
+   required for this will increase rapidly with the total number of symbols and
+   the maximum code length in bits. However this is a very small price to pay
+   for the vast speedup.
+
+   First, all of the possible prefix codes are counted, and reachable
+   intermediate states are noted by a non-zero count in a saved-results array.
+   Second, the intermediate states that lead to (root + 1) bit or longer codes
+   are used to look at all sub-codes from those junctures for their inflate
+   memory usage. (The amount of memory used is not affected by the number of
+   codes of root bits or less in length.)  Third, the visited states in the
+   construction of those sub-codes and the associated calculation of the table
+   size is recalled in order to avoid recalculating from the same juncture.
+   Beginning the code examination at (root + 1) bit codes, which is enabled by
+   identifying the reachable nodes, accounts for about six of the orders of
+   magnitude of improvement for the default arguments. About another four
+   orders of magnitude come from not revisiting previous states. Out of
+   approximately 2x10^16 possible prefix codes, only about 2x10^6 sub-codes
+   need to be examined to cover all of the possible table memory usage cases
+   for the default arguments of 286 symbols limited to 15-bit codes.
+
+   Note that the uintmax_t type is used for counting. It is quite easy to
+   exceed the capacity of an eight-byte integer with a large number of symbols
+   and a large maximum code length, so multiple-precision arithmetic would need
+   to replace the integer arithmetic in that case. This program will abort if
+   an overflow occurs. The big_t type identifies where the counting takes
+   place.
+
+   The uintmax_t type is also used for calculating the number of possible codes
+   remaining at the maximum length. This limits the maximum code length to the
+   number of bits in a long long minus the number of bits needed to represent
+   the symbols in a flat code. The code_t type identifies where the bit-pattern
+   counting takes place.
+ ','line_number':24,'multiline':True]
+['text':' Special data types.','line_number':114,'multiline':False]
+['text':' type for code counting','line_number':115,'multiline':False]
+['text':' printf format for big_t','line_number':116,'multiline':False]
+['text':' type for bit pattern counting','line_number':117,'multiline':False]
+['text':' type for been-here check','line_number':118,'multiline':False]
+['text':' allocated length of bit vector in octets','line_number':119,'multiline':False]
+['text':' allocated bit vector','line_number':120,'multiline':False]
+['text':' The array for saving results, num[], is indexed with this triplet:
+
+      syms: number of symbols remaining to code
+      left: number of available bit patterns at length len
+      len: number of bits in the codes currently being assigned
+
+   Those indices are constrained thusly when saving results:
+
+      syms: 3..totsym (totsym == total symbols to code)
+      left: 2..syms - 1, but only the evens (so syms == 8 -> 2, 4, 6)
+      len: 1..max - 1 (max == maximum code length in bits)
+
+   syms == 2 is not saved since that immediately leads to a single code. left
+   must be even, since it represents the number of available bit patterns at
+   the current length, which is double the number at the previous length. left
+   ends at syms-1 since left == syms immediately results in a single code.
+   (left > sym is not allowed since that would result in an incomplete code.)
+   len is less than max, since the code completes immediately when len == max.
+
+   The offset into the array is calculated for the three indices with the first
+   one (syms) being outermost, and the last one (len) being innermost. We build
+   the array with length max-1 lists for the len index, with syms-3 of those
+   for each symbol. There are totsym-2 of those, with each one varying in
+   length as a function of sym. See the calculation of index in map() for the
+   index, and the calculation of size in main() for the size of the array.
+
+   For the deflate example of 286 symbols limited to 15-bit codes, the array
+   has 284,284 entries, taking up 2.17 MB for an 8-byte big_t. More than half
+   of the space allocated for saved results is actually used -- not all
+   possible triplets are reached in the generation of valid prefix codes.
+ ','line_number':123,'multiline':True]
+['text':' The array for tracking visited states, done[], is itself indexed identically
+   to the num[] array as described above for the (syms, left, len) triplet.
+   Each element in the array is further indexed by the (mem, rem) doublet,
+   where mem is the amount of inflate table space used so far, and rem is the
+   remaining unused entries in the current inflate sub-table. Each indexed
+   element is simply one bit indicating whether the state has been visited or
+   not. Since the ranges for mem and rem are not known a priori, each bit
+   vector is of a variable size, and grows as needed to accommodate the visited
+   states. mem and rem are used to calculate a single index in a triangular
+   array. Since the range of mem is expected in the default case to be about
+   ten times larger than the range of rem, the array is skewed to reduce the
+   memory usage, with eight times the range for mem than for rem. See the
+   calculations for offset and bit in been_here() for the details.
+
+   For the deflate example of 286 symbols limited to 15-bit codes, the bit
+   vectors grow to total 5.5 MB, in addition to the 4.3 MB done array itself.
+ ','line_number':155,'multiline':True]
+['text':' Type for a variable-length, allocated string.','line_number':173,'multiline':False]
+['text':' pointer to allocated string','line_number':175,'multiline':False]
+['text':' size of allocation','line_number':176,'multiline':False]
+['text':' length of string, not including terminating zero','line_number':177,'multiline':False]
+['text':' Clear a string_t.','line_number':180,'multiline':False]
+['text':' Initialize a string_t.','line_number':186,'multiline':False]
+['text':' Release the allocation of a string_t.','line_number':194,'multiline':False]
+['text':' Save the results of printf with fmt and the subsequent argument list to s.','line_number':202,'multiline':False]
+['text':' Each call appends to s. The allocated space for s is increased as needed.','line_number':203,'multiline':False]
+['text':' Globals to avoid propagating constants or constant pointers recursively.','line_number':223,'multiline':False]
+['text':' maximum allowed bit length for the codes','line_number':225,'multiline':False]
+['text':' size of base code table in bits','line_number':226,'multiline':False]
+['text':' largest code table so far','line_number':227,'multiline':False]
+['text':' number of elements in num and done','line_number':228,'multiline':False]
+['text':' total number of codes with maximum tables size','line_number':229,'multiline':False]
+['text':' display of subcodes for maximum tables size','line_number':230,'multiline':False]
+['text':' number of symbols assigned to each bit length','line_number':231,'multiline':False]
+['text':' saved results array for code counting','line_number':232,'multiline':False]
+['text':' states already evaluated array','line_number':233,'multiline':False]
+['text':' Index function for num[] and done[].','line_number':236,'multiline':False]
+['text':' Free allocated space in globals.','line_number':243,'multiline':False]
+['text':' Return the number of possible prefix codes using bit patterns of lengths len','line_number':257,'multiline':False]
+['text':' through max inclusive, coding syms symbols, with left bit patterns of length','line_number':258,'multiline':False]
+['text':' len unused -- return -1 if there is an overflow in the counting. Keep a','line_number':259,'multiline':False]
+['text':' record of previous results in num to prevent repeating the same calculation.','line_number':260,'multiline':False]
+['text':' see if only one possible code','line_number':262,'multiline':False]
+['text':' note and verify the expected state','line_number':266,'multiline':False]
+['text':' see if we've done this one already','line_number':269,'multiline':False]
+['text':' we have -- return the saved result','line_number':273,'multiline':False]
+['text':' we need to use at least this many bit patterns so that the code won't be','line_number':275,'multiline':False]
+['text':' incomplete at the next length (more bit patterns than symbols)','line_number':276,'multiline':False]
+['text':' we can use at most this many bit patterns, lest there not be enough','line_number':281,'multiline':False]
+['text':' available for the remaining symbols at the maximum length (if there were','line_number':282,'multiline':False]
+['text':' no limit to the code length, this would become: most = left - 1)','line_number':283,'multiline':False]
+['text':' count all possible codes from this juncture and add them up','line_number':287,'multiline':False]
+['text':' overflow','line_number':292,'multiline':False]
+['text':' verify that all recursive calls are productive','line_number':296,'multiline':False]
+['text':' save the result and return it','line_number':299,'multiline':False]
+['text':' Return true if we've been here before, set to true if not. Set a bit in a','line_number':304,'multiline':False]
+['text':' bit vector to indicate visiting this state. Each (syms,len,left) state has a','line_number':305,'multiline':False]
+['text':' variable size bit vector indexed by (mem,rem). The bit vector is lengthened','line_number':306,'multiline':False]
+['text':' as needed to allow setting the (mem,rem) bit.','line_number':307,'multiline':False]
+['text':' point to vector for (syms,left,len), bit in vector for (mem,rem)','line_number':309,'multiline':False]
+['text':' mem always includes the root table','line_number':311,'multiline':False]
+['text':' mem and rem are always even','line_number':312,'multiline':False]
+['text':' see if we've been here','line_number':318,'multiline':False]
+['text':' done this!','line_number':321,'multiline':False]
+['text':' we haven't been here before -- set the bit to show we have now','line_number':323,'multiline':False]
+['text':' see if we need to lengthen the vector in order to set the bit','line_number':325,'multiline':False]
+['text':' if we have one already, enlarge it, zero out the appended space','line_number':327,'multiline':False]
+['text':' otherwise we need to make a new vector and zero it out','line_number':338,'multiline':False]
+['text':' install the new vector','line_number':347,'multiline':False]
+['text':' set the bit','line_number':352,'multiline':False]
+['text':' Examine all possible codes from the given node (syms, len, left). Compute','line_number':357,'multiline':False]
+['text':' the amount of memory required to build inflate's decoding tables, where the','line_number':358,'multiline':False]
+['text':' number of code structures used so far is mem, and the number remaining in','line_number':359,'multiline':False]
+['text':' the current sub-table is rem.','line_number':360,'multiline':False]
+['text':' see if we have a complete code','line_number':362,'multiline':False]
+['text':' set the last code entry','line_number':364,'multiline':False]
+['text':' complete computation of memory used by this code','line_number':367,'multiline':False]
+['text':' if this is at the maximum, show the sub-code','line_number':375,'multiline':False]
+['text':' if this is a new maximum, update the maximum and clear out the','line_number':377,'multiline':False]
+['text':' printed sub-codes from the previous maximum','line_number':378,'multiline':False]
+['text':' compute the starting state for this sub-code','line_number':384,'multiline':False]
+['text':' print the starting state and the resulting sub-code to g.out','line_number':394,'multiline':False]
+['text':' remove entries as we drop back down in the recursion','line_number':403,'multiline':False]
+['text':' prune the tree if we can','line_number':408,'multiline':False]
+['text':' we need to use at least this many bit patterns so that the code won't be','line_number':412,'multiline':False]
+['text':' incomplete at the next length (more bit patterns than symbols)','line_number':413,'multiline':False]
+['text':' we can use at most this many bit patterns, lest there not be enough','line_number':418,'multiline':False]
+['text':' available for the remaining symbols at the maximum length (if there were','line_number':419,'multiline':False]
+['text':' no limit to the code length, this would become: most = left - 1)','line_number':420,'multiline':False]
+['text':' occupy least table spaces, creating new sub-tables as needed','line_number':424,'multiline':False]
+['text':' examine codes from here, updating table space as we go','line_number':433,'multiline':False]
+['text':' remove entries as we drop back down in the recursion','line_number':445,'multiline':False]
+['text':' Look at all sub-codes starting with root + 1 bits. Look at only the valid','line_number':449,'multiline':False]
+['text':' intermediate code states (syms, left, len). For each completed code,','line_number':450,'multiline':False]
+['text':' calculate the amount of memory required by inflate to build the decoding','line_number':451,'multiline':False]
+['text':' tables. Find the maximum amount of memory required and show the codes that','line_number':452,'multiline':False]
+['text':' require that maximum.','line_number':453,'multiline':False]
+['text':' clear code','line_number':455,'multiline':False]
+['text':' look at all (root + 1) bit and longer codes','line_number':459,'multiline':False]
+['text':' empty saved results','line_number':460,'multiline':False]
+['text':' base table','line_number':461,'multiline':False]
+['text':' otherwise, there's only a base table','line_number':462,'multiline':False]
+['text':' look at all reachable (root + 1) bit nodes, and the','line_number':465,'multiline':False]
+['text':' resulting codes (complete at root + 2 or more)','line_number':466,'multiline':False]
+['text':' reachable node','line_number':468,'multiline':False]
+['text':' also look at root bit codes with completions at root + 1','line_number':471,'multiline':False]
+['text':' bits (not saved in num, since complete), just in case','line_number':472,'multiline':False]
+['text':' done','line_number':478,'multiline':False]
+['text':' Examine and show the total number of possible prefix codes for a given','line_number':483,'multiline':False]
+['text':' maximum number of symbols, initial root table size, and maximum code length','line_number':484,'multiline':False]
+['text':' in bits -- those are the command arguments in that order. The default values','line_number':485,'multiline':False]
+['text':' are 286, 9, and 15 respectively, for the deflate literal/length code. The','line_number':486,'multiline':False]
+['text':' possible codes are counted for each number of coded symbols from two to the','line_number':487,'multiline':False]
+['text':' maximum. The counts for each of those and the total number of codes are','line_number':488,'multiline':False]
+['text':' shown. The maximum number of inflate table entries is then calculated across','line_number':489,'multiline':False]
+['text':' all possible codes. Each new maximum number of table entries and the','line_number':490,'multiline':False]
+['text':' associated sub-code (starting at root + 1 == 10 bits) is shown.','line_number':491,'multiline':False]
+['text':'','line_number':492,'multiline':False]
+['text':' To count and examine prefix codes that are not length-limited, provide a','line_number':493,'multiline':False]
+['text':' maximum length equal to the number of symbols minus one.','line_number':494,'multiline':False]
+['text':'','line_number':495,'multiline':False]
+['text':' For the deflate literal/length code, use "enough". For the deflate distance','line_number':496,'multiline':False]
+['text':' code, use "enough 30 6".','line_number':497,'multiline':False]
+['text':' set up globals for cleanup()','line_number':499,'multiline':False]
+['text':' get arguments -- default to the deflate literal/length code','line_number':505,'multiline':False]
+['text':' if not restricting the code length, the longest is syms - 1','line_number':523,'multiline':False]
+['text':' determine the number of bits in a code_t','line_number':527,'multiline':False]
+['text':' make sure that the calculation of most will not overflow','line_number':532,'multiline':False]
+['text':' reject impossible code requests','line_number':538,'multiline':False]
+['text':' allocate code vector','line_number':545,'multiline':False]
+['text':' determine size of saved results array, checking for overflows,','line_number':549,'multiline':False]
+['text':' allocate and clear the array (set all to zero with calloc())','line_number':550,'multiline':False]
+['text':' iff max == 1','line_number':551,'multiline':False]
+['text':' won't be saving any results','line_number':552,'multiline':False]
+['text':' count possible codes for all numbers of symbols, add up counts','line_number':565,'multiline':False]
+['text':' allocate and clear done array for been_here()','line_number':578,'multiline':False]
+['text':' find and show maximum inflate table usage','line_number':586,'multiline':False]
+['text':' reduce root to max length','line_number':587,'multiline':False]
+['text':' done','line_number':594,'multiline':False]

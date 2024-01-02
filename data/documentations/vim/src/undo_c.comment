@@ -1,0 +1,729 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]
+['text':'
+ * undo.c: multi level undo facility
+ *
+ * The saved lines are stored in a list of lists (one for each buffer):
+ *
+ * b_u_oldhead------------------------------------------------+
+ *							      |
+ *							      V
+ *		  +--------------+    +--------------+	  +--------------+
+ * b_u_newhead--->| u_header	 |    | u_header     |	  | u_header	 |
+ *		  |	uh_next------>|     uh_next------>|	uh_next---->NULL
+ *	   NULL<--------uh_prev  |<---------uh_prev  |<---------uh_prev  |
+ *		  |	uh_entry |    |     uh_entry |	  |	uh_entry |
+ *		  +--------|-----+    +--------|-----+	  +--------|-----+
+ *			   |		       |		   |
+ *			   V		       V		   V
+ *		  +--------------+    +--------------+	  +--------------+
+ *		  | u_entry	 |    | u_entry      |	  | u_entry	 |
+ *		  |	ue_next  |    |     ue_next  |	  |	ue_next  |
+ *		  +--------|-----+    +--------|-----+	  +--------|-----+
+ *			   |		       |		   |
+ *			   V		       V		   V
+ *		  +--------------+	      NULL		  NULL
+ *		  | u_entry	 |
+ *		  |	ue_next  |
+ *		  +--------|-----+
+ *			   |
+ *			   V
+ *			  etc.
+ *
+ * Each u_entry list contains the information for one undo or redo.
+ * curbuf->b_u_curhead points to the header of the last undo (the next redo),
+ * or is NULL if nothing has been undone (end of the branch).
+ *
+ * For keeping alternate undo/redo branches the uh_alt field is used.  Thus at
+ * each point in the list a branch may appear for an alternate to redo.  The
+ * uh_seq field is numbered sequentially to be able to find a newer or older
+ * branch.
+ *
+ *		   +---------------+	+---------------+
+ * b_u_oldhead --->| u_header	   |	| u_header	|
+ *		   |   uh_alt_next ---->|   uh_alt_next ----> NULL
+ *	   NULL <----- uh_alt_prev |<------ uh_alt_prev |
+ *		   |   uh_prev	   |	|   uh_prev	|
+ *		   +-----|---------+	+-----|---------+
+ *			 |		      |
+ *			 V		      V
+ *		   +---------------+	+---------------+
+ *		   | u_header	   |	| u_header	|
+ *		   |   uh_alt_next |	|   uh_alt_next |
+ * b_u_newhead --->|   uh_alt_prev |	|   uh_alt_prev |
+ *		   |   uh_prev	   |	|   uh_prev	|
+ *		   +-----|---------+	+-----|---------+
+ *			 |		      |
+ *			 V		      V
+ *		       NULL		+---------------+    +---------------+
+ *					| u_header	|    | u_header      |
+ *					|   uh_alt_next ---->|	 uh_alt_next |
+ *					|   uh_alt_prev |<------ uh_alt_prev |
+ *					|   uh_prev	|    |	 uh_prev     |
+ *					+-----|---------+    +-----|---------+
+ *					      |			   |
+ *					     etc.		  etc.
+ *
+ *
+ * All data is allocated and will all be freed when the buffer is unloaded.
+ ','line_number':10,'multiline':True]
+['text':' Uncomment the next line for including the u_check() function.  This warns','line_number':78,'multiline':False]
+['text':' for errors in the debug information.','line_number':79,'multiline':False]
+['text':' #define U_DEBUG 1','line_number':80,'multiline':False]
+['text':' value for uh_magic when in use','line_number':81,'multiline':False]
+['text':' value for ue_magic when in use','line_number':82,'multiline':False]
+['text':' Size of buffer used for encryption.','line_number':84,'multiline':False]
+['text':' Structure passed around between functions.','line_number':89,'multiline':False]
+['text':' Avoids passing cryptstate_T when encryption not available.','line_number':90,'multiline':False]
+['text':' CRYPT_BUF_SIZE, NULL when not buffering','line_number':96,'multiline':False]
+['text':' bytes written to/read from bi_buffer','line_number':97,'multiline':False]
+['text':' bytes available in bi_buffer','line_number':98,'multiline':False]
+['text':' used in undo_end() to report number of added and deleted lines','line_number':129,'multiline':False]
+['text':'
+ * When 'u' flag included in 'cpoptions', we behave like vi.  Need to remember
+ * the action that "u" should do.
+ ','line_number':132,'multiline':True]
+['text':'
+ * Check the undo structures for being valid.  Print a warning when something
+ * looks wrong.
+ ','line_number':141,'multiline':True]
+['text':' Check pointers back are correct.','line_number':174,'multiline':False]
+['text':' Check the undo tree at this header.','line_number':188,'multiline':False]
+['text':' Check the next alt tree.','line_number':198,'multiline':False]
+['text':' Check the next header in this branch.','line_number':201,'multiline':False]
+['text':'
+ * Save the current line for both the "u" and "U" command.
+ * Careful: may trigger autocommands that reload the buffer.
+ * Returns OK or FAIL.
+ ','line_number':229,'multiline':True]
+['text':'
+ * Save the lines between "top" and "bot" for both the "u" and "U" command.
+ * "top" may be 0 and "bot" may be curbuf->b_ml.ml_line_count + 1.
+ * Careful: may trigger autocommands that reload the buffer.
+ * Returns FAIL when lines could not be saved, OK otherwise.
+ ','line_number':241,'multiline':True]
+['text':' rely on caller to give an error message','line_number':254,'multiline':False]
+['text':'
+ * Save the line "lnum" (used by ":s" and "~" command).
+ * The line is replaced, so the new bottom line is lnum + 1.
+ * Careful: may trigger autocommands that reload the buffer.
+ * Returns FAIL when lines could not be saved, OK otherwise.
+ ','line_number':262,'multiline':True]
+['text':'
+ * A new line is inserted before line "lnum" (used by :s command).
+ * The line is inserted, so the new bottom line is lnum + 1.
+ * Careful: may trigger autocommands that reload the buffer.
+ * Returns FAIL when lines could not be saved, OK otherwise.
+ ','line_number':277,'multiline':True]
+['text':'
+ * Save the lines "lnum" - "lnum" + nlines (used by delete command).
+ * The lines are deleted, so the new bottom line is lnum, unless the buffer
+ * becomes empty.
+ * Careful: may trigger autocommands that reload the buffer.
+ * Returns FAIL when lines could not be saved, OK otherwise.
+ ','line_number':292,'multiline':True]
+['text':'
+ * Return TRUE when undo is allowed.  Otherwise give an error message and
+ * return FALSE.
+ ','line_number':309,'multiline':True]
+['text':' Don't allow changes when 'modifiable' is off.','line_number':316,'multiline':False]
+['text':' In the sandbox it's not allowed to change the text.','line_number':324,'multiline':False]
+['text':' Don't allow changes in the buffer while editing the cmdline.  The','line_number':332,'multiline':False]
+['text':' caller of getcmdline() may get confused.','line_number':333,'multiline':False]
+['text':'
+ * Get the undolevel value for the current buffer.
+ ','line_number':343,'multiline':True]
+['text':'
+ * u_save_line(): save an allocated copy of line "lnum" into "ul".
+ * Returns FAIL when out of memory.
+ ','line_number':354,'multiline':True]
+['text':' This uses the length in the memline, thus text properties are','line_number':370,'multiline':False]
+['text':' included.','line_number':371,'multiline':False]
+['text':'
+ * return TRUE if line "lnum" has text property "flags".
+ ','line_number':379,'multiline':True]
+['text':'
+ * Common code for various ways to save text before a change.
+ * "top" is the line above the first changed line.
+ * "bot" is the line below the last changed line.
+ * "newbot" is the new bottom line.  Use zero when not known.
+ * "reload" is TRUE when saving for a buffer reload.
+ * Careful: may trigger autocommands that reload the buffer.
+ * Returns FAIL when lines could not be saved, OK otherwise.
+ ','line_number':401,'multiline':True]
+['text':' When making changes is not allowed return FAIL.  It's a crude way','line_number':427,'multiline':False]
+['text':' to make all change commands fail.','line_number':428,'multiline':False]
+['text':'
+	 * Netbeans defines areas that cannot be modified.  Bail out here when
+	 * trying to change text in a guarded area.
+	 ','line_number':433,'multiline':True]
+['text':' A change in a terminal buffer removes the highlighting.','line_number':452,'multiline':False]
+['text':'
+	 * Saving text for undo means we are going to make a change.  Give a
+	 * warning for a read-only file before making the change, so that the
+	 * FileChangedRO event can replace the buffer with a read-write version
+	 * (e.g., obtained from a source control system).
+	 ','line_number':456,'multiline':True]
+['text':' This happens when the FileChangedRO autocommand changes the','line_number':465,'multiline':False]
+['text':' file in a way it becomes shorter.','line_number':466,'multiline':False]
+['text':' Include the line above if a text property continues from it.','line_number':477,'multiline':False]
+['text':' Include the line below if a text property continues to it.','line_number':478,'multiline':False]
+['text':'
+     * If curbuf->b_u_synced == TRUE make a new header.
+     ','line_number':495,'multiline':True]
+['text':' Need to create new entry in b_changelist.','line_number':500,'multiline':False]
+['text':'
+	     * Make a new header entry.  Do this first so that we don't mess
+	     * up the undo info when out of memory.
+	     ','line_number':505,'multiline':True]
+['text':'
+	 * If we undid more than we redid, move the entry lists before and
+	 * including curbuf->b_u_curhead to an alternate branch.
+	 ','line_number':519,'multiline':True]
+['text':'
+	 * free headers to keep the size right
+	 ','line_number':530,'multiline':True]
+['text':' Can't reconnect the branch, delete all of it.','line_number':539,'multiline':False]
+['text':' There is no branch, only free one header.','line_number':542,'multiline':False]
+['text':' Free the oldest alternate branch as a whole.','line_number':546,'multiline':False]
+['text':' no undo at all','line_number':556,'multiline':False]
+['text':' save cursor pos. for undo','line_number':590,'multiline':False]
+['text':' save changed and buffer empty flag for undo','line_number':596,'multiline':False]
+['text':' save named marks and Visual marks for undo','line_number':600,'multiline':False]
+['text':' no undo at all','line_number':611,'multiline':False]
+['text':'
+	 * When saving a single line, and it has been saved just before, it
+	 * doesn't make sense saving it again.  Saves a lot of memory when
+	 * making lots of changes inside the same line.
+	 * This is only possible if the previous change didn't increase or
+	 * decrease the number of lines.
+	 * Check the ten last changes.  More doesn't make sense and takes too
+	 * long.
+	 ','line_number':614,'multiline':True]
+['text':' If lines have been inserted/deleted we give up.','line_number':632,'multiline':False]
+['text':' Also when the line was included in a multi-line save.','line_number':633,'multiline':False]
+['text':' If it's the same line we can skip saving it again.','line_number':645,'multiline':False]
+['text':' It's not the last entry: get ue_bot for the last','line_number':650,'multiline':False]
+['text':' entry now.  Following deleted/inserted lines go to','line_number':651,'multiline':False]
+['text':' the re-used entry.','line_number':652,'multiline':False]
+['text':' Move the found entry to become the last entry.  The','line_number':656,'multiline':False]
+['text':' order of undo/redo doesn't matter for the entries','line_number':657,'multiline':False]
+['text':' we move it over, since they don't change the line','line_number':658,'multiline':False]
+['text':' count and don't include this line.  It does matter','line_number':659,'multiline':False]
+['text':' for the found entry if the line count is changed by','line_number':660,'multiline':False]
+['text':' the executed command.','line_number':661,'multiline':False]
+['text':' The executed command may change the line count.','line_number':667,'multiline':False]
+['text':' find line number for ue_bot for previous u_save()','line_number':684,'multiline':False]
+['text':'
+	 * With Amiga we can't handle big undo's, because
+	 * then u_alloc_line would have to allocate a block larger than 32K
+	 ','line_number':689,'multiline':True]
+['text':'
+     * add lines in front of entry list
+     ','line_number':697,'multiline':True]
+['text':'
+     * Use 0 for ue_bot if bot is below last line.
+     * Otherwise we have to compute ue_bot later.
+     ','line_number':712,'multiline':True]
+['text':' must display the prompt','line_number':759,'multiline':False]
+['text':' will be reset when character typed','line_number':763,'multiline':False]
+['text':' magic at start of undofile','line_number':772,'multiline':False]
+['text':' magic at start of header','line_number':774,'multiline':False]
+['text':' magic after last header','line_number':775,'multiline':False]
+['text':' magic at start of entry','line_number':776,'multiline':False]
+['text':' magic after last entry','line_number':777,'multiline':False]
+['text':' 2-byte undofile version number','line_number':778,'multiline':False]
+['text':' idem, encrypted','line_number':779,'multiline':False]
+['text':' extra fields for header','line_number':781,'multiline':False]
+['text':' extra fields for uhp','line_number':784,'multiline':False]
+['text':'
+ * Compute the hash for the current buffer text into hash[UNDO_HASH_SIZE].
+ ','line_number':787,'multiline':True]
+['text':'
+ * Return an allocated string of the full path of the target undofile.
+ * When "reading" is TRUE find the file to read, go over all directories in
+ * 'undodir'.
+ * When "reading" is FALSE use the first name where the directory exists.
+ * Returns NULL when there is no place to write or no file to read.
+ ','line_number':806,'multiline':True]
+['text':' Expand symlink in the file name, so that we put the undo file with the','line_number':832,'multiline':False]
+['text':' actual file instead of with the symlink.','line_number':833,'multiline':False]
+['text':' Loop over 'undodir'.  When reading find the first file that exists.','line_number':838,'multiline':False]
+['text':' When not reading use the first directory that exists or ".".','line_number':839,'multiline':False]
+['text':' Use same directory as the ffname,','line_number':846,'multiline':False]
+['text':' "dir/name" -> "dir/.name.un~"','line_number':847,'multiline':False]
+['text':' VMS can not handle more than one dot in the filenames','line_number':853,'multiline':False]
+['text':' use "dir/name" -> "dir/_un_name" - add _un_','line_number':854,'multiline':False]
+['text':' at the beginning to keep the extension','line_number':855,'multiline':False]
+['text':' Use same directory as the ffname,','line_number':860,'multiline':False]
+['text':' "dir/name" -> "dir/.name.un~"','line_number':861,'multiline':False]
+['text':' When reading check if the file exists.','line_number':885,'multiline':False]
+['text':'
+ * Write a sequence of bytes to the undo file.
+ * Buffers and encrypts as needed.
+ * Returns OK or FAIL.
+ ','line_number':918,'multiline':True]
+['text':' Last parameter is only used for sodium encryption and that','line_number':962,'multiline':False]
+['text':' explicitly disables encryption of undofiles.','line_number':963,'multiline':False]
+['text':'
+ * Write "ptr[len]" and crypt the bytes when needed.
+ * Returns OK or FAIL.
+ ','line_number':973,'multiline':True]
+['text':' crypting every piece of text separately','line_number':987,'multiline':False]
+['text':' no malloc()/free() for short strings','line_number':989,'multiline':False]
+['text':' Last parameter is only used for sodium encryption and that','line_number':996,'multiline':False]
+['text':' explicitly disables encryption of undofiles.','line_number':997,'multiline':False]
+['text':'
+ * Write a number, MSB first, in "len" bytes.
+ * Must match with undo_read_?c() functions.
+ * Returns OK or FAIL.
+ ','line_number':1008,'multiline':True]
+['text':'
+ * Write the pointer to an undo header.  Instead of writing the pointer itself
+ * we use the sequence number of the header.  This is converted back to
+ * pointers when reading. ','line_number':1025,'multiline':True]
+['text':'
+ * Read "buffer[size]" from the undo file.
+ * Return OK or FAIL.
+ ','line_number':1103,'multiline':True]
+['text':' Error may be checked for only later.  Fill with zeros,','line_number':1149,'multiline':False]
+['text':' so that the reader won't use garbage.','line_number':1150,'multiline':False]
+['text':'
+ * Read a string of length "len" from "bi->bi_fd".
+ * "len" can be zero to allocate an empty line.
+ * Decrypt the bytes if needed.
+ * Append a NUL.
+ * Returns a pointer to allocated memory or NULL for failure.
+ ','line_number':1155,'multiline':True]
+['text':' In case there are text properties there already is a NUL, but','line_number':1175,'multiline':False]
+['text':' checking for that is more expensive than just adding a dummy byte.','line_number':1176,'multiline':False]
+['text':'
+ * Writes the (not encrypted) header and initializes encryption if needed.
+ ','line_number':1185,'multiline':True]
+['text':' Start writing, first the magic marker and undo info version.','line_number':1196,'multiline':False]
+['text':' If the buffer is encrypted then all text bytes following will be','line_number':1200,'multiline':False]
+['text':' encrypted.  Numbers and other info is not crypted.','line_number':1201,'multiline':False]
+['text':' Write a hash of the buffer text, so that we can verify it is still the','line_number':1239,'multiline':False]
+['text':' same when reading the buffer text.','line_number':1240,'multiline':False]
+['text':' buffer-specific data','line_number':1244,'multiline':False]
+['text':' Undo structures header data','line_number':1255,'multiline':False]
+['text':' Optional fields.','line_number':1266,'multiline':False]
+['text':' end marker','line_number':1271,'multiline':False]
+['text':' Assume NMARKS will stay the same.','line_number':1294,'multiline':False]
+['text':' Optional fields.','line_number':1301,'multiline':False]
+['text':' end marker','line_number':1306,'multiline':False]
+['text':' Write all the entries.','line_number':1308,'multiline':False]
+['text':' Optional fields.','line_number':1354,'multiline':False]
+['text':' field not supported, skip','line_number':1375,'multiline':False]
+['text':' Unserialize the uep list.','line_number':1381,'multiline':False]
+['text':'
+ * Serialize "uep".
+ ','line_number':1408,'multiline':True]
+['text':' Text is written without the text properties, since we cannot restore','line_number':1425,'multiline':False]
+['text':' the text property types.','line_number':1426,'multiline':False]
+['text':'
+ * Serialize "pos".
+ ','line_number':1490,'multiline':True]
+['text':'
+ * Unserialize the pos_T at the current position.
+ ','line_number':1501,'multiline':True]
+['text':'
+ * Serialize "info".
+ ','line_number':1518,'multiline':True]
+['text':'
+ * Unserialize the visualinfo_T at the current position.
+ ','line_number':1530,'multiline':True]
+['text':'
+ * Write the undo tree in an undo file.
+ * When "name" is not NULL, use it as the name of the undo file.
+ * Otherwise use buf->b_ffname to generate the undo file name.
+ * "buf" must never be null, buf->b_ffname is used to obtain the original file
+ * permissions.
+ * "forceit" is TRUE for ":wundo!", FALSE otherwise.
+ * "hash[UNDO_HASH_SIZE]" must be the hash value of the buffer text.
+ ','line_number':1542,'multiline':True]
+['text':'
+     * Decide about the permission to use for the undo file.  If the buffer
+     * has a name use the permission of the original file.  Otherwise only
+     * allow the user to access the undo file.
+     ','line_number':1595,'multiline':True]
+['text':' strip any s-bit and executable bit','line_number':1616,'multiline':False]
+['text':' If the undo file already exists, verify that it actually is an undo','line_number':1619,'multiline':False]
+['text':' file, and delete it.','line_number':1620,'multiline':False]
+['text':' Check we can read it and it's an undo file.','line_number':1625,'multiline':False]
+['text':' If there is no undo information at all, quit here after deleting any','line_number':1668,'multiline':False]
+['text':' existing undo file.','line_number':1669,'multiline':False]
+['text':' Check there is no problem in undo info before writing.','line_number':1693,'multiline':False]
+['text':'
+     * Try to set the group of the undo file same as the original file. If
+     * this fails, set the protection bits for the group same as the
+     * protection bits for others.
+     ','line_number':1698,'multiline':True]
+['text':' sequent-ptx lacks fchown()','line_number':1706,'multiline':False]
+['text':' Undo must be synced.','line_number':1726,'multiline':False]
+['text':'
+     * Write the header.  Initializes encryption, if enabled.
+     ','line_number':1729,'multiline':True]
+['text':'
+     * Iteratively serialize UHPs and their UEPs from the top down.
+     ','line_number':1737,'multiline':True]
+['text':' Serialize current UHP if we haven't seen it','line_number':1744,'multiline':False]
+['text':' Now walk through the tree - algorithm from undo_time().','line_number':1755,'multiline':False]
+['text':' Copy file attributes; for systems where this can only be done after','line_number':1796,'multiline':False]
+['text':' closing the file.','line_number':1797,'multiline':False]
+['text':' For systems that support ACL: get the ACL from the original file.','line_number':1806,'multiline':False]
+['text':'
+ * Load the undo tree from an undo file.
+ * If "name" is not NULL use it as the undo file name.  This also means being
+ * a bit more verbose.
+ * Otherwise use curbuf->b_ffname to generate the undo file name.
+ * "hash[UNDO_HASH_SIZE]" must be the hash value of the buffer text.
+ ','line_number':1823,'multiline':True]
+['text':' For safety we only read an undo file if the owner is equal to the','line_number':1873,'multiline':False]
+['text':' owner of the text file or equal to the current user.','line_number':1874,'multiline':False]
+['text':'
+     * Read the undo file header.
+     ','line_number':1911,'multiline':True]
+['text':' Read undo data for "U" command.','line_number':1980,'multiline':False]
+['text':' Begin general undo data','line_number':1997,'multiline':False]
+['text':' Optional header fields.','line_number':2006,'multiline':False]
+['text':' field not supported, skip','line_number':2021,'multiline':False]
+['text':' uhp_table will store the freshly created undo headers we allocate','line_number':2027,'multiline':False]
+['text':' until we insert them into curbuf. The table remains sorted by the','line_number':2028,'multiline':False]
+['text':' sequence numbers of the headers.','line_number':2029,'multiline':False]
+['text':' When there are no headers uhp_table is NULL.','line_number':2030,'multiline':False]
+['text':' We have put all of the headers into a table. Now we iterate through the','line_number':2071,'multiline':False]
+['text':' table and swizzle each sequence number we have stored in uh_*_seq into','line_number':2072,'multiline':False]
+['text':' a pointer corresponding to the header with that sequence number.','line_number':2073,'multiline':False]
+['text':' Now that we have read the undo info successfully, free the current undo','line_number':2135,'multiline':False]
+['text':' info and use the info from the file.','line_number':2136,'multiline':False]
+['text':' FEAT_PERSISTENT_UNDO','line_number':2189,'multiline':False]
+['text':'
+ * If 'cpoptions' contains 'u': Undo the previous undo or redo (vi compatible).
+ * If 'cpoptions' does not contain 'u': Always undo.
+ ','line_number':2192,'multiline':True]
+['text':'
+     * If we get an undo command while executing a macro, we behave like the
+     * original vi. If this happens twice in one macro the result will not
+     * be compatible.
+     ','line_number':2199,'multiline':True]
+['text':'
+ * If 'cpoptions' contains 'u': Repeat the previous undo or redo.
+ * If 'cpoptions' does not contain 'u': Always redo.
+ ','line_number':2217,'multiline':True]
+['text':'
+ * Undo or redo, depending on 'undo_undoes', 'count' times.
+ ','line_number':2229,'multiline':True]
+['text':' Do the change warning now, so that it triggers FileChangedRO when','line_number':2246,'multiline':False]
+['text':' needed.  This may cause the file to be reloaded, that must happen','line_number':2247,'multiline':False]
+['text':' before we do anything, because it may change curbuf->b_u_curhead','line_number':2248,'multiline':False]
+['text':' and more.','line_number':2249,'multiline':False]
+['text':' first undo','line_number':2254,'multiline':False]
+['text':' multi level undo','line_number':2256,'multiline':False]
+['text':' get next undo','line_number':2257,'multiline':False]
+['text':' nothing to undo','line_number':2259,'multiline':False]
+['text':' stick curbuf->b_u_curhead at end','line_number':2262,'multiline':False]
+['text':' nothing to redo','line_number':2279,'multiline':False]
+['text':' Advance for next redo.  Set "newhead" when at the end of the','line_number':2290,'multiline':False]
+['text':' redoable changes.','line_number':2291,'multiline':False]
+['text':'
+ * Undo or redo over the timeline.
+ * When "step" is negative go back in time, otherwise goes forward in time.
+ * When "sec" is FALSE make "step" steps, when "sec" is TRUE use "step" as
+ * seconds.
+ * When "file" is TRUE use "step" as a number of file writes.
+ * When "absolute" is TRUE use "step" as the sequence number to jump to.
+ * "sec" must be FALSE then.
+ ','line_number':2300,'multiline':True]
+['text':' shut up compiler','line_number':2324,'multiline':False]
+['text':' First make sure the current undoable change is synced.','line_number':2337,'multiline':False]
+['text':' "target" is the node below which we want to be.','line_number':2346,'multiline':False]
+['text':' Init "closest" to a value we can't reach.','line_number':2347,'multiline':False]
+['text':' Going back to a previous write. If there were changes after','line_number':2361,'multiline':False]
+['text':' the last write, count that as moving one file-write, so','line_number':2362,'multiline':False]
+['text':' that ":earlier 1f" undoes all changes since the last save.','line_number':2363,'multiline':False]
+['text':' "uh_save_nr" was set in the last block, that means','line_number':2370,'multiline':False]
+['text':' there were no changes since the last write','line_number':2371,'multiline':False]
+['text':' count the changes since the last write as one step','line_number':2374,'multiline':False]
+['text':' Go to before first write: before the oldest change. Use','line_number':2377,'multiline':False]
+['text':' the sequence number for that.','line_number':2378,'multiline':False]
+['text':' Moving forward to a newer write.','line_number':2383,'multiline':False]
+['text':' Go to after last write: after the latest change. Use','line_number':2387,'multiline':False]
+['text':' the sequence number for that.','line_number':2388,'multiline':False]
+['text':' When "target" is 0; Back to origin.','line_number':2417,'multiline':False]
+['text':' avoid that GCC complains','line_number':2420,'multiline':False]
+['text':'
+     * May do this twice:
+     * 1. Search for "target", update "closest" to the best match found.
+     * 2. If "target" not found search for "closest".
+     *
+     * When using the closest time we use the sequence number in the second
+     * round, because there may be several entries with the same time.
+     ','line_number':2424,'multiline':True]
+['text':' Find the path from the current state to where we want to go.  The','line_number':2434,'multiline':False]
+['text':' desired state can be anywhere in the undo tree, need to go all over','line_number':2435,'multiline':False]
+['text':' it.  We put "nomark" in uh_walk where we have been without success,','line_number':2436,'multiline':False]
+['text':' "mark" where it could possibly be.','line_number':2437,'multiline':False]
+['text':' at leaf of the tree','line_number':2441,'multiline':False]
+['text':' Remember the header that is closest to the target.','line_number':2458,'multiline':False]
+['text':' It must be at least in the right direction (checked with','line_number':2459,'multiline':False]
+['text':' "b_u_seq_cur").  When the timestamp is equal find the','line_number':2460,'multiline':False]
+['text':' highest/lowest sequence number.','line_number':2461,'multiline':False]
+['text':' Quit searching when we found a match.  But when searching for a','line_number':2482,'multiline':False]
+['text':' time we need to continue looking for the best uh_seq.','line_number':2483,'multiline':False]
+['text':' go down in the tree if we haven't been there','line_number':2490,'multiline':False]
+['text':' go to alternate branch if we haven't been there','line_number':2495,'multiline':False]
+['text':' go up in the tree if we haven't been there and we are at the','line_number':2501,'multiline':False]
+['text':' start of alternate branches','line_number':2502,'multiline':False]
+['text':' If still at the start we don't go through this change.','line_number':2507,'multiline':False]
+['text':' need to backtrack; mark this node as useless','line_number':2515,'multiline':False]
+['text':' found it','line_number':2524,'multiline':False]
+['text':' stop above the header','line_number':2546,'multiline':False]
+['text':' If we found it: Follow the path to go to where we want to be.','line_number':2550,'multiline':False]
+['text':'
+	 * First go up the tree as much as needed.
+	 ','line_number':2553,'multiline':True]
+['text':' Do the change warning now, for the same reason as above.','line_number':2558,'multiline':False]
+['text':' don't go back down here','line_number':2572,'multiline':False]
+['text':' When back to origin, redo is not needed.','line_number':2575,'multiline':False]
+['text':'
+	     * And now go down the tree (redo), branching off where needed.
+	     ','line_number':2578,'multiline':True]
+['text':' Do the change warning now, for the same reason as above.','line_number':2583,'multiline':False]
+['text':' Go back to the first branch with a mark.','line_number':2590,'multiline':False]
+['text':' Find the last branch with a mark, that's the one.','line_number':2595,'multiline':False]
+['text':' Make the used branch the first entry in the list of','line_number':2602,'multiline':False]
+['text':' alternatives to make "u" and CTRL-R take this branch.','line_number':2603,'multiline':False]
+['text':' must have reached the target','line_number':2624,'multiline':False]
+['text':' Stop when going backwards in time and didn't find the exact','line_number':2626,'multiline':False]
+['text':' header we were looking for.','line_number':2627,'multiline':False]
+['text':' Advance "curhead" to below the header we last used.  If it','line_number':2636,'multiline':False]
+['text':' becomes NULL then we need to set "newhead" to this leaf.','line_number':2637,'multiline':False]
+['text':' found it!','line_number':2643,'multiline':False]
+['text':' Need to redo more but can't find it...','line_number':2649,'multiline':False]
+['text':'
+ * u_undoredo: common code for undo and redo
+ *
+ * The lines in the file are replaced by the lines in the entry list at
+ * curbuf->b_u_curhead. The replaced lines in the file are saved in the entry
+ * list for the next undo/redo.
+ *
+ * When "undo" is TRUE we go up in the tree, when FALSE we go down.
+ ','line_number':2659,'multiline':True]
+['text':' buffer became empty','line_number':2685,'multiline':False]
+['text':' Don't want autocommands using the undo structures here, they are','line_number':2688,'multiline':False]
+['text':' invalid till the end.','line_number':2689,'multiline':False]
+['text':'
+     * save marks before undo/redo
+     ','line_number':2700,'multiline':True]
+['text':' don't want UNCHANGED now','line_number':2721,'multiline':False]
+['text':' number of lines before undo','line_number':2725,'multiline':False]
+['text':' number of lines after undo','line_number':2726,'multiline':False]
+['text':' Decide about the cursor position, depending on what text changed.','line_number':2728,'multiline':False]
+['text':' Don't set it yet, it may be invalid if lines are going to be added.','line_number':2729,'multiline':False]
+['text':' If the saved cursor is somewhere in this undo block, move it to','line_number':2732,'multiline':False]
+['text':' the remembered position.  Makes "gwap" put the cursor back','line_number':2733,'multiline':False]
+['text':' where it was.','line_number':2734,'multiline':False]
+['text':' Use the first line that actually changed.  Avoids that','line_number':2743,'multiline':False]
+['text':' undoing auto-formatting puts the cursor in the previous','line_number':2744,'multiline':False]
+['text':' line.','line_number':2745,'multiline':False]
+['text':'
+	 * Delete the lines between top and bot and save them in newarray.
+	 ','line_number':2770,'multiline':True]
+['text':' We have messed up the entry list, repair is impossible.','line_number':2779,'multiline':False]
+['text':' we have to free the rest of the list.','line_number':2780,'multiline':False]
+['text':' delete backwards, it goes faster in most cases','line_number':2789,'multiline':False]
+['text':' what can we do when we run out of memory?','line_number':2792,'multiline':False]
+['text':' remember we deleted the last line in the buffer, and a','line_number':2795,'multiline':False]
+['text':' dummy empty line will be inserted','line_number':2796,'multiline':False]
+['text':' make sure the cursor is on a valid line after the deletions','line_number':2805,'multiline':False]
+['text':'
+	 * Insert the lines in u_array between top and bot.
+	 ','line_number':2808,'multiline':True]
+['text':' If the file is empty, there is an empty line 1 that we','line_number':2815,'multiline':False]
+['text':' should get rid of, by replacing it with the new line.','line_number':2816,'multiline':False]
+['text':' adjust marks','line_number':2828,'multiline':False]
+['text':' When text has been changed, possibly the start of the next line','line_number':2842,'multiline':False]
+['text':' may have SpellCap that should be removed or it needs to be','line_number':2843,'multiline':False]
+['text':' displayed.  Schedule the next line for redrawing just in case.','line_number':2844,'multiline':False]
+['text':' Set the '[ mark.','line_number':2850,'multiline':False]
+['text':' Set the '] mark.','line_number':2853,'multiline':False]
+['text':'
+	 * insert this entry in front of the new entry list
+	 ','line_number':2865,'multiline':True]
+['text':' Ensure the '[ and '] marks are within bounds.','line_number':2873,'multiline':False]
+['text':' Set the cursor to the desired position.  Check that the line is valid.','line_number':2879,'multiline':False]
+['text':' per netbeans undo rules, keep it as modified','line_number':2891,'multiline':False]
+['text':'
+     * restore marks from before undo/redo
+     ','line_number':2896,'multiline':True]
+['text':'
+     * If the cursor is only off by one line, put it at the same position as
+     * before starting the change (for the "o" command).
+     * Otherwise the cursor should go to the first undone line.
+     ','line_number':2914,'multiline':True]
+['text':' We get here with the current cursor line being past the end (eg','line_number':2937,'multiline':False]
+['text':' after adding lines at the end of the file, and then undoing it).','line_number':2938,'multiline':False]
+['text':' check_cursor() will move the cursor to the last line.  Move it to','line_number':2939,'multiline':False]
+['text':' the first column here.','line_number':2940,'multiline':False]
+['text':' Make sure the cursor is on an existing line and column.','line_number':2945,'multiline':False]
+['text':' Remember where we are for "g-" and ":earlier 10s".','line_number':2948,'multiline':False]
+['text':' We are below the previous undo.  However, to make ":earlier 1s"','line_number':2952,'multiline':False]
+['text':' work we compute this as being just above the just undone change.','line_number':2953,'multiline':False]
+['text':' Remember where we are for ":earlier 1f" and ":later 1f".','line_number':2960,'multiline':False]
+['text':' The timestamp can be the same for multiple changes, just use the one of','line_number':2969,'multiline':False]
+['text':' the undone/redone change.','line_number':2970,'multiline':False]
+['text':'
+ * If we deleted or added lines, report the number of less/more lines.
+ * Otherwise, report the number of changes (this may be incorrect
+ * in some cases, but it's better than nothing).
+ ','line_number':2979,'multiline':True]
+['text':' just did an undo','line_number':2986,'multiline':False]
+['text':' used ":undo N"','line_number':2987,'multiline':False]
+['text':' no messages now, wait until global is finished','line_number':2998,'multiline':False]
+['text':' 'lazyredraw' set, don't do messages now','line_number':2999,'multiline':False]
+['text':' For ":undo N" we prefer a "after #N" message.','line_number':3025,'multiline':False]
+['text':'
+ * u_sync: stop adding to the current entry list
+ ','line_number':3066,'multiline':True]
+['text':' Also sync when no_u_sync is set.','line_number':3071,'multiline':False]
+['text':' Skip it when already synced or syncing is disabled.','line_number':3073,'multiline':False]
+['text':' XIM is busy, don't break an undo sequence','line_number':3078,'multiline':False]
+['text':' no entries, nothing to do','line_number':3081,'multiline':False]
+['text':' compute ue_bot of previous u_save','line_number':3084,'multiline':False]
+['text':'
+ * ":undolist": List the leafs of the undo tree
+ ','line_number':3089,'multiline':True]
+['text':'
+     * 1: walk the tree to find all leafs, put the info in "ga".
+     * 2: sort the lines
+     * 3: display the list
+     ','line_number':3102,'multiline':True]
+['text':' go down in the tree if we haven't been there','line_number':3135,'multiline':False]
+['text':' go to alternate branch if we haven't been there','line_number':3143,'multiline':False]
+['text':' go up in the tree if we haven't been there and we are at the','line_number':3149,'multiline':False]
+['text':' start of alternate branches','line_number':3150,'multiline':False]
+['text':' need to backtrack; mark this node as done','line_number':3161,'multiline':False]
+['text':'
+ * ":undojoin": continue adding to the last entry list
+ ','line_number':3195,'multiline':True]
+['text':' nothing changed before','line_number':3202,'multiline':False]
+['text':' already unsynced','line_number':3209,'multiline':False]
+['text':' no entries, nothing to do','line_number':3211,'multiline':False]
+['text':' Append next change to the last entry','line_number':3213,'multiline':False]
+['text':'
+ * Called after writing or reloading the file and setting b_changed to FALSE.
+ * Now an undo means that the buffer is modified.
+ ','line_number':3217,'multiline':True]
+['text':'
+ * After reloading a buffer which was saved for 'undoreload': Find the first
+ * line that was changed and set the cursor there.
+ ','line_number':3228,'multiline':True]
+['text':' undid something in an autocmd?','line_number':3240,'multiline':False]
+['text':' Check that the last undo block was for the whole file.','line_number':3242,'multiline':False]
+['text':' lines added or deleted at the end, put the cursor there','line_number':3262,'multiline':False]
+['text':'
+ * Increase the write count, store it in the last undo header, what would be
+ * used for "u".
+ ','line_number':3268,'multiline':True]
+['text':' recursive','line_number':3297,'multiline':False]
+['text':'
+ * Get pointer to last added entry.
+ * If it's not valid, give an error message and return NULL.
+ ','line_number':3301,'multiline':True]
+['text':'
+ * u_getbot(): compute the line number of the previous u_save
+ *		It is called only when b_u_synced is FALSE.
+ ','line_number':3316,'multiline':True]
+['text':' check for corrupt undo list','line_number':3326,'multiline':False]
+['text':'
+	 * the new ue_bot is computed from the number of lines that has been
+	 * inserted (0 - deleted) since calling u_save. This is equal to the
+	 * old line count subtracted from the current line count.
+	 ','line_number':3333,'multiline':True]
+['text':' assume all lines deleted, will','line_number':3343,'multiline':False]
+['text':' get all the old lines back','line_number':3344,'multiline':False]
+['text':' without deleting the current','line_number':3345,'multiline':False]
+['text':' ones','line_number':3346,'multiline':False]
+['text':'
+ * Free one header "uhp" and its entry list and adjust the pointers.
+ ','line_number':3355,'multiline':True]
+['text':' if not NULL reset when freeing this header','line_number':3362,'multiline':False]
+['text':' When there is an alternate redo list free that branch completely,','line_number':3366,'multiline':False]
+['text':' because we can never go there.','line_number':3367,'multiline':False]
+['text':' Update the links in the list to remove the header.','line_number':3374,'multiline':False]
+['text':'
+ * Free an alternate branch and any following alternate branches.
+ ','line_number':3390,'multiline':True]
+['text':' if not NULL reset when freeing this header','line_number':3397,'multiline':False]
+['text':' If this is the top branch we may need to use u_freeheader() to update','line_number':3401,'multiline':False]
+['text':' all the pointers.','line_number':3402,'multiline':False]
+['text':' recursive','line_number':3418,'multiline':False]
+['text':'
+ * Free all the undo entries for one header and the header itself.
+ * This means that "uhp" is invalid when returning.
+ ','line_number':3424,'multiline':True]
+['text':' if not NULL reset when freeing this header','line_number':3432,'multiline':False]
+['text':' Check for pointers to the header that become invalid now.','line_number':3436,'multiline':False]
+['text':' freeing the newest entry','line_number':3440,'multiline':False]
+['text':'
+ * free entry 'uep' and 'n' lines in uep->ue_array[]
+ ','line_number':3457,'multiline':True]
+['text':'
+ * invalidate the undo buffer; called when storage has already been released
+ ','line_number':3472,'multiline':True]
+['text':'
+ * Save the line "lnum" for the "U" command.
+ ','line_number':3486,'multiline':True]
+['text':' line is already saved','line_number':3492,'multiline':False]
+['text':' should never happen','line_number':3494,'multiline':False]
+['text':'
+ * clear the line saved for the "U" command
+ * (this is used externally for crossing a line while in insert mode)
+ ','line_number':3506,'multiline':True]
+['text':'
+ * Implementation of the "U" command.
+ * Differentiation from vi: "U" can be undone with the next "U".
+ * We also allow the cursor to be in another line.
+ * Careful: may trigger autocommands that reload the buffer.
+ ','line_number':3521,'multiline':True]
+['text':' first save the line for the 'u' command','line_number':3543,'multiline':False]
+['text':'
+ * Free all allocated memory blocks for the buffer 'buf'.
+ ','line_number':3565,'multiline':True]
+['text':'
+ * Check if the 'modified' flag is set, or 'ff' has changed (only need to
+ * check the first character, because it can only be "dos", "unix" or "mac").
+ * "nofile" and "scratch" type buffers are considered to always be unchanged.
+ * Also considers a buffer changed when a terminal window contains a running
+ * job.
+ ','line_number':3576,'multiline':True]
+['text':'
+ * Return TRUE if any buffer has changes.  Also buffers that are not written.
+ ','line_number':3593,'multiline':True]
+['text':'
+ * Like bufIsChanged() but ignoring a terminal window.
+ ','line_number':3607,'multiline':True]
+['text':' In a "prompt" buffer we do respect 'modified', so that we can control','line_number':3613,'multiline':False]
+['text':' closing the window by setting or resetting that option.','line_number':3614,'multiline':False]
+['text':'
+ * For undotree(): Append the list of undo blocks at "first_uhp" to "list".
+ * Recursive.
+ ','line_number':3627,'multiline':True]
+['text':' Recursive call to add alternate undo tree.','line_number':3657,'multiline':False]
+['text':'
+ * "undofile(name)" function
+ ','line_number':3668,'multiline':True]
+['text':' If there is no file name there will be no undo file.','line_number':3684,'multiline':False]
+['text':'
+ * Reset undofile option and delete the undofile
+ ','line_number':3701,'multiline':True]
+['text':'
+ * "undotree(expr)" function
+ ','line_number':3723,'multiline':True]

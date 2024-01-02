@@ -1,0 +1,83 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __wt_hs_modify --
+ *     Make an update to the history store.
+ *
+ * History store updates don't use transactions as those updates should be immediately visible and
+ *     don't follow normal transaction semantics. For this reason, history store updates are
+ *     directly modified using the low level api instead of the ordinary cursor api.
+ ','line_number':11,'multiline':True]
+['text':'
+     * We don't have exclusive access to the history store page so we need to pass "false" here to
+     * ensure that we're locking when inserting new keys to an insert list.
+     ','line_number':24,'multiline':True]
+['text':'
+ * __wt_hs_upd_time_window --
+ *     Get the underlying time window of the update history store cursor is positioned at.
+ ','line_number':34,'multiline':True]
+['text':'
+ * __wt_hs_find_upd --
+ *     Scan the history store for a record the btree cursor wants to position on. Create an update
+ *     for the record and return to the caller.
+ ','line_number':47,'multiline':True]
+['text':' Row-store key is as passed to us, create the column-store key as needed. ','line_number':80,'multiline':True]
+['text':'
+     * If reading from a checkpoint, it is possible to get here because the history store is
+     * currently open, but not be able to get a cursor because there was no history store in the
+     * checkpoint. We know this is the case if there's no history store checkpoint name stashed in
+     * the session. In this case, behave the same as if we searched and found nothing. Otherwise, we
+     * should be able to open a cursor on the selected checkpoint; if we fail because it's somehow
+     * disappeared, that's a problem and we shouldn't just silently return no data.
+     ','line_number':92,'multiline':True]
+['text':' Do this separately for now because the behavior below is confusing if it triggers. ','line_number':106,'multiline':True]
+['text':'
+     * After positioning our cursor, we're stepping backwards to find the correct update. Since the
+     * timestamp is part of the key, our cursor needs to go from the newest record (further in the
+     * history store) to the oldest (earlier in the history store) for a given key.
+     *
+     * A reader without a timestamp should read the largest timestamp in the range, however cursor
+     * search near if given a 0 timestamp will place at the top of the range and hide the records
+     * below it. As such we need to adjust a 0 timestamp to the timestamp max value.
+     *
+     * If reading a checkpoint, use the checkpoint read timestamp instead.
+     ','line_number':110,'multiline':True]
+['text':' Allocate buffer for the history store value. ','line_number':132,'multiline':True]
+['text':' We do not have tombstones in the history store anymore. ','line_number':138,'multiline':True]
+['text':'
+     * If the caller has signalled they don't need the value buffer, don't bother reconstructing a
+     * modify update or copying the contents into the value buffer.
+     ','line_number':143,'multiline':True]
+['text':'
+     * Keep walking until we get a non-modify update. Once we get to that point, squash the updates
+     * together.
+     ','line_number':150,'multiline':True]
+['text':' Store this so that we don't have to make a special case for the first modify. ','line_number':155,'multiline':True]
+['text':'
+         * Resolving update chains of reverse deltas requires the current transaction to look beyond
+         * its current snapshot in certain scenarios. This flag allows us to ignore transaction
+         * visibility checks when reading in order to construct the modify chain, so we can create
+         * the value we expect.
+         ','line_number':158,'multiline':True]
+['text':'
+             * Find the base update to apply the reverse deltas. If our cursor next fails to find an
+             * update here we fall back to the datastore version. If its timestamp doesn't match our
+             * timestamp then we return not found.
+             ','line_number':171,'multiline':True]
+['text':'
+                 * Fallback to the provided value as the base value.
+                 *
+                 * Work around of clang analyzer complaining the value is never read as it is reset
+                 * again by the following WT_ERR macro.
+                 ','line_number':178,'multiline':True]
+['text':'
+     * Potential optimization: We can likely get rid of this copy and the update allocation above.
+     * We already have buffers containing the modify values so there's no good reason to allocate an
+     * update other than to work with our modify vector implementation.
+     ','line_number':204,'multiline':True]
+['text':' Mark the buffer as invalid if there is an error. ','line_number':239,'multiline':True]

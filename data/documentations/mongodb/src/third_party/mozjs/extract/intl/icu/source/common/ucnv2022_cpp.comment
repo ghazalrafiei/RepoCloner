@@ -1,0 +1,950 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]
+['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]
+['text':'
+**********************************************************************
+*   Copyright (C) 2000-2016, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+**********************************************************************
+*   file name:  ucnv2022.cpp
+*   encoding:   UTF-8
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 2000feb03
+*   created by: Markus W. Scherer
+*
+*   Change history:
+*
+*   06/29/2000  helena  Major rewrite of the callback APIs.
+*   08/08/2000  Ram     Included support for ISO-2022-JP-2
+*                       Changed implementation of toUnicode
+*                       function
+*   08/21/2000  Ram     Added support for ISO-2022-KR
+*   08/29/2000  Ram     Seperated implementation of EBCDIC to
+*                       ucnvebdc.c
+*   09/20/2000  Ram     Added support for ISO-2022-CN
+*                       Added implementations for getNextUChar()
+*                       for specific 2022 country variants.
+*   10/31/2000  Ram     Implemented offsets logic functions
+','line_number':3,'multiline':True]
+['text':'
+ * I am disabling the generic ISO-2022 converter after proposing to do so on
+ * the icu mailing list two days ago.
+ *
+ * Reasons:
+ * 1. It does not fully support the ISO-2022/ECMA-35 specification with all of
+ *    its designation sequences, single shifts with return to the previous state,
+ *    switch-with-no-return to UTF-16BE or similar, etc.
+ *    This is unlike the language-specific variants like ISO-2022-JP which
+ *    require a much smaller repertoire of ISO-2022 features.
+ *    These variants continue to be supported.
+ * 2. I believe that no one is really using the generic ISO-2022 converter
+ *    but rather always one of the language-specific variants.
+ *    Note that ICU's generic ISO-2022 converter has always output one escape
+ *    sequence followed by UTF-8 for the whole stream.
+ * 3. Switching between subcharsets is extremely slow, because each time
+ *    the previous converter is closed and a new one opened,
+ *    without any kind of caching, least-recently-used list, etc.
+ * 4. The code is currently buggy, and given the above it does not seem
+ *    reasonable to spend the time on maintenance.
+ * 5. ISO-2022 subcharsets should normally be used with 7-bit byte encodings.
+ *    This means, for example, that when ISO-8859-7 is designated, the following
+ *    ISO-2022 bytes 00..7f should be interpreted as ISO-8859-7 bytes 80..ff.
+ *    The ICU ISO-2022 converter does not handle this - and has no information
+ *    about which subconverter would have to be shifted vs. which is designed
+ *    for 7-bit ISO-2022.
+ *
+ * Markus Scherer 2003-dec-03
+ ','line_number':49,'multiline':True]
+['text':' static const char SHIFT_OUT_STR[] = "\x0E";','line_number':82,'multiline':False]
+['text':'
+ * 94-character sets with native byte values A1..FE are encoded in ISO 2022
+ * as bytes 21..7E. (Subtract 0x80.)
+ * 96-character sets with native byte values A0..FF are encoded in ISO 2022
+ * as bytes 20..7F. (Subtract 0x80.)
+ * Do not encode C1 control codes with native bytes 80..9F
+ * as bytes 00..1F (C0 control codes).
+ ','line_number':96,'multiline':True]
+['text':'
+ * ISO 2022 control codes must not be converted from Unicode
+ * because they would mess up the byte stream.
+ * The bit mask 0x0800c000 has bits set at bit positions 0xe, 0xf, 0x1b
+ * corresponding to SO, SI, and ESC.
+ ','line_number':111,'multiline':True]
+['text':' for ISO-2022-JP and -CN implementations ','line_number':119,'multiline':True]
+['text':' shared values ','line_number':121,'multiline':True]
+['text':' JP ','line_number':128,'multiline':True]
+['text':' Halfwidth Katakana 7 bit ','line_number':136,'multiline':True]
+['text':' CN ','line_number':138,'multiline':True]
+['text':' the first few enum constants must keep their values because they correspond to myConverterArray[] ','line_number':139,'multiline':True]
+['text':'
+         * these are used in StateEnum and ISO2022State variables,
+         * but CNS_11643 must be used to index into myConverterArray[]
+         ','line_number':144,'multiline':True]
+['text':' is the StateEnum charset value for a DBCS charset? ','line_number':158,'multiline':True]
+['text':'
+ * Each of these charset masks (with index x) contains a bit for a charset in exact correspondence
+ * to whether that charset is used in the corresponding version x of ISO_2022,locale=ja,version=x
+ *
+ * Note: The converter uses some leniency:
+ * - The escape sequence ESC ( I for half-width 7-bit Katakana is recognized in
+ *   all versions, not just JIS7 and JIS8.
+ * - ICU does not distinguish between different versions of JIS X 0208.
+ ','line_number':167,'multiline':True]
+['text':' charset number for SI (G0)/SO (G1)/SS2 (G2)/SS3 (G3) ','line_number':201,'multiline':True]
+['text':' 0..3 for G0..G3 (SI/SO/SS2/SS3) ','line_number':202,'multiline':True]
+['text':' g before single shift (SS2 or SS3) ','line_number':203,'multiline':True]
+['text':' Protos ','line_number':224,'multiline':True]
+['text':' ISO-2022 ----------------------------------------------------------------- ','line_number':225,'multiline':True]
+['text':'Forward declaration ','line_number':227,'multiline':True]
+['text':'ESC','line_number':235,'multiline':True]
+['text':'Doesn't correspond to a valid iso 2022 escape sequence','line_number':239,'multiline':True]
+['text':'so far corresponds to a valid iso 2022 escape sequence','line_number':240,'multiline':True]
+['text':'corresponds to a valid iso 2022 escape sequence','line_number':241,'multiline':True]
+['text':'so far matches one iso 2022 escape sequence, but by adding more characters might match another escape sequence','line_number':242,'multiline':True]
+['text':'
+* The way these state transition arrays work is:
+* ex : ESC$B is the sequence for JISX208
+*      a) First Iteration: char is ESC
+*          i) Get the value of ESC from normalize_esq_chars_2022[] with int value of ESC as index
+*             int x = normalize_esq_chars_2022[27] which is equal to 1
+*         ii) Search for this value in escSeqStateTable_Key_2022[]
+*             value of x is stored at escSeqStateTable_Key_2022[0]
+*        iii) Save this index as offset
+*         iv) Get state of this sequence from escSeqStateTable_Value_2022[]
+*             escSeqStateTable_Value_2022[offset], which is VALID_NON_TERMINAL_2022
+*     b) Switch on this state and continue to next char
+*          i) Get the value of $ from normalize_esq_chars_2022[] with int value of $ as index
+*             which is normalize_esq_chars_2022[36] == 4
+*         ii) x is currently 1(from above)
+*               x<<=5 -- x is now 32
+*               x+=normalize_esq_chars_2022[36]
+*               now x is 36
+*        iii) Search for this value in escSeqStateTable_Key_2022[]
+*             value of x is stored at escSeqStateTable_Key_2022[2], so offset is 2
+*         iv) Get state of this sequence from escSeqStateTable_Value_2022[]
+*             escSeqStateTable_Value_2022[offset], which is VALID_NON_TERMINAL_2022
+*     c) Switch on this state and continue to next char
+*        i)  Get the value of B from normalize_esq_chars_2022[] with int value of B as index
+*        ii) x is currently 36 (from above)
+*            x<<=5 -- x is now 1152
+*            x+=normalize_esq_chars_2022[66]
+*            now x is 1161
+*       iii) Search for this value in escSeqStateTable_Key_2022[]
+*            value of x is stored at escSeqStateTable_Key_2022[21], so offset is 21
+*        iv) Get state of this sequence from escSeqStateTable_Value_2022[21]
+*            escSeqStateTable_Value_2022[offset], which is VALID_TERMINAL_2022
+*         v) Get the converter name form escSeqStateTable_Result_2022[21] which is JISX208
+','line_number':245,'multiline':True]
+['text':'Below are the 3 arrays depicting a state transition table','line_number':281,'multiline':True]
+['text':'       0      1       2       3       4      5       6        7       8       9           ','line_number':283,'multiline':True]
+['text':'
+ * When the generic ISO-2022 converter is completely removed, not just disabled
+ * per #ifdef, then the following state table and the associated tables that are
+ * dimensioned with MAX_STATES_2022 should be trimmed.
+ *
+ * Especially, VALID_MAYBE_TERMINAL_2022 will not be used any more, and all of
+ * the associated escape sequences starting with ESC ( B should be removed.
+ * This includes the ones with key values 1097 and all of the ones above 1000000.
+ *
+ * For the latter, the tables can simply be truncated.
+ * For the former, since the tables must be kept parallel, it is probably best
+ * to simply duplicate an adjacent table cell, parallel in all tables.
+ *
+ * It may make sense to restructure the tables, especially by using small search
+ * tables for the variants instead of indexing them parallel to the table here.
+ ','line_number':314,'multiline':True]
+['text':'   0           1           2           3           4           5           6           7           8           9           ','line_number':334,'multiline':True]
+['text':'  0                      1                        2                      3                   4                   5                        6                      7                       8                       9    ','line_number':349,'multiline':True]
+['text':'          0                           1                         2                             3                           4                           5                               6                        7                          8                           9       ','line_number':364,'multiline':True]
+['text':' Type def for refactoring changeState_2022 code','line_number':375,'multiline':True]
+['text':'********** ISO 2022 Converter Protos **********','line_number':387,'multiline':True]
+['text':'const UConverterSharedData _ISO2022Data;','line_number':418,'multiline':True]
+['text':' namespace','line_number':426,'multiline':False]
+['text':'************** Converter implementations *****************','line_number':428,'multiline':True]
+['text':' The purpose of this function is to get around gcc compiler warnings. ','line_number':430,'multiline':True]
+['text':'converter','line_number':447,'multiline':True]
+['text':' offset ','line_number':451,'multiline':True]
+['text':' state ','line_number':452,'multiline':True]
+['text':' byteIndex ','line_number':453,'multiline':True]
+['text':' in ISO-2022-KR the designator sequence appears only once
+    * in a file so we append it only once
+    ','line_number':459,'multiline':True]
+['text':' prevLength ','line_number':474,'multiline':True]
+['text':' open the required converters and cache them ','line_number':503,'multiline':True]
+['text':' ICU 55 fails to open a converter for an unsupported version.','line_number':505,'multiline':False]
+['text':' Previously, it fell back to version 0, but that would yield','line_number':506,'multiline':False]
+['text':' unexpected behavior.','line_number':507,'multiline':False]
+['text':' gb_2312_80-1 ','line_number':523,'multiline':True]
+['text':' set the function pointers to appropriate funtions ','line_number':530,'multiline':True]
+['text':' ICU 55 fails to open a converter for an unsupported version.','line_number':544,'multiline':False]
+['text':' Previously, it fell back to version 0, but that would yield','line_number':545,'multiline':False]
+['text':' unexpected behavior.','line_number':546,'multiline':False]
+['text':' errorCode carries result ','line_number':558,'multiline':True]
+['text':' initialize the state variables ','line_number':577,'multiline':True]
+['text':' set the function pointers to appropriate funtions ','line_number':581,'multiline':True]
+['text':' ICU 55 fails to open a converter for an unsupported version.','line_number':590,'multiline':False]
+['text':' Previously, it fell back to version 0, but that would yield','line_number':591,'multiline':False]
+['text':' unexpected behavior.','line_number':592,'multiline':False]
+['text':' open the required converters and cache them ','line_number':597,'multiline':True]
+['text':' set the function pointers to appropriate funtions ','line_number':608,'multiline':True]
+['text':' !UCONFIG_ONLY_HTML_CONVERSION','line_number':623,'multiline':False]
+['text':' append the UTF-8 escape sequence ','line_number':628,'multiline':True]
+['text':' initialize the state variables ','line_number':635,'multiline':True]
+['text':' Was U_UNSUPPORTED_ERROR but changed in ICU 55 to a more standard','line_number':639,'multiline':False]
+['text':' data loading error code.','line_number':640,'multiline':False]
+['text':'close the array of converter pointers and free the memory','line_number':663,'multiline':True]
+['text':' re-append UTF-8 escape sequence ','line_number':702,'multiline':True]
+['text':' reset the state variables ','line_number':712,'multiline':True]
+['text':'************** to unicode ******************','line_number':738,'multiline':True]
+['text':'***************************************************************************
+ * Recognized escape sequences are
+ * <ESC>(B  ASCII
+ * <ESC>.A  ISO-8859-1
+ * <ESC>.F  ISO-8859-7
+ * <ESC>(J  JISX-201
+ * <ESC>(I  JISX-201
+ * <ESC>$B  JISX-208
+ * <ESC>$@  JISX-208
+ * <ESC>$(D JISX-212
+ * <ESC>$A  GB2312
+ * <ESC>$(C KSC5601
+ ','line_number':739,'multiline':True]
+['text':'      0                1               2               3               4               5               6               7               8               9    ','line_number':753,'multiline':True]
+['text':'************** to unicode ******************','line_number':765,'multiline':True]
+['text':'      0                1               2               3               4               5               6               7               8               9    ','line_number':767,'multiline':True]
+['text':' not a valid character anywhere in an escape sequence ','line_number':789,'multiline':True]
+['text':'binary search','line_number':796,'multiline':True]
+['text':'Finds median','line_number':798,'multiline':True]
+['text':'we found it','line_number':809,'multiline':True]
+['text':'runs through a state machine to determine the escape sequence - codepage correspondence
+ ','line_number':823,'multiline':True]
+['text':' continue with the loop ','line_number':847,'multiline':True]
+['text':' ESC ( B is ambiguous only for ISO_2022 itself ','line_number':859,'multiline':True]
+['text':' discard toUBytes[] for ESC ( B because this sequence is correct and complete ','line_number':861,'multiline':True]
+['text':' TODO need to indicate that ESC ( B was seen; if failure, then need to replay from source or from MBCS-style replay ','line_number':864,'multiline':True]
+['text':' continue with the loop ','line_number':866,'multiline':True]
+['text':' not ISO_2022 itself, finish here ','line_number':872,'multiline':True]
+['text':' indicate that the escape sequence is incomplete: key!=0 ','line_number':884,'multiline':True]
+['text':' value == VALID_TERMINAL_2022 ','line_number':888,'multiline':True]
+['text':' SS2 or SS3 ','line_number':895,'multiline':True]
+['text':' illegal to have SS2 before a matching designator ','line_number':925,'multiline':True]
+['text':' case SS3_STATE: not used in ISO-2022-JP-x ','line_number':929,'multiline':True]
+['text':' G2 charset for SS2 ','line_number':935,'multiline':True]
+['text':' G0 charset ','line_number':943,'multiline':True]
+['text':' illegal to have SS2 before a matching designator ','line_number':965,'multiline':True]
+['text':' illegal to have SS3 before a matching designator ','line_number':976,'multiline':True]
+['text':' other CNS 11643 planes ','line_number':995,'multiline':True]
+['text':' nothing to be done, just accept this one escape sequence ','line_number':1007,'multiline':True]
+['text':' !UCONFIG_ONLY_HTML_CONVERSION','line_number':1012,'multiline':False]
+['text':'
+             * Ticket 5691: consistent illegal sequences:
+             * - We include at least the first byte (ESC) in the illegal sequence.
+             * - If any of the non-initial bytes could be the start of a character,
+             *   we stop the illegal sequence before the first one of those.
+             *   In escape sequences, all following bytes are "printable", that is,
+             *   unless they are completely illegal (>7f in SBCS, outside 21..7e in DBCS),
+             *   they are valid single/lead bytes.
+             *   For simplicity, we always only report the initial ESC byte as the
+             *   illegal sequence and back out all other bytes we looked at.
+             ','line_number':1023,'multiline':True]
+['text':' Back out some bytes. ','line_number':1034,'multiline':True]
+['text':' same as initialToULength<=1 ','line_number':1038,'multiline':True]
+['text':' Back out bytes from the previous buffer: Need to replay them. ','line_number':1041,'multiline':True]
+['text':' same as -(initialToULength-1) ','line_number':1043,'multiline':True]
+['text':' preToULength is negative! ','line_number':1044,'multiline':True]
+['text':'Checks the characters of the buffer against valid 2022 escape sequences
+*if the match we return a pointer to the initial start of the sequence otherwise
+*we return sourceLimit
+','line_number':1056,'multiline':True]
+['text':'for 2022 looks ahead in the stream
+ *to determine the longest possible convertible
+ *data stream
+ ','line_number':1060,'multiline':True]
+['text':'flush','line_number':1067,'multiline':True]
+['text':' Kludge: I could not
+            * figure out the reason for validating an escape sequence
+            * twice - once here and once in changeState_2022().
+            * is it possible to have an ESC character in a ISO2022
+            * byte stream which is valid in a code page? Is it legal?
+            ','line_number':1083,'multiline':True]
+['text':' This inline function replicates code in _MBCSFromUChar32() function in ucnvmbcs.c
+ * any future change in _MBCSFromUChar32() function should be reflected here.
+ * @return number of bytes in *value; negative number if fallback; 0 if no mapping
+ ','line_number':1112,'multiline':True]
+['text':'
+     * TODO(markus): Use and require new, faster MBCS conversion table structures.
+     * Use internal version of ucnv_open() that verifies that the new structures are available,
+     * else U_INTERNAL_PROGRAM_ERROR.
+     ','line_number':1129,'multiline':True]
+['text':' BMP-only codepages are stored without stage 1 entries for supplementary code points ','line_number':1134,'multiline':True]
+['text':' get the bytes and the length for the output ','line_number':1138,'multiline':True]
+['text':' outputType==MBCS_OUTPUT_3 ','line_number':1146,'multiline':True]
+['text':' is this code point assigned, or do we use fallbacks? ','line_number':1157,'multiline':True]
+['text':' assigned ','line_number':1159,'multiline':True]
+['text':'
+             * We allow a 0 byte output if the "assigned" bit is set for this entry.
+             * There is no way with this data structure for fallback output
+             * to be a zero byte.
+             ','line_number':1163,'multiline':True]
+['text':' unassigned ','line_number':1178,'multiline':True]
+['text':' This inline function replicates code in _MBCSSingleFromUChar32() function in ucnvmbcs.c
+ * any future change in _MBCSSingleFromUChar32() function should be reflected here.
+ * @param retval pointer to output byte
+ * @return 1 roundtrip byte  0 no mapping  -1 fallback byte
+ ','line_number':1182,'multiline':True]
+['text':' BMP-only codepages are stored without stage 1 entries for supplementary code points ','line_number':1195,'multiline':True]
+['text':' convert the Unicode code point in c into codepage bytes (same as in _MBCSFromUnicodeWithOffsets) ','line_number':1199,'multiline':True]
+['text':' get the byte for the output ','line_number':1201,'multiline':True]
+['text':' is this code point assigned, or do we use fallbacks? ','line_number':1203,'multiline':True]
+['text':' roundtrip ','line_number':1206,'multiline':True]
+['text':' fallback taken ','line_number':1208,'multiline':True]
+['text':' no mapping ','line_number':1210,'multiline':True]
+['text':'
+ * Check that the result is a 2-byte value with each byte in the range A1..FE
+ * (strict EUC DBCS) before accepting it and subtracting 0x80 from each byte
+ * to move it to the ISO 2022 range 21..7E.
+ * Return 0 if out of range.
+ ','line_number':1214,'multiline':True]
+['text':' shift down to 21..7e byte range ','line_number':1225,'multiline':True]
+['text':' not valid for ISO 2022 ','line_number':1227,'multiline':True]
+['text':' 5691: Call sites now check for validity. They can just += 0x8080 after that. ','line_number':1231,'multiline':True]
+['text':'
+ * This method does the reverse of _2022FromGR94DBCS(). Given the 2022 code point, it returns the
+ * 2 byte value that is in the range A1..FE for each byte. Otherwise it returns the 2022 code point
+ * unchanged. 
+ ','line_number':1232,'multiline':True]
+['text':'*********************************************************************************
+*  ISO-2022 Converter
+*
+*
+','line_number':1251,'multiline':True]
+['text':' are we in the middle of an escape sequence? ','line_number':1272,'multiline':True]
+['text':'Find the end of the buffer e.g : Next Escape Seq | end of Buffer','line_number':1273,'multiline':True]
+['text':' convert to before the ESC or until the end of the buffer ','line_number':1287,'multiline':True]
+['text':' move the overflow buffer ','line_number':1303,'multiline':True]
+['text':'
+                 * At least one of:
+                 * -Error while converting
+                 * -Done with entire buffer
+                 * -Need to write offsets or update the current offset
+                 *  (leave that up to the code in ucnv.c)
+                 *
+                 * or else we just stopped at an ESC byte and continue with changeState_2022()
+                 ','line_number':1314,'multiline':True]
+['text':' copy partial or error input for truncated detection and error handling ','line_number':1328,'multiline':True]
+['text':' truncated input before ESC ','line_number':1339,'multiline':True]
+['text':' let the ucnv.c code update its current offset ','line_number':1355,'multiline':True]
+['text':'
+ * To Unicode Callback helper function
+ ','line_number':1363,'multiline':True]
+['text':'0xfffe','line_number':1380,'multiline':True]
+['text':'*************************************ISO-2022-JP************************************************','line_number':1388,'multiline':True]
+['text':'************************************* IMPORTANT **************************************************
+* The UConverter_fromUnicode_ISO2022_JP converter does not use ucnv_fromUnicode() functions for SBCS,DBCS and
+* MBCS; instead, the values are obtained directly by calling _MBCSFromUChar32().
+* The converter iterates over each Unicode codepoint
+* to obtain the equivalent codepoints from the codepages supported. Since the source buffer is
+* processed one char at a time it would make sense to reduce the extra processing a canned converter
+* would do as far as possible.
+*
+* If the implementation of these macros or structure of sharedData struct change in the future, make
+* sure that ISO-2022 is also changed.
+***************************************************************************************************
+','line_number':1390,'multiline':True]
+['text':'**************************************************************************************************
+* Rules for ISO-2022-jp encoding
+* (i)   Escape sequences must be fully contained within a line they should not
+*       span new lines or CRs
+* (ii)  If the last character on a line is represented by two bytes then an ASCII or
+*       JIS-Roman character escape sequence should follow before the line terminates
+* (iii) If the first character on the line is represented by two bytes then a two
+*       byte character escape sequence should precede it
+* (iv)  If no escape sequence is encountered then the characters are ASCII
+* (v)   Latin(ISO-8859-1) and Greek(ISO-8859-7) characters must be designated to G2,
+*       and invoked with SS2 (ESC N).
+* (vi)  If there is any G0 designation in text, there must be a switch to
+*       ASCII or to JIS X 0201-Roman before a space character (but not
+*       necessarily before "ESC 4/14 2/0" or "ESC N ' '") or control
+*       characters such as tab or CRLF.
+* (vi)  Supported encodings:
+*          ASCII, JISX201, JISX208, JISX212, GB2312, KSC5601, ISO-8859-1,ISO-8859-7
+*
+*  source : RFC-1554
+*
+*          JISX201, JISX208,JISX212 : new .cnv data files created
+*          KSC5601 : alias to ibm-949 mapping table
+*          GB2312 : alias to ibm-1386 mapping table
+*          ISO-8859-1 : Algorithmic implemented as LATIN1 case
+*          ISO-8859-7 : alias to ibm-9409 mapping table
+','line_number':1403,'multiline':True]
+['text':' preference order of JP charsets ','line_number':1430,'multiline':True]
+['text':'
+ * The escape sequences must be in order of the enum constants like JISX201  = 3,
+ * not in order of jpCharsetPref[]!
+ ','line_number':1443,'multiline':True]
+['text':' <ESC>(B  ASCII       ','line_number':1448,'multiline':True]
+['text':' <ESC>.A  ISO-8859-1  ','line_number':1449,'multiline':True]
+['text':' <ESC>.F  ISO-8859-7  ','line_number':1450,'multiline':True]
+['text':' <ESC>(J  JISX-201    ','line_number':1451,'multiline':True]
+['text':' <ESC>$B  JISX-208    ','line_number':1452,'multiline':True]
+['text':' <ESC>$(D JISX-212    ','line_number':1453,'multiline':True]
+['text':' <ESC>$A  GB2312      ','line_number':1454,'multiline':True]
+['text':' <ESC>$(C KSC5601     ','line_number':1455,'multiline':True]
+['text':' <ESC>(I  HWKANA_7BIT ','line_number':1456,'multiline':True]
+['text':' length of <ESC>(B  ASCII       ','line_number':1460,'multiline':True]
+['text':' length of <ESC>.A  ISO-8859-1  ','line_number':1461,'multiline':True]
+['text':' length of <ESC>.F  ISO-8859-7  ','line_number':1462,'multiline':True]
+['text':' length of <ESC>(J  JISX-201    ','line_number':1463,'multiline':True]
+['text':' length of <ESC>$B  JISX-208    ','line_number':1464,'multiline':True]
+['text':' length of <ESC>$(D JISX-212    ','line_number':1465,'multiline':True]
+['text':' length of <ESC>$A  GB2312      ','line_number':1466,'multiline':True]
+['text':' length of <ESC>$(C KSC5601     ','line_number':1467,'multiline':True]
+['text':' length of <ESC>(I  HWKANA_7BIT ','line_number':1468,'multiline':True]
+['text':'
+* The iteration over various code pages works this way:
+* i)   Get the currentState from myConverterData->currentState
+* ii)  Check if the character is mapped to a valid character in the currentState
+*      Yes ->  a) set the initIterState to currentState
+*       b) remain in this state until an invalid character is found
+*      No  ->  a) go to the next code page and find the character
+* iii) Before changing the state increment the current state check if the current state
+*      is equal to the intitIteration state
+*      Yes ->  A character that cannot be represented in any of the supported encodings
+*       break and return a U_INVALID_CHARACTER error
+*      No  ->  Continue and find the character in next code page
+*
+*
+* TODO: Implement a priority technique where the users are allowed to set the priority of code pages
+','line_number':1471,'multiline':True]
+['text':' Map 00..7F to Unicode according to JIS X 0201. ','line_number':1488,'multiline':True]
+['text':' value <= 0x7f ','line_number':1497,'multiline':True]
+['text':' Map Unicode to 00..7F according to JIS X 0201. Return U+FFFE if unmappable. ','line_number':1502,'multiline':True]
+['text':'
+ * Take a valid Shift-JIS byte pair, check that it is in the range corresponding
+ * to JIS X 0208, and convert it to a pair of 21..7E bytes.
+ * Return 0 if the byte pair is out of range.
+ ','line_number':1517,'multiline':True]
+['text':' beyond JIS X 0208 ','line_number':1527,'multiline':True]
+['text':' lead byte ','line_number':1532,'multiline':True]
+['text':' 0xe000 <= value <= 0xef00 ','line_number':1535,'multiline':True]
+['text':' trail <= 0xfc ','line_number':1547,'multiline':True]
+['text':'
+ * Convert a pair of JIS X 0208 21..7E bytes to Shift-JIS.
+ * If either byte is outside 21..7E make sure that the result is not valid
+ * for Shift-JIS so that the converter catches it.
+ * Some invalid byte values already turn into equally invalid Shift-JIS
+ * byte values and need not be tested explicitly.
+ ','line_number':1553,'multiline':True]
+['text':' invalid ','line_number':1569,'multiline':True]
+['text':' invalid ','line_number':1575,'multiline':True]
+['text':' invalid ','line_number':1584,'multiline':True]
+['text':'
+ * JIS X 0208 has fallbacks from Unicode half-width Katakana to full-width (DBCS)
+ * Katakana.
+ * Now that we use a Shift-JIS table for JIS X 0208 we need to hardcode these fallbacks
+ * because Shift-JIS roundtrips half-width Katakana to single bytes.
+ * These were the only fallbacks in ICU's jisx-208.ucm file.
+ ','line_number':1590,'multiline':True]
+['text':' U+FF61 ','line_number':1598,'multiline':True]
+['text':' U+FF70 ','line_number':1613,'multiline':True]
+['text':' U+FF80 ','line_number':1629,'multiline':True]
+['text':' U+FF90 ','line_number':1645,'multiline':True]
+['text':' U+FF9F ','line_number':1660,'multiline':True]
+['text':' set up the state ','line_number':1684,'multiline':True]
+['text':' check if the last codepoint of previous buffer was a lead surrogate','line_number':1690,'multiline':True]
+['text':'check if the char is a First surrogate','line_number':1699,'multiline':True]
+['text':'look ahead to find the trail surrogate','line_number':1703,'multiline':True]
+['text':' test the following code unit ','line_number':1705,'multiline':True]
+['text':' convert this supplementary code point ','line_number':1711,'multiline':True]
+['text':' exit this condition tree ','line_number':1712,'multiline':True]
+['text':' this is an unmatched lead code unit (1st surrogate) ','line_number':1714,'multiline':True]
+['text':' callback(illegal) ','line_number':1715,'multiline':True]
+['text':' no more input ','line_number':1721,'multiline':True]
+['text':' this is an unmatched trail code unit (2nd surrogate) ','line_number':1726,'multiline':True]
+['text':' callback(illegal) ','line_number':1727,'multiline':True]
+['text':' do not convert SO/SI/ESC ','line_number':1734,'multiline':True]
+['text':' callback(illegal) ','line_number':1736,'multiline':True]
+['text':' do the conversion ','line_number':1742,'multiline':True]
+['text':'
+                 * The csm variable keeps track of which charsets are allowed
+                 * and not used yet while building the choices[].
+                 ','line_number':1747,'multiline':True]
+['text':' JIS7/8: try single-byte half-width Katakana before JISX208 ','line_number':1754,'multiline':True]
+['text':' Do not try single-byte half-width Katakana for other versions. ','line_number':1758,'multiline':True]
+['text':' try the current G0 charset ','line_number':1761,'multiline':True]
+['text':' try the current G2 charset ','line_number':1765,'multiline':True]
+['text':' try all the other possible charsets ','line_number':1771,'multiline':True]
+['text':'
+             * len==0: no mapping found yet
+             * len<0: found a fallback result: continue looking for a roundtrip but no further fallbacks
+             * len>0: found a roundtrip result, done
+             ','line_number':1782,'multiline':True]
+['text':'
+             * We will turn off useFallback after finding a fallback,
+             * but we still get fallbacks from PUA code points as usual.
+             * Therefore, we will also need to check that we don't overwrite
+             * an early fallback with a later one.
+             ','line_number':1788,'multiline':True]
+['text':' JIS7: use G1 (SO) ','line_number':1820,'multiline':True]
+['text':' Shift U+FF61..U+FF9F to bytes 21..5F. ','line_number':1821,'multiline':True]
+['text':' do not output an escape sequence ','line_number':1824,'multiline':True]
+['text':' JIS8: use 8-bit bytes with any single-byte charset, see escape sequence output below ','line_number':1827,'multiline':True]
+['text':' Shift U+FF61..U+FF9F to bytes A1..DF. ','line_number':1828,'multiline':True]
+['text':' switch from a DBCS charset to JISX201 ','line_number':1834,'multiline':True]
+['text':' else stay in the current G0 charset ','line_number':1837,'multiline':True]
+['text':' else do not use HWKANA_7BIT with other versions ','line_number':1840,'multiline':True]
+['text':' G0 SBCS ','line_number':1844,'multiline':True]
+['text':' G0 DBCS from Shift-JIS table ','line_number':1855,'multiline':True]
+['text':' only accept DBCS: abs(len)==2 ','line_number':1860,'multiline':True]
+['text':' G0 SBCS forced to 7-bit output ','line_number':1879,'multiline':True]
+['text':' G0 DBCS ','line_number':1893,'multiline':True]
+['text':' only accept DBCS: abs(len)==2 ','line_number':1898,'multiline':True]
+['text':'
+                             * Check for valid bytes for the encoding scheme.
+                             * This is necessary because the sub-converter (windows-949)
+                             * has a broader encoding scheme than is valid for 2022.
+                             ','line_number':1900,'multiline':True]
+['text':' fallback ','line_number':1922,'multiline':True]
+['text':' count output bytes ','line_number':1924,'multiline':True]
+['text':' write SI if necessary (only for JIS7) ','line_number':1926,'multiline':True]
+['text':' write the designation sequence if necessary ','line_number':1932,'multiline':True]
+['text':' invalidate the choices[] ','line_number':1939,'multiline':True]
+['text':' write the shift sequence if necessary ','line_number':1943,'multiline':True]
+['text':' case 0 handled before writing escapes ','line_number':1946,'multiline':True]
+['text':' case 2 ','line_number':1951,'multiline':True]
+['text':' no case 3: no SS3 in ISO-2022-JP-x ','line_number':1955,'multiline':True]
+['text':' write the output bytes ','line_number':1959,'multiline':True]
+['text':' len == 2 ','line_number':1962,'multiline':True]
+['text':'
+                 * if we cannot find the character after checking all codepages
+                 * then this is an error
+                 ','line_number':1967,'multiline':True]
+['text':' reset the G2 state at the end of a line (conversion got us into ASCII or JISX201 already) ','line_number':1977,'multiline':True]
+['text':' output outLen>0 bytes in buffer[] ','line_number':1982,'multiline':True]
+['text':' -1: known to be ASCII ','line_number':1986,'multiline':True]
+['text':' end if(myTargetIndex<myTargetLength) ','line_number':2007,'multiline':True]
+['text':' end while(mySourceIndex<mySourceLength) ','line_number':2013,'multiline':True]
+['text':'
+     * the end of the input stream and detection of truncated input
+     * are handled by the framework, but for ISO-2022-JP conversion
+     * we need to be in ASCII mode at the very end
+     *
+     * conditions:
+     *   successful
+     *   in SO mode or not in ASCII mode
+     *   end of input and no truncated input
+     ','line_number':2015,'multiline':True]
+['text':' get the source index of the last input character ','line_number':2045,'multiline':True]
+['text':'
+         * TODO this would be simpler and more reliable if we used a pair
+         * of sourceIndex/prevSourceIndex like in ucnvmbcs.c
+         * so that we could simply use the prevSourceIndex here;
+         * this code gives an incorrect result for the rare case of an unmatched
+         * trail surrogate that is alone in the last buffer of the text stream
+         ','line_number':2046,'multiline':True]
+['text':'save the state and return ','line_number':2073,'multiline':True]
+['text':'************** to unicode ******************','line_number':2078,'multiline':True]
+['text':' continue with a partial escape sequence ','line_number':2098,'multiline':True]
+['text':' continue with a partial double-byte character ','line_number':2101,'multiline':True]
+['text':' only JIS7 uses SI/SO, not ISO-2022-JP-x ','line_number':2123,'multiline':True]
+['text':' reset this, we have a different error ','line_number':2124,'multiline':True]
+['text':' JIS7: switch to G1 half-width Katakana ','line_number':2130,'multiline':True]
+['text':' only JIS7 uses SI/SO, not ISO-2022-JP-x ','line_number':2135,'multiline':True]
+['text':' reset this, we have a different error ','line_number':2136,'multiline':True]
+['text':' If in ISO-2022-JP only and we successully completed an escape sequence, but previous segment was empty, create an error ','line_number':2150,'multiline':True]
+['text':' invalid or illegal escape sequence ','line_number':2158,'multiline':True]
+['text':' Reset to avoid future spurious errors ','line_number':2162,'multiline':True]
+['text':' If we successfully completed an escape sequence, we begin a new segment, empty so far ','line_number':2165,'multiline':True]
+['text':' ISO-2022-JP does not use single-byte (C1) SS2 and SS3 ','line_number':2171,'multiline':True]
+['text':' automatically reset to single-byte mode ','line_number':2175,'multiline':True]
+['text':' convert one or two bytes ','line_number':2183,'multiline':True]
+['text':' 8-bit halfwidth katakana in any single-byte mode for JIS8 ','line_number':2189,'multiline':True]
+['text':' return from a single-shift state to the previous one ','line_number':2192,'multiline':True]
+['text':' return from a single-shift state to the previous one ','line_number':2206,'multiline':True]
+['text':' convert mySourceChar+0x80 to use a normal 8-bit table ','line_number':2211,'multiline':True]
+['text':' return from a single-shift state to the previous one ','line_number':2217,'multiline':True]
+['text':' 7-bit halfwidth Katakana ','line_number':2227,'multiline':True]
+['text':' G0 DBCS ','line_number':2232,'multiline':True]
+['text':'
+                         * Ticket 5691: consistent illegal sequences:
+                         * - We include at least the first byte in the illegal sequence.
+                         * - If any of the non-initial bytes could be the start of a character,
+                         *   we stop the illegal sequence before the first one of those.
+                         *
+                         * In ISO-2022 DBCS, if the second byte is in the 21..7e range or is
+                         * an ESC/SO/SI, we report only the first byte as the illegal sequence.
+                         * Otherwise we convert or report the pair of bytes.
+                         ','line_number':2238,'multiline':True]
+['text':' Copy before we modify tmpSourceChar so toUnicodeCallback() sees the correct bytes. ','line_number':2257,'multiline':True]
+['text':' = _2022ToGR94DBCS(tmpSourceChar) ','line_number':2260,'multiline':True]
+['text':' report a pair of illegal bytes if the second byte is not a DBCS starter ','line_number':2267,'multiline':True]
+['text':' add another bit so that the code below writes 2 bytes in case of error ','line_number':2269,'multiline':True]
+['text':' End of inner switch ','line_number':2277,'multiline':True]
+['text':' End of outer switch ','line_number':2279,'multiline':True]
+['text':'0xfffe','line_number':2280,'multiline':True]
+['text':' disassemble the surrogate pair and write to output','line_number':2287,'multiline':True]
+['text':' Call the callback function','line_number':2307,'multiline':True]
+['text':' goes with "if(myTarget < args->targetLimit)"  way up near top of function ','line_number':2312,'multiline':True]
+['text':'**************************************************************
+*   Rules for ISO-2022-KR encoding
+*   i) The KSC5601 designator sequence should appear only once in a file,
+*      at the beginning of a line before any KSC5601 characters. This usually
+*      means that it appears by itself on the first line of the file
+*  ii) There are only 2 shifting sequences SO to shift into double byte mode
+*      and SI to shift into single byte mode
+','line_number':2324,'multiline':True]
+['text':' if the version is 1 then the user is requesting
+     * conversion with ibm-25546 pass the arguments to
+     * MBCS converter and return
+     ','line_number':2374,'multiline':True]
+['text':' initialize data ','line_number':2383,'multiline':True]
+['text':' do not convert SO/SI/ESC ','line_number':2400,'multiline':True]
+['text':' callback(illegal) ','line_number':2402,'multiline':True]
+['text':' fallback ','line_number':2410,'multiline':True]
+['text':' only DBCS or SBCS characters are expected','line_number':2412,'multiline':True]
+['text':' DB characters with high bit set to 1 are expected ','line_number':2413,'multiline':True]
+['text':' append the shift sequence ','line_number':2426,'multiline':True]
+['text':' write the targetUniChar  to target ','line_number':2436,'multiline':True]
+['text':' oops.. the code point is unassingned
+                 * set the error and reason
+                 ','line_number':2472,'multiline':True]
+['text':'check if the char is a First surrogate','line_number':2476,'multiline':True]
+['text':'look ahead to find the trail surrogate','line_number':2480,'multiline':True]
+['text':' test the following code unit ','line_number':2482,'multiline':True]
+['text':' convert this surrogate code point ','line_number':2488,'multiline':True]
+['text':' exit this condition tree ','line_number':2489,'multiline':True]
+['text':' this is an unmatched lead code unit (1st surrogate) ','line_number':2491,'multiline':True]
+['text':' callback(illegal) ','line_number':2492,'multiline':True]
+['text':' no more input ','line_number':2496,'multiline':True]
+['text':' this is an unmatched trail code unit (2nd surrogate) ','line_number':2500,'multiline':True]
+['text':' callback(illegal) ','line_number':2501,'multiline':True]
+['text':' callback(unassigned) for a BMP code point ','line_number':2505,'multiline':True]
+['text':' end if(myTargetIndex<myTargetLength) ','line_number':2512,'multiline':True]
+['text':' end while(mySourceIndex<mySourceLength) ','line_number':2518,'multiline':True]
+['text':'
+     * the end of the input stream and detection of truncated input
+     * are handled by the framework, but for ISO-2022-KR conversion
+     * we need to be in ASCII mode at the very end
+     *
+     * conditions:
+     *   successful
+     *   not in ASCII mode
+     *   end of input and no truncated input
+     ','line_number':2520,'multiline':True]
+['text':' we are switching to ASCII ','line_number':2536,'multiline':True]
+['text':' get the source index of the last input character ','line_number':2539,'multiline':True]
+['text':'
+         * TODO this would be simpler and more reliable if we used a pair
+         * of sourceIndex/prevSourceIndex like in ucnvmbcs.c
+         * so that we could simply use the prevSourceIndex here;
+         * this code gives an incorrect result for the rare case of an unmatched
+         * trail surrogate that is alone in the last buffer of the text stream
+         ','line_number':2540,'multiline':True]
+['text':'save the state and return ','line_number':2567,'multiline':True]
+['text':'*********************** To Unicode **************************************','line_number':2573,'multiline':True]
+['text':' set up the subconverter arguments ','line_number':2584,'multiline':True]
+['text':' remember the original start of the input for offsets ','line_number':2595,'multiline':True]
+['text':' continue with a partial escape sequence ','line_number':2599,'multiline':True]
+['text':'Find the end of the buffer e.g : Next Escape Seq | end of Buffer','line_number':2604,'multiline':True]
+['text':'
+             * get the current partial byte sequence
+             *
+             * it needs to be moved between the public and the subconverter
+             * so that the conversion framework, which only sees the public
+             * converter, can handle truncated and illegal input etc.
+             ','line_number':2608,'multiline':True]
+['text':'
+             * Convert up to the end of the input, or to before the next escape character.
+             * Does not handle conversion extensions because the preToU[] state etc.
+             * is not copied.
+             ','line_number':2620,'multiline':True]
+['text':' update offsets to base them on the actual start of the input ','line_number':2628,'multiline':True]
+['text':' copy input/error/overflow buffers ','line_number':2644,'multiline':True]
+['text':' initialize state ','line_number':2692,'multiline':True]
+['text':' continue with a partial escape sequence ','line_number':2697,'multiline':True]
+['text':' continue with a partial double-byte character ','line_number':2700,'multiline':True]
+['text':' we are handling it, reset to avoid future spurious errors ','line_number':2715,'multiline':True]
+['text':'consume the source ','line_number':2724,'multiline':True]
+['text':' Begin a new segment, empty so far ','line_number':2728,'multiline':True]
+['text':'consume the source ','line_number':2729,'multiline':True]
+['text':' Any invalid ESC sequences will be detected separately, so just reset this ','line_number':2734,'multiline':True]
+['text':' Any invalid char errors will be detected separately, so just reset this ','line_number':2745,'multiline':True]
+['text':'
+                     * Ticket 5691: consistent illegal sequences:
+                     * - We include at least the first byte in the illegal sequence.
+                     * - If any of the non-initial bytes could be the start of a character,
+                     *   we stop the illegal sequence before the first one of those.
+                     *
+                     * In ISO-2022 DBCS, if the second byte is in the 21..7e range or is
+                     * an ESC/SO/SI, we report only the first byte as the illegal sequence.
+                     * Otherwise we convert or report the pair of bytes.
+                     ','line_number':2753,'multiline':True]
+['text':' report a pair of illegal bytes if the second byte is not a DBCS starter ','line_number':2772,'multiline':True]
+['text':' add another bit so that the code below writes 2 bytes in case of error ','line_number':2774,'multiline':True]
+['text':' Call the callback function','line_number':2795,'multiline':True]
+['text':'************************** END ISO2022-KR ********************************','line_number':2809,'multiline':True]
+['text':'************************** ISO-2022-CN *********************************
+*
+* Rules for ISO-2022-CN Encoding:
+* i)   The designator sequence must appear once on a line before any instance
+*      of character set it designates.
+* ii)  If two lines contain characters from the same character set, both lines
+*      must include the designator sequence.
+* iii) Once the designator sequence is known, a shifting sequence has to be found
+*      to invoke the  shifting
+* iv)  All lines start in ASCII and end in ASCII.
+* v)   Four shifting sequences are employed for this purpose:
+*
+*      Sequcence   ASCII Eq    Charsets
+*      ----------  -------    ---------
+*      SI           <SI>        US-ASCII
+*      SO           <SO>        CNS-11643-1992 Plane 1, GB2312, ISO-IR-165
+*      SS2          <ESC>N      CNS-11643-1992 Plane 2
+*      SS3          <ESC>O      CNS-11643-1992 Planes 3-7
+*
+* vi)
+*      SOdesignator  : ESC "$" ")" finalchar_for_SO
+*      SS2designator : ESC "$" "*" finalchar_for_SS2
+*      SS3designator : ESC "$" "+" finalchar_for_SS3
+*
+*      ESC $ ) A       Indicates the bytes following SO are Chinese
+*       characters as defined in GB 2312-80, until
+*       another SOdesignation appears
+*
+*
+*      ESC $ ) E       Indicates the bytes following SO are as defined
+*       in ISO-IR-165 (for details, see section 2.1),
+*       until another SOdesignation appears
+*
+*      ESC $ ) G       Indicates the bytes following SO are as defined
+*       in CNS 11643-plane-1, until another
+*       SOdesignation appears
+*
+*      ESC $ * H       Indicates the two bytes immediately following
+*       SS2 is a Chinese character as defined in CNS
+*       11643-plane-2, until another SS2designation
+*       appears
+*       (Meaning <ESC>N must preceed every 2 byte
+*        sequence.)
+*
+*      ESC $ + I       Indicates the immediate two bytes following SS3
+*       is a Chinese character as defined in CNS
+*       11643-plane-3, until another SS3designation
+*       appears
+*       (Meaning <ESC>O must preceed every 2 byte
+*        sequence.)
+*
+*      ESC $ + J       Indicates the immediate two bytes following SS3
+*       is a Chinese character as defined in CNS
+*       11643-plane-4, until another SS3designation
+*       appears
+*       (In English: <ESC>O must preceed every 2 byte
+*        sequence.)
+*
+*      ESC $ + K       Indicates the immediate two bytes following SS3
+*       is a Chinese character as defined in CNS
+*       11643-plane-5, until another SS3designation
+*       appears
+*
+*      ESC $ + L       Indicates the immediate two bytes following SS3
+*       is a Chinese character as defined in CNS
+*       11643-plane-6, until another SS3designation
+*       appears
+*
+*      ESC $ + M       Indicates the immediate two bytes following SS3
+*       is a Chinese character as defined in CNS
+*       11643-plane-7, until another SS3designation
+*       appears
+*
+*       As in ISO-2022-CN, each line starts in ASCII, and ends in ASCII, and
+*       has its own designation information before any Chinese characters
+*       appear
+*
+','line_number':2811,'multiline':True]
+['text':' The following are defined this way to make the strings truly readonly ','line_number':2890,'multiline':True]
+['text':'********************* ISO2022-CN Data *************************','line_number':2901,'multiline':True]
+['text':' 0 ASCII ','line_number':2903,'multiline':True]
+['text':' 1 GB2312_1 ','line_number':2904,'multiline':True]
+['text':' 2 ISO_IR_165 ','line_number':2905,'multiline':True]
+['text':' set up the state ','line_number':2933,'multiline':True]
+['text':' check if the last codepoint of previous buffer was a lead surrogate','line_number':2939,'multiline':True]
+['text':'check if the char is a First surrogate','line_number':2948,'multiline':True]
+['text':'look ahead to find the trail surrogate','line_number':2952,'multiline':True]
+['text':' test the following code unit ','line_number':2954,'multiline':True]
+['text':' convert this supplementary code point ','line_number':2960,'multiline':True]
+['text':' exit this condition tree ','line_number':2961,'multiline':True]
+['text':' this is an unmatched lead code unit (1st surrogate) ','line_number':2963,'multiline':True]
+['text':' callback(illegal) ','line_number':2964,'multiline':True]
+['text':' no more input ','line_number':2970,'multiline':True]
+['text':' this is an unmatched trail code unit (2nd surrogate) ','line_number':2975,'multiline':True]
+['text':' callback(illegal) ','line_number':2976,'multiline':True]
+['text':' do the conversion ','line_number':2983,'multiline':True]
+['text':' do not convert SO/SI/ESC ','line_number':2985,'multiline':True]
+['text':' callback(illegal) ','line_number':2987,'multiline':True]
+['text':' US-ASCII ','line_number':2993,'multiline':True]
+['text':' reset the state at the end of a line ','line_number':3005,'multiline':True]
+['text':' convert U+0080..U+10ffff ','line_number':3011,'multiline':True]
+['text':' try the current SO/G1 converter first ','line_number':3016,'multiline':True]
+['text':' default to GB2312_1 if none is designated yet ','line_number':3019,'multiline':True]
+['text':' ISO-2022-CN ','line_number':3025,'multiline':True]
+['text':' try the other SO/G1 converter; a CNS_11643_1 lookup may result in any plane ','line_number':3027,'multiline':True]
+['text':' ISO-2022-CN-EXT ','line_number':3036,'multiline':True]
+['text':' try one of the other converters ','line_number':3038,'multiline':True]
+['text':' CNS_11643_x ','line_number':3048,'multiline':True]
+['text':'
+                 * len==0: no mapping found yet
+                 * len<0: found a fallback result: continue looking for a roundtrip but no further fallbacks
+                 * len>0: found a roundtrip result, done
+                 ','line_number':3062,'multiline':True]
+['text':'
+                 * We will turn off useFallback after finding a fallback,
+                 * but we still get fallbacks from PUA code points as usual.
+                 * Therefore, we will also need to check that we don't overwrite
+                 * an early fallback with a later one.
+                 ','line_number':3068,'multiline':True]
+['text':' plane 3..7 ','line_number':3101,'multiline':True]
+['text':' ISO-2022-CN (without -EXT) does not support plane 3..7 ','line_number':3104,'multiline':True]
+['text':' GB2312_1 or ISO-IR-165 ','line_number':3109,'multiline':True]
+['text':' count output bytes; it must have been abs(len) == 2 ','line_number':3129,'multiline':True]
+['text':' write the designation sequence if necessary ','line_number':3131,'multiline':True]
+['text':' changing the SO/G1 charset invalidates the choices[] ','line_number':3142,'multiline':True]
+['text':' write the shift sequence if necessary ','line_number':3147,'multiline':True]
+['text':' set the new state only if it is the locking shift SO/G1, not for SS2 or SS3 ','line_number':3153,'multiline':True]
+['text':' case 3 ','line_number':3160,'multiline':True]
+['text':' write the two output bytes ','line_number':3167,'multiline':True]
+['text':' if we cannot find the character after checking all codepages
+                     * then this is an error
+                     ','line_number':3171,'multiline':True]
+['text':' output len>0 bytes in buffer[] ','line_number':3180,'multiline':True]
+['text':' -1: known to be ASCII ','line_number':3184,'multiline':True]
+['text':' end if(myTargetIndex<myTargetLength) ','line_number':3205,'multiline':True]
+['text':' end while(mySourceIndex<mySourceLength) ','line_number':3211,'multiline':True]
+['text':'
+     * the end of the input stream and detection of truncated input
+     * are handled by the framework, but for ISO-2022-CN conversion
+     * we need to be in ASCII mode at the very end
+     *
+     * conditions:
+     *   successful
+     *   not in ASCII mode
+     *   end of input and no truncated input
+     ','line_number':3213,'multiline':True]
+['text':' we are switching to ASCII ','line_number':3229,'multiline':True]
+['text':' get the source index of the last input character ','line_number':3232,'multiline':True]
+['text':'
+         * TODO this would be simpler and more reliable if we used a pair
+         * of sourceIndex/prevSourceIndex like in ucnvmbcs.c
+         * so that we could simply use the prevSourceIndex here;
+         * this code gives an incorrect result for the rare case of an unmatched
+         * trail surrogate that is alone in the last buffer of the text stream
+         ','line_number':3233,'multiline':True]
+['text':'save the state and return ','line_number':3260,'multiline':True]
+['text':' continue with a partial escape sequence ','line_number':3282,'multiline':True]
+['text':' continue with a partial double-byte character ','line_number':3285,'multiline':True]
+['text':' we are handling it, reset to avoid future spurious errors ','line_number':3304,'multiline':True]
+['text':' Begin a new segment, empty so far ','line_number':3318,'multiline':True]
+['text':' illegal to have SO before a matching designator ','line_number':3321,'multiline':True]
+['text':' Handling a different error, reset this to avoid future spurious errs ','line_number':3322,'multiline':True]
+['text':' After SO there must be at least one character before a designator (designator error handled separately) ','line_number':3336,'multiline':True]
+['text':' invalid or illegal escape sequence ','line_number':3344,'multiline':True]
+['text':' Reset to avoid future spurious errors ','line_number':3348,'multiline':True]
+['text':' ISO-2022-CN does not use single-byte (C1) SS2 and SS3 ','line_number':3353,'multiline':True]
+['text':' convert one or two bytes ','line_number':3360,'multiline':True]
+['text':'
+                         * Ticket 5691: consistent illegal sequences:
+                         * - We include at least the first byte in the illegal sequence.
+                         * - If any of the non-initial bytes could be the start of a character,
+                         *   we stop the illegal sequence before the first one of those.
+                         *
+                         * In ISO-2022 DBCS, if the second byte is in the 21..7e range or is
+                         * an ESC/SO/SI, we report only the first byte as the illegal sequence.
+                         * Otherwise we convert or report the pair of bytes.
+                         ','line_number':3371,'multiline':True]
+['text':' report a pair of illegal bytes if the second byte is not a DBCS starter ','line_number':3403,'multiline':True]
+['text':' add another bit so that the code below writes 2 bytes in case of error ','line_number':3405,'multiline':True]
+['text':' return from a single-shift state to the previous one ','line_number':3409,'multiline':True]
+['text':'0xfffe','line_number':3425,'multiline':True]
+['text':' disassemble the surrogate pair and write to output','line_number':3432,'multiline':True]
+['text':' Call the callback function','line_number':3452,'multiline':True]
+['text':' #if !UCONFIG_ONLY_HTML_CONVERSION ','line_number':3466,'multiline':True]
+['text':' assume length==1 for most variants ','line_number':3478,'multiline':True]
+['text':' JIS7: switch from G1 to G0 ','line_number':3487,'multiline':True]
+['text':' not in ASCII or JIS X 0201: switch to ASCII ','line_number':3494,'multiline':True]
+['text':' not in ASCII mode: switch to ASCII ','line_number':3506,'multiline':True]
+['text':' in DBCS mode: switch to SBCS ','line_number':3516,'multiline':True]
+['text':' length == 2','line_number':3521,'multiline':True]
+['text':' in SBCS mode: switch to DBCS ','line_number':3523,'multiline':True]
+['text':' save the subconverter's substitution string ','line_number':3532,'multiline':True]
+['text':' set our substitution string into the subconverter ','line_number':3536,'multiline':True]
+['text':' let the subconverter write the subchar, set/retrieve fromUChar32 state ','line_number':3540,'multiline':True]
+['text':' restore the subconverter's substitution string ','line_number':3547,'multiline':True]
+['text':' not expected ','line_number':3564,'multiline':True]
+['text':'
+ * Structure for cloning an ISO 2022 converter into a single memory block.
+ ','line_number':3572,'multiline':True]
+['text':' 'preflighting' request - set needed size into *pBufferSize ','line_number':3600,'multiline':True]
+['text':' ucnv.c/ucnv_safeClone() copied the main UConverter already ','line_number':3608,'multiline':True]
+['text':' set pointer to extra data ','line_number':3611,'multiline':True]
+['text':' share the subconverters ','line_number':3614,'multiline':True]
+['text':' We use UTF-8 in this case ','line_number':3652,'multiline':True]
+['text':' open a set and initialize it with code points that are algorithmically round-tripped ','line_number':3661,'multiline':True]
+['text':' include JIS X 0201 which is hardcoded ','line_number':3664,'multiline':True]
+['text':' include Latin-1 for some variants of JP ','line_number':3668,'multiline':True]
+['text':' include ASCII for JP ','line_number':3671,'multiline':True]
+['text':'
+             * Do not test (jpCharsetMasks[cnvData->version]&CSM(HWKANA_7BIT))!=0
+             * because the bit is on for all JP versions although only versions 3 & 4 (JIS7 & JIS8)
+             * use half-width Katakana.
+             * This is because all ISO-2022-JP variants are lenient in that they accept (in toUnicode)
+             * half-width Katakana via the ESC ( I sequence.
+             * However, we only emit (fromUnicode) half-width Katakana according to the
+             * definition of each variant.
+             *
+             * When including fallbacks,
+             * we need to include half-width Katakana Unicode code points for all JP variants because
+             * JIS X 0208 has hardcoded fallbacks for them (which map to full-width Katakana).
+             ','line_number':3675,'multiline':True]
+['text':' include half-width Katakana for JP ','line_number':3688,'multiline':True]
+['text':' include ASCII for CN ','line_number':3695,'multiline':True]
+['text':' there is only one converter for KR, and it is not in the myConverterArray[] ','line_number':3699,'multiline':True]
+['text':' the loop over myConverterArray[] will simply not find another converter ','line_number':3702,'multiline':True]
+['text':' Replaced by ucnv_MBCSGetFilteredUnicodeSetForUnicode() until we implement ucnv_getUnicodeSet() with reverse fallbacks. ','line_number':3709,'multiline':True]
+['text':' special handling for non-EXT ISO-2022-CN: add only code points for CNS planes 1 and 2 ','line_number':3713,'multiline':True]
+['text':'
+                 * Only add code points that map to Shift-JIS codes
+                 * corresponding to JIS X 0208.
+                 ','line_number':3726,'multiline':True]
+['text':'
+                 * Version-specific for CN:
+                 * CN version 0 does not map CNS planes 3..7 although
+                 * they are all available in the CNS conversion table;
+                 * CN version 1 (-EXT) does map them all.
+                 * The two versions create different Unicode sets.
+                 ','line_number':3734,'multiline':True]
+['text':'
+                 * Some of the KSC 5601 tables (convrtrs.txt has this aliases on multiple tables)
+                 * are broader than GR94.
+                 ','line_number':3743,'multiline':True]
+['text':'
+     * ISO 2022 converters must not convert SO/SI/ESC despite what
+     * sub-converters do by themselves.
+     * Remove these characters from the set.
+     ','line_number':3756,'multiline':True]
+['text':' ISO 2022 converters do not convert C1 controls either ','line_number':3765,'multiline':True]
+['text':' max 3 bytes per UChar from UTF-8 (4 bytes from surrogate _pair_) ','line_number':3808,'multiline':True]
+['text':' reserved ','line_number':3815,'multiline':True]
+['text':'************JP***************','line_number':3820,'multiline':True]
+['text':' max 6 bytes per UChar: 4-byte escape sequence + DBCS ','line_number':3853,'multiline':True]
+['text':' reserved ','line_number':3860,'multiline':True]
+['text':' namespace','line_number':3868,'multiline':False]
+['text':'************ KR **************','line_number':3871,'multiline':True]
+['text':' max 8 bytes per UChar ','line_number':3904,'multiline':True]
+['text':' reserved ','line_number':3911,'multiline':True]
+['text':' namespace','line_number':3919,'multiline':False]
+['text':'************** CN **************','line_number':3921,'multiline':True]
+['text':' max 8 bytes per UChar: 4-byte CNS designator + 2 bytes for SS2/SS3 + DBCS ','line_number':3955,'multiline':True]
+['text':' reserved ','line_number':3962,'multiline':True]
+['text':' namespace','line_number':3970,'multiline':False]
+['text':' #if !UCONFIG_ONLY_HTML_CONVERSION ','line_number':3971,'multiline':True]
+['text':' #if !UCONFIG_NO_LEGACY_CONVERSION ','line_number':3973,'multiline':True]

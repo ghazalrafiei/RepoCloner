@@ -1,0 +1,101 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]
+['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]
+['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]
+['text':' Typed temporary pointers for reference-counted smart pointers. ','line_number':7,'multiline':True]
+['text':' namespace mozilla','line_number':21,'multiline':False]
+['text':'*
+ * already_AddRefed cooperates with reference counting smart pointers to enable
+ * you to assign in a pointer _without_ |AddRef|ing it.  You might want to use
+ * this as a return type from a function that returns an already |AddRef|ed
+ * pointer.
+ *
+ * TODO Move already_AddRefed to namespace mozilla.  This has not yet been done
+ * because of the sheer number of usages of already_AddRefed.
+ *
+ * When should you use already_AddRefed<>?
+ * * Ensure a consumer takes ownership of a reference
+ * * Pass ownership without calling AddRef/Release (sometimes required in
+ *   off-main-thread code)
+ * * The ref pointer type you're using doesn't support move construction
+ *
+ * Otherwise, use std::move(RefPtr/nsCOMPtr/etc).
+ ','line_number':23,'multiline':True]
+['text':' For simplicity, allow returning nullptr from functions returning','line_number':44,'multiline':False]
+['text':' already_AddRefed<T>. Don't permit returning raw T*, though; it's preferred','line_number':45,'multiline':False]
+['text':' to create already_AddRefed<T> from a reference-counting smart pointer.','line_number':46,'multiline':False]
+['text':' Disallow copy constructor and copy assignment operator: move semantics used','line_number':50,'multiline':False]
+['text':' instead.','line_number':51,'multiline':False]
+['text':' WARNING: sketchiness ahead.','line_number':55,'multiline':False]
+['text':'','line_number':56,'multiline':False]
+['text':' The x86-64 ABI for Unix-like operating systems requires structures to be','line_number':57,'multiline':False]
+['text':' returned via invisible reference if they are non-trivial for the purposes','line_number':58,'multiline':False]
+['text':' of calls according to the C++ ABI[1].  For our consideration here, that','line_number':59,'multiline':False]
+['text':' means that if we have a non-trivial move constructor or destructor,','line_number':60,'multiline':False]
+['text':' already_AddRefed must be returned by invisible reference.  But','line_number':61,'multiline':False]
+['text':' already_AddRefed is small enough and so commonly used that it would be','line_number':62,'multiline':False]
+['text':' beneficial to return it via registers instead.  So we need to figure out','line_number':63,'multiline':False]
+['text':' a way to make the move constructor and the destructor trivial.','line_number':64,'multiline':False]
+['text':'','line_number':65,'multiline':False]
+['text':' Our destructor is normally non-trivial, because it asserts that the','line_number':66,'multiline':False]
+['text':' stored pointer has been taken by somebody else prior to destruction.','line_number':67,'multiline':False]
+['text':' However, since the assert in question is compiled only for DEBUG builds,','line_number':68,'multiline':False]
+['text':' we can make the destructor trivial in non-DEBUG builds by simply defining','line_number':69,'multiline':False]
+['text':' it with `= default`.','line_number':70,'multiline':False]
+['text':'','line_number':71,'multiline':False]
+['text':' We now have to make the move constructor trivial as well.  It is normally','line_number':72,'multiline':False]
+['text':' non-trivial, because the incoming object has its pointer null-ed during','line_number':73,'multiline':False]
+['text':' the move. This null-ing is done to satisfy the assert in the destructor.','line_number':74,'multiline':False]
+['text':' But since that destructor has no assert in non-DEBUG builds, the clearing','line_number':75,'multiline':False]
+['text':' is unnecessary in such builds; all we really need to perform is a copy of','line_number':76,'multiline':False]
+['text':' the pointer from the incoming object.  So we can let the compiler define','line_number':77,'multiline':False]
+['text':' a trivial move constructor for us, and already_AddRefed can now be','line_number':78,'multiline':False]
+['text':' returned in registers rather than needing to allocate a stack slot for','line_number':79,'multiline':False]
+['text':' an invisible reference.','line_number':80,'multiline':False]
+['text':'','line_number':81,'multiline':False]
+['text':' The above considerations apply to Unix-like operating systems only; the','line_number':82,'multiline':False]
+['text':' conditions for the same optimization to apply on x86-64 Windows are much','line_number':83,'multiline':False]
+['text':' more strigent and are basically impossible for already_AddRefed to','line_number':84,'multiline':False]
+['text':' satisfy[2].  But we do get some benefit from this optimization on Windows','line_number':85,'multiline':False]
+['text':' because we removed the nulling of the pointer during the move, so that's','line_number':86,'multiline':False]
+['text':' a codesize win.','line_number':87,'multiline':False]
+['text':'','line_number':88,'multiline':False]
+['text':' [1] https://itanium-cxx-abi.github.io/cxx-abi/abi.html#non-trivial','line_number':89,'multiline':False]
+['text':' [2] https://docs.microsoft.com/en-us/cpp/build/return-values-cpp','line_number':90,'multiline':False]
+['text':'*
+   * This helper is useful in cases like
+   *
+   *  already_AddRefed<BaseClass>
+   *  Foo()
+   *  {
+   *    RefPtr<SubClass> x = ...;
+   *    return x.forget();
+   *  }
+   *
+   * The autoconversion allows one to omit the idiom
+   *
+   *    RefPtr<BaseClass> y = x.forget();
+   *    return y.forget();
+   *
+   * Note that nsRefPtr is the XPCOM reference counting smart pointer class.
+   ','line_number':105,'multiline':True]
+['text':' Specialize the unused operator<< for already_AddRefed, to allow','line_number':135,'multiline':False]
+['text':' nsCOMPtr<nsIFoo> foo;','line_number':136,'multiline':False]
+['text':' Unused << foo.forget();','line_number':137,'multiline':False]
+['text':' Note that nsCOMPtr is the XPCOM reference counting smart pointer class.','line_number':138,'multiline':False]
+['text':'*
+   * This helper provides a static_cast replacement for already_AddRefed, so
+   * if you have
+   *
+   *   already_AddRefed<Parent> F();
+   *
+   * you can write
+   *
+   *   already_AddRefed<Child>
+   *   G()
+   *   {
+   *     return F().downcast<Child>();
+   *   }
+   ','line_number':151,'multiline':True]
+['text':' AlreadyAddRefed_h','line_number':176,'multiline':False]

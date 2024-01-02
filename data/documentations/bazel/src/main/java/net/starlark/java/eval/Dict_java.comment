@@ -1,0 +1,141 @@
+['text':' Copyright 2016 The Bazel Authors. All rights reserved.','line_number':1,'multiline':False]
+['text':'','line_number':2,'multiline':False]
+['text':' Licensed under the Apache License, Version 2.0 (the "License");','line_number':3,'multiline':False]
+['text':' you may not use this file except in compliance with the License.','line_number':4,'multiline':False]
+['text':' You may obtain a copy of the License at','line_number':5,'multiline':False]
+['text':'','line_number':6,'multiline':False]
+['text':'    http://www.apache.org/licenses/LICENSE-2.0','line_number':7,'multiline':False]
+['text':'','line_number':8,'multiline':False]
+['text':' Unless required by applicable law or agreed to in writing, software','line_number':9,'multiline':False]
+['text':' distributed under the License is distributed on an "AS IS" BASIS,','line_number':10,'multiline':False]
+['text':' WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.','line_number':11,'multiline':False]
+['text':' See the License for the specific language governing permissions and','line_number':12,'multiline':False]
+['text':' limitations under the License.','line_number':13,'multiline':False]
+['text':'*
+ * A Dict is a Starlark dictionary (dict), a mapping from keys to values.
+ *
+ * <p>Dicts are iterable in both Java and Starlark; the iterator yields successive keys.
+ *
+ * <p>Starlark operations on dicts, including element update {@code dict[k]=v} and the {@code
+ * update} and {@code setdefault} methods, may insert arbitrary Starlark values as dict keys/values,
+ * regardless of the type argument used to reference the dict from Java code. Therefore, as long as
+ * a dict is mutable, Java code should refer to it only through a type such as {@code Dict<Object,
+ * Object>} or {@code Dict<?, ?>} to avoid undermining the type-safety of the Java application. Once
+ * the dict becomes frozen, it is safe to {@link #cast} it to a more specific type that accurately
+ * reflects its entries, such as {@code Dict<String, StarlarkInt>}.
+ *
+ * <p>The following Dict methods, defined by the {@link Map} interface, are not supported. Use the
+ * corresponding methods with "entry" in their name; they may report mutation failure by throwing a
+ * checked exception:
+ *
+ * <pre>
+ * void clear()         -- use clearEntries
+ * V put(K, V)          -- use putEntry
+ * void putAll(Map)     -- use putEntries
+ * V remove(Object key) -- use removeEntry
+ * </pre>
+ ','line_number':35,'multiline':True]
+['text':' number of active iterators (unused once frozen)','line_number':113,'multiline':False]
+['text':'* Final except for {@link #unsafeShallowFreeze}; must not be modified any other way. ','line_number':115,'multiline':True]
+['text':' TODO(bazel-team): Memory optimization opportunity: Make it so that a call to','line_number':122,'multiline':False]
+['text':' `mutability.freeze()` causes `contents` here to become an ImmutableMap. Benchmarks show that','line_number':123,'multiline':False]
+['text':' for many targets, this can save a small amount of retained heap (up to 1%). But for some','line_number':124,'multiline':False]
+['text':' targets the bookkeeping required for this causes unacceptably increased temporary heap, and','line_number':125,'multiline':False]
+['text':' the CPU overhead of the bookkeeping and the CPU cost of the ImmutableMap#copyOf call cause','line_number':126,'multiline':False]
+['text':' unacceptably increased CPU. In other words, the overall tradeoff is not obviously worth it','line_number':127,'multiline':False]
+['text':' in all cases. So be careful making this optimization! See comment #12 of b/225469491 for','line_number':128,'multiline':False]
+['text':' details.','line_number':129,'multiline':False]
+['text':' An immutable dict might as well store its contents as an ImmutableMap, since ImmutableMap','line_number':134,'multiline':False]
+['text':' both is more memory-efficient than LinkedHashMap and also it has the requisite deterministic','line_number':135,'multiline':False]
+['text':' iteration order.','line_number':136,'multiline':False]
+['text':'*
+   * Takes ownership of the supplied LinkedHashMap and returns a new Dict that wraps it. The caller
+   * must not subsequently modify the map, but the Dict may do so.
+   ','line_number':141,'multiline':True]
+['text':' #wrap is used in situations where the resulting Dict isn't necessarily retained [forever].','line_number':152,'multiline':False]
+['text':' So, don't make an ImmutableMap copy of `contents`, as #copyOf would do.','line_number':153,'multiline':False]
+['text':' Even a frozen dict is unhashable.','line_number':182,'multiline':False]
+['text':' TODO(adonovan): This method is named get2 as a temporary workaround for a bug in','line_number':216,'multiline':False]
+['text':' StarlarkAnnotations.getStarlarkMethod. The two 'get' methods cause it to get','line_number':217,'multiline':False]
+['text':' confused as to which one has the annotation. Fix it and remove "2" suffix.','line_number':218,'multiline':False]
+['text':' This statement is executed for its effect, which is to throw "unhashable"','line_number':225,'multiline':False]
+['text':' if key is unhashable, instead of returning defaultValue.','line_number':226,'multiline':False]
+['text':' I think this is a bug: the correct behavior is simply 'return defaultValue'.','line_number':227,'multiline':False]
+['text':' See https://github.com/bazelbuild/starlark/issues/65.','line_number':228,'multiline':False]
+['text':' TODO(adonovan): improve error; this ain't Python.','line_number':261,'multiline':False]
+['text':' see class doc comment','line_number':304,'multiline':False]
+['text':' see class doc comment','line_number':333,'multiline':False]
+['text':' Common implementation of dict(pairs, **kwargs) and dict.update(pairs, **kwargs).','line_number':337,'multiline':False]
+['text':' common case','line_number':341,'multiline':False]
+['text':'* Returns an immutable empty dict. ','line_number':419,'multiline':True]
+['text':' Safe because the empty singleton is immutable.','line_number':420,'multiline':False]
+['text':'* Returns a new empty dict with the specified mutability. ','line_number':426,'multiline':True]
+['text':'* Returns a new dict with the specified mutability containing the entries of {@code m}. ','line_number':438,'multiline':True]
+['text':'* Returns an immutable dict containing the entries of {@code m}. ','line_number':477,'multiline':True]
+['text':'* Returns a new empty Dict.Builder. ','line_number':482,'multiline':True]
+['text':'* A reusable builder for Dicts. ','line_number':487,'multiline':True]
+['text':' [k, v, ... k, v]','line_number':489,'multiline':False]
+['text':'* Adds an entry (k, v) to the builder, overwriting any previous entry with the same key . ','line_number':491,'multiline':True]
+['text':'* Adds all the map's entries to the builder. ','line_number':499,'multiline':True]
+['text':'* Returns a new immutable Dict containing the entries added so far. ','line_number':509,'multiline':True]
+['text':'* Returns a new {@link ImmutableKeyTrackingDict} containing the entries added so far. ','line_number':514,'multiline':True]
+['text':'*
+     * Returns a new Dict containing the entries added so far. The result has the specified
+     * mutability; null means immutable.
+     ','line_number':519,'multiline':True]
+['text':' safe','line_number':541,'multiline':False]
+['text':' safe','line_number':543,'multiline':False]
+['text':' Respect the desired semantics of Builder#put.','line_number':552,'multiline':False]
+['text':'*
+   * Puts an entry into a dict, after validating that mutation is allowed.
+   *
+   * @param key the key of the added entry
+   * @param value the value of the added entry
+   * @throws EvalException if the key is invalid or the dict is frozen
+   ','line_number':575,'multiline':True]
+['text':'*
+   * Puts all the entries from a given map into the dict, after validating that mutation is allowed.
+   *
+   * @param map the map whose entries are added
+   * @throws EvalException if some key is invalid or the dict is frozen
+   ','line_number':588,'multiline':True]
+['text':'*
+   * Deletes the entry associated with the given key.
+   *
+   * @param key the key to delete
+   * @return the value associated to the key, or {@code null} if not present
+   * @throws EvalException if the dict is frozen
+   ','line_number':603,'multiline':True]
+['text':'*
+   * Clears the dict.
+   *
+   * @throws EvalException if the dict is frozen
+   ','line_number':615,'multiline':True]
+['text':'*
+   * Casts a non-null Starlark value {@code x} to a {@code Dict<K, V>} after checking that all keys
+   * and values are instances of {@code keyType} and {@code valueType}, respectively. On error, it
+   * throws an EvalException whose message includes {@code what}, ideally a string literal, as a
+   * description of the role of {@code x}. If x is null, it returns an immutable empty dict.
+   ','line_number':636,'multiline':True]
+['text':' TODO(adonovan): change message to "found <K2, V2> entry",','line_number':652,'multiline':False]
+['text':' without suggesting that the entire dict is <K2, V2>.','line_number':653,'multiline':False]
+['text':' safe','line_number':664,'multiline':False]
+['text':'* Like {@link #cast}, but if x is None, returns an empty Dict. ','line_number':669,'multiline':True]
+['text':' java.util.Map accessors','line_number':690,'multiline':False]
+['text':' disallowed java.util.Map update operations','line_number':733,'multiline':False]
+['text':' TODO(adonovan): make mutability exception a subclass of (unchecked)','line_number':735,'multiline':False]
+['text':' UnsupportedOperationException, allowing the primary Dict operations','line_number':736,'multiline':False]
+['text':' to satisfy the Map operations below in the usual way (like ImmutableMap does).','line_number':737,'multiline':False]
+['text':' use clearEntries','line_number':739,'multiline':False]
+['text':' use putEntry','line_number':746,'multiline':False]
+['text':' use putEntries','line_number':752,'multiline':False]
+['text':' use removeEntry','line_number':759,'multiline':False]
+['text':'*
+   * An immutable {@code Dict} that tracks accessed keys.
+   *
+   * <p>Only keys present in the dict are tracked. Any call to {@link #keySet} or {@link #entrySet}
+   * conservatively results in all keys being considered as accessed - notably, this happens with
+   * iteration, {@link #repr}, and a mutable copy.
+   ','line_number':765,'multiline':True]
+['text':' Present keys must be of type K.','line_number':784,'multiline':False]
+['text':' Present keys must be of type K.','line_number':795,'multiline':False]

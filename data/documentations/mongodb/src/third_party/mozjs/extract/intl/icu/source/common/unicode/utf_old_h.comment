@@ -1,0 +1,573 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]
+['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]
+['text':'
+*******************************************************************************
+*
+*   Copyright (C) 2002-2012, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+*******************************************************************************
+*   file name:  utf_old.h
+*   encoding:   UTF-8
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 2002sep21
+*   created by: Markus W. Scherer
+','line_number':3,'multiline':True]
+['text':'*
+ * \file
+ * \brief C API: Deprecated macros for Unicode string handling
+ *
+ * The macros in utf_old.h are all deprecated and their use discouraged.
+ * Some of the design principles behind the set of UTF macros
+ * have changed or proved impractical.
+ * Almost all of the old "UTF macros" are at least renamed.
+ * If you are looking for a new equivalent to an old macro, please see the
+ * comment at the old one.
+ *
+ * Brief summary of reasons for deprecation:
+ * - Switch on UTF_SIZE (selection of UTF-8/16/32 default string processing)
+ *   was impractical.
+ * - Switch on UTF_SAFE etc. (selection of unsafe/safe/strict default string processing)
+ *   was of little use and impractical.
+ * - Whole classes of macros became obsolete outside of the UTF_SIZE/UTF_SAFE
+ *   selection framework: UTF32_ macros (all trivial)
+ *   and UTF_ default and intermediate macros (all aliases).
+ * - The selection framework also caused many macro aliases.
+ * - Change in Unicode standard: "irregular" sequences (3.0) became illegal (3.2).
+ * - Change of language in Unicode standard:
+ *   Growing distinction between internal x-bit Unicode strings and external UTF-x
+ *   forms, with the former more lenient.
+ *   Suggests renaming of UTF16_ macros to U16_.
+ * - The prefix "UTF_" without a width number confused some users.
+ * - "Safe" append macros needed the addition of an error indicator output.
+ * - "Safe" UTF-8 macros used legitimate (if rarely used) code point values
+ *   to indicate error conditions.
+ * - The use of the "_CHAR" infix for code point operations confused some users.
+ *
+ * More details:
+ *
+ * Until ICU 2.2, utf.h theoretically allowed to choose among UTF-8/16/32
+ * for string processing, and among unsafe/safe/strict default macros for that.
+ *
+ * It proved nearly impossible to write non-trivial, high-performance code
+ * that is UTF-generic.
+ * Unsafe default macros would be dangerous for default string processing,
+ * and the main reason for the "strict" versions disappeared:
+ * Between Unicode 3.0 and 3.2 all "irregular" UTF-8 sequences became illegal.
+ * The only other conditions that "strict" checked for were non-characters,
+ * which are valid during processing. Only during text input/output should they
+ * be checked, and at that time other well-formedness checks may be
+ * necessary or useful as well.
+ * This can still be done by using U16_NEXT and U_IS_UNICODE_NONCHAR
+ * or U_IS_UNICODE_CHAR.
+ *
+ * The old UTF8_..._SAFE macros also used some normal Unicode code points
+ * to indicate malformed sequences.
+ * The new UTF8_ macros without suffix use negative values instead.
+ *
+ * The entire contents of utf32.h was moved here without replacement
+ * because all those macros were trivial and
+ * were meaningful only in the framework of choosing the UTF size.
+ *
+ * See Jitterbug 2150 and its discussion on the ICU mailing list
+ * in September 2002.
+ *
+ * <hr>
+ *
+ * <em>Obsolete part</em> of pre-ICU 2.4 utf.h file documentation:
+ *
+ * <p>The original concept for these files was for ICU to allow
+ * in principle to set which UTF (UTF-8/16/32) is used internally
+ * by defining UTF_SIZE to either 8, 16, or 32. utf.h would then define the UChar type
+ * accordingly. UTF-16 was the default.</p>
+ *
+ * <p>This concept has been abandoned.
+ * A lot of the ICU source code assumes UChar strings are in UTF-16.
+ * This is especially true for low-level code like
+ * conversion, normalization, and collation.
+ * The utf.h header enforces the default of UTF-16.
+ * The UTF-8 and UTF-32 macros remain for now for completeness and backward compatibility.</p>
+ *
+ * <p>Accordingly, utf.h defines UChar to be an unsigned 16-bit integer. If this matches wchar_t, then
+ * UChar is defined to be exactly wchar_t, otherwise uint16_t.</p>
+ *
+ * <p>UChar32 is defined to be a signed 32-bit integer (int32_t), large enough for a 21-bit
+ * Unicode code point (Unicode scalar value, 0..0x10ffff).
+ * Before ICU 2.4, the definition of UChar32 was similarly platform-dependent as
+ * the definition of UChar. For details see the documentation for UChar32 itself.</p>
+ *
+ * <p>utf.h also defines a number of C macros for handling single Unicode code points and
+ * for using UTF Unicode strings. It includes utf8.h, utf16.h, and utf32.h for the actual
+ * implementations of those macros and then aliases one set of them (for UTF-16) for general use.
+ * The UTF-specific macros have the UTF size in the macro name prefixes (UTF16_...), while
+ * the general alias macros always begin with UTF_...</p>
+ *
+ * <p>Many string operations can be done with or without error checking.
+ * Where such a distinction is useful, there are two versions of the macros, "unsafe" and "safe"
+ * ones with ..._UNSAFE and ..._SAFE suffixes. The unsafe macros are fast but may cause
+ * program failures if the strings are not well-formed. The safe macros have an additional, boolean
+ * parameter "strict". If strict is false, then only illegal sequences are detected.
+ * Otherwise, irregular sequences and non-characters are detected as well (like single surrogates).
+ * Safe macros return special error code points for illegal/irregular sequences:
+ * Typically, U+ffff, or values that would result in a code unit sequence of the same length
+ * as the erroneous input sequence.<br>
+ * Note that _UNSAFE macros have fewer parameters: They do not have the strictness parameter, and
+ * they do not have start/length parameters for boundary checking.</p>
+ *
+ * <p>Here, the macros are aliased in two steps:
+ * In the first step, the UTF-specific macros with UTF16_ prefix and _UNSAFE and _SAFE suffixes are
+ * aliased according to the UTF_SIZE to macros with UTF_ prefix and the same suffixes and signatures.
+ * Then, in a second step, the default, general alias macros are set to use either the unsafe or
+ * the safe/not strict (default) or the safe/strict macro;
+ * these general macros do not have a strictness parameter.</p>
+ *
+ * <p>It is possible to change the default choice for the general alias macros to be unsafe, safe/not strict or safe/strict.
+ * The default is safe/not strict. It is not recommended to select the unsafe macros as the basis for
+ * Unicode string handling in ICU! To select this, define UTF_SAFE, UTF_STRICT, or UTF_UNSAFE.</p>
+ *
+ * <p>For general use, one should use the default, general macros with UTF_ prefix and no _SAFE/_UNSAFE suffix.
+ * Only in some cases it may be necessary to control the choice of macro directly and use a less generic alias.
+ * For example, if it can be assumed that a string is well-formed and the index will stay within the bounds,
+ * then the _UNSAFE version may be used.
+ * If a UTF-8 string is to be processed, then the macros with UTF8_ prefixes need to be used.</p>
+ *
+ * <hr>
+ *
+ * Deprecated ICU 2.4. Use the macros in utf.h, utf16.h, utf8.h instead.
+ ','line_number':19,'multiline':True]
+['text':'*
+ * \def U_HIDE_OBSOLETE_UTF_OLD_H
+ *
+ * Hides the obsolete definitions in unicode/utf_old.h.
+ * Recommended to be set to 1 at compile time to make sure
+ * the long-deprecated macros are no longer used.
+ *
+ * For reasons for the deprecation see the utf_old.h file comments.
+ *
+ * @internal
+ ','line_number':149,'multiline':True]
+['text':' Formerly utf.h, part 1 --------------------------------------------------- ','line_number':166,'multiline':True]
+['text':'*
+ * Unicode string and array offset and index type.
+ * ICU always counts Unicode code units (UChars) for
+ * string offsets, indexes, and lengths, not Unicode code points.
+ *
+ * @obsolete ICU 2.6. Use int32_t directly instead since this API will be removed in that release.
+ ','line_number':169,'multiline':True]
+['text':'* Number of bits in a Unicode string code unit - ICU uses 16-bit Unicode. @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':179,'multiline':True]
+['text':'*
+ * The default choice for general Unicode string macros is to use the ..._SAFE macro implementations
+ * with strict=false.
+ *
+ * @deprecated ICU 2.4. Obsolete, see utf_old.h.
+ ','line_number':182,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':189,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':191,'multiline':True]
+['text':'*
+ * UTF8_ERROR_VALUE_1 and UTF8_ERROR_VALUE_2 are special error values for UTF-8,
+ * which need 1 or 2 bytes in UTF-8:
+ * \code
+ * U+0015 = NAK = Negative Acknowledge, C0 control character
+ * U+009f = highest C1 control character
+ * \endcode
+ *
+ * These are used by UTF8_..._SAFE macros so that they can return an error value
+ * that needs the same number of code units (bytes) as were seen by
+ * a macro. They should be tested with UTF_IS_ERROR() or UTF_IS_VALID().
+ *
+ * @deprecated ICU 2.4. Obsolete, see utf_old.h.
+ ','line_number':194,'multiline':True]
+['text':'*
+ * See documentation on UTF8_ERROR_VALUE_1 for details.
+ *
+ * @deprecated ICU 2.4. Obsolete, see utf_old.h.
+ ','line_number':210,'multiline':True]
+['text':'*
+ * Error value for all UTFs. This code point value will be set by macros with error
+ * checking if an error is detected.
+ *
+ * @deprecated ICU 2.4. Obsolete, see utf_old.h.
+ ','line_number':217,'multiline':True]
+['text':'*
+ * Is a given 32-bit code an error value
+ * as returned by one of the macros for any UTF?
+ *
+ * @deprecated ICU 2.4. Obsolete, see utf_old.h.
+ ','line_number':225,'multiline':True]
+['text':'*
+ * This is a combined macro: Is c a valid Unicode value _and_ not an error code?
+ *
+ * @deprecated ICU 2.4. Obsolete, see utf_old.h.
+ ','line_number':234,'multiline':True]
+['text':'*
+ * Is this code unit or code point a surrogate (U+d800..U+dfff)?
+ * @deprecated ICU 2.4. Renamed to U_IS_SURROGATE and U16_IS_SURROGATE, see utf_old.h.
+ ','line_number':243,'multiline':True]
+['text':'*
+ * Is a given 32-bit code point a Unicode noncharacter?
+ *
+ * @deprecated ICU 2.4. Renamed to U_IS_UNICODE_NONCHAR, see utf_old.h.
+ ','line_number':249,'multiline':True]
+['text':'*
+ * Is a given 32-bit value a Unicode code point value (0..U+10ffff)
+ * that can be assigned a character?
+ *
+ * Code points that are not characters include:
+ * - single surrogate code points (U+d800..U+dfff, 2048 code points)
+ * - the last two code points on each plane (U+__fffe and U+__ffff, 34 code points)
+ * - U+fdd0..U+fdef (new with Unicode 3.1, 32 code points)
+ * - the highest Unicode code point value is U+10ffff
+ *
+ * This means that all code points below U+d800 are character code points,
+ * and that boundary is tested first for performance.
+ *
+ * @deprecated ICU 2.4. Renamed to U_IS_UNICODE_CHAR, see utf_old.h.
+ ','line_number':259,'multiline':True]
+['text':' Formerly utf8.h ---------------------------------------------------------- ','line_number':280,'multiline':True]
+['text':'*
+* \var utf8_countTrailBytes
+* Internal array with numbers of trail bytes for any given byte used in
+* lead byte position.
+*
+* This is internal since it is not meant to be called directly by external clients;
+* however it is called by public macros in this file and thus must remain stable,
+* and should not be hidden when other internal functions are hidden (otherwise
+* public macros would fail to compile).
+* @internal
+','line_number':282,'multiline':True]
+['text':' No forward declaration if compiling utf_impl.cpp, which defines utf8_countTrailBytes.','line_number':294,'multiline':False]
+['text':' U_IMPORT2? ','line_number':298,'multiline':True]
+['text':'U_IMPORT','line_number':298,'multiline':True]
+['text':'*
+ * Count the trail bytes for a UTF-8 lead byte.
+ * @deprecated ICU 2.4. Renamed to U8_COUNT_TRAIL_BYTES, see utf_old.h.
+ ','line_number':301,'multiline':True]
+['text':'*
+ * Mask a UTF-8 lead byte, leave only the lower bits that form part of the code point value.
+ * @deprecated ICU 2.4. Renamed to U8_MASK_LEAD_BYTE, see utf_old.h.
+ ','line_number':307,'multiline':True]
+['text':'* Is this this code point a single code unit (byte)? @deprecated ICU 2.4. Renamed to U8_IS_SINGLE, see utf_old.h. ','line_number':313,'multiline':True]
+['text':'* Is this this code unit the lead code unit (byte) of a code point? @deprecated ICU 2.4. Renamed to U8_IS_LEAD, see utf_old.h. ','line_number':315,'multiline':True]
+['text':'* Is this this code unit a trailing code unit (byte) of a code point? @deprecated ICU 2.4. Renamed to U8_IS_TRAIL, see utf_old.h. ','line_number':317,'multiline':True]
+['text':'* Does this scalar Unicode value need multiple code units for storage? @deprecated ICU 2.4. Use U8_LENGTH or test ((uint32_t)(c)>0x7f) instead, see utf_old.h. ','line_number':320,'multiline':True]
+['text':'*
+ * Given the lead character, how many bytes are taken by this code point.
+ * ICU does not deal with code points >0x10ffff
+ * unless necessary for advancing in the byte stream.
+ *
+ * These length macros take into account that for values >0x10ffff
+ * the UTF8_APPEND_CHAR_SAFE macros would write the error code point 0xffff
+ * with 3 bytes.
+ * Code point comparisons need to be in uint32_t because UChar32
+ * may be a signed type, and negative values must be recognized.
+ *
+ * @deprecated ICU 2.4. Use U8_LENGTH instead, see utf.h.
+ ','line_number':323,'multiline':True]
+['text':'* The maximum number of bytes per code point. @deprecated ICU 2.4. Renamed to U8_MAX_LENGTH, see utf_old.h. ','line_number':358,'multiline':True]
+['text':'* Average number of code units compared to UTF-16. @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':361,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_GET_UNSAFE, see utf_old.h. ','line_number':364,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U8_GET instead, see utf_old.h. ','line_number':371,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_NEXT_UNSAFE, see utf_old.h. ','line_number':378,'multiline':True]
+['text':' each following branch falls through to the next one ','line_number':385,'multiline':True]
+['text':' no other branches to optimize switch() ','line_number':392,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_APPEND_UNSAFE, see utf_old.h. ','line_number':398,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_FWD_1_UNSAFE, see utf_old.h. ','line_number':418,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_FWD_N_UNSAFE, see utf_old.h. ','line_number':423,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_SET_CP_START_UNSAFE, see utf_old.h. ','line_number':432,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U8_NEXT instead, see utf_old.h. ','line_number':437,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U8_APPEND instead, see utf_old.h. ','line_number':449,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_FWD_1, see utf_old.h. ','line_number':458,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_FWD_N, see utf_old.h. ','line_number':461,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_SET_CP_START, see utf_old.h. ','line_number':464,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_PREV_UNSAFE, see utf_old.h. ','line_number':467,'multiline':True]
+['text':' c is a trail byte ','line_number':473,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_BACK_1_UNSAFE, see utf_old.h. ','line_number':490,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_BACK_N_UNSAFE, see utf_old.h. ','line_number':495,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_SET_CP_LIMIT_UNSAFE, see utf_old.h. ','line_number':504,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U8_PREV instead, see utf_old.h. ','line_number':510,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_BACK_1, see utf_old.h. ','line_number':522,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_BACK_N, see utf_old.h. ','line_number':525,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U8_SET_CP_LIMIT, see utf_old.h. ','line_number':528,'multiline':True]
+['text':' Formerly utf16.h --------------------------------------------------------- ','line_number':531,'multiline':True]
+['text':'* Is uchar a first/lead surrogate? @deprecated ICU 2.4. Renamed to U_IS_LEAD and U16_IS_LEAD, see utf_old.h. ','line_number':533,'multiline':True]
+['text':'* Is uchar a second/trail surrogate? @deprecated ICU 2.4. Renamed to U_IS_TRAIL and U16_IS_TRAIL, see utf_old.h. ','line_number':536,'multiline':True]
+['text':'* Assuming c is a surrogate, is it a first/lead surrogate? @deprecated ICU 2.4. Renamed to U_IS_SURROGATE_LEAD and U16_IS_SURROGATE_LEAD, see utf_old.h. ','line_number':539,'multiline':True]
+['text':'* Helper constant for UTF16_GET_PAIR_VALUE. @deprecated ICU 2.4. Renamed to U16_SURROGATE_OFFSET, see utf_old.h. ','line_number':542,'multiline':True]
+['text':'* Get the UTF-32 value from the surrogate code units. @deprecated ICU 2.4. Renamed to U16_GET_SUPPLEMENTARY, see utf_old.h. ','line_number':545,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_LEAD, see utf_old.h. ','line_number':549,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_TRAIL, see utf_old.h. ','line_number':552,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_LEAD, see utf_old.h. ','line_number':555,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_TRAIL, see utf_old.h. ','line_number':558,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_IS_SINGLE, see utf_old.h. ','line_number':561,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_IS_LEAD, see utf_old.h. ','line_number':564,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_IS_TRAIL, see utf_old.h. ','line_number':567,'multiline':True]
+['text':'* Does this scalar Unicode value need multiple code units for storage? @deprecated ICU 2.4. Use U16_LENGTH or test ((uint32_t)(c)>0xffff) instead, see utf_old.h. ','line_number':570,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_LENGTH, see utf_old.h. ','line_number':573,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_MAX_LENGTH, see utf_old.h. ','line_number':576,'multiline':True]
+['text':'* Average number of code units compared to UTF-16. @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':579,'multiline':True]
+['text':'*
+ * Get a single code point from an offset that points to any
+ * of the code units that belong to that code point.
+ * Assume 0<=i<length.
+ *
+ * This could be used for iteration together with
+ * UTF16_CHAR_LENGTH() and UTF_IS_ERROR(),
+ * but the use of UTF16_NEXT_CHAR[_UNSAFE]() and
+ * UTF16_PREV_CHAR[_UNSAFE]() is more efficient for that.
+ * @deprecated ICU 2.4. Renamed to U16_GET_UNSAFE, see utf_old.h.
+ ','line_number':582,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U16_GET instead, see utf_old.h. ','line_number':604,'multiline':True]
+['text':' strict: ((c)&0xfffe)==0xfffe is caught by UTF_IS_ERROR() and UTF_IS_UNICODE_CHAR() ','line_number':612,'multiline':True]
+['text':' unmatched first surrogate ','line_number':614,'multiline':True]
+['text':' strict: ((c)&0xfffe)==0xfffe is caught by UTF_IS_ERROR() and UTF_IS_UNICODE_CHAR() ','line_number':620,'multiline':True]
+['text':' unmatched second surrogate ','line_number':622,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_NEXT_UNSAFE, see utf_old.h. ','line_number':631,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_APPEND_UNSAFE, see utf_old.h. ','line_number':639,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_FWD_1_UNSAFE, see utf_old.h. ','line_number':649,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_FWD_N_UNSAFE, see utf_old.h. ','line_number':656,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_SET_CP_START_UNSAFE, see utf_old.h. ','line_number':665,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U16_NEXT instead, see utf_old.h. ','line_number':672,'multiline':True]
+['text':' strict: ((c)&0xfffe)==0xfffe is caught by UTF_IS_ERROR() and UTF_IS_UNICODE_CHAR() ','line_number':680,'multiline':True]
+['text':' unmatched first surrogate ','line_number':682,'multiline':True]
+['text':' unmatched second surrogate or other non-character ','line_number':686,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U16_APPEND instead, see utf_old.h. ','line_number':691,'multiline':True]
+['text':' not enough space ','line_number':699,'multiline':True]
+['text':' c>0x10ffff, write error value ','line_number':702,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_FWD_1, see utf_old.h. ','line_number':707,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_FWD_N, see utf_old.h. ','line_number':710,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_SET_CP_START, see utf_old.h. ','line_number':713,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_PREV_UNSAFE, see utf_old.h. ','line_number':716,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_BACK_1_UNSAFE, see utf_old.h. ','line_number':724,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_BACK_N_UNSAFE, see utf_old.h. ','line_number':731,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_SET_CP_LIMIT_UNSAFE, see utf_old.h. ','line_number':740,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U16_PREV instead, see utf_old.h. ','line_number':747,'multiline':True]
+['text':' strict: ((c)&0xfffe)==0xfffe is caught by UTF_IS_ERROR() and UTF_IS_UNICODE_CHAR() ','line_number':755,'multiline':True]
+['text':' unmatched second surrogate ','line_number':757,'multiline':True]
+['text':' unmatched first surrogate or other non-character ','line_number':761,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_BACK_1, see utf_old.h. ','line_number':766,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_BACK_N, see utf_old.h. ','line_number':769,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_SET_CP_LIMIT, see utf_old.h. ','line_number':772,'multiline':True]
+['text':' Formerly utf32.h --------------------------------------------------------- ','line_number':775,'multiline':True]
+['text':'
+* Old documentation:
+*
+*   This file defines macros to deal with UTF-32 code units and code points.
+*   Signatures and semantics are the same as for the similarly named macros
+*   in utf16.h.
+*   utf32.h is included by utf.h after unicode/umachine.h</p>
+*   and some common definitions.
+*   <p><b>Usage:</b>  ICU coding guidelines for if() statements should be followed when using these macros.
+*                  Compound statements (curly braces {}) must be used  for if-else-while...
+*                  bodies and all macro statements should be terminated with semicolon.</p>
+','line_number':777,'multiline':True]
+['text':' internal definitions ----------------------------------------------------- ','line_number':790,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':792,'multiline':True]
+['text':'
+ * For the semantics of all of these macros, see utf16.h.
+ * The UTF-32 versions are trivial because any code point is
+ * encoded using exactly one code unit.
+ ','line_number':798,'multiline':True]
+['text':' single-code point definitions -------------------------------------------- ','line_number':804,'multiline':True]
+['text':' classes of code unit values ','line_number':806,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':808,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':810,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':812,'multiline':True]
+['text':' number of code units per code point ','line_number':815,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':817,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':819,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':821,'multiline':True]
+['text':' average number of code units compared to UTF-16 ','line_number':824,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':826,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':829,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':834,'multiline':True]
+['text':' definitions with forward iteration --------------------------------------- ','line_number':842,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':844,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':849,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':854,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':859,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':864,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':868,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':876,'multiline':True]
+['text':' c>0x10ffff, write 0xfffd ','line_number':880,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':885,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':890,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':897,'multiline':True]
+['text':' definitions with backward iteration -------------------------------------- ','line_number':901,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':903,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':908,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':913,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':918,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':922,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':930,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':935,'multiline':True]
+['text':'* @deprecated ICU 2.4. Obsolete, see utf_old.h. ','line_number':943,'multiline':True]
+['text':' Formerly utf.h, part 2 --------------------------------------------------- ','line_number':947,'multiline':True]
+['text':'*
+ * Estimate the number of code units for a string based on the number of UTF-16 code units.
+ *
+ * @deprecated ICU 2.4. Obsolete, see utf_old.h.
+ ','line_number':949,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_GET_UNSAFE, see utf_old.h. ','line_number':956,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U16_GET instead, see utf_old.h. ','line_number':959,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_NEXT_UNSAFE, see utf_old.h. ','line_number':963,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U16_NEXT instead, see utf_old.h. ','line_number':966,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_APPEND_UNSAFE, see utf_old.h. ','line_number':970,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U16_APPEND instead, see utf_old.h. ','line_number':973,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_FWD_1_UNSAFE, see utf_old.h. ','line_number':977,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_FWD_1, see utf_old.h. ','line_number':980,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_FWD_N_UNSAFE, see utf_old.h. ','line_number':984,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_FWD_N, see utf_old.h. ','line_number':987,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_SET_CP_START_UNSAFE, see utf_old.h. ','line_number':991,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_SET_CP_START, see utf_old.h. ','line_number':994,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_PREV_UNSAFE, see utf_old.h. ','line_number':998,'multiline':True]
+['text':'* @deprecated ICU 2.4. Use U16_PREV instead, see utf_old.h. ','line_number':1001,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_BACK_1_UNSAFE, see utf_old.h. ','line_number':1005,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_BACK_1, see utf_old.h. ','line_number':1008,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_BACK_N_UNSAFE, see utf_old.h. ','line_number':1012,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_BACK_N, see utf_old.h. ','line_number':1015,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_SET_CP_LIMIT_UNSAFE, see utf_old.h. ','line_number':1019,'multiline':True]
+['text':'* @deprecated ICU 2.4. Renamed to U16_SET_CP_LIMIT, see utf_old.h. ','line_number':1022,'multiline':True]
+['text':' Define default macros (UTF-16 "safe") ------------------------------------ ','line_number':1025,'multiline':True]
+['text':'*
+ * Does this code unit alone encode a code point (BMP, not a surrogate)?
+ * Same as UTF16_IS_SINGLE.
+ * @deprecated ICU 2.4. Renamed to U_IS_SINGLE and U16_IS_SINGLE, see utf_old.h.
+ ','line_number':1027,'multiline':True]
+['text':'*
+ * Is this code unit the first one of several (a lead surrogate)?
+ * Same as UTF16_IS_LEAD.
+ * @deprecated ICU 2.4. Renamed to U_IS_LEAD and U16_IS_LEAD, see utf_old.h.
+ ','line_number':1034,'multiline':True]
+['text':'*
+ * Is this code unit one of several but not the first one (a trail surrogate)?
+ * Same as UTF16_IS_TRAIL.
+ * @deprecated ICU 2.4. Renamed to U_IS_TRAIL and U16_IS_TRAIL, see utf_old.h.
+ ','line_number':1041,'multiline':True]
+['text':'*
+ * Does this code point require multiple code units (is it a supplementary code point)?
+ * Same as UTF16_NEED_MULTIPLE_UCHAR.
+ * @deprecated ICU 2.4. Use U16_LENGTH or test ((uint32_t)(c)>0xffff) instead.
+ ','line_number':1048,'multiline':True]
+['text':'*
+ * How many code units are used to encode this code point (1 or 2)?
+ * Same as UTF16_CHAR_LENGTH.
+ * @deprecated ICU 2.4. Renamed to U16_LENGTH, see utf_old.h.
+ ','line_number':1055,'multiline':True]
+['text':'*
+ * How many code units are used at most for any Unicode code point (2)?
+ * Same as UTF16_MAX_CHAR_LENGTH.
+ * @deprecated ICU 2.4. Renamed to U16_MAX_LENGTH, see utf_old.h.
+ ','line_number':1062,'multiline':True]
+['text':'*
+ * Set c to the code point that contains the code unit i.
+ * i could point to the lead or the trail surrogate for the code point.
+ * i is not modified.
+ * Same as UTF16_GET_CHAR.
+ * \pre 0<=i<length
+ *
+ * @deprecated ICU 2.4. Renamed to U16_GET, see utf_old.h.
+ ','line_number':1069,'multiline':True]
+['text':'*
+ * Set c to the code point that starts at code unit i
+ * and advance i to beyond the code units of this code point (post-increment).
+ * i must point to the first code unit of a code point.
+ * Otherwise c is set to the trail unit (surrogate) itself.
+ * Same as UTF16_NEXT_CHAR.
+ * \pre 0<=i<length
+ * \post 0<i<=length
+ *
+ * @deprecated ICU 2.4. Renamed to U16_NEXT, see utf_old.h.
+ ','line_number':1080,'multiline':True]
+['text':'*
+ * Append the code units of code point c to the string at index i
+ * and advance i to beyond the new code units (post-increment).
+ * The code units beginning at index i will be overwritten.
+ * Same as UTF16_APPEND_CHAR.
+ * \pre 0<=c<=0x10ffff
+ * \pre 0<=i<length
+ * \post 0<i<=length
+ *
+ * @deprecated ICU 2.4. Use U16_APPEND instead, see utf_old.h.
+ ','line_number':1093,'multiline':True]
+['text':'*
+ * Advance i to beyond the code units of the code point that begins at i.
+ * I.e., advance i by one code point.
+ * Same as UTF16_FWD_1.
+ * \pre 0<=i<length
+ * \post 0<i<=length
+ *
+ * @deprecated ICU 2.4. Renamed to U16_FWD_1, see utf_old.h.
+ ','line_number':1106,'multiline':True]
+['text':'*
+ * Advance i to beyond the code units of the n code points where the first one begins at i.
+ * I.e., advance i by n code points.
+ * Same as UT16_FWD_N.
+ * \pre 0<=i<length
+ * \post 0<i<=length
+ *
+ * @deprecated ICU 2.4. Renamed to U16_FWD_N, see utf_old.h.
+ ','line_number':1117,'multiline':True]
+['text':'*
+ * Take the random-access index i and adjust it so that it points to the beginning
+ * of a code point.
+ * The input index points to any code unit of a code point and is moved to point to
+ * the first code unit of the same code point. i is never incremented.
+ * In other words, if i points to a trail surrogate that is preceded by a matching
+ * lead surrogate, then i is decremented. Otherwise it is not modified.
+ * This can be used to start an iteration with UTF_NEXT_CHAR() from a random index.
+ * Same as UTF16_SET_CHAR_START.
+ * \pre start<=i<length
+ * \post start<=i<length
+ *
+ * @deprecated ICU 2.4. Renamed to U16_SET_CP_START, see utf_old.h.
+ ','line_number':1128,'multiline':True]
+['text':'*
+ * Set c to the code point that has code units before i
+ * and move i backward (towards the beginning of the string)
+ * to the first code unit of this code point (pre-increment).
+ * i must point to the first code unit after the last unit of a code point (i==length is allowed).
+ * Same as UTF16_PREV_CHAR.
+ * \pre start<i<=length
+ * \post start<=i<length
+ *
+ * @deprecated ICU 2.4. Renamed to U16_PREV, see utf_old.h.
+ ','line_number':1144,'multiline':True]
+['text':'*
+ * Move i backward (towards the beginning of the string)
+ * to the first code unit of the code point that has code units before i.
+ * I.e., move i backward by one code point.
+ * i must point to the first code unit after the last unit of a code point (i==length is allowed).
+ * Same as UTF16_BACK_1.
+ * \pre start<i<=length
+ * \post start<=i<length
+ *
+ * @deprecated ICU 2.4. Renamed to U16_BACK_1, see utf_old.h.
+ ','line_number':1157,'multiline':True]
+['text':'*
+ * Move i backward (towards the beginning of the string)
+ * to the first code unit of the n code points that have code units before i.
+ * I.e., move i backward by n code points.
+ * i must point to the first code unit after the last unit of a code point (i==length is allowed).
+ * Same as UTF16_BACK_N.
+ * \pre start<i<=length
+ * \post start<=i<length
+ *
+ * @deprecated ICU 2.4. Renamed to U16_BACK_N, see utf_old.h.
+ ','line_number':1170,'multiline':True]
+['text':'*
+ * Take the random-access index i and adjust it so that it points beyond
+ * a code point. The input index points beyond any code unit
+ * of a code point and is moved to point beyond the last code unit of the same
+ * code point. i is never decremented.
+ * In other words, if i points to a trail surrogate that is preceded by a matching
+ * lead surrogate, then i is incremented. Otherwise it is not modified.
+ * This can be used to start an iteration with UTF_PREV_CHAR() from a random index.
+ * Same as UTF16_SET_CHAR_LIMIT.
+ * \pre start<i<=length
+ * \post start<i<=length
+ *
+ * @deprecated ICU 2.4. Renamed to U16_SET_CP_LIMIT, see utf_old.h.
+ ','line_number':1183,'multiline':True]
+['text':' !U_HIDE_DEPRECATED_API && !U_HIDE_OBSOLETE_UTF_OLD_H','line_number':1199,'multiline':False]

@@ -1,0 +1,105 @@
+['text':'
+ * Minimum size to grow the allocation by (or 25%). The 8KiB means the actual
+ * growths is within `8 KiB <= size < 16 KiB` (depending on the row size).
+ ','line_number':21,'multiline':True]
+['text':'
+ *  Create the array of converter functions from the Python converters.
+ ','line_number':29,'multiline':True]
+['text':' a single converter used for all columns individually ','line_number':45,'multiline':True]
+['text':'
+             * This code searches for the corresponding usecol.  It is
+             * identical to the legacy usecols code, which has two weaknesses:
+             * 1. It fails for duplicated usecols only setting converter for
+             *    the first one.
+             * 2. It fails e.g. if usecols uses negative indexing and
+             *    converters does not.  (This is a feature, since it allows
+             *    us to correctly normalize converters to result column here.)
+             ','line_number':70,'multiline':True]
+['text':' ignore unused converter ','line_number':87,'multiline':True]
+['text':'*
+ * Read a file into the provided array, or create (and possibly grow) an
+ * array to read into.
+ *
+ * @param s The stream object/struct providing reading capabilities used by
+ *        the tokenizer.
+ * @param max_rows The number of rows to read, or -1.  If negative
+ *        all rows are read.
+ * @param num_field_types The number of field types stored in `field_types`.
+ * @param field_types Information about the dtype for each column (or one if
+ *        `homogeneous`).
+ * @param pconfig Pointer to the parser config object used by both the
+ *        tokenizer and the conversion functions.
+ * @param num_usecols The number of columns in `usecols`.
+ * @param usecols An array of length `num_usecols` or NULL.  If given indicates
+ *        which column is read for each individual row (negative columns are
+ *        accepted).
+ * @param skiplines The number of lines to skip, these lines are ignored.
+ * @param converters Python dictionary of converters.  Finalizing converters
+ *        is difficult without information about the number of columns.
+ * @param data_array An array to be filled or NULL.  In either case a new
+ *        reference is returned (the reference to `data_array` is not stolen).
+ * @param out_descr The dtype used for allocating a new array.  This is not
+ *        used if `data_array` is provided.  Note that the actual dtype of the
+ *        returned array can differ for strings.
+ * @param num_cols Pointer in which the actual (discovered) number of columns
+ *        is returned.  This is only relevant if `homogeneous` is true.
+ * @param homogeneous Whether the datatype of the array is not homogeneous,
+ *        i.e. not structured.  In this case the number of columns has to be
+ *        discovered an the returned array will be 2-dimensional rather than
+ *        1-dimensional.
+ *
+ * @returns Returns the result as an array object or NULL on error.  The result
+ *          is always a new reference (even when `data_array` was passed in).
+ ','line_number':120,'multiline':True]
+['text':' Make sure we own `data_array` for the purpose of error handling ','line_number':174,'multiline':True]
+['text':' will be increased depending on row size ','line_number':176,'multiline':True]
+['text':' We give a warning if max_rows is used and an empty line is encountered ','line_number':179,'multiline':True]
+['text':' Set the actual number of fields if it is already known, otherwise -1 ','line_number':188,'multiline':True]
+['text':' Fewer lines than skiplines is acceptable ','line_number':206,'multiline':True]
+['text':' number of rows actually processed ','line_number':211,'multiline':True]
+['text':'
+             * Deprecated NumPy 1.23, 2021-01-13 (not really a deprecation,
+             * but similar policy should apply to removing the warning again)
+             ','line_number':220,'multiline':True]
+['text':' Tokenizer may give a final "empty line" even if there is none ','line_number':224,'multiline':True]
+['text':' Ignore empty line ','line_number':242,'multiline':True]
+['text':' We've deferred some of the initialization tasks to here,','line_number':246,'multiline':False]
+['text':' because we've now read the first line, and we definitively','line_number':247,'multiline':False]
+['text':' know how many fields (i.e. columns) we will be processing.','line_number':248,'multiline':False]
+['text':' Note that result_shape[1] is only used if homogeneous is true ','line_number':261,'multiline':True]
+['text':'
+                     * Negative max_rows denotes to read the whole file, we
+                     * approach this by allocating ever larger blocks.
+                     * Adds a number of rows based on `MIN_BLOCK_SIZE`.
+                     * Note: later code grows assuming this is a power of two.
+                     ','line_number':269,'multiline':True]
+['text':' actual rows_per_block should not matter here ','line_number':276,'multiline':True]
+['text':' safe on overflow since min_rows will be 0 or 1 ','line_number':280,'multiline':True]
+['text':'
+                 * We do not use Empty, as it would fill with None
+                 * and requiring decref'ing if we shrink again.
+                 ','line_number':294,'multiline':True]
+['text':'
+             * Grow by ~25% and rounded up to the next rows_per_block
+             * NOTE: This is based on very crude timings and could be refined!
+             ','line_number':333,'multiline':True]
+['text':' should normally error much earlier, but make sure ','line_number':341,'multiline':True]
+['text':' Replace the arrays data since it may have changed ','line_number':355,'multiline':True]
+['text':' The field, either 0 (if homogeneous) or i. ','line_number':366,'multiline':True]
+['text':' The column as read, remapped by usecols ','line_number':367,'multiline':True]
+['text':' Python-like column indexing: k = -1 means the last column.','line_number':384,'multiline':False]
+['text':'
+             * The following function calls represent the main "conversion"
+             * step, i.e. parsing the unicode string for each field and storing
+             * the result in the array.
+             ','line_number':396,'multiline':True]
+['text':'
+             * We found no rows and have to discover the number of elements
+             * we have no choice but to guess 1.
+             * NOTE: It may make sense to move this outside of here to refine
+             *       the behaviour where necessary.
+             ','line_number':449,'multiline':True]
+['text':'
+     * Note that if there is no data, `data_array` may still be NULL and
+     * row_count is 0.  In that case, always realloc just in case.
+     ','line_number':465,'multiline':True]

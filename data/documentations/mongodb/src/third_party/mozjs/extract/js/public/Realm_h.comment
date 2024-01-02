@@ -1,0 +1,97 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' JS::shadow::Realm','line_number':10,'multiline':False]
+['text':' forward-declaration of JS::Realm','line_number':13,'multiline':False]
+['text':'**********************************************************************','line_number':15,'multiline':True]
+['text':' [SMDOC] Realms','line_number':17,'multiline':False]
+['text':'','line_number':18,'multiline':False]
+['text':' Data associated with a global object. In the browser each frame has its','line_number':19,'multiline':False]
+['text':' own global/realm.','line_number':20,'multiline':False]
+['text':' namespace gc','line_number':27,'multiline':False]
+['text':' namespace js','line_number':28,'multiline':False]
+['text':' Each Realm holds a strong reference to its GlobalObject, and vice versa.','line_number':33,'multiline':False]
+['text':' Get the current realm, if any. The ECMAScript spec calls this "the current','line_number':46,'multiline':False]
+['text':' Realm Record".','line_number':47,'multiline':False]
+['text':' Return the compartment that contains a given realm.','line_number':50,'multiline':False]
+['text':' Return an object's realm. All objects except cross-compartment wrappers are','line_number':55,'multiline':False]
+['text':' created in a particular realm, which never changes. Returns null if obj is','line_number':56,'multiline':False]
+['text':' a cross-compartment wrapper.','line_number':57,'multiline':False]
+['text':' Get the value of the "private data" internal field of the given Realm.','line_number':60,'multiline':False]
+['text':' This field is initially null and is set using SetRealmPrivate.','line_number':61,'multiline':False]
+['text':' It's a pointer to embeddding-specific data that SpiderMonkey never uses.','line_number':62,'multiline':False]
+['text':' Set the "private data" internal field of the given Realm.','line_number':65,'multiline':False]
+['text':' Set the callback SpiderMonkey calls just before garbage-collecting a realm.','line_number':70,'multiline':False]
+['text':' Embeddings can use this callback to free private data associated with the','line_number':71,'multiline':False]
+['text':' realm via SetRealmPrivate.','line_number':72,'multiline':False]
+['text':'','line_number':73,'multiline':False]
+['text':' By the time this is called, the global object for the realm has already been','line_number':74,'multiline':False]
+['text':' collected.','line_number':75,'multiline':False]
+['text':' Set the callback SpiderMonkey calls to get the name of a realm, for','line_number':83,'multiline':False]
+['text':' diagnostic output.','line_number':84,'multiline':False]
+['text':' Get the global object for the given realm. This only returns nullptr during','line_number':88,'multiline':False]
+['text':' GC, between collecting the global object and destroying the Realm.','line_number':89,'multiline':False]
+['text':' Initialize standard JS class constructors, prototypes, and any top-level','line_number':92,'multiline':False]
+['text':' functions and constants associated with the standard classes (e.g. isNaN','line_number':93,'multiline':False]
+['text':' for Number).','line_number':94,'multiline':False]
+['text':'
+ * Ways to get various per-Realm objects. All the getters declared below operate
+ * on the JSContext's current Realm.
+ ','line_number':97,'multiline':True]
+['text':' Returns an object that represents the realm, that can be referred from','line_number':112,'multiline':False]
+['text':' other realm/compartment.','line_number':113,'multiline':False]
+['text':' See the consumer in `MaybeCrossOriginObjectMixins::EnsureHolder` for details.','line_number':114,'multiline':False]
+['text':' Implements https://tc39.github.io/ecma262/#sec-getfunctionrealm','line_number':117,'multiline':False]
+['text':' 7.3.22 GetFunctionRealm ( obj )','line_number':118,'multiline':False]
+['text':'','line_number':119,'multiline':False]
+['text':' WARNING: may return a realm in a different compartment!','line_number':120,'multiline':False]
+['text':'','line_number':121,'multiline':False]
+['text':' Will throw an exception and return nullptr when a security wrapper or revoked','line_number':122,'multiline':False]
+['text':' proxy is encountered.','line_number':123,'multiline':False]
+['text':'* NB: This API is infallible; a nullptr return value does not indicate error.
+ *
+ * |target| must not be a cross-compartment wrapper because CCWs are not
+ * associated with a single realm.
+ *
+ * Entering a realm roots the realm and its global object until the matching
+ * JS::LeaveRealm() call.
+ ','line_number':127,'multiline':True]
+['text':' namespace JS','line_number':139,'multiline':False]
+['text':'
+ * At any time, a JSContext has a current (possibly-nullptr) realm. The
+ * preferred way to change the current realm is with JSAutoRealm:
+ *
+ *   void foo(JSContext* cx, JSObject* obj) {
+ *     // in some realm 'r'
+ *     {
+ *       JSAutoRealm ar(cx, obj);  // constructor enters
+ *       // in the realm of 'obj'
+ *     }                           // destructor leaves
+ *     // back in realm 'r'
+ *   }
+ *
+ * The object passed to JSAutoRealm must *not* be a cross-compartment wrapper,
+ * because CCWs are not associated with a single realm.
+ *
+ * For more complicated uses that don't neatly fit in a C++ stack frame, the
+ * realm can be entered and left using separate function calls:
+ *
+ *   void foo(JSContext* cx, JSObject* obj) {
+ *     // in 'oldRealm'
+ *     JS::Realm* oldRealm = JS::EnterRealm(cx, obj);
+ *     // in the realm of 'obj'
+ *     JS::LeaveRealm(cx, oldRealm);
+ *     // back in 'oldRealm'
+ *   }
+ *
+ * Note: these calls must still execute in a LIFO manner w.r.t all other
+ * enter/leave calls on the context. Furthermore, only the return value of a
+ * JS::EnterRealm call may be passed as the 'oldRealm' argument of
+ * the corresponding JS::LeaveRealm call.
+ *
+ * Entering a realm roots the realm and its global object for the lifetime of
+ * the JSAutoRealm.
+ ','line_number':141,'multiline':True]
+['text':' js_Realm_h','line_number':196,'multiline':False]

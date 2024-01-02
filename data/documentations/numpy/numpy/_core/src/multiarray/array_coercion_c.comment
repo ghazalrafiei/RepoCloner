@@ -1,0 +1,484 @@
+['text':'
+ * This file defines helpers for some of the ctors.c functions which
+ * create an array from Python sequences and types.
+ * When creating an array with ``np.array(...)`` we have to do two main things:
+ *
+ * 1. Find the exact shape of the resulting array
+ * 2. Find the correct dtype of the resulting array.
+ *
+ * In most cases these two things are can be done in a single processing step.
+ * There are in principle three different calls that should be distinguished:
+ *
+ * 1. The user calls ``np.array(..., dtype=np.dtype("<f8"))``
+ * 2. The user calls ``np.array(..., dtype="S")``
+ * 3. The user calls ``np.array(...)``
+ *
+ * In the first case, in principle only the shape needs to be found. In the
+ * second case, the DType class (e.g. string) is already known but the DType
+ * instance (e.g. length of the string) has to be found.
+ * In the last case the DType class needs to be found as well. Note that
+ * it is not necessary to find the DType class of the entire array, but
+ * the DType class needs to be found for each element before the actual
+ * dtype instance can be found.
+ *
+ * Further, there are a few other things to keep in mind when coercing arrays:
+ *
+ *   * For UFunc promotion, Python scalars need to be handled specially to
+ *     allow value based casting.  This requires python complex/float to
+ *     have their own DTypes.
+ *   * It is necessary to decide whether or not a sequence is an element.
+ *     For example tuples are considered elements for structured dtypes, but
+ *     otherwise are considered sequences.
+ *     This means that if a dtype is given (either as a class or instance),
+ *     it can effect the dimension discovery part.
+ *     For the "special" NumPy types structured void and "c" (single character)
+ *     this is special cased.  For future user-types, this is currently
+ *     handled by providing calling an `is_known_scalar` method.  This method
+ *     currently ensures that Python numerical types are handled quickly.
+ *
+ * In the initial version of this implementation, it is assumed that dtype
+ * discovery can be implemented sufficiently fast.  That is, it is not
+ * necessary to create fast paths that only find the correct shape e.g. when
+ * ``dtype=np.dtype("f8")`` is given.
+ *
+ * The code here avoid multiple conversion of array-like objects (including
+ * sequences). These objects are cached after conversion, which will require
+ * additional memory, but can drastically speed up coercion from array like
+ * objects.
+ ','line_number':30,'multiline':True]
+['text':'
+ * For finding a DType quickly from a type, it is easiest to have a
+ * a mapping of pytype -> DType.
+ * TODO: This mapping means that it is currently impossible to delete a
+ *       pair of pytype <-> DType.  To resolve this, it is necessary to
+ *       weakly reference the pytype. As long as the pytype is alive, we
+ *       want to be able to use `np.array([pytype()])`.
+ *       It should be possible to retrofit this without too much trouble
+ *       (all type objects support weak references).
+ ','line_number':80,'multiline':True]
+['text':' Enum to track or signal some things during dtype and shape discovery ','line_number':93,'multiline':True]
+['text':'*
+ * Adds known sequence types to the global type dictionary, note that when
+ * a DType is passed in, this lookup may be ignored.
+ *
+ * @return -1 on error 0 on success
+ ','line_number':105,'multiline':True]
+['text':' Add the basic Python sequence types ','line_number':116,'multiline':True]
+['text':' NumPy Arrays are not handled as scalars ','line_number':127,'multiline':True]
+['text':'*
+ * Add a new mapping from a python type to the DType class. For a user
+ * defined legacy dtype, this function does nothing unless the pytype
+ * subclass from `np.generic`.
+ *
+ * This assumes that the DType class is guaranteed to hold on the
+ * python type (this assumption is guaranteed).
+ * This functionality supersedes ``_typenum_fromtypeobj``.
+ *
+ * @param DType DType to map the python type to
+ * @param pytype Python type to map from
+ * @param userdef Whether or not it is user defined. We ensure that user
+ *        defined scalars subclass from our scalars (for now).
+ ','line_number':137,'multiline':True]
+['text':'
+         * We expect that user dtypes (for now) will subclass some numpy
+         * scalar class to allow automatic discovery.
+         ','line_number':159,'multiline':True]
+['text':'
+             * For legacy user dtypes, discovery relied on subclassing, but
+             * arbitrary type objects are supported, so do nothing.
+             ','line_number':164,'multiline':True]
+['text':'
+         * We currently enforce that user DTypes subclass from `np.generic`
+         * (this should become a `np.generic` base class and may be lifted
+         * entirely).
+         ','line_number':170,'multiline':True]
+['text':' Create the global dictionary if it does not exist ','line_number':182,'multiline':True]
+['text':'*
+ * Lookup the DType for a registered known python scalar type.
+ *
+ * @param pytype Python Type to look up
+ * @return DType, None if it is a known non-scalar, or NULL if an unknown object.
+ ','line_number':208,'multiline':True]
+['text':' the python type is not known ','line_number':233,'multiline':True]
+['text':'
+ * Note: This function never fails, but will return `NULL` for unknown scalars
+ *       and `None` for known array-likes (e.g. tuple, list, ndarray).
+ ','line_number':242,'multiline':True]
+['text':'*
+ * Find the correct DType class for the given python type. If flags is NULL
+ * this is not used to discover a dtype, but only for conversion to an
+ * existing dtype. In that case the Python (not NumPy) scalar subclass
+ * checks are skipped.
+ *
+ * @param obj The python object, mainly type(pyobj) is used, the object
+ *        is passed to reuse existing code at this time only.
+ * @param flags Flags used to know if warnings were already given. If
+ *        flags is NULL, this is not
+ * @param fixed_DType if not NULL, will be checked first for whether or not
+ *        it can/wants to handle the (possible) scalar value.
+ * @return New reference to either a DType class, Py_None, or NULL on error.
+ ','line_number':253,'multiline':True]
+['text':'
+         * Let the given DType handle the discovery.  This is when the
+         * scalar-type matches exactly, or the DType signals that it can
+         * handle the scalar-type.  (Even if it cannot handle here it may be
+         * asked to attempt to do so later, if no other matching DType exists.)
+         ','line_number':273,'multiline':True]
+['text':'
+     * At this point we have not found a clear mapping, but mainly for
+     * backward compatibility we have to make some further attempts at
+     * interpreting the input as a known scalar type.
+     ','line_number':290,'multiline':True]
+['text':' TODO: Enable warning about subclass handling ','line_number':320,'multiline':True]
+['text':'*
+ * Discover the correct descriptor from a known DType class and scalar.
+ * If the fixed DType can discover a dtype instance/descr all is fine,
+ * if it cannot and DType is used instead, a cast will have to be tried.
+ *
+ * @param fixed_DType A user provided fixed DType, can be NULL
+ * @param DType A discovered DType (by discover_dtype_from_pyobject);
+ *        this can be identical to `fixed_DType`, if it obj is a
+ *        known scalar. Can be `NULL` indicating no known type.
+ * @param obj The Python scalar object. At the time of calling this function
+ *        it must be known that `obj` should represent a scalar.
+ ','line_number':339,'multiline':True]
+['text':' No known DType and no fixed one means we go to object. ','line_number':359,'multiline':True]
+['text':'
+         * If no DType is known/found, give the fixed give one a second
+         * chance.  This allows for example string, to call `str(obj)` to
+         * figure out the length for arbitrary objects.
+         ','line_number':363,'multiline':True]
+['text':'
+ * Helper function for casting a raw value from one descriptor to another.
+ * This helper uses the normal casting machinery, but e.g. does not care about
+ * checking cast safety.
+ ','line_number':385,'multiline':True]
+['text':'*
+ * Assign a single element in an array from a python value.
+ *
+ * The dtypes SETITEM should only be trusted to generally do the right
+ * thing if something is known to be a scalar *and* is of a python type known
+ * to the DType (which should include all basic Python math types), but in
+ * general a cast may be necessary.
+ * This function handles the cast, which is for example hit when assigning
+ * a float128 to complex128.
+ *
+ * TODO: This function probably needs to be passed an "owner" for the sake of
+ *       future HPy (non CPython) support
+ *
+ * NOTE: We do support 0-D exact NumPy arrays correctly via casting here.
+ *       There be dragons, because we must NOT support generic array-likes.
+ *       The problem is that some (e.g. astropy's Quantity and our masked
+ *       arrays) have divergent behaviour for `__array__` as opposed to
+ *       `__float__`.  And they rely on that.
+ *       That is arguably bad as it limits the things that work seamlessly
+ *       because `__float__`, etc. cannot even begin to cover all of casting.
+ *       However, we have no choice.  We simply CANNOT support array-likes
+ *       here without finding a solution for this first.
+ *       And the only plausible one I see currently, is expanding protocols
+ *       in some form, either to indicate that we want a scalar or to indicate
+ *       that we want the unsafe version that `__array__` currently gives
+ *       for both objects.
+ *
+ *       If we ever figure out how to expand this to other array-likes, care
+ *       may need to be taken. `PyArray_FromAny`/`PyArray_AssignFromCache`
+ *       uses this function but know if the input is an array, array-like,
+ *       or scalar.  Relaxing things here should be OK, but looks a bit
+ *       like possible recursion, so it may make sense to make a "scalars only"
+ *       version of this function.
+ *
+ * @param descr
+ * @param item
+ * @param value
+ * @return 0 on success -1 on failure.
+ ','line_number':428,'multiline':True]
+['text':' assume array is not behaved. ','line_number':471,'multiline':True]
+['text':'
+         * We always have store objects directly, casting will lose some
+         * type information. Any other dtype discards the type information.
+         * TODO: For a Categorical[object] this path may be necessary?
+         ','line_number':477,'multiline':True]
+['text':' discover_dtype_from_pyobject includes a check for is_known_scalar_type ','line_number':486,'multiline':True]
+['text':'
+         * WARNING: Do NOT relax the above `PyArray_CheckExact`, unless you
+         *          read the function doc NOTE carefully and understood it.
+         *
+         * NOTE: The ndim == 0 check should probably be an error, but
+         *       unfortunately. `arr.__float__()` works for 1 element arrays
+         *       so in some contexts we need to let it handled like a scalar.
+         *       (If we manage to deprecate the above, we can do that.)
+         ','line_number':494,'multiline':True]
+['text':' light-weight fast-path for when the descrs obviously matches ','line_number':507,'multiline':True]
+['text':' success (it was an array-like) ','line_number':509,'multiline':True]
+['text':' We can set the element directly (or at least will try to) ','line_number':516,'multiline':True]
+['text':' unsuccessful if array is ragged ','line_number':563,'multiline':True]
+['text':' Only update/check as many dims as possible, max_ndim is unchanged ','line_number':568,'multiline':True]
+['text':'
+         * Sequences do not update max_ndim, otherwise shrink and check.
+         * This is depth first, so if it is already set, `out_shape` is filled.
+         ','line_number':572,'multiline':True]
+['text':' If a shape was already set, this is also ragged ','line_number':577,'multiline':True]
+['text':' The array is ragged, and this dimension is unusable already ','line_number':590,'multiline':True]
+['text':' Remove dimensions that we cannot use: ','line_number':593,'multiline':True]
+['text':' max_ndim is usually not updated for sequences, so set now: ','line_number':598,'multiline':True]
+['text':'
+ * Steals a reference to the object.
+ ','line_number':615,'multiline':True]
+['text':'*
+ * Unlink coercion cache item.
+ *
+ * @param current
+ * @return next coercion cache object (or NULL)
+ ','line_number':646,'multiline':True]
+['text':' We only need to check from the last used cache pos ','line_number':669,'multiline':True]
+['text':'*
+ * Do the promotion step and possible casting. This function should
+ * never be called if a descriptor was requested. In that case the output
+ * dtype is not of importance, so we must not risk promotion errors.
+ *
+ * @param out_descr The current descriptor.
+ * @param descr The newly found descriptor to promote with
+ * @param fixed_DType The user provided (fixed) DType or NULL
+ * @param flags dtype discover flags to signal failed promotion.
+ * @return -1 on error, 0 on success.
+ ','line_number':677,'multiline':True]
+['text':'
+             * If a DType is fixed, promotion must not fail. Do not catch
+             * FutureWarning (raised for string+numeric promotions). We could
+             * only catch TypeError here or even always raise the error.
+             ','line_number':702,'multiline':True]
+['text':' Continue with object, since we may need the dimensionality ','line_number':711,'multiline':True]
+['text':'*
+ * Handle a leave node (known scalar) during dtype and shape discovery.
+ *
+ * @param obj The python object or nested sequence to convert
+ * @param curr_dims The current number of dimensions (depth in the recursion)
+ * @param max_dims The maximum number of dimensions.
+ * @param out_shape The discovered output shape, will be filled
+ * @param fixed_DType The user provided (fixed) DType or NULL
+ * @param flags used signal that this is a ragged array, used internally and
+ *        can be expanded if necessary.
+ * @param DType the DType class that should be used, or NULL, if not provided.
+ *
+ * @return 0 on success -1 on error
+ ','line_number':719,'multiline':True]
+['text':' no need to do any promotion ','line_number':748,'multiline':True]
+['text':' This is a scalar, so find the descriptor ','line_number':751,'multiline':True]
+['text':'*
+ * Return the correct descriptor given an array object and a DType class.
+ *
+ * This is identical to casting the arrays descriptor/dtype to the new
+ * DType class
+ *
+ * @param arr The array object.
+ * @param DType The DType class to cast to (or NULL for convenience)
+ * @param out_descr The output descriptor will set. The result can be NULL
+ *        when the array is of object dtype and has no elements.
+ *
+ * @return -1 on failure, 0 on success.
+ ','line_number':765,'multiline':True]
+['text':'
+         * We have one special case, if (and only if) the input array is of
+         * object DType and the dtype is not fixed already but parametric.
+         * Then, we allow inspection of all elements, treating them as
+         * elements. We do this recursively, so nested 0-D arrays can work,
+         * but nested higher dimensional arrays will lead to an error.
+         ','line_number':792,'multiline':True]
+['text':' not parametric ','line_number':799,'multiline':True]
+['text':'
+             * Note: If the array contains typed objects we may need to use
+             *       the dtype to use casting for finding the correct instance.
+             ','line_number':808,'multiline':True]
+['text':'
+         * TODO: This branch should be deprecated IMO, the workaround is
+         *       to cast to the object to a string array. Although a specific
+         *       function (if there is even any need) would be better.
+         *       This is value based casting!
+         * Unless of course we actually want to support this kind of thing
+         * in general (not just for object dtype)...
+         ','line_number':843,'multiline':True]
+['text':'
+         * If this is not an object array figure out the dtype cast,
+         * or simply use the returned DType.
+         ','line_number':866,'multiline':True]
+['text':'*
+ * Given a dtype or DType object, find the correct descriptor to cast the
+ * array to.  In some places, this function is used with dtype=NULL which
+ * means that legacy behavior is used: The dtype instances "S0", "U0", and
+ * "V0" are converted to mean the DType classes instead.
+ * When dtype != NULL, this path is ignored, and the function does nothing
+ * unless descr == NULL. If both descr and dtype are null, it returns the
+ * descriptor for the array.
+ *
+ * This function is identical to normal casting using only the dtype, however,
+ * it supports inspecting the elements when the array has object dtype
+ * (and the given datatype describes a parametric DType class).
+ *
+ * @param arr
+ * @param dtype NULL or a dtype class
+ * @param descr A dtype instance, if the dtype is NULL the dtype class is
+ *              found and e.g. "S0" is converted to denote only String.
+ * @return A concrete dtype instance or NULL
+ ','line_number':878,'multiline':True]
+['text':' If the requested dtype is flexible, adapt it ','line_number':901,'multiline':True]
+['text':' descr was given and no special logic, return (call not necessary) ','line_number':906,'multiline':True]
+['text':' gueranteed above ','line_number':921,'multiline':True]
+['text':' This is an object array but contained no elements, use default ','line_number':931,'multiline':True]
+['text':'*
+ * Recursion helper for `PyArray_DiscoverDTypeAndShape`.  See its
+ * documentation for additional details.
+ *
+ * @param obj The current (possibly nested) object
+ * @param curr_dims The current depth, i.e. initially 0 and increasing.
+ * @param max_dims Maximum number of dimensions, modified during discovery.
+ * @param out_descr dtype instance (or NULL) to promoted and update.
+ * @param out_shape The current shape (updated)
+ * @param coercion_cache_tail_ptr The tail of the linked list of coercion
+ *        cache objects, which hold on to converted sequences and arrays.
+ *        This is a pointer to the `->next` slot of the previous cache so
+ *        that we can append a new cache object (and update this pointer).
+ *        (Initially it is a pointer to the user-provided head pointer).
+ * @param fixed_DType User provided fixed DType class
+ * @param flags Discovery flags (reporting and behaviour flags, see def.)
+ * @param never_copy Specifies if a copy is allowed during array creation.
+ * @return The updated number of maximum dimensions (i.e. scalars will set
+ *         this to the current dimensions).
+ ','line_number':939,'multiline':True]
+['text':'
+     * The first step is to find the DType class if it was not provided,
+     * alternatively we have to find out that this is not a scalar at all
+     * (which could fail and lead us to `object` dtype).
+     ','line_number':970,'multiline':True]
+['text':'
+         * We currently support that bytes/strings are considered sequences,
+         * if the dtype is np.dtype('c'), this should be deprecated probably,
+         * but requires hacks right now.
+         ','line_number':978,'multiline':True]
+['text':' If this is a known scalar, find the corresponding DType class ','line_number':991,'multiline':True]
+['text':'
+     * At this point we expect to find either a sequence, or an array-like.
+     * Although it is still possible that this fails and we have to use
+     * `object`.
+     ','line_number':1007,'multiline':True]
+['text':' __array__ may be passed the requested descriptor if provided ','line_number':1019,'multiline':True]
+['text':'
+         * This is an array object which will be added to the cache, keeps
+         * the reference to the array alive (takes ownership).
+         ','line_number':1033,'multiline':True]
+['text':'
+             * Special case for reverse broadcasting, ignore max_dims if this
+             * is a single array-like object; needed for PyArray_CopyObject.
+             ','line_number':1043,'multiline':True]
+['text':'
+         * For arrays we may not just need to cast the dtype to the user
+         * provided fixed_DType. If this is an object array, the elements
+         * may need to be inspected individually.
+         * Note, this finds the descriptor of the array first and only then
+         * promotes here (different associativity).
+         ','line_number':1060,'multiline':True]
+['text':' object array with no elements, no need to promote/adjust. ','line_number':1072,'multiline':True]
+['text':'
+     * The last step is to assume the input should be handled as a sequence
+     * and to handle it recursively. That is, unless we have hit the
+     * dimension limit.
+     ','line_number':1083,'multiline':True]
+['text':' NOTE: This should likely just raise all errors ','line_number':1092,'multiline':True]
+['text':'
+                 * Consider these unrecoverable errors, continuing execution
+                 * might crash the interpreter.
+                 ','line_number':1095,'multiline':True]
+['text':' Clear any PySequence_Size error which would corrupts further calls ','line_number':1109,'multiline':True]
+['text':' Flag as ragged or too deep array ','line_number':1114,'multiline':True]
+['text':' If we stop supporting bytes/str subclasses, more may be required here: ','line_number':1119,'multiline':True]
+['text':' Ensure we have a sequence (required for PyPy) ','line_number':1124,'multiline':True]
+['text':'
+         * Specifically do not fail on things that look like a dictionary,
+         * instead treat them as scalar.
+         ','line_number':1127,'multiline':True]
+['text':' The cache takes ownership of the sequence here. ','line_number':1140,'multiline':True]
+['text':' But do update, if there this is a ragged case ','line_number':1150,'multiline':True]
+['text':' If the sequence is empty, this must be the last dimension ','line_number':1155,'multiline':True]
+['text':' Allow keyboard interrupts. See gh issue 18117. ','line_number':1160,'multiline':True]
+['text':' Recursive call for each sequence item ','line_number':1165,'multiline':True]
+['text':'*
+ * Finds the DType and shape of an arbitrary nested sequence. This is the
+ * general purpose function to find the parameters of the array (but not
+ * the array itself) as returned by `np.array()`
+ *
+ * Note: Before considering to make part of this public, we should consider
+ *       whether things such as `out_descr != NULL` should be supported in
+ *       a public API.
+ *
+ * @param obj Scalar or nested sequences.
+ * @param max_dims Maximum number of dimensions (after this scalars are forced)
+ * @param out_shape Will be filled with the output shape (more than the actual
+ *        shape may be written).
+ * @param coercion_cache NULL initialized reference to a cache pointer.
+ *        May be set to the first coercion_cache, and has to be freed using
+ *        npy_free_coercion_cache.
+ *        This should be stored in a thread-safe manner (i.e. function static)
+ *        and is designed to be consumed by `PyArray_AssignFromCache`.
+ *        If not consumed, must be freed using `npy_free_coercion_cache`.
+ * @param fixed_DType A user provided fixed DType class.
+ * @param requested_descr A user provided fixed descriptor. This is always
+ *        returned as the discovered descriptor, but currently only used
+ *        for the ``__array__`` protocol.
+ * @param out_descr Set to the discovered output descriptor. This may be
+ *        non NULL but only when fixed_DType/requested_descr are not given.
+ *        If non NULL, it is the first dtype being promoted and used if there
+ *        are no elements.
+ *        The result may be unchanged (remain NULL) when converting a
+ *        sequence with no elements. In this case it is callers responsibility
+ *        to choose a default.
+ * @param never_copy Specifies that a copy is not allowed.
+ * @return dimensions of the discovered object or -1 on error.
+ *         WARNING: If (and only if) the output is a single array, the ndim
+ *         returned _can_ exceed the maximum allowed number of dimensions.
+ *         It might be nice to deprecate this? But it allows things such as
+ *         `arr1d[...] = np.array([[1,2,3,4]])`
+ ','line_number':1180,'multiline':True]
+['text':'
+     * Support a passed in descriptor (but only if nothing was specified).
+     ','line_number':1229,'multiline':True]
+['text':' Validate input of requested descriptor and DType ','line_number':1233,'multiline':True]
+['text':' The output descriptor must be the input. ','line_number':1243,'multiline':True]
+['text':'
+     * Call the recursive function, the setup for this may need expanding
+     * to handle caching better.
+     ','line_number':1249,'multiline':True]
+['text':' Legacy discovery flags ','line_number':1254,'multiline':True]
+['text':' Character dtype variation of string (should be deprecated...) ','line_number':1258,'multiline':True]
+['text':' Void is a chimera, in that it may or may not be structured... ','line_number':1263,'multiline':True]
+['text':'
+         * If max-dims was reached and the dimensions reduced, this is ragged.
+         * Otherwise, we merely reached the maximum dimensions, which is
+         * slightly different. This happens for example for `[1, [2, 3]]`
+         * where the maximum dimensions is 1, but then a sequence found.
+         *
+         * In this case we need to inform the user and clean out the cache
+         * since it may be too deep.
+         ','line_number':1276,'multiline':True]
+['text':' Handle reaching the maximum depth differently: ','line_number':1286,'multiline':True]
+['text':' Only object DType supports ragged cases unify error ','line_number':1290,'multiline':True]
+['text':'
+         * If the array is ragged, the cache may be too deep, so clean it.
+         * The cache is left at the same depth as the array though.
+         ','line_number':1312,'multiline':True]
+['text':' item to check ','line_number':1317,'multiline':True]
+['text':' delete "next" cache item and advanced it (unlike later) ','line_number':1320,'multiline':True]
+['text':' advance both prev and next, and set prev->next to new item ','line_number':1324,'multiline':True]
+['text':' We could check here for max-ndims being reached as well ','line_number':1331,'multiline':True]
+['text':' descriptor was provided, we did not accidentally change it ','line_number':1334,'multiline':True]
+['text':'
+         * When the object contained no elements (sequence of length zero),
+         * the no descriptor may have been found. When a DType was requested
+         * we use it to define the output dtype.
+         * Otherwise, out_descr will remain NULL and the caller has to set
+         * the correct default.
+         ','line_number':1338,'multiline':True]
+['text':'
+ * Python API function to expose the dtype+shape discovery functionality
+ * directly.
+ ','line_number':1362,'multiline':True]
+['text':' fixed is last to parse, so never necessary to clean up ','line_number':1380,'multiline':True]
+['text':' Empty sequence, report this as None. ','line_number':1397,'multiline':True]

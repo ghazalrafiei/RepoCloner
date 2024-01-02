@@ -1,0 +1,308 @@
+['text':'*  NOTE [ Grid Sample CPU Kernels ]
+ *
+ *   Implementation of vectorized grid sample CPU kernels is divided into three
+ *   parts. More detailed description exist after this paragraph, but on a high
+ *   level, they are
+ *   1. `ComputeLocation` struct
+ *      + Computes the interpolation location basing on padding mode.
+ *   2. `ApplyGridSample` struct
+ *      + Owns N (# spatial dims) `ComputeLocation` structs, and uses them to
+ *        compute the interpolation locations.
+ *      + Interpolates the values and writes to output.
+ *   3. `grid_sample_2d_grid_slice_iterator` function
+ *      + Iterates over a slice of the grid tensor based on the geometry by the
+ *        spatial ordering, i.e., the first iteration will process grid values
+ *           grid[n, 0, 0, :], grid[n, 0, 1, :], grid[n, 0, 2, :], ...
+ *        (Recall that, e.g., 2D grid has shape [N x H x W x 2], so grid[n, ...]
+ *         is a slice, and grid[n, h, w, :] contains the values for a single
+ *         output spatial location.)
+ *      + Applies a given operator at each iteration, so we can use the same
+ *        pattern for forward and backward.
+ *
+ *   Putting everything together, we have, e.g., the forward kernel implemented
+ *   as
+ *
+ *      // `ApplyGridSample` struct that processes grid values, extracts and
+ *      // interpolates input values, and write to output.
+ *      ApplyGridSample<scalar_t, 2, interp, padding> grid_sample(input_accessor);
+ *
+ *      // For each slice, we call `grid_sample_2d_grid_slice_iterator` with
+ *      //   1. the grid slice, and
+ *      //   2. a lambda that takes in
+ *      //      i.   location vectors (x and y for 2D) extracted from grid
+ *      //      ii.  `spatial_offset` as the spatial offset of these vectors
+ *      //           from the beginning of this slice.
+ *      //      iii. `len` as the number of valid locations in the vectors.
+ *      //           (There might not be enough near boundary.)
+ *      for (const auto n : c10::irange(input_accessor.size(0))) {
+ *        grid_sample_2d_grid_slice_iterator(
+ *          grid_accessor[n],
+ *          [&](const Vectorized<scalar_t>& grid_x,
+ *              const Vectorized<scalar_t>& grid_y,
+ *              int64_t spatial_offset, int64_t len) {
+ *            grid_sample.forward(out_accessor[n], input_accessor[n],
+ *                                spatial_offset, grid_x, grid_y, len);
+ *          });
+ *      }
+ *
+ *   Now we talk about details of each of these three parts:
+ *
+ *   1. `ComputeLocation` struct
+ *      Transforms grid values into interpolation locations of the input tensor
+ *      for a particular spatial dimension, based on the size of that dimension
+ *      in input tensor, and the padding mode.
+ *
+ *        template<typename scalar_t, GridSamplerPadding padding>
+ *        struct ComputeLocation {
+ *          using Vec = Vectorized<scalar_t>;
+ *
+ *          // ctor
+ *          ComputeLocation(int64_t size);
+ *
+ *          // Given grid values `in`, return the interpolation locations after
+ *          // un-normalization and padding mechanism (elementwise).
+ *          Vec apply(const Vec &in) const;
+ *
+ *          // Similar to `apply`, but also returns `d apply(in) / d in`
+ *          // (elementwise).
+ *          // this is often used in gradient computation.
+ *          std::pair<Vec, Vec> apply_get_grad(const Vec &in) const;
+ *        };
+ *
+ *   2. `ApplyGridSample` struct
+ *      Owns N `ComputeLocation` structs, where N is the number of spatial
+ *      dimensions. Given N input grid vectors (one for each spatial dimension)
+ *      and spatial offset, it gets the interpolation locations from
+ *      `ComputeLocation`s, applies interpolation procedure, and then writes to
+ *      the output (or grad_input & grad_grid in backward).
+ *
+ *        template<typename scalar_t, int spatial_dim,
+ *                 GridSamplerInterpolation interp,
+ *                 GridSamplerPadding padding>
+ *        struct ApplyGridSample {
+ *
+ *          // ctor
+ *          ApplyGridSample(const TensorAccessor<scalar_t, 4>& input);
+ *
+ *          // Applies grid sampling (forward) procedure:
+ *          //   1. computes interpolation locations from grid values `grid_x`
+ *          //      and `grid_y`,
+ *          //   2. interpolates output values using the locations and input
+ *          //      data in `inp_slice`, and
+ *          //   3. writes the first `len` values in the interpolated vector to
+ *          //      `out_slice` with spatial offset being `offset`.
+ *          //
+ *          // This assimes that `grid_x` and `grid_y` all contain valid grid
+ *          // values \in [-1, 1], even at indices greater than `len`.
+ *          //
+ *          // The `*_slice` argument names mean samples within a batch (i.e.,
+ *          // with the batch dimension sliced out).
+ *          void forward(TensorAccessor<scalar_t, 3>& out_slice,
+ *                       const TensorAccessor<scalar_t, 3>& inp_slice,
+ *                       int64_t offset, const Vec& grid_x, const Vec& grid_y,
+ *                       int64_t len) const;
+ *
+ *          // Applies grid sampling (backward) procedure. Arguments semantics
+ *          // and strategy are similar to those of `forward`, with the
+ *          // exception that `backward` has branches based on whether `input`
+ *          // requires gradient (passed in as a template parameter). The
+ *          // TensorAccessor for the input gradient is also given as a
+ *          // pointer instead of reference, so that it can be null if the
+ *          // gradient is not calculated.
+ *          template <bool input_requires_grad>
+ *          void backward(TensorAccessor<scalar_t, 3>* gInp_slice_ptr,
+ *                        TensorAccessor<scalar_t, 3>& gGrid_slice,
+ *                        const TensorAccessor<scalar_t, 3>& gOut_slice,
+ *                        const TensorAccessor<scalar_t, 3>& inp_slice,
+ *                        int64_t offset, const Vec& grid_x, const Vec& grid_y,
+ *                        int64_t len) const;
+ *        };
+ *
+ *   3. `grid_sample_2d_grid_slice_iterator` function
+ *      Among the tensors we work with, we know that the output tensors are
+ *      contiguous (i.e., `output` in forward, and `grad_input` & `grad_grid` in
+ *      backward), we need to randomly read `input` anyways, and `grad_output`
+ *      usually comes from autograd and is often contiguous. So we base our
+ *      iterating strategy on the geometry of grid.
+ *      `grid_sample_2d_grid_slice_iterator` function provides an abstraction to
+ *      efficiently iterates through a `grid` slice (without batch dimension).
+ *      See comments of that function on the specific cases and strategies used.
+ *
+ *        template<typename scalar_t, typename ApplyFn>
+ *        void grid_sample_2d_grid_slice_iterator(
+ *          const TensorAccessor<scalar_t, 3>& grid_slice,
+ *          const ApplyFn &apply_fn);
+ *
+ *      `apply_fn` is a function/lambda that takes in
+ *           i.   location vectors (x and y for 2D) extracted from grid
+ *           ii.  `spatial_offset` as the spatial offset of these vectors
+ *                from the beginning of this slice.
+ *           iii. `len` as the number of valid locations in the vectors.
+ *                (There might not be enough near boundary.)
+
+ *       It should be callable as if it has declaration:
+ *          void apply_fn(const Vectorized<scalar_t>& grid_x,
+ *                        const Vectorized<scalar_t>& grid_y,
+ *                        int64_t spatial_offset, int64_t len);
+ *
+ *      `apply_fn` will be called multiple times, and together cover the entire
+ *      output spatial space.
+ *
+ *  Now you should be able to understand everything about the implementation of
+ *  2D forward kernel shown at the beginning of this note.
+ *
+ *','line_number':19,'multiline':True]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ComputeLocation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':180,'multiline':False]
+['text':' Struct to compute interpolation location from grid values, and to apply','line_number':181,'multiline':False]
+['text':' padding mechanism (e.g., reflection).','line_number':182,'multiline':False]
+['text':' See NOTE [ Grid Sample CPU Kernels ] for details.','line_number':183,'multiline':False]
+['text':'align_corners=','line_number':189,'multiline':True]
+['text':' values are clipped to between 0 and max_val','line_number':192,'multiline':False]
+['text':' unnormalization scaling factor','line_number':194,'multiline':False]
+['text':' reflection parameters: reflected coordinates land in [low, low+span] inclusive','line_number':196,'multiline':False]
+['text':' only used when align_corners=False','line_number':197,'multiline':False]
+['text':' if the reflecting span is empty, all reflected coords are set to 0','line_number':199,'multiline':False]
+['text':' Invert order of clamp_min operands in order to clamp Nans to zero','line_number':214,'multiline':False]
+['text':' same as clip_coordinates but also returns the gradient multiplier','line_number':218,'multiline':False]
+['text':' Integral type equality comparison is very very fast because it just looks','line_number':222,'multiline':False]
+['text':' at the bits. Casting is free too. So we use the following pattern instead','line_number':223,'multiline':False]
+['text':' of comparison + blendv.','line_number':224,'multiline':False]
+['text':' Note that it is important for the gradient calculation that borders','line_number':225,'multiline':False]
+['text':' are considered out of bounds.','line_number':226,'multiline':False]
+['text':' Now we need to test if extra > max_val to find out if another flip is','line_number':242,'multiline':False]
+['text':' needed. The following comparison does that and returns the correct','line_number':243,'multiline':False]
+['text':' flipped value.','line_number':244,'multiline':False]
+['text':' same as reflect_coordinates but also returns the gradient multiplier','line_number':248,'multiline':False]
+['text':'align_corners=','line_number':271,'multiline':True]
+['text':' values are clipped to between 0 and max_val','line_number':274,'multiline':False]
+['text':' unnormalization scaling factor','line_number':276,'multiline':False]
+['text':' reflection parameters: reflected coordinates land in [low, low+span] inclusive','line_number':278,'multiline':False]
+['text':' if the reflecting span is empty, all reflected coords are set to 0','line_number':281,'multiline':False]
+['text':' only used when align_corners=True','line_number':282,'multiline':False]
+['text':' Invert order of clamp_min operands in order to clamp Nans to zero','line_number':296,'multiline':False]
+['text':' same as clip_coordinates but also returns the gradient multiplier','line_number':300,'multiline':False]
+['text':' Integral type equality comparison is very very fast because it just looks','line_number':304,'multiline':False]
+['text':' at the bits. Casting is free too. So we use the following pattern instead','line_number':305,'multiline':False]
+['text':' of comparison + blendv.','line_number':306,'multiline':False]
+['text':' Note that it is important for the gradient calculation that borders','line_number':307,'multiline':False]
+['text':' are considered out of bounds.','line_number':308,'multiline':False]
+['text':' Since reflection is around low and low+span, subtract low before','line_number':317,'multiline':False]
+['text':' the reflection, and then add it back at the end.','line_number':318,'multiline':False]
+['text':' Now we need to test if extra > max_val to find out if another flip is','line_number':323,'multiline':False]
+['text':' needed. The following comparison does that and returns the correct','line_number':324,'multiline':False]
+['text':' flipped value.','line_number':325,'multiline':False]
+['text':' same as reflect_coordinates but also returns the gradient multiplier','line_number':329,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ApplyGridSample ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':435,'multiline':False]
+['text':' Struct to apply grid sample (reading from input, interpolate, and write to','line_number':436,'multiline':False]
+['text':' output).','line_number':437,'multiline':False]
+['text':' See NOTE [ Grid Sample CPU Kernels ] for details.','line_number':438,'multiline':False]
+['text':' distances to 4 sides','line_number':489,'multiline':False]
+['text':' interpolation weights wrt 4 corners','line_number':490,'multiline':False]
+['text':' in_bound masks','line_number':491,'multiline':False]
+['text':' y_n and x_w','line_number':492,'multiline':False]
+['text':' get NE, NW, SE, SW pixel values from (x, y)','line_number':495,'multiline':False]
+['text':' assuming we get exact integer representation and just use scalar_t','line_number':496,'multiline':False]
+['text':' if we don't, the weights will be garbage anyways.','line_number':497,'multiline':False]
+['text':' get distances to each side','line_number':501,'multiline':False]
+['text':' get interpolation weights for each neighbor','line_number':507,'multiline':False]
+['text':' e.g., for the nw corner, the weight is `dist_to_south * dist_to_east`.','line_number':508,'multiline':False]
+['text':' Use int comparison because it is much faster than float comp with AVX2','line_number':519,'multiline':False]
+['text':' (latency 1 cyc vs. 4 cyc on skylake)','line_number':520,'multiline':False]
+['text':' Avoid using the le and ge because those are not implemented in AVX2 and','line_number':521,'multiline':False]
+['text':' are actually simulated using multiple instructions.','line_number':522,'multiline':False]
+['text':' true = all ones','line_number':523,'multiline':False]
+['text':' true = all ones','line_number':525,'multiline':False]
+['text':' mask_gather zeros out the mask, so we need to make copies','line_number':576,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':614,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':616,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':618,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':620,'multiline':False]
+['text':' i_gInp_*_offset_arr and gInp_corner_arr variables below are unnecessary','line_number':627,'multiline':False]
+['text':' when input_requires_grad is false (they are only used within the','line_number':628,'multiline':False]
+['text':' if-blocks), but required to make the code well-formed.','line_number':629,'multiline':False]
+['text':' When reading input values, we used mask_gather. Unfortunately, there is','line_number':631,'multiline':False]
+['text':' no mask_scatter_add (the backward of mask_gather) in Intel intrinsics.','line_number':632,'multiline':False]
+['text':' So we store the necessary vectors to temporary arrays and use the helper','line_number':633,'multiline':False]
+['text':' mask_scatter_add defined above.','line_number':634,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':636,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':638,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':640,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':642,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':656,'multiline':False]
+['text':' mask_gather zeros out the mask, so we need to make copies','line_number':681,'multiline':False]
+['text':' mask_gather zeros out the mask, so we need to make a copy','line_number':762,'multiline':False]
+['text':'inp_slice','line_number':773,'multiline':True]
+['text':' gInp is contiguous','line_number':790,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':792,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':795,'multiline':False]
+['text':' grid has zero 0 gradient in Nearest mode','line_number':808,'multiline':False]
+['text':' Use bicubic convolution algorithm. Based on','line_number':814,'multiline':False]
+['text':' https://en.wikipedia.org/wiki/Bicubic_interpolation#Bicubic_convolution_algorithm','line_number':815,'multiline':False]
+['text':' constant used in cubic convolution','line_number':833,'multiline':False]
+['text':' could be -0.5 or -0.75, use the same value in UpSampleBicubic2d.h','line_number':834,'multiline':False]
+['text':' Calculate the cubic convolution coefficient','line_number':847,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':848,'multiline':False]
+['text':' 1 < x = |-1 - tx| < 2','line_number':851,'multiline':False]
+['text':' x = |0 - tx| <= 1','line_number':853,'multiline':False]
+['text':' x = |1 - tx| <= 1','line_number':855,'multiline':False]
+['text':' 1 < x = |2 - tx| < 2','line_number':857,'multiline':False]
+['text':' Calculate the differential of the cubic convolution, i.e. `d coeff / d x`','line_number':861,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':862,'multiline':False]
+['text':' 1 < x = |-1 - tx| < 2','line_number':865,'multiline':False]
+['text':' x = |0 - tx| <= 1','line_number':867,'multiline':False]
+['text':' x = |1 - tx| <= 1','line_number':869,'multiline':False]
+['text':' 1 < x = |2 - tx| < 2','line_number':871,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':900,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':904,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':908,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':926,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':928,'multiline':False]
+['text':' Interpolate the 4 values in the x direction','line_number':939,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':940,'multiline':False]
+['text':' Interpolate the 4 values in the y direction','line_number':950,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':972,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':974,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':979,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':981,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~ grid_sample_2d_grid_slice_iterator ~~~~~~~~~~~~~~~~~~~~~~','line_number':1024,'multiline':False]
+['text':' Function to apply a vectorized function on a grid slice tensor (without batch','line_number':1025,'multiline':False]
+['text':' dimension).','line_number':1026,'multiline':False]
+['text':' See NOTE [ Grid Sample CPU Kernels ] for details.','line_number':1027,'multiline':False]
+['text':' Loop over each output pixel in grid.','line_number':1043,'multiline':False]
+['text':' We consider the following three cases (after slicing out the batch','line_number':1044,'multiline':False]
+['text':' dimension).','line_number':1045,'multiline':False]
+['text':' See detailed discussions under each if-case.','line_number':1046,'multiline':False]
+['text':' Case 1:','line_number':1049,'multiline':False]
+['text':' Grid is contiguous.','line_number':1050,'multiline':False]
+['text':' Strategy: Sequentially load two vectors at the same time, and get,','line_number':1051,'multiline':False]
+['text':'           e.g.,  {x0, y0, x1, y1}, {x2, y2, x3, y3}. Then we use','line_number':1052,'multiline':False]
+['text':'           at::vec::deinterleave2 to get x and y vectors.','line_number':1053,'multiline':False]
+['text':' make sure that x and y are valid grid sample locations','line_number':1067,'multiline':False]
+['text':' Case 2:','line_number':1075,'multiline':False]
+['text':' The W dimension is contiguous.','line_number':1076,'multiline':False]
+['text':' This can be common, e.g., grid is from a conv net output of shape','line_number':1077,'multiline':False]
+['text':' [N, 2, H, W].','line_number':1078,'multiline':False]
+['text':' Strategy: Divide into two contiguous slices each of shape [H, W], and','line_number':1079,'multiline':False]
+['text':'           each containing x and y vectors. So we sequentially load a','line_number':1080,'multiline':False]
+['text':'           vector from each of them to get x and y vector','line_number':1081,'multiline':False]
+['text':' Function to apply along a contiguous W dimension (or flattened H x W).','line_number':1083,'multiline':False]
+['text':' make sure that x and y are valid grid sample locations','line_number':1090,'multiline':False]
+['text':' If [H, W] is contiguous, apply line_fn once.','line_number':1100,'multiline':False]
+['text':' If only [W] is contiguous, apply line_fn once for each h slice.','line_number':1103,'multiline':False]
+['text':' Case 3:','line_number':1111,'multiline':False]
+['text':' General case.','line_number':1112,'multiline':False]
+['text':' Strategy: Do a for-loop over H, for each W slice, use','line_number':1113,'multiline':False]
+['text':'           at::vec::gather to load the x and y vectors.','line_number':1114,'multiline':False]
+['text':' prevents illegal memory access, sets the exceeding offsets to zero','line_number':1131,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~ Grid Sample Kernels ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':1146,'multiline':False]
+['text':' Use the structs & functions defined above to calculate grid sample forward','line_number':1147,'multiline':False]
+['text':' and backward.','line_number':1148,'multiline':False]
+['text':' See NOTE [ Grid Sample CPU Kernels ] for details.','line_number':1149,'multiline':False]
+['text':' 2d * 2 tensors','line_number':1159,'multiline':True]
+['text':' grad_output should be contiguous most of time. Ensuring that it is','line_number':1230,'multiline':False]
+['text':' contiguous can greatly simplify this code.','line_number':1231,'multiline':False]
+['text':' If `input` gradient is not required, we skip computing it -- not needing to create','line_number':1234,'multiline':False]
+['text':' the tensor to hold the gradient can markedly increase performance. (`grid` gradient','line_number':1235,'multiline':False]
+['text':' is always computed.)','line_number':1236,'multiline':False]
+['text':' 2d * 5 tensors','line_number':1242,'multiline':True]
+['text':' namespace at::native','line_number':1329,'multiline':False]

@@ -1,0 +1,167 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __wt_lsm_manager_config --
+ *     Configure the LSM manager.
+ ','line_number':15,'multiline':True]
+['text':'
+ * __lsm_general_worker_start --
+ *     Start up all of the general LSM worker threads.
+ ','line_number':36,'multiline':True]
+['text':'
+     * Start the worker threads or new worker threads if called via reconfigure. The LSM manager is
+     * worker[0]. This should get more sophisticated in the future - only launching as many worker
+     * threads as are required to keep up with demand.
+     ','line_number':50,'multiline':True]
+['text':'
+         * The first worker only does switch and drop operations as these are both short operations
+         * and it is essential that switches are responsive to avoid introducing throttling stalls.
+         ','line_number':61,'multiline':True]
+['text':'
+             * Only allow half of the threads to run merges to avoid all workers getting stuck in
+             * long-running merge operations. Make sure the first worker is allowed, so that there
+             * is at least one thread capable of running merges. We know the first worker is id 2,
+             * so set merges on even numbered workers.
+             ','line_number':69,'multiline':True]
+['text':'
+     * Setup the first worker properly - if there are only a minimal number of workers allow the
+     * first worker to flush. Otherwise a single merge can lead to switched chunks filling up the
+     * cache. This is separate to the main loop so that it is applied on startup and reconfigure.
+     ','line_number':81,'multiline':True]
+['text':'
+ * __lsm_stop_workers --
+ *     Stop worker threads until the number reaches the configured amount.
+ ','line_number':94,'multiline':True]
+['text':'
+     * Start at the end of the list of threads and stop them until we have the desired number. We
+     * want to keep all active threads packed at the front of the worker array.
+     ','line_number':105,'multiline':True]
+['text':'
+         * We do not clear the other fields because they are allocated statically when the
+         * connection was opened.
+         ','line_number':117,'multiline':True]
+['text':'
+     * Setup the first worker properly - if there are only a minimal number of workers it should
+     * flush. Since the number of threads is being reduced the field can't already be set.
+     ','line_number':123,'multiline':True]
+['text':'
+ * __wt_lsm_manager_reconfig --
+ *     Re-configure the LSM manager.
+ ','line_number':133,'multiline':True]
+['text':'
+     * If LSM hasn't started yet, we simply reconfigured the settings and we'll let the normal code
+     * path start the threads.
+     ','line_number':147,'multiline':True]
+['text':'
+     * If the number of workers has not changed, we're done.
+     ','line_number':155,'multiline':True]
+['text':'
+     * If we want more threads, start them.
+     ','line_number':160,'multiline':True]
+['text':'
+     * Otherwise we want to reduce the number of workers.
+     ','line_number':166,'multiline':True]
+['text':'
+ * __wt_lsm_manager_start --
+ *     Start the LSM management infrastructure. Our queues and locks were initialized when the
+ *     connection was initialized.
+ ','line_number':174,'multiline':True]
+['text':'
+     * If readonly or the manager is running, or we've already failed, there's no work to do.
+     ','line_number':191,'multiline':True]
+['text':' It's possible to race, see if we're the winner. ','line_number':198,'multiline':True]
+['text':' We need at least a manager, a switch thread and a generic worker. ','line_number':202,'multiline':True]
+['text':'
+     * Open sessions for all potential worker threads here - it's not safe to have worker threads
+     * open/close sessions themselves. All the LSM worker threads do their operations on read-only
+     * files. Use read-uncommitted isolation to avoid keeping updates in cache unnecessarily.
+     ','line_number':205,'multiline':True]
+['text':' Start the LSM manager thread. ','line_number':219,'multiline':True]
+['text':' Make the failure permanent, we won't try again. ','line_number':228,'multiline':True]
+['text':'
+         * Reset the workers count (otherwise, LSM destroy will hang waiting for threads to exit.
+         ','line_number':231,'multiline':True]
+['text':'
+ * __wt_lsm_manager_free_work_unit --
+ *     Release an LSM tree work unit.
+ ','line_number':239,'multiline':True]
+['text':'
+ * __wt_lsm_manager_destroy --
+ *     Destroy the LSM manager threads and subsystem.
+ ','line_number':254,'multiline':True]
+['text':' Clear the LSM server flag. ','line_number':272,'multiline':True]
+['text':' Wait for the main LSM manager thread to finish. ','line_number':277,'multiline':True]
+['text':' Clean up open LSM handles. ','line_number':283,'multiline':True]
+['text':' Release memory from any operations left on the queue. ','line_number':288,'multiline':True]
+['text':' Close all LSM worker sessions. ','line_number':305,'multiline':True]
+['text':'
+ * __lsm_manager_worker_shutdown --
+ *     Shutdown the LSM worker threads.
+ ','line_number':314,'multiline':True]
+['text':'
+     * Wait for the rest of the LSM workers to shutdown. Start at index one - since we (the manager)
+     * are at index 0.
+     ','line_number':327,'multiline':True]
+['text':'
+ * __lsm_manager_run_server --
+ *     Run manager thread operations.
+ ','line_number':338,'multiline':True]
+['text':'
+             * If work was added reset our counts and time. Otherwise compute an idle time.
+             ','line_number':366,'multiline':True]
+['text':'
+             * If the tree appears to not be triggering enough LSM maintenance, help it out. Some
+             * types of additional work units don't hurt, and can be necessary if some work units
+             * aren't completed for some reason. If the tree hasn't been modified, and there are
+             * more than 1 chunks - try to get the tree smaller so queries run faster. If we are
+             * getting aggressive - ensure there are enough work units that we can get chunks
+             * merged. If we aren't pushing enough work units, compared to how often new chunks are
+             * being created add some more.
+             ','line_number':378,'multiline':True]
+['text':'
+ * __lsm_worker_manager --
+ *     A thread that manages all open LSM trees, and the shared LSM worker threads.
+ ','line_number':419,'multiline':True]
+['text':' Connection close waits on us to shutdown, let it know we're done. ','line_number':444,'multiline':True]
+['text':'
+ * __wt_lsm_manager_clear_tree --
+ *     Remove all entries for a tree from the LSM manager queues. This introduces an inefficiency if
+ *     LSM trees are being opened and closed regularly.
+ ','line_number':451,'multiline':True]
+['text':' Clear out the tree from the switch queue ','line_number':466,'multiline':True]
+['text':' Clear out the tree from the application queue ','line_number':477,'multiline':True]
+['text':' Clear out the tree from the manager queue ','line_number':488,'multiline':True]
+['text':'
+ * We assume this is only called from __wt_lsm_manager_pop_entry and we have session, entry and type
+ * available to use. If the queue is empty we may return from the macro.
+ ','line_number':502,'multiline':True]
+['text':'
+ * __wt_lsm_manager_pop_entry --
+ *     Retrieve the head of the queue, if it matches the requested work unit type.
+ ','line_number':521,'multiline':True]
+['text':'
+     * Pop the entry off the correct queue based on our work type.
+     ','line_number':535,'multiline':True]
+['text':'
+ * Push a work unit onto the appropriate queue. This macro assumes we are called from
+ * __wt_lsm_manager_push_entry and we have session and entry available for use.
+ ','line_number':550,'multiline':True]
+['text':'
+ * __wt_lsm_manager_push_entry --
+ *     Add an entry to the end of the switch queue.
+ ','line_number':562,'multiline':True]
+['text':'
+     * Don't add merges or bloom filter creates if merges or bloom filters are disabled in the tree.
+     ','line_number':576,'multiline':True]
+['text':'
+     * Don't allow any work units unless a tree is active, this avoids races on shutdown between
+     * clearing out queues and pushing new work units.
+     *
+     * Increment the queue reference before checking the flag since on close, the flag is cleared
+     * and then the queue reference count is checked.
+     ','line_number':590,'multiline':True]

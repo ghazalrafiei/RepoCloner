@@ -1,0 +1,80 @@
+['text':' namespace detail','line_number':29,'multiline':False]
+['text':' LeftRight wait-free readers synchronization primitive','line_number':31,'multiline':False]
+['text':' https://hal.archives-ouvertes.fr/hal-01207881/document','line_number':32,'multiline':False]
+['text':'','line_number':33,'multiline':False]
+['text':' LeftRight is quite easy to use (it can make an arbitrary','line_number':34,'multiline':False]
+['text':' data structure permit wait-free reads), but it has some','line_number':35,'multiline':False]
+['text':' particular performance characteristics you should be aware','line_number':36,'multiline':False]
+['text':' of if you're deciding to use it:','line_number':37,'multiline':False]
+['text':'','line_number':38,'multiline':False]
+['text':'  - Reads still incur an atomic write (this is how LeftRight','line_number':39,'multiline':False]
+['text':'    keeps track of how long it needs to keep around the old','line_number':40,'multiline':False]
+['text':'    data structure)','line_number':41,'multiline':False]
+['text':'','line_number':42,'multiline':False]
+['text':'  - Writes get executed twice, to keep both the left and right','line_number':43,'multiline':False]
+['text':'    versions up to date.  So if your write is expensive or','line_number':44,'multiline':False]
+['text':'    nondeterministic, this is also an inappropriate structure','line_number':45,'multiline':False]
+['text':'','line_number':46,'multiline':False]
+['text':' LeftRight is used fairly rarely in PyTorch's codebase.  If you','line_number':47,'multiline':False]
+['text':' are still not sure if you need it or not, consult your local','line_number':48,'multiline':False]
+['text':' C++ expert.','line_number':49,'multiline':False]
+['text':'','line_number':50,'multiline':False]
+['text':' Copying and moving would not be threadsafe.','line_number':62,'multiline':False]
+['text':' Needs more thought and careful design to make that work.','line_number':63,'multiline':False]
+['text':' wait until any potentially running writers are finished','line_number':70,'multiline':False]
+['text':' wait until any potentially running readers are finished','line_number':73,'multiline':False]
+['text':' Throwing an exception in writeFunc is ok but causes the state to be either','line_number':87,'multiline':False]
+['text':' the old or the new state, depending on if the first or the second call to','line_number':88,'multiline':False]
+['text':' writeFunc threw.','line_number':89,'multiline':False]
+['text':'
+     * Assume, A is in background and B in foreground. In simplified terms, we
+     * want to do the following:
+     * 1. Write to A (old background)
+     * 2. Switch A/B
+     * 3. Write to B (new background)
+     *
+     * More detailed algorithm (explanations on why this is important are below
+     * in code):
+     * 1. Write to A
+     * 2. Switch A/B data pointers
+     * 3. Wait until A counter is zero
+     * 4. Switch A/B counters
+     * 5. Wait until B counter is zero
+     * 6. Write to B
+     ','line_number':100,'multiline':True]
+['text':' 1. Write to A','line_number':119,'multiline':False]
+['text':' 2. Switch A/B data pointers','line_number':122,'multiline':False]
+['text':'
+     * 3. Wait until A counter is zero
+     *
+     * In the previous write run, A was foreground and B was background.
+     * There was a time after switching _foregroundDataIndex (B to foreground)
+     * and before switching _foregroundCounterIndex, in which new readers could
+     * have read B but incremented A's counter.
+     *
+     * In this current run, we just switched _foregroundDataIndex (A back to
+     * foreground), but before writing to the new background B, we have to make
+     * sure A's counter was zero briefly, so all these old readers are gone.
+     ','line_number':126,'multiline':True]
+['text':'
+     * 4. Switch A/B counters
+     *
+     * Now that we know all readers on B are really gone, we can switch the
+     * counters and have new readers increment A's counter again, which is the
+     * correct counter since they're reading A.
+     ','line_number':141,'multiline':True]
+['text':'
+     * 5. Wait until B counter is zero
+     *
+     * This waits for all the readers on B that came in while both data and
+     * counter for B was in foreground, i.e. normal readers that happened
+     * outside of that brief gap between switching data and counter.
+     ','line_number':151,'multiline':True]
+['text':' 6. Write to B','line_number':160,'multiline':False]
+['text':' recover invariant by copying from the foreground instance','line_number':171,'multiline':False]
+['text':' rethrow','line_number':173,'multiline':False]
+['text':' RWSafeLeftRightWrapper is API compatible with LeftRight and uses a','line_number':191,'multiline':False]
+['text':' read-write lock to protect T (data).','line_number':192,'multiline':False]
+['text':' RWSafeLeftRightWrapper is not copyable or moveable since LeftRight','line_number':199,'multiline':False]
+['text':' is not copyable or moveable.','line_number':200,'multiline':False]
+['text':' namespace c10','line_number':221,'multiline':False]

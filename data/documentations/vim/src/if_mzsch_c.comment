@@ -1,0 +1,517 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * MzScheme interface by Sergey Khorev <sergey.khorev@gmail.com>
+ * Based on work by Brent Fulgham <bfulgham@debian.org>
+ * (Based on lots of help from Matthew Flatt)
+ *
+ * This consists of six parts:
+ * 1. MzScheme interpreter main program
+ * 2. Routines that handle the external interface between MzScheme and
+ *    Vim.
+ * 3. MzScheme input/output handlers: writes output via [e]msg().
+ * 4. Implementation of the Vim Features for MzScheme
+ * 5. Vim Window-related Manipulation Functions.
+ * 6. Vim Buffer-related Manipulation Functions
+ *
+ * NOTES
+ * 1. Memory, allocated with scheme_malloc*, need not to be freed explicitly,
+ *    garbage collector will do it self
+ * 2. Requires at least NORMAL features. I can't imagine why one may want
+ *    to build with TINY features but with MzScheme interface.
+ * 3. I don't use K&R-style functions. Anyways, MzScheme headers are ANSI.
+ ','line_number':1,'multiline':True]
+['text':' Only do the following when the feature is enabled.  Needed for "make','line_number':28,'multiline':False]
+['text':' depend".','line_number':29,'multiline':False]
+['text':'
+ * scheme_register_tls_space is only available on 32-bit Windows until
+ * racket-6.3.  See
+ * http://docs.racket-lang.org/inside/im_memoryalloc.html?q=scheme_register_tls_space
+ ','line_number':45,'multiline':True]
+['text':'
+ * Since version 4.x precise GC requires trampolined startup.
+ * Futures and places in version 5.x need it too.
+ ','line_number':56,'multiline':True]
+['text':' Base data structures','line_number':66,'multiline':False]
+['text':'
+ * Prims that form MzScheme Vim interface
+ ','line_number':86,'multiline':True]
+['text':' arity information','line_number':93,'multiline':False]
+['text':'
+ *========================================================================
+ *  Vim-Control Commands
+ *========================================================================
+ ','line_number':103,'multiline':True]
+['text':'
+ *========================================================================
+ *  Utility functions for the vim/mzscheme interface
+ *========================================================================
+ ','line_number':108,'multiline':True]
+['text':'  Buffer-related commands','line_number':118,'multiline':False]
+['text':'  Window-related commands','line_number':123,'multiline':False]
+['text':'
+ *========================================================================
+ *  Internal Function Prototypes
+ *========================================================================
+ ','line_number':127,'multiline':True]
+['text':' apparently not needed as the object will be uncollectable while','line_number':185,'multiline':False]
+['text':' the buffer is alive','line_number':186,'multiline':False]
+['text':' vim_mz_buffer* buf = (vim_mz_buffer*) obj;','line_number':187,'multiline':False]
+['text':' buf->buf->b_mzscheme_ref = GC_fixup_self(obj);','line_number':188,'multiline':False]
+['text':' apparently not needed as the object will be uncollectable while','line_number':202,'multiline':False]
+['text':' the window is alive','line_number':203,'multiline':False]
+['text':' vim_mz_window* win = (vim_mz_window*) obj;','line_number':204,'multiline':False]
+['text':' win->win->w_mzscheme_ref = GC_fixup_self(obj);','line_number':205,'multiline':False]
+['text':'','line_number':206,'multiline':False]
+['text':' with precise GC, w_mzscheme_ref and b_mzscheme_ref are immobile boxes','line_number':209,'multiline':False]
+['text':' containing pointers to a window/buffer','line_number':210,'multiline':False]
+['text':' with conservative GC these are simply pointers','line_number':211,'multiline':False]
+['text':' not when defined(PROTO)','line_number':377,'multiline':False]
+['text':' arrays are imported directly','line_number':379,'multiline':False]
+['text':' pointers are GetProceAddress'ed as pointers to pointer','line_number':386,'multiline':False]
+['text':' and functions in a usual way','line_number':394,'multiline':False]
+['text':' define as function for macro in schthread.h','line_number':503,'multiline':False]
+['text':' DYNAMIC_MZSCHEME','line_number':734,'multiline':False]
+['text':' unreachable','line_number':759,'multiline':False]
+['text':' need to put it here for dynamic stuff to work','line_number':765,'multiline':False]
+['text':'
+ *========================================================================
+ *  1. MzScheme interpreter startup
+ *========================================================================
+ ','line_number':770,'multiline':True]
+['text':' global environment','line_number':785,'multiline':False]
+['text':' output/error handlers','line_number':787,'multiline':False]
+['text':' exn:vim exception','line_number':790,'multiline':False]
+['text':' Vim Error exception','line_number':794,'multiline':False]
+['text':' MzScheme threads scheduling stuff','line_number':803,'multiline':False]
+['text':' Win32 console and Unix','line_number':817,'multiline':False]
+['text':' Last time MzScheme threads were scheduled','line_number':821,'multiline':False]
+['text':' timers are presented in GUI only','line_number':841,'multiline':False]
+['text':' continue receiving notifications','line_number':855,'multiline':False]
+['text':' renew timeout','line_number':857,'multiline':False]
+['text':' MZSCHEME_GUI_THREADS','line_number':889,'multiline':False]
+['text':' reset timer','line_number':895,'multiline':False]
+['text':' We can not unload the DLL.  Racket's thread might be still alive.','line_number':919,'multiline':False]
+['text':'
+ * mzscheme_main() is called early in main().
+ * We may call scheme_main_setup() which calls mzscheme_env_main() which then
+ * trampolines into vim_main2(), which never returns.
+ ','line_number':940,'multiline':True]
+['text':'
+     * Racket requires trampolined startup.  We can not load it later.
+     * If dynamic dll loading is failed, disable it.
+     ','line_number':952,'multiline':True]
+['text':' Scheme has created the environment for us','line_number':976,'multiline':False]
+['text':' not reached, vim_main2() will loop until exit()','line_number':992,'multiline':False]
+['text':' in newer versions of precise GC the initial env has been created','line_number':1019,'multiline':False]
+['text':' invoke function from generated and included mzscheme_base.c','line_number':1034,'multiline':False]
+['text':' setup 'current-library-collection-paths' parameter','line_number':1038,'multiline':False]
+['text':' workaround for dynamic loading on windows','line_number':1048,'multiline':False]
+['text':' workaround for dynamic loading on windows','line_number':1105,'multiline':False]
+['text':'
+     * versions 4.x do not provide Scheme bindings by default
+     * we need to add them explicitly
+     ','line_number':1134,'multiline':True]
+['text':' use error handler to avoid abort','line_number':1139,'multiline':False]
+['text':' use new environment to initialise exception handling','line_number':1153,'multiline':False]
+['text':' redirect output','line_number':1156,'multiline':False]
+['text':' setup sandbox guards','line_number':1184,'multiline':False]
+['text':' Create buffer and window types for use in Scheme code','line_number':1212,'multiline':False]
+['text':'
+     * setup callback to receive notifications
+     * whether thread scheduling is (or not) required
+     ','line_number':1228,'multiline':True]
+['text':'
+ * This routine is called for each new invocation of MzScheme
+ * to make sure things are properly initialized.
+ ','line_number':1237,'multiline':True]
+['text':' recreate ports each call effectively clearing these ones','line_number':1267,'multiline':False]
+['text':'
+ *========================================================================
+ *  2.  External Interface
+ *========================================================================
+ ','line_number':1282,'multiline':True]
+['text':'
+ * Evaluate command with exception handling
+ ','line_number':1288,'multiline':True]
+['text':' Got an exn?','line_number':1312,'multiline':False]
+['text':'  Send to stderr-vim','line_number':1315,'multiline':False]
+['text':' `raise' was called on some arbitrary value','line_number':1320,'multiline':False]
+['text':' if pointer to retval supported give it up','line_number':1324,'multiline':False]
+['text':' Print any result, as long as it's not a void','line_number':1326,'multiline':False]
+['text':' Send to stdout-vim','line_number':1329,'multiline':False]
+['text':'
+ * :mzscheme
+ ','line_number':1338,'multiline':True]
+['text':'
+ * Routine called by VIM when deleting a buffer
+ ','line_number':1353,'multiline':True]
+['text':'
+ * Routine called by VIM when deleting a Window
+ ','line_number':1379,'multiline':True]
+['text':'
+ * ":mzscheme" (or ":mz")
+ ','line_number':1404,'multiline':True]
+['text':' make Vim expansion','line_number':1442,'multiline':False]
+['text':' to get accurate read error location','line_number':1446,'multiline':False]
+['text':' Like REPL but print only last result','line_number':1449,'multiline':False]
+['text':' errors will be caught in do_mzscheme_command and ex_mzfile','line_number':1456,'multiline':False]
+['text':'
+ * :mzfile
+ ','line_number':1464,'multiline':True]
+['text':' looks like port was not closed','line_number':1478,'multiline':False]
+['text':'
+ *========================================================================
+ * Exception handling code -- cribbed form the MzScheme sources and
+ * Matthew Flatt's "Inside PLT MzScheme" document.
+ *========================================================================
+ ','line_number':1487,'multiline':True]
+['text':'
+ * This function applies a thunk, returning the Scheme value if there's
+ * no exception, otherwise returning NULL and setting *exn to the raised
+ * value (usually an exn structure).
+ ','line_number':1512,'multiline':True]
+['text':' v is a pair: (cons #t value) or (cons #f exn)','line_number':1523,'multiline':False]
+['text':' Not an exn structure','line_number':1540,'multiline':False]
+['text':'
+ *========================================================================
+ *  3.  MzScheme I/O Handlers
+ *========================================================================
+ ','line_number':1549,'multiline':True]
+['text':' TODO: use len, the string may not be NUL terminated','line_number':1581,'multiline':False]
+['text':'
+ *========================================================================
+ *  4. Implementation of the Vim Features for MzScheme
+ *========================================================================
+ ','line_number':1617,'multiline':True]
+['text':'
+ * (command {command-string})
+ ','line_number':1623,'multiline':True]
+['text':' may be use do_cmdline_cmd?','line_number':1636,'multiline':False]
+['text':'
+ * (eval {expr-string})
+ ','line_number':1645,'multiline':True]
+['text':' unreachable','line_number':1675,'multiline':False]
+['text':'
+ * (range-start)
+ ','line_number':1680,'multiline':True]
+['text':'
+ * (range-end)
+ ','line_number':1689,'multiline':True]
+['text':'
+ * (beep)
+ ','line_number':1698,'multiline':True]
+['text':'
+ * (get-option {option-name}) [buffer/window]
+ ','line_number':1710,'multiline':True]
+['text':'NOTREACHED','line_number':1783,'multiline':False]
+['text':'NOTREACHED','line_number':1787,'multiline':False]
+['text':' unreachable','line_number':1789,'multiline':False]
+['text':'
+ * (set-option {option-changing-string} [buffer/window])
+ ','line_number':1793,'multiline':True]
+['text':' do_set can modify cmd, make copy','line_number':1838,'multiline':False]
+['text':'
+ *===========================================================================
+ *  5. Vim Window-related Manipulation Functions
+ *===========================================================================
+ ','line_number':1850,'multiline':True]
+['text':'
+ * (curr-win)
+ ','line_number':1856,'multiline':True]
+['text':'
+ * (win-count)
+ ','line_number':1865,'multiline':True]
+['text':'
+ * (get-win-list [buffer])
+ ','line_number':1879,'multiline':True]
+['text':' We need to handle deletion of windows underneath us.','line_number':1911,'multiline':False]
+['text':' If we add a "w_mzscheme_ref" field to the win_T structure,','line_number':1912,'multiline':False]
+['text':' then we can get at it in win_free() in vim.','line_number':1913,'multiline':False]
+['text':'','line_number':1914,'multiline':False]
+['text':' On a win_free() we set the Scheme object's win_T *field','line_number':1915,'multiline':False]
+['text':' to an invalid value. We trap all uses of a window','line_number':1916,'multiline':False]
+['text':' object, and reject them if the win_T *field is invalid.','line_number':1917,'multiline':False]
+['text':' because win isn't visible to GC','line_number':1927,'multiline':False]
+['text':'
+ * (get-win-num [window])
+ ','line_number':1939,'multiline':True]
+['text':'
+ * (get-win-by-num {windownum})
+ ','line_number':1956,'multiline':True]
+['text':' to be 1-based','line_number':1971,'multiline':False]
+['text':'
+ * (get-win-buffer [window])
+ ','line_number':1977,'multiline':True]
+['text':'
+ * (get-win-height [window])
+ ','line_number':1989,'multiline':True]
+['text':'
+ * (set-win-height {height} [window])
+ ','line_number':2001,'multiline':True]
+['text':'
+ * (get-win-width [window])
+ ','line_number':2028,'multiline':True]
+['text':'
+ * (set-win-width {width} [window])
+ ','line_number':2040,'multiline':True]
+['text':'
+ * (get-cursor [window]) -> (line . col)
+ ','line_number':2067,'multiline':True]
+['text':'
+ * (set-cursor (line . col) [window])
+ ','line_number':2083,'multiline':True]
+['text':' don't know how to catch invalid column value','line_number':2108,'multiline':False]
+['text':'
+ *===========================================================================
+ *  6. Vim Buffer-related Manipulation Functions
+ *===========================================================================
+ ','line_number':2118,'multiline':True]
+['text':'
+ * (open-buff {filename})
+ ','line_number':2124,'multiline':True]
+['text':' TODO make open existing file','line_number':2146,'multiline':False]
+['text':'
+ * (get-buff-by-num {buffernum})
+ ','line_number':2158,'multiline':True]
+['text':'
+ * (get-buff-by-name {buffername})
+ ','line_number':2177,'multiline':True]
+['text':' empty string','line_number':2198,'multiline':False]
+['text':' either short or long filename matches','line_number':2206,'multiline':False]
+['text':'
+ * (get-next-buff [buffer])
+ ','line_number':2215,'multiline':True]
+['text':'
+ * (get-prev-buff [buffer])
+ ','line_number':2230,'multiline':True]
+['text':'
+ * (get-buff-num [buffer])
+ ','line_number':2245,'multiline':True]
+['text':'
+ * (buff-count)
+ ','line_number':2257,'multiline':True]
+['text':'
+ * (get-buff-name [buffer])
+ ','line_number':2270,'multiline':True]
+['text':'
+ * (curr-buff)
+ ','line_number':2282,'multiline':True]
+['text':' We need to handle deletion of buffers underneath us.','line_number':2299,'multiline':False]
+['text':' If we add a "b_mzscheme_ref" field to the buf_T structure,','line_number':2300,'multiline':False]
+['text':' then we can get at it in buf_freeall() in vim.','line_number':2301,'multiline':False]
+['text':' because buf isn't visible to GC','line_number':2311,'multiline':False]
+['text':'
+ * (get-buff-size [buffer])
+ *
+ * Get the size (number of lines) in the current buffer.
+ ','line_number':2323,'multiline':True]
+['text':'
+ * (get-buff-line {linenr} [buffer])
+ *
+ * Get a line from the specified buffer. The line number is
+ * in Vim format (1-based). The line is returned as a MzScheme
+ * string object.
+ ','line_number':2337,'multiline':True]
+['text':'
+ * (get-buff-line-list {start} {end} [buffer])
+ *
+ * Get a list of lines from the specified buffer. The line numbers
+ * are in Vim format (1-based). The range is from lo up to, but not
+ * including, hi. The list is returned as a list of string objects.
+ ','line_number':2361,'multiline':True]
+['text':'
+     * Handle some error conditions
+     ','line_number':2385,'multiline':True]
+['text':' Set the list item','line_number':2404,'multiline':False]
+['text':'
+ * (set-buff-line {linenr} {string/#f} [buffer])
+ *
+ * Replace a line in the specified buffer. The line number is
+ * in Vim format (1-based). The replacement line is given as
+ * an MzScheme string object. The object is checked for validity
+ * and correct format. An exception is thrown if the values are not
+ * the correct format.
+ *
+ * It returns a Scheme Object that indicates the length of the
+ * string changed.
+ ','line_number':2412,'multiline':True]
+['text':' First of all, we check the value of the supplied MzScheme object.','line_number':2427,'multiline':False]
+['text':' There are three cases:','line_number':2428,'multiline':False]
+['text':'	  1. #f - this is a deletion.','line_number':2429,'multiline':False]
+['text':'	  2. A string	   - this is a replacement.','line_number':2430,'multiline':False]
+['text':'	  3. Anything else - this is an error.','line_number':2431,'multiline':False]
+['text':' Otherwise it's a line','line_number':2481,'multiline':False]
+['text':' Check that the cursor is not beyond the end of the line now.','line_number':2508,'multiline':False]
+['text':'
+ * (set-buff-line-list {start} {end} {string-list/#f/null} [buffer])
+ *
+ * Replace a range of lines in the specified buffer. The line numbers are in
+ * Vim format (1-based). The range is from lo up to, but not including, hi.
+ * The replacement lines are given as a Scheme list of string objects. The
+ * list is checked for validity and correct format.
+ *
+ * Errors are returned as a value of FAIL. The return value is OK on success.
+ * If OK is returned and len_change is not NULL, *len_change is set to the
+ * change in the buffer length.
+ ','line_number':2527,'multiline':True]
+['text':' First of all, we check the type of the supplied MzScheme object.','line_number':2542,'multiline':False]
+['text':' There are three cases:','line_number':2543,'multiline':False]
+['text':'	  1. #f - this is a deletion.','line_number':2544,'multiline':False]
+['text':'	  2. A list	   - this is a replacement.','line_number':2545,'multiline':False]
+['text':'	  3. Anything else - this is an error.','line_number':2546,'multiline':False]
+['text':' process inverse values wisely','line_number':2568,'multiline':False]
+['text':' inclusive','line_number':2577,'multiline':False]
+['text':' exclusive','line_number':2578,'multiline':False]
+['text':' List','line_number':2613,'multiline':False]
+['text':' improper or cyclic list','line_number':2616,'multiline':False]
+['text':'
+	     * If the size of the range is reducing (ie, new_len < old_len) we
+	     * need to delete some old_len. We do this at the start, by
+	     * repeatedly deleting line "lo".
+	     ','line_number':2654,'multiline':True]
+['text':'
+	     * For as long as possible, replace the existing old_len with the
+	     * new old_len. This is a more efficient operation, as it requires
+	     * less memory allocation and freeing.
+	     ','line_number':2670,'multiline':True]
+['text':'
+	     * Now we may need to insert the remaining new_len.  We don't need to
+	     * free the string passed back because MzScheme has control of that
+	     * memory.
+	     ','line_number':2683,'multiline':True]
+['text':'
+	 * Adjust marks. Invalidate any which lie in the
+	 * changed range, and move any in the remainder of the buffer.
+	 ','line_number':2704,'multiline':True]
+['text':'
+ * (insert-buff-line-list {linenr} {string/string-list} [buffer])
+ *
+ * Insert a number of lines into the specified buffer after the specified line.
+ * The line number is in Vim format (1-based). The lines to be inserted are
+ * given as an MzScheme list of string objects or as a single string. The lines
+ * to be added are checked for validity and correct format. Errors are
+ * returned as a value of FAIL.  The return value is OK on success.
+ * If OK is returned and len_change is not NULL, *len_change
+ * is set to the change in the buffer length.
+ ','line_number':2722,'multiline':True]
+['text':'
+     * First of all, we check the type of the supplied MzScheme object.
+     * It must be a string or a list, or the call is in error.
+     ','line_number':2749,'multiline':True]
+['text':' 0 can be used in insert','line_number':2760,'multiline':False]
+['text':' List','line_number':2795,'multiline':False]
+['text':' improper or cyclic list','line_number':2798,'multiline':False]
+['text':'
+ * Predicates
+ ','line_number':2856,'multiline':True]
+['text':'
+ * (buff? obj)
+ ','line_number':2859,'multiline':True]
+['text':'
+ * (win? obj)
+ ','line_number':2871,'multiline':True]
+['text':'
+ * (buff-valid? obj)
+ ','line_number':2883,'multiline':True]
+['text':'
+ * (win-valid? obj)
+ ','line_number':2896,'multiline':True]
+['text':'
+ *===========================================================================
+ * Utilities
+ *===========================================================================
+ ','line_number':2909,'multiline':True]
+['text':'
+ * Convert an MzScheme string into a Vim line.
+ *
+ * All internal nulls are replaced by newline characters.
+ * It is an error for the string to contain newline characters.
+ *
+ * Returns pointer to Vim allocated memory
+ ','line_number':2915,'multiline':True]
+['text':' Error checking: String must not contain newlines, as we','line_number':2933,'multiline':False]
+['text':' are replacing a single line, and we must replace it with','line_number':2934,'multiline':False]
+['text':' a single line.','line_number':2935,'multiline':False]
+['text':' Create a copy of the string, with internal nulls replaced by','line_number':2941,'multiline':False]
+['text':' newline characters, as is the vim convention.','line_number':2942,'multiline':False]
+['text':'
+ * Convert Vim value into MzScheme, adopted from if_python.c
+ ','line_number':2958,'multiline':True]
+['text':' hash table to store visited values to avoid infinite loops','line_number':2965,'multiline':False]
+['text':' Avoid infinite recursion','line_number':2993,'multiline':False]
+['text':' Check if we run into a recursive loop.  The item must be in visited','line_number':3000,'multiline':False]
+['text':' then and we can use it again.','line_number':3001,'multiline':False]
+['text':' found, do nothing','line_number':3004,'multiline':False]
+['text':' FIXME: func_ref() and func_unref() are needed.','line_number':3095,'multiline':False]
+['text':' FIXME: func_ref() and func_unref() are needed.','line_number':3116,'multiline':False]
+['text':' TODO: Support pt_dict and pt_argv.','line_number':3117,'multiline':False]
+['text':' free up remembered objects','line_number':3167,'multiline':False]
+['text':' limit the deepest recursion level','line_number':3188,'multiline':False]
+['text':' temporary var to hold current element of vectors and pairs','line_number':3248,'multiline':False]
+['text':' add the value in advance to allow handling of self-referential','line_number':3265,'multiline':False]
+['text':' data structures','line_number':3266,'multiline':False]
+['text':' improper list not terminated with null','line_number':3300,'multiline':False]
+['text':' need to handle the last element','line_number':3301,'multiline':False]
+['text':' nothing to do for scheme_null','line_number':3312,'multiline':False]
+['text':' generate item for `display'ed Scheme key','line_number':3348,'multiline':False]
+['text':' convert Scheme val to Vim and add it to the dict','line_number':3351,'multiline':False]
+['text':' `display' any other value to string','line_number':3368,'multiline':False]
+['text':'
+ * Scheme prim procedure wrapping Vim funcref
+ ','line_number':3376,'multiline':True]
+['text':'
+ * Check to see whether a Vim error has been reported, or a keyboard
+ * interrupt (from vim --> got_int) has been detected.
+ ','line_number':3460,'multiline':True]
+['text':'
+ * register Scheme exn:vim
+ ','line_number':3470,'multiline':True]
+['text':'
+ * raise exn:vim, may be with additional info string
+ ','line_number':3528,'multiline':True]
+['text':'
+ * get buffer:
+ * either current
+ * or passed as argv[argnum] with checks
+ ','line_number':3595,'multiline':True]
+['text':'
+ * get window:
+ * either current
+ * or passed as argv[argnum] with checks
+ ','line_number':3614,'multiline':True]
+['text':'
+ * get valid Vim buffer from Scheme_Object*
+ ','line_number':3633,'multiline':True]
+['text':'
+ * get valid Vim window from Scheme_Object*
+ ','line_number':3645,'multiline':True]
+['text':'
+ * Check if deleting lines made the cursor position invalid
+ * (or you'll get msg from Vim about invalid linenr).
+ * Changed the lines from "lo" to "hi" and added "extra" lines (negative if
+ * deleted). Got from if_python.c
+ ','line_number':3675,'multiline':True]
+['text':' Adjust the cursor position if it's in/after the changed','line_number':3686,'multiline':False]
+['text':' lines.','line_number':3687,'multiline':False]
+['text':'
+     * Buffer-related commands
+     ','line_number':3707,'multiline':True]
+['text':'
+     * Window-related commands
+     ','line_number':3725,'multiline':True]
+['text':'
+     * Vim-related commands
+     ','line_number':3740,'multiline':True]
+['text':'
+     * small utilities
+     ','line_number':3750,'multiline':True]
+['text':'
+ * return MzScheme wrapper for curbuf
+ ','line_number':3759,'multiline':True]
+['text':'
+ * return MzScheme wrapper for curwin
+ ','line_number':3771,'multiline':True]
+['text':' all prims made closed so they can access their own names','line_number':3801,'multiline':False]
+['text':'
+ * security guards to force Vim's sandbox restrictions on MzScheme level
+ ','line_number':3828,'multiline':True]

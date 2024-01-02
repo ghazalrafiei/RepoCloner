@@ -1,0 +1,371 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]
+['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]
+['text':'
+*******************************************************************************
+*
+*   Copyright (C) 2000-2016, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+*******************************************************************************
+*   file name:  genmbcs.cpp
+*   encoding:   UTF-8
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 2000jul06
+*   created by: Markus W. Scherer
+','line_number':3,'multiline':True]
+['text':'
+ * TODO: Split this file into toUnicode, SBCSFromUnicode and MBCSFromUnicode files.
+ * Reduce tests for maxCharLength.
+ ','line_number':31,'multiline':True]
+['text':' toUnicode (state table in ucm->states) ','line_number':41,'multiline':True]
+['text':' fromUnicode ','line_number':46,'multiline':True]
+['text':' stage 2 for single-byte codepages ','line_number':48,'multiline':True]
+['text':' stage 2 for MBCS ','line_number':49,'multiline':True]
+['text':' fromUTF8 ','line_number':53,'multiline':True]
+['text':' allow for utf8Max=0xffff ','line_number':54,'multiline':True]
+['text':'
+     * Maximum UTF-8-friendly code point.
+     * 0 if !utf8Friendly, otherwise 0x01ff..0xffff in steps of 0x100.
+     * If utf8Friendly, utf8Max is normally either MBCS_UTF8_MAX or 0xffff.
+     ','line_number':56,'multiline':True]
+['text':' prototypes ','line_number':67,'multiline':True]
+['text':' helper ------------------------------------------------------------------- ','line_number':108,'multiline':True]
+['text':' implementation ----------------------------------------------------------- ','line_number':129,'multiline':True]
+['text':'
+     * Set "pessimistic" values which may sometimes move too many
+     * mappings to the extension table (but never too few).
+     * These values cause MBCSOkForBaseFromUnicode() to return FALSE for the
+     * largest set of mappings.
+     * Assume maxCharLength>1.
+     ','line_number':138,'multiline':True]
+['text':' aliased, not owned ','line_number':159,'multiline':True]
+['text':' toUnicode ','line_number':202,'multiline':True]
+['text':' allocate the code unit array and prefill it with "unassigned" values ','line_number':204,'multiline':True]
+['text':' fromUnicode ','line_number':222,'multiline':True]
+['text':' allocate the codepage mappings and preset the first 16 characters to 0 ','line_number':225,'multiline':True]
+['text':' allocate 64k 16-bit results for single-byte codepages ','line_number':227,'multiline':True]
+['text':' allocate 1M * maxCharLength bytes for at most 1M mappings ','line_number':230,'multiline':True]
+['text':'
+     * UTF-8-friendly fromUnicode tries: allocate multiple blocks at a time.
+     * See ucnvmbcs.h for details.
+     *
+     * There is code, for example in ucnv_MBCSGetUnicodeSetForUnicode(), which
+     * assumes that the initial stage 2/3 blocks are the all-unassigned ones.
+     * Therefore, we refine the data structure while maintaining this placement
+     * even though it would be convenient to allocate the ASCII block at the
+     * beginning of stage 3, for example.
+     *
+     * UTF-8-friendly fromUnicode tries work from sorted tables and are built
+     * pre-compacted, overlapping adjacent stage 2/3 blocks.
+     * This is necessary because the block allocation and compaction changes
+     * at SBCS_UTF8_MAX or MBCS_UTF8_MAX, and for MBCS tables the additional
+     * stage table uses direct indexes into stage 3, without a multiplier and
+     * thus with a smaller reach.
+     *
+     * Non-UTF-8-friendly fromUnicode tries work from unsorted tables
+     * (because implicit precision is used), and are compacted
+     * in post-processing.
+     *
+     * Preallocation for UTF-8-friendly fromUnicode tries:
+     *
+     * Stage 3:
+     * 64-entry all-unassigned first block followed by ASCII (128 entries).
+     *
+     * Stage 2:
+     * 64-entry all-unassigned first block followed by preallocated
+     * 64-block for ASCII.
+     ','line_number':240,'multiline':True]
+['text':' Preallocate ASCII as a linear 128-entry stage 3 block. ','line_number':271,'multiline':True]
+['text':' ASCII U+0000..U+007f ','line_number':276,'multiline':True]
+['text':' Initialize stage 1 for the preallocated blocks. ','line_number':278,'multiline':True]
+['text':' ==sum ','line_number':284,'multiline':True]
+['text':'
+     * Stage 2 indexes count 16-blocks in stage 3 as follows:
+     * SBCS: directly, indexes increment by 16
+     * MBCS: indexes need to be multiplied by 16*maxCharLength, indexes increment by 1
+     * MBCS UTF-8: directly, indexes increment by 16
+     ','line_number':286,'multiline':True]
+['text':'
+     * Allocate a 64-entry all-unassigned first stage 3 block,
+     * for UTF-8-friendly lookup with a trail byte,
+     * plus 128 entries for ASCII.
+     ','line_number':312,'multiline':True]
+['text':' ==sum*maxCharLength ','line_number':317,'multiline':True]
+['text':' return TRUE for success ','line_number':322,'multiline':True]
+['text':' if there is already a fallback for this offset, then overwrite it ','line_number':327,'multiline':True]
+['text':' if there is no fallback for this offset, then add one ','line_number':331,'multiline':True]
+['text':' remove fallback if there is one with this offset; return the code point if there was such a fallback, otherwise -1 ','line_number':345,'multiline':True]
+['text':' copy the last fallback entry here to keep the list contiguous ','line_number':357,'multiline':True]
+['text':'
+ * isFallback is almost a boolean:
+ * 1 (TRUE)  this is a fallback mapping
+ * 0 (FALSE) this is a precise mapping
+ * -1        the precision of this mapping is not specified
+ ','line_number':367,'multiline':True]
+['text':' for SI/SO (like EBCDIC-stateful), double-byte sequences start in state 1 ','line_number':388,'multiline':True]
+['text':'
+     * Walk down the state table like in conversion,
+     * much like getNextUChar().
+     * We assume that c<=0x10ffff.
+     ','line_number':393,'multiline':True]
+['text':' the "direct" action's value is not "valid-direct-16-unassigned" any more ','line_number':432,'multiline':True]
+['text':'
+                     * Continue after the above warning
+                     * if the precision of the mapping is unspecified.
+                     ','line_number':446,'multiline':True]
+['text':' reassign the correct action code ','line_number':451,'multiline':True]
+['text':' put the code point into bits 22..7 for BMP, c-0x10000 into 26..7 for others ','line_number':454,'multiline':True]
+['text':' bits 26..16 are not used, 0 ','line_number':463,'multiline':True]
+['text':' bits 15..7 contain the final offset delta to one 16-bit code unit ','line_number':464,'multiline':True]
+['text':' check that this byte sequence is still unassigned ','line_number':466,'multiline':True]
+['text':' assign only if there is no precise mapping ','line_number':483,'multiline':True]
+['text':' bits 26..16 are not used, 0 ','line_number':492,'multiline':True]
+['text':' bits 15..7 contain the final offset delta to two 16-bit code units ','line_number':493,'multiline':True]
+['text':' check that this byte sequence is still unassigned ','line_number':495,'multiline':True]
+['text':' old<=0xe001 ','line_number':503,'multiline':True]
+['text':' assign only if there is no precise mapping ','line_number':516,'multiline':True]
+['text':' do nothing ','line_number':518,'multiline':True]
+['text':' set a BMP fallback code point as a pair with 0xe001 ','line_number':520,'multiline':True]
+['text':' set a fallback surrogate pair with two second surrogates ','line_number':524,'multiline':True]
+['text':' set a BMP code point ','line_number':530,'multiline':True]
+['text':' set a BMP code point above 0xd800 as a pair with 0xe000 ','line_number':533,'multiline':True]
+['text':' set a surrogate pair ','line_number':537,'multiline':True]
+['text':' reserved, must never occur ','line_number':544,'multiline':True]
+['text':' is this byte sequence valid? (this is almost the same as MBCSAddToUnicode()) ','line_number':556,'multiline':True]
+['text':'length','line_number':567,'multiline':True]
+['text':' ignore |2 SUB mappings ','line_number':577,'multiline':True]
+['text':'
+     * Walk down the triple-stage compact array ("trie") and
+     * allocate parts as necessary.
+     * Note that the first stage 2 and 3 blocks are reserved for all-unassigned mappings.
+     * We assume that length<=maxCharLength and that c<=0x10ffff.
+     ','line_number':582,'multiline':True]
+['text':' inspect stage 1 ','line_number':591,'multiline':True]
+['text':' allocate another block in stage 2 ','line_number':599,'multiline':True]
+['text':' minimum block start with overlap ','line_number':602,'multiline':True]
+['text':'
+         * each stage 2 block contains 64 16-bit words:
+         * 6 code point bits 9..4 with 1 stage 3 index
+         ','line_number':614,'multiline':True]
+['text':' inspect stage 2 ','line_number':622,'multiline':True]
+['text':' allocate 64-entry blocks for UTF-8-friendly lookup ','line_number':625,'multiline':True]
+['text':' allocate another block in stage 3 ','line_number':633,'multiline':True]
+['text':' minimum block start with overlap ','line_number':636,'multiline':True]
+['text':' each block has 16 uint16_t entries ','line_number':647,'multiline':True]
+['text':' ==newBlock ','line_number':653,'multiline':True]
+['text':' write the codepage entry into stage 3 and get the previous entry ','line_number':656,'multiline':True]
+['text':' check that this Unicode code point was still unassigned ','line_number':667,'multiline':True]
+['text':' continue after the above warning if the precision of the mapping is unspecified ','line_number':677,'multiline':True]
+['text':'
+     * Walk down the triple-stage compact array ("trie") and
+     * allocate parts as necessary.
+     * Note that the first stage 2 and 3 blocks are reserved for
+     * all-unassigned mappings.
+     * We assume that length<=maxCharLength and that c<=0x10ffff.
+     ','line_number':712,'multiline':True]
+['text':' inspect stage 1 ','line_number':721,'multiline':True]
+['text':' allocate another block in stage 2 ','line_number':729,'multiline':True]
+['text':' minimum block start with overlap ','line_number':732,'multiline':True]
+['text':'
+         * each stage 2 block contains 64 32-bit words:
+         * 6 code point bits 9..4 with value with bits 31..16 "assigned" flags and bits 15..0 stage 3 index
+         ','line_number':745,'multiline':True]
+['text':' ==newBlock ','line_number':754,'multiline':True]
+['text':' inspect stage 2 ','line_number':757,'multiline':True]
+['text':' allocate 64-entry blocks for UTF-8-friendly lookup ','line_number':760,'multiline':True]
+['text':' allocate another block in stage 3 ','line_number':768,'multiline':True]
+['text':'
+             * Overlap stage 3 blocks only in multiples of 16-entry blocks
+             * because of the indexing granularity in stage 2.
+             ','line_number':771,'multiline':True]
+['text':' each block has 16*maxCharLength bytes ','line_number':792,'multiline':True]
+['text':' ==newBlock ','line_number':798,'multiline':True]
+['text':' Build an alternate, UTF-8-friendly stage table as well. ','line_number':803,'multiline':True]
+['text':' Overflow for uint16_t entries in stageUTF8? ','line_number':805,'multiline':True]
+['text':'
+             * This can occur only if the mapping table is nearly perfectly filled and if
+             * utf8Max==0xffff.
+             * (There is no known charset like this. GB 18030 does not map
+             * surrogate code points and LMBCS does not map 256 PUA code points.)
+             *
+             * Otherwise, stage3Index<=MBCS_UTF8_LIMIT<0xffff
+             * (stage3Index can at most reach exactly MBCS_UTF8_LIMIT)
+             * because we have a sorted table and there are at most MBCS_UTF8_LIMIT
+             * mappings with 0<=c<MBCS_UTF8_LIMIT, and there is only also
+             * the initial all-unassigned block in stage3.
+             *
+             * Solution for the overflow: Reduce utf8Max to the next lower value, 0xfeff.
+             *
+             * (See svn revision 20866 of the markus/ucnvutf8 feature branch for
+             * code that causes MBCSAddTable() to rebuild the table not utf8Friendly
+             * in case of overflow. That code was not tested.)
+             ','line_number':807,'multiline':True]
+['text':'
+             * The stage 3 block has been assigned for the regular trie.
+             * Just copy its index into stageUTF8[], without the granularity.
+             ','line_number':827,'multiline':True]
+['text':' write the codepage bytes into stage 3 and get the previous bytes ','line_number':835,'multiline':True]
+['text':' assemble the bytes into a single integer ','line_number':837,'multiline':True]
+['text':' will never occur ','line_number':876,'multiline':True]
+['text':' check that this Unicode code point was still unassigned ','line_number':880,'multiline':True]
+['text':' continue after the above warning if the precision of the mapping is
+           unspecified ','line_number':890,'multiline':True]
+['text':' set the roundtrip flag ','line_number':894,'multiline':True]
+['text':'
+     * A 1:1 mapping does not fit into the MBCS base table's fromUnicode table under
+     * the following conditions:
+     *
+     * - a |2 SUB mapping for <subchar1> (no base table data structure for them)
+     * - a |1 fallback to 0x00 (result value 0, indistinguishable from unmappable entry)
+     * - a multi-byte mapping with leading 0x00 bytes (no explicit length field)
+     *
+     * Some of these tests are redundant with ucm_mappingType().
+     ','line_number':905,'multiline':True]
+['text':' testing length==1 would be redundant with the next test ','line_number':916,'multiline':True]
+['text':'
+     * Additional restrictions for UTF-8-friendly fromUnicode tables,
+     * for code points up to the maximum optimized one:
+     *
+     * - any mapping to 0x00 (result value 0, indistinguishable from unmappable entry)
+     * - any |1 fallback (no roundtrip flags in the optimized table)
+     ','line_number':922,'multiline':True]
+['text':'
+     * If we omit the fromUnicode data, we can only store roundtrips there
+     * because only they are recoverable from the toUnicode data.
+     * Fallbacks must go into the extension table.
+     ','line_number':933,'multiline':True]
+['text':' All other mappings do fit into the base table. ','line_number':942,'multiline':True]
+['text':' we can assume that the table only contains 1:1 mappings with <=4 bytes each ','line_number':947,'multiline':True]
+['text':'
+     * Generation of UTF-8-friendly data requires
+     * a sorted table, which makeconv generates when explicit precision
+     * indicators are used.
+     ','line_number':968,'multiline':True]
+['text':'
+         * Small optimization for --small .cnv files:
+         *
+         * If there are fromUnicode mappings above MBCS_UTF8_MAX,
+         * then the file size will be smaller if we make utf8Max larger
+         * because the size increase in stageUTF8 will be more than balanced by
+         * how much less of stage2 needs to be stored.
+         *
+         * There is no point in doing this incrementally because stageUTF8
+         * uses so much less space per block than stage2,
+         * so we immediately increase utf8Max to 0xffff.
+         *
+         * Do not increase utf8Max if it is already at 0xfeff because MBCSAddFromUnicode()
+         * sets it to that value when stageUTF8 overflows.
+         ','line_number':1001,'multiline':True]
+['text':' there was no precision/fallback indicator ','line_number':1025,'multiline':True]
+['text':' fall through to set the mappings ','line_number':1026,'multiline':True]
+['text':' set roundtrip mappings ','line_number':1029,'multiline':True]
+['text':' set only a fallback mapping from Unicode to codepage ','line_number':1042,'multiline':True]
+['text':' ignore |2 SUB mappings, except to move <subchar1> mappings to the extension table ','line_number':1055,'multiline':True]
+['text':' set only a fallback mapping from codepage to Unicode ','line_number':1062,'multiline':True]
+['text':' move "good one-way" mappings to the extension table ','line_number':1067,'multiline':True]
+['text':' will not occur because the parser checked it already ','line_number':1072,'multiline':True]
+['text':' careful: 2-byte and 4-byte codes are stored in platform endianness! ','line_number':1096,'multiline':True]
+['text':' test if all first bytes are in {0, 0x8e, 0x8f} ','line_number':1098,'multiline':True]
+['text':' some first byte does not fit the EUC pattern, nothing to be done ','line_number':1110,'multiline':True]
+['text':' restore p if it was modified above ','line_number':1114,'multiline':True]
+['text':' modify outputType and adjust stage3Top ','line_number':1117,'multiline':True]
+['text':'
+     * EUC-encode all byte sequences;
+     * see "CJKV Information Processing" (1st ed. 1999) from Ken Lunde, O'Reilly,
+     * p. 161 in chapter 4 "Encoding Methods"
+     *
+     * This also must reverse the byte order if the platform is little-endian!
+     ','line_number':1121,'multiline':True]
+['text':' short sequences are stored directly ','line_number':1133,'multiline':True]
+['text':' code set 0 or 1 ','line_number':1134,'multiline':True]
+['text':' code set 2 ','line_number':1137,'multiline':True]
+['text':' b==0x8f ','line_number':1139,'multiline':True]
+['text':' code set 3 ','line_number':1140,'multiline':True]
+['text':' oldLength==4 ','line_number':1145,'multiline':True]
+['text':' short sequences are stored directly ','line_number':1151,'multiline':True]
+['text':' code set 0 or 1 ','line_number':1152,'multiline':True]
+['text':' code set 2 ','line_number':1157,'multiline':True]
+['text':' first byte is 0x8f ','line_number':1161,'multiline':True]
+['text':' code set 3 ','line_number':1162,'multiline':True]
+['text':'
+ * Compact stage 2 for SBCS by overlapping adjacent stage 2 blocks as far
+ * as possible. Overlapping is done on unassigned head and tail
+ * parts of blocks in steps of MBCS_STAGE_2_MULTIPLIER.
+ * Stage 1 indexes need to be adjusted accordingly.
+ * This function is very similar to genprops/store.c/compactStage().
+ ','line_number':1173,'multiline':True]
+['text':' this array maps the ordinal number of a stage 2 block to its new stage 1 index ','line_number':1182,'multiline':True]
+['text':' enter the all-unassigned first stage 2 block into the map ','line_number':1186,'multiline':True]
+['text':' begin with the first block after the all-unassigned one ','line_number':1189,'multiline':True]
+['text':' find the size of the overlap ','line_number':1194,'multiline':True]
+['text':' move the non-overlapping indexes to their new positions ','line_number':1200,'multiline':True]
+['text':' move the indexes to their new positions ','line_number':1206,'multiline':True]
+['text':' no overlap && newStart==start ','line_number':1211,'multiline':True]
+['text':' adjust stage2Top ','line_number':1217,'multiline':True]
+['text':' now adjust stage 1 ','line_number':1225,'multiline':True]
+['text':' Compact stage 3 for SBCS - same algorithm as above. ','line_number':1231,'multiline':True]
+['text':' this array maps the ordinal number of a stage 3 block to its new stage 2 index ','line_number':1236,'multiline':True]
+['text':' enter the all-unassigned first stage 3 block into the map ','line_number':1240,'multiline':True]
+['text':' begin with the first block after the all-unassigned one ','line_number':1243,'multiline':True]
+['text':' find the size of the overlap ','line_number':1248,'multiline':True]
+['text':' move the non-overlapping indexes to their new positions ','line_number':1254,'multiline':True]
+['text':' move the indexes to their new positions ','line_number':1260,'multiline':True]
+['text':' no overlap && newStart==start ','line_number':1265,'multiline':True]
+['text':' adjust stage3Top ','line_number':1271,'multiline':True]
+['text':' now adjust stage 2 ','line_number':1279,'multiline':True]
+['text':'
+ * Compact stage 2 by overlapping adjacent stage 2 blocks as far
+ * as possible. Overlapping is done on unassigned head and tail
+ * parts of blocks in steps of MBCS_STAGE_2_MULTIPLIER.
+ * Stage 1 indexes need to be adjusted accordingly.
+ * This function is very similar to genprops/store.c/compactStage().
+ ','line_number':1285,'multiline':True]
+['text':' this array maps the ordinal number of a stage 2 block to its new stage 1 index ','line_number':1294,'multiline':True]
+['text':' enter the all-unassigned first stage 2 block into the map ','line_number':1298,'multiline':True]
+['text':' begin with the first block after the all-unassigned one ','line_number':1301,'multiline':True]
+['text':' find the size of the overlap ','line_number':1306,'multiline':True]
+['text':' move the non-overlapping indexes to their new positions ','line_number':1312,'multiline':True]
+['text':' move the indexes to their new positions ','line_number':1318,'multiline':True]
+['text':' no overlap && newStart==start ','line_number':1323,'multiline':True]
+['text':' adjust stage2Top ','line_number':1329,'multiline':True]
+['text':' now adjust stage 1 ','line_number':1337,'multiline':True]
+['text':'staticData','line_number':1344,'multiline':True]
+['text':' try to compact the fromUnicode tables ','line_number':1356,'multiline':True]
+['text':'
+     * UTF-8-friendly tries are built precompacted, to cope with variable
+     * stage 3 allocation block sizes.
+     *
+     * Tables without precision indicators cannot be built that way,
+     * because if a block was overlapped with a previous one, then a smaller
+     * code point for the same block would not fit.
+     * Therefore, such tables are not marked UTF-8-friendly and must be
+     * compacted after all mappings are entered.
+     ','line_number':1361,'multiline':True]
+['text':'uint32_t c, i1, i2, i2Limit, i3;','line_number':1381,'multiline':True]
+['text':' find how much of stage2 can be omitted ','line_number':1435,'multiline':True]
+['text':'initialized it to avoid compiler warnings ','line_number':1437,'multiline':True]
+['text':' utf8Limit is in the middle of an existing stage 2 block ','line_number':1441,'multiline':True]
+['text':' find the last stage2 block with mappings before utf8Limit ','line_number':1444,'multiline':True]
+['text':' stage2 up to the end of this block corresponds to stageUTF8 ','line_number':1446,'multiline':True]
+['text':' 0x440==1088 ','line_number':1464,'multiline':True]
+['text':' 0x40==64 ','line_number':1466,'multiline':True]
+['text':' adjust stage 1 entries to include the size of stage 1 in the offsets to stage 2 ','line_number':1469,'multiline':True]
+['text':' stage2Top/Length have counted 16-bit results, now we need to count bytes ','line_number':1475,'multiline':True]
+['text':' also round up to a multiple of 4 bytes ','line_number':1476,'multiline':True]
+['text':' stage3Top has counted 16-bit results, now we need to count bytes ','line_number':1479,'multiline':True]
+['text':' store 0x1f for max==0x1fff ','line_number':1483,'multiline':True]
+['text':' stage 2 contains 32-bit entries, stage 1 16-bit entries ','line_number':1487,'multiline':True]
+['text':' stage2Top/Length have counted 32-bit results, now we need to count bytes ','line_number':1490,'multiline':True]
+['text':' leave stage2Start counting 32-bit units ','line_number':1492,'multiline':True]
+['text':' store 0xd7 for max==0xd7ff ','line_number':1496,'multiline':True]
+['text':' stage3Top has already counted bytes ','line_number':1499,'multiline':True]
+['text':' round up stage3Top so that the sizes of all data blocks are multiples of 4 ','line_number':1502,'multiline':True]
+['text':' fill the header ','line_number':1505,'multiline':True]
+['text':' include fullStage2Length ','line_number':1509,'multiline':True]
+['text':' 9 ','line_number':1511,'multiline':True]
+['text':' 8 ','line_number':1515,'multiline':True]
+['text':' header.version[2] set above for utf8Friendly data ','line_number':1518,'multiline':True]
+['text':' write the MBCS data ','line_number':1554,'multiline':True]
+['text':' return the number of bytes that should have been written ','line_number':1573,'multiline':True]

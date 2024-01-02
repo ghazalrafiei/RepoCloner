@@ -1,0 +1,149 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]
+['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]
+['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]
+['text':'
+ * Math operations that implement wraparound semantics on overflow or underflow.
+ *
+ * While in some cases (but not all of them!) plain old C++ operators and casts
+ * will behave just like these functions, there are three reasons you should use
+ * these functions:
+ *
+ *   1) These functions make *explicit* the desire for and dependence upon
+ *      wraparound semantics, just as Rust's i32::wrapping_add and similar
+ *      functions explicitly produce wraparound in Rust.
+ *   2) They implement this functionality *safely*, without invoking signed
+ *      integer overflow that has undefined behavior in C++.
+ *   3) They play nice with compiler-based integer-overflow sanitizers (see
+ *      build/autoconf/sanitize.m4), that in appropriately configured builds
+ *      verify at runtime that integral arithmetic doesn't overflow.
+ ','line_number':7,'multiline':True]
+['text':' Overflow-correctness was proven in bug 1432646 and is explained in the','line_number':52,'multiline':False]
+['text':' comment below.  This function is very hot, both at compile time and','line_number':53,'multiline':False]
+['text':' runtime, so disable all overflow checking in it.','line_number':54,'multiline':False]
+['text':' This algorithm was originally provided here:','line_number':58,'multiline':False]
+['text':' https://stackoverflow.com/questions/13150449/efficient-unsigned-to-signed-cast-avoiding-implementation-defined-behavior','line_number':59,'multiline':False]
+['text':'','line_number':60,'multiline':False]
+['text':' If the value is in the non-negative signed range, just cast.','line_number':61,'multiline':False]
+['text':'','line_number':62,'multiline':False]
+['text':' If the value will be negative, compute its delta from the first number','line_number':63,'multiline':False]
+['text':' past the max signed integer, then add that to the minimum signed value.','line_number':64,'multiline':False]
+['text':'','line_number':65,'multiline':False]
+['text':' At the low end: if |u| is the maximum signed value plus one, then it has','line_number':66,'multiline':False]
+['text':' the same mathematical value as |MinValue| cast to unsigned form.  The','line_number':67,'multiline':False]
+['text':' delta is zero, so the signed form of |u| is |MinValue| -- exactly the','line_number':68,'multiline':False]
+['text':' result of adding zero delta to |MinValue|.','line_number':69,'multiline':False]
+['text':'','line_number':70,'multiline':False]
+['text':' At the high end: if |u| is the maximum *unsigned* value, then it has all','line_number':71,'multiline':False]
+['text':' bits set.  |MinValue| cast to unsigned form is purely the high bit set.','line_number':72,'multiline':False]
+['text':' So the delta is all bits but high set -- exactly |MaxValue|.  And as','line_number':73,'multiline':False]
+['text':' |MinValue = -MaxValue - 1|, we have |MaxValue + (-MaxValue - 1)| to','line_number':74,'multiline':False]
+['text':' equal -1.','line_number':75,'multiline':False]
+['text':'','line_number':76,'multiline':False]
+['text':' Thus the delta below is in signed range, the corresponding cast is safe,','line_number':77,'multiline':False]
+['text':' and this computation produces values spanning [MinValue, 0): exactly the','line_number':78,'multiline':False]
+['text':' desired range of all negative signed integers.','line_number':79,'multiline':False]
+['text':' namespace detail','line_number':86,'multiline':False]
+['text':'*
+ * Convert an unsigned value to signed, if necessary wrapping around.
+ *
+ * This is the behavior normal C++ casting will perform in most implementations
+ * these days -- but this function makes explicit that such conversion is
+ * happening.
+ ','line_number':88,'multiline':True]
+['text':' We could *always* return WrapToSigned and rely on unsigned conversion to','line_number':105,'multiline':False]
+['text':' undo the wrapping when |T| is unsigned, but this seems clearer.','line_number':106,'multiline':False]
+['text':' namespace detail','line_number':122,'multiline':False]
+['text':'*
+ * Add two integers of the same type and return the result converted to that
+ * type using wraparound semantics, without triggering overflow sanitizers.
+ *
+ * For N-bit unsigned integer types, this is equivalent to adding the two
+ * numbers, then taking the result mod 2**N:
+ *
+ *   WrappingAdd(uint32_t(42), uint32_t(17)) is 59 (59 mod 2**32);
+ *   WrappingAdd(uint8_t(240), uint8_t(20)) is 4 (260 mod 2**8).
+ *
+ * Unsigned WrappingAdd acts exactly like C++ unsigned addition.
+ *
+ * For N-bit signed integer types, this is equivalent to adding the two numbers
+ * wrapped to unsigned, then wrapping the sum mod 2**N to the signed range:
+ *
+ *   WrappingAdd(int16_t(32767), int16_t(3)) is
+ *     -32766 ((32770 mod 2**16) - 2**16);
+ *   WrappingAdd(int8_t(-128), int8_t(-128)) is
+ *     0 (256 mod 2**8);
+ *   WrappingAdd(int32_t(-42), int32_t(-17)) is
+ *     -59 ((8589934533 mod 2**32) - 2**32).
+ *
+ * There's no equivalent to this operation in C++, as C++ signed addition that
+ * overflows has undefined behavior.  But it's how such addition *tends* to
+ * behave with most compilers, unless an optimization or similar -- quite
+ * permissibly -- triggers different behavior.
+ ','line_number':124,'multiline':True]
+['text':' namespace detail','line_number':170,'multiline':False]
+['text':'*
+ * Subtract two integers of the same type and return the result converted to
+ * that type using wraparound semantics, without triggering overflow sanitizers.
+ *
+ * For N-bit unsigned integer types, this is equivalent to subtracting the two
+ * numbers, then taking the result mod 2**N:
+ *
+ *   WrappingSubtract(uint32_t(42), uint32_t(17)) is 29 (29 mod 2**32);
+ *   WrappingSubtract(uint8_t(5), uint8_t(20)) is 241 (-15 mod 2**8).
+ *
+ * Unsigned WrappingSubtract acts exactly like C++ unsigned subtraction.
+ *
+ * For N-bit signed integer types, this is equivalent to subtracting the two
+ * numbers wrapped to unsigned, then wrapping the difference mod 2**N to the
+ * signed range:
+ *
+ *   WrappingSubtract(int16_t(32767), int16_t(-5)) is -32764 ((32772 mod 2**16)
+ * - 2**16); WrappingSubtract(int8_t(-128), int8_t(127)) is 1 (-255 mod 2**8);
+ *   WrappingSubtract(int32_t(-17), int32_t(-42)) is 25 (25 mod 2**32).
+ *
+ * There's no equivalent to this operation in C++, as C++ signed subtraction
+ * that overflows has undefined behavior.  But it's how such subtraction *tends*
+ * to behave with most compilers, unless an optimization or similar -- quite
+ * permissibly -- triggers different behavior.
+ ','line_number':172,'multiline':True]
+['text':' Begin with |1U| to ensure the overall operation chain is never promoted','line_number':212,'multiline':False]
+['text':' to signed integer operations that might have *signed* integer overflow.','line_number':213,'multiline':False]
+['text':' namespace detail','line_number':219,'multiline':False]
+['text':'*
+ * Multiply two integers of the same type and return the result converted to
+ * that type using wraparound semantics, without triggering overflow sanitizers.
+ *
+ * For N-bit unsigned integer types, this is equivalent to multiplying the two
+ * numbers, then taking the result mod 2**N:
+ *
+ *   WrappingMultiply(uint32_t(42), uint32_t(17)) is 714 (714 mod 2**32);
+ *   WrappingMultiply(uint8_t(16), uint8_t(24)) is 128 (384 mod 2**8);
+ *   WrappingMultiply(uint16_t(3), uint16_t(32768)) is 32768 (98304 mod 2*16).
+ *
+ * Unsigned WrappingMultiply is *not* identical to C++ multiplication: with most
+ * compilers, in rare cases uint16_t*uint16_t can invoke *signed* integer
+ * overflow having undefined behavior!  http://kqueue.org/blog/2013/09/17/cltq/
+ * has the grody details.  (Some compilers do this for uint32_t, not uint16_t.)
+ * So it's especially important to use WrappingMultiply for wraparound math with
+ * uint16_t.  That quirk aside, this function acts like you *thought* C++
+ * unsigned multiplication always worked.
+ *
+ * For N-bit signed integer types, this is equivalent to multiplying the two
+ * numbers wrapped to unsigned, then wrapping the product mod 2**N to the signed
+ * range:
+ *
+ *   WrappingMultiply(int16_t(-456), int16_t(123)) is
+ *     9448 ((-56088 mod 2**16) + 2**16);
+ *   WrappingMultiply(int32_t(-7), int32_t(-9)) is 63 (63 mod 2**32);
+ *   WrappingMultiply(int8_t(16), int8_t(24)) is -128 ((384 mod 2**8) - 2**8);
+ *   WrappingMultiply(int8_t(16), int8_t(255)) is -16 ((4080 mod 2**8) - 2**8).
+ *
+ * There's no equivalent to this operation in C++, as C++ signed
+ * multiplication that overflows has undefined behavior.  But it's how such
+ * multiplication *tends* to behave with most compilers, unless an optimization
+ * or similar -- quite permissibly -- triggers different behavior.
+ ','line_number':221,'multiline':True]
+['text':' namespace mozilla ','line_number':260,'multiline':True]
+['text':' mozilla_WrappingOperations_h ','line_number':262,'multiline':True]

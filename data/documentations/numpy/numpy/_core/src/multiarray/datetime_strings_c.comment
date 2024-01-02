@@ -1,0 +1,331 @@
+['text':'
+ * This file implements string parsing and creation for NumPy datetime.
+ *
+ * Written by Mark Wiebe (mwwiebe@gmail.com)
+ * Copyright (c) 2011 by Enthought, Inc.
+ *
+ * See LICENSE.txt for the license.
+ ','line_number':1,'multiline':True]
+['text':'
+ * Platform-specific time_t typedef. Some platforms use 32 bit, some use 64 bit
+ * and we just use the default with the exception of mingw, where we must use
+ * 64 bit because MSVCRT version 9 does not have the (32 bit) localtime()
+ * symbol, so we need to use the 64 bit version [1].
+ *
+ * [1] http://thread.gmane.org/gmane.comp.gnu.mingw.user/27011
+ ','line_number':28,'multiline':True]
+['text':'
+ * Wraps `localtime` functionality for multiple platforms. This
+ * converts a time value to a time structure in the local timezone.
+ * If size(NPY_TIME_T) == 4, then years must be between 1970 and 2038. If
+ * size(NPY_TIME_T) == 8, then years must be later than 1970. If the years are
+ * not in this range, then get_localtime() will fail on some platforms.
+ *
+ * Returns 0 on success, -1 on failure.
+ *
+ * Notes:
+ * 1) If NPY_TIME_T is 32 bit (i.e. sizeof(NPY_TIME_T) == 4), then the
+ *    maximum year it can represent is 2038 (see [1] for more details). Trying
+ *    to use a higher date like 2041 in the 32 bit "ts" variable below will
+ *    typically result in "ts" being a negative number (corresponding roughly
+ *    to a year ~ 1905). If NPY_TIME_T is 64 bit, then there is no such
+ *    problem in practice.
+ * 2) If the "ts" argument to localtime() is negative, it represents
+ *    years < 1970 both for 32 and 64 bits (for 32 bits the earliest year it can
+ *    represent is 1901, while 64 bits can represent much earlier years).
+ * 3) On Linux, localtime() works for negative "ts". On Windows and in Wine,
+ *    localtime() as well as the localtime_s() and _localtime64_s() functions
+ *    will fail for any negative "ts" and return a nonzero exit number
+ *    (localtime_s, _localtime64_s) or NULL (localtime). This behavior is the
+ *    same for both 32 and 64 bits.
+ *
+ * From this it follows that get_localtime() is only guaranteed to work
+ * correctly on all platforms for years between 1970 and 2038 for 32bit
+ * NPY_TIME_T and years higher than 1970 for 64bit NPY_TIME_T. For
+ * multiplatform code, get_localtime() should never be used outside of this
+ * range.
+ *
+ * [1] https://en.wikipedia.org/wiki/Year_2038_problem
+ ','line_number':42,'multiline':True]
+['text':'
+ * Converts a datetimestruct in UTC to a datetimestruct in local time,
+ * also returning the timezone offset applied. This function works for any year
+ * > 1970 on all platforms and both 32 and 64 bits. If the year < 1970, then it
+ * will fail on some platforms.
+ *
+ * Returns 0 on success, -1 on failure.
+ ','line_number':114,'multiline':True]
+['text':' Make a copy of the input 'dts' to modify ','line_number':130,'multiline':True]
+['text':'
+     * For 32 bit NPY_TIME_T, the get_localtime() function does not work for
+     * years later than 2038, see the comments above get_localtime(). So if the
+     * year >= 2038, we instead call get_localtime() for the year 2036 or 2037
+     * (depending on the leap year) which must work and at the end we add the
+     * 'year_correction' back.
+     ','line_number':133,'multiline':True]
+['text':' 2036 is a leap year ','line_number':142,'multiline':True]
+['text':' = 2036 ','line_number':144,'multiline':True]
+['text':' 2037 is not a leap year ','line_number':147,'multiline':True]
+['text':' = 2037 ','line_number':149,'multiline':True]
+['text':'
+     * Convert everything in 'dts' to a time_t, to minutes precision.
+     * This is POSIX time, which skips leap-seconds, but because
+     * we drop the seconds value from the npy_datetimestruct, everything
+     * is ok for this operation.
+     ','line_number':153,'multiline':True]
+['text':' localtime converts a 'time_t' into a local 'struct tm' ','line_number':163,'multiline':True]
+['text':' This should only fail if year < 1970 on some platforms. ','line_number':165,'multiline':True]
+['text':' Copy back all the values except seconds ','line_number':169,'multiline':True]
+['text':' Extract the timezone offset that was applied ','line_number':176,'multiline':True]
+['text':' Reapply the year 2038 year correction ','line_number':184,'multiline':True]
+['text':'NUMPY_API
+ *
+ * Parses (almost) standard ISO 8601 date strings. The differences are:
+ *
+ * + The date "20100312" is parsed as the year 20100312, not as
+ *   equivalent to "2010-03-12". The '-' in the dates are not optional.
+ * + Only seconds may have a decimal point, with up to 18 digits after it
+ *   (maximum attoseconds precision).
+ * + Either a 'T' as in ISO 8601 or a ' ' may be used to separate
+ *   the date and the time. Both are treated equivalently.
+ * + Doesn't (yet) handle the "YYYY-DDD" or "YYYY-Www" formats.
+ * + Doesn't handle leap seconds (seconds value has 60 in these cases).
+ * + Doesn't handle 24:00:00 as synonym for midnight (00:00:00) tomorrow
+ * + Accepts special values "NaT" (not a time), "Today", (current
+ *   day according to local time) and "Now" (current time in UTC).
+ *
+ * 'str' must be a NULL-terminated string, and 'len' must be its length.
+ * 'unit' should contain -1 if the unit is unknown, or the unit
+ *      which will be used if it is.
+ * 'casting' controls how the detected unit from the string is allowed
+ *           to be cast to the 'unit' parameter.
+ *
+ * 'out' gets filled with the parsed date-time.
+ * 'out_bestunit' gives a suggested unit based on the amount of
+ *      resolution provided in the string, or -1 for NaT.
+ * 'out_special' gets set to 1 if the parsed time was 'today',
+ *      'now', or ''/'NaT'. For 'today', the unit recommended is
+ *      'D', for 'now', the unit recommended is 's', and for 'NaT'
+ *      the unit recommended is 'Y'.
+ *
+ * Returns 0 on success, -1 on failure.
+ ','line_number':190,'multiline':True]
+['text':' Initialize the output to all zeros ','line_number':237,'multiline':True]
+['text':'
+     * Convert the empty string and case-variants of "NaT" to not-a-time.
+     * Tried to use PyOS_stricmp, but that function appears to be broken,
+     * not even matching the strcmp function signature as it should.
+     ','line_number':242,'multiline':True]
+['text':'
+         * Indicate that this was a special value, and
+         * recommend generic units.
+         ','line_number':253,'multiline':True]
+['text':'
+     * The string "today" means take today's date in local time, and
+     * convert it to a date representation. This date representation, if
+     * forced into a time unit, will be at midnight UTC.
+     * This is perhaps a little weird, but done so that the
+     * 'datetime64[D]' type produces the date you expect, rather than
+     * switching to an adjacent day depending on the current time and your
+     * timezone.
+     ','line_number':274,'multiline':True]
+['text':'
+         * Indicate that this was a special value, and
+         * is a date (unit 'D').
+         ','line_number':301,'multiline':True]
+['text':' Check the casting rule ','line_number':312,'multiline':True]
+['text':' The string "now" resolves to the current UTC time ','line_number':325,'multiline':True]
+['text':' Set up a dummy metadata for the conversion ','line_number':334,'multiline':True]
+['text':'
+         * Indicate that this was a special value, and
+         * use 's' because the time() function has resolution
+         * seconds.
+         ','line_number':340,'multiline':True]
+['text':' Check the casting rule ','line_number':352,'multiline':True]
+['text':' Anything else isn't a special value ','line_number':365,'multiline':True]
+['text':' Skip leading whitespace ','line_number':373,'multiline':True]
+['text':' Leading '-' sign for negative year ','line_number':379,'multiline':True]
+['text':' PARSE THE YEAR (digits until the '-' character) ','line_number':389,'multiline':True]
+['text':' Negate the year if necessary ','line_number':397,'multiline':True]
+['text':' Check whether it's a leap-year ','line_number':401,'multiline':True]
+['text':' Next character must be a '-' or the end of the string ','line_number':404,'multiline':True]
+['text':' Can't have a trailing '-' ','line_number':417,'multiline':True]
+['text':' PARSE THE MONTH (2 digits) ','line_number':422,'multiline':True]
+['text':' Next character must be a '-' or the end of the string ','line_number':438,'multiline':True]
+['text':' Can't have a trailing '-' ','line_number':451,'multiline':True]
+['text':' PARSE THE DAY (2 digits) ','line_number':456,'multiline':True]
+['text':' Next character must be a 'T', ' ', or end of string ','line_number':473,'multiline':True]
+['text':' PARSE THE HOURS (2 digits) ','line_number':486,'multiline':True]
+['text':' Next character must be a ':' or the end of the string ','line_number':502,'multiline':True]
+['text':' Can't have a trailing ':' ','line_number':512,'multiline':True]
+['text':' PARSE THE MINUTES (2 digits) ','line_number':517,'multiline':True]
+['text':' Next character must be a ':' or the end of the string ','line_number':533,'multiline':True]
+['text':' Can't have a trailing ':' ','line_number':543,'multiline':True]
+['text':' PARSE THE SECONDS (2 digits) ','line_number':548,'multiline':True]
+['text':' Next character may be a '.' indicating fractional seconds ','line_number':564,'multiline':True]
+['text':' PARSE THE MICROSECONDS (0 to 6 digits) ','line_number':574,'multiline':True]
+['text':' PARSE THE PICOSECONDS (0 to 6 digits) ','line_number':596,'multiline':True]
+['text':' PARSE THE ATTOSECONDS (0 to 6 digits) ','line_number':618,'multiline':True]
+['text':' 2016-01-14, 1.11 ','line_number':642,'multiline':True]
+['text':' UTC specifier ','line_number':651,'multiline':True]
+['text':' Time zone offset ','line_number':661,'multiline':True]
+['text':' The hours offset ','line_number':671,'multiline':True]
+['text':' The minutes offset is optional ','line_number':687,'multiline':True]
+['text':' Optional ':' ','line_number':689,'multiline':True]
+['text':' The minutes offset (at the end of the string) ','line_number':695,'multiline':True]
+['text':' Apply the time zone offset ','line_number':712,'multiline':True]
+['text':' Skip trailing whitespace ','line_number':720,'multiline':True]
+['text':' Check the casting rule ','line_number':735,'multiline':True]
+['text':'NUMPY_API
+ *
+ * Provides a string length to use for converting datetime
+ * objects with the given local and unit settings.
+ ','line_number':757,'multiline':True]
+['text':' If no unit is provided, return the maximum length ','line_number':769,'multiline':True]
+['text':' Generic units can only be used to represent NaT ','line_number':772,'multiline':True]
+['text':' "###" ','line_number':775,'multiline':True]
+['text':' "###" ','line_number':777,'multiline':True]
+['text':' "###" ','line_number':779,'multiline':True]
+['text':' "###" ','line_number':781,'multiline':True]
+['text':' "###" ','line_number':783,'multiline':True]
+['text':' ".###" ','line_number':785,'multiline':True]
+['text':' ":##" ','line_number':787,'multiline':True]
+['text':' ":##" ','line_number':789,'multiline':True]
+['text':' "T##" ','line_number':791,'multiline':True]
+['text':' "-##" ','line_number':794,'multiline':True]
+['text':' "-##" ','line_number':796,'multiline':True]
+['text':' 64-bit year ','line_number':798,'multiline':True]
+['text':' "+####" or "-####" ','line_number':804,'multiline':True]
+['text':' "Z" ','line_number':807,'multiline':True]
+['text':' NULL terminator ','line_number':811,'multiline':True]
+['text':'
+ * Finds the largest unit whose value is nonzero, and for which
+ * the remainder for the rest of the units is zero.
+ ','line_number':816,'multiline':True]
+['text':'NUMPY_API
+ *
+ * Converts an npy_datetimestruct to an (almost) ISO 8601
+ * NULL-terminated string. If the string fits in the space exactly,
+ * it leaves out the NULL terminator and returns success.
+ *
+ * The differences from ISO 8601 are the 'NaT' string, and
+ * the number of year digits is >= 4 instead of strictly 4.
+ *
+ * If 'local' is non-zero, it produces a string in local time with
+ * a +-#### timezone offset. If 'local' is zero and 'utc' is non-zero,
+ * produce a string ending with 'Z' to denote UTC. By default, no time
+ * zone information is attached.
+ *
+ * 'base' restricts the output to that unit. Set 'base' to
+ * -1 to auto-detect a base after which all the values are zero.
+ *
+ *  'tzoffset' is used if 'local' is enabled, and 'tzoffset' is
+ *  set to a value other than -1. This is a manual override for
+ *  the local time zone to use, as an offset in minutes.
+ *
+ *  'casting' controls whether data loss is allowed by truncating
+ *  the data to a coarser unit. This interacts with 'local', slightly,
+ *  in order to form a date unit string as a local time, the casting
+ *  must be unsafe.
+ *
+ *  Returns 0 on success, -1 on failure (for example if the output
+ *  string was too short).
+ ','line_number':861,'multiline':True]
+['text':' Handle NaT, and treat a datetime with generic units as NaT ','line_number':903,'multiline':True]
+['text':'
+     * Only do local time within a reasonable year range. The years
+     * earlier than 1970 are not made local, because the Windows API
+     * raises an error when they are attempted (see the comments above the
+     * get_localtime() function). For consistency, this
+     * restriction is applied to all platforms.
+     *
+     * Note that this only affects how the datetime becomes a string.
+     * The result is still completely unambiguous, it only means
+     * that datetimes outside this range will not include a time zone
+     * when they are printed.
+     ','line_number':918,'multiline':True]
+['text':' Automatically detect a good unit ','line_number':934,'multiline':True]
+['text':'
+         * If there's a timezone, use at least minutes precision,
+         * and never split up hours and minutes by default
+         ','line_number':937,'multiline':True]
+['text':' Don't split up dates by default ','line_number':944,'multiline':True]
+['text':'
+     * Print weeks with the same precision as days.
+     *
+     * TODO: Could print weeks with YYYY-Www format if the week
+     *       epoch is a Monday.
+     ','line_number':949,'multiline':True]
+['text':' Use the C API to convert from UTC to local time ','line_number':959,'multiline':True]
+['text':' Set dts to point to our local time instead of the UTC time ','line_number':966,'multiline':True]
+['text':' Use the manually provided tzoffset ','line_number':969,'multiline':True]
+['text':' Make a copy of the npy_datetimestruct we can modify ','line_number':971,'multiline':True]
+['text':' Set and apply the required timezone offset ','line_number':975,'multiline':True]
+['text':'
+     * Now the datetimestruct data is in the final form for
+     * the string representation, so ensure that the data
+     * is being cast according to the casting rule.
+     ','line_number':980,'multiline':True]
+['text':' Producing a date as a local time is always 'unsafe' ','line_number':986,'multiline':True]
+['text':' Only 'unsafe' and 'same_kind' allow data loss ','line_number':993,'multiline':True]
+['text':' YEAR ','line_number':1011,'multiline':True]
+['text':'
+     * Can't use PyOS_snprintf, because it always produces a '\0'
+     * character at the end, and NumPy string types are permitted
+     * to have data all the way to the end of the buffer.
+     ','line_number':1012,'multiline':True]
+['text':' If it ran out of space or there isn't space for the NULL terminator ','line_number':1022,'multiline':True]
+['text':' Stop if the unit is years ','line_number':1029,'multiline':True]
+['text':' MONTH ','line_number':1037,'multiline':True]
+['text':' Stop if the unit is months ','line_number':1053,'multiline':True]
+['text':' DAY ','line_number':1061,'multiline':True]
+['text':' Stop if the unit is days ','line_number':1077,'multiline':True]
+['text':' HOUR ','line_number':1085,'multiline':True]
+['text':' Stop if the unit is hours ','line_number':1101,'multiline':True]
+['text':' MINUTE ','line_number':1106,'multiline':True]
+['text':' Stop if the unit is minutes ','line_number':1122,'multiline':True]
+['text':' SECOND ','line_number':1127,'multiline':True]
+['text':' Stop if the unit is seconds ','line_number':1143,'multiline':True]
+['text':' MILLISECOND ','line_number':1148,'multiline':True]
+['text':' Stop if the unit is milliseconds ','line_number':1168,'multiline':True]
+['text':' MICROSECOND ','line_number':1173,'multiline':True]
+['text':' Stop if the unit is microseconds ','line_number':1189,'multiline':True]
+['text':' NANOSECOND ','line_number':1194,'multiline':True]
+['text':' Stop if the unit is nanoseconds ','line_number':1210,'multiline':True]
+['text':' PICOSECOND ','line_number':1215,'multiline':True]
+['text':' Stop if the unit is picoseconds ','line_number':1231,'multiline':True]
+['text':' FEMTOSECOND ','line_number':1236,'multiline':True]
+['text':' Stop if the unit is femtoseconds ','line_number':1252,'multiline':True]
+['text':' ATTOSECOND ','line_number':1257,'multiline':True]
+['text':' Add the +/- sign ','line_number':1275,'multiline':True]
+['text':' Add the timezone offset ','line_number':1289,'multiline':True]
+['text':' UTC "Zulu" time ','line_number':1309,'multiline':True]
+['text':' Add a NULL terminator, and return ','line_number':1319,'multiline':True]
+['text':'
+ * This is the Python-exposed datetime_as_string function.
+ ','line_number':1335,'multiline':True]
+['text':' Claim a reference to timezone for later ','line_number':1369,'multiline':True]
+['text':' Get the datetime metadata ','line_number':1382,'multiline':True]
+['text':' Use the metadata's unit for printing by default ','line_number':1388,'multiline':True]
+['text':' Parse the input unit if provided ','line_number':1391,'multiline':True]
+['text':' accept bytes input ','line_number':1396,'multiline':True]
+['text':'
+         * unit == NPY_FR_ERROR means to autodetect the unit
+         * from the datetime data
+         * ','line_number':1415,'multiline':True]
+['text':' Get the input time zone ','line_number':1443,'multiline':True]
+['text':' accept bytes input ','line_number':1447,'multiline':True]
+['text':' Check for the supported string inputs ','line_number':1461,'multiline':True]
+['text':' Otherwise assume it's a Python TZInfo, or acts like one ','line_number':1493,'multiline':True]
+['text':' Get a string size long enough for any datetimes we're given ','line_number':1499,'multiline':True]
+['text':'
+     * For Python3, allocate the output array as a UNICODE array, so
+     * that it will behave as strings properly
+     ','line_number':1501,'multiline':True]
+['text':' This steals the UNICODE dtype reference in op_dtypes[1] ','line_number':1510,'multiline':True]
+['text':' Create the iteration string data type (always ASCII string) ','line_number':1517,'multiline':True]
+['text':' Get the datetime ','line_number':1552,'multiline':True]
+['text':' Convert it to a struct ','line_number':1555,'multiline':True]
+['text':' Get the tzoffset from the timezone if provided ','line_number':1560,'multiline':True]
+['text':' Zero the destination string completely ','line_number':1568,'multiline':True]
+['text':' Convert that into a string ','line_number':1570,'multiline':True]

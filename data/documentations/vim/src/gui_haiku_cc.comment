@@ -1,0 +1,865 @@
+['text':' vi:set ts=8 sts=4 sw=4:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *    BeBox GUI support Copyright 1998 by Olaf Seibert.
+ *		    All Rights Reserved.
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ *
+ * Based on "GUI support for the Buzzword Enhanced Operating System."
+ *
+ * Ported to R4 by Richard Offer <richard@whitequeen.com> Jul 99
+ *
+ * Haiku support by Siarzhuk Zharski <imker@gmx.li> Apr-Mai 2009
+ *
+ ','line_number':1,'multiline':True]
+['text':'
+ * Structure of the Haiku GUI code:
+ *
+ * There are 3 threads.
+ * 1. The initial thread. In gui_mch_prepare() this gets to run the
+ *    BApplication message loop. But before it starts doing that,
+ *    it creates thread 2
+ * 2. The main() thread. This thread is created in gui_mch_prepare()
+ *    and its purpose in life is to call main(argc, argv) again.
+ *    This thread is doing the bulk of the work.
+ * 3. Sooner or later, a window is opened by the main() thread. This
+ *    causes a second message loop to be created: the window thread.
+ *
+ * == alternatively ===
+ *
+ * #if RUN_BAPPLICATION_IN_NEW_THREAD...
+ *
+ * 1. The initial thread. In gui_mch_prepare() this gets to spawn
+ *    thread 2. After doing that, it returns to main() to do the
+ *    bulk of the work, being the main() thread.
+ * 2. Runs the BApplication.
+ * 3. The window thread, just like in the first case.
+ *
+ * This second alternative is cleaner from Vim's viewpoint. However,
+ * the BeBook seems to assume everywhere that the BApplication *must*
+ * run in the initial thread. So perhaps doing otherwise is very wrong.
+ *
+ * However, from a B_SINGLE_LAUNCH viewpoint, the first is better.
+ * If Vim is marked "Single Launch" in its application resources,
+ * and a file is dropped on the Vim icon, and another Vim is already
+ * running, the file is passed on to the earlier Vim. This happens
+ * in BApplication::Run(). So we want Vim to terminate if
+ * BApplication::Run() terminates. (See the BeBook, on BApplication.
+ * However, it seems that the second copy of Vim isn't even started
+ * in this case... which is for the better since I wouldn't know how
+ * to detect this case.)
+ *
+ * Communication between these threads occurs mostly by translating
+ * BMessages that come in and posting an appropriate translation on
+ * the VDCMP (Vim Direct Communication Message Port). Therefore the
+ * actions required for keypresses and window resizes, etc, are mostly
+ * performed in the main() thread.
+ *
+ * A notable exception to this is the Draw() event. The redrawing of
+ * the window contents is performed asynchronously from the window
+ * thread. To make this work correctly, a locking protocol is used when
+ * any thread is accessing the essential variables that are used by
+ * the window thread.
+ *
+ * This locking protocol consists of locking Vim's window. This is both
+ * convenient and necessary.
+ ','line_number':18,'multiline':True]
+['text':' extern "C"','line_number':80,'multiline':False]
+['text':' ---------------- start of header part ----------------','line_number':82,'multiline':False]
+['text':'#include <Alert.h>','line_number':84,'multiline':False]
+['text':'#include <Directory.h>','line_number':92,'multiline':False]
+['text':'#include <Entry.h>','line_number':93,'multiline':False]
+['text':'#include <Font.h>','line_number':97,'multiline':False]
+['text':'#include <MessageQueue.h>','line_number':103,'multiline':False]
+['text':'#include <OS.h>','line_number':104,'multiline':False]
+['text':'#include <Region.h>','line_number':108,'multiline':False]
+['text':'#include <Roster.h>','line_number':110,'multiline':False]
+['text':'#include <SupportDefs.h>','line_number':116,'multiline':False]
+['text':' VimApp seems comparable to the X "vimShell"','line_number':141,'multiline':False]
+['text':' callbacks:','line_number':149,'multiline':False]
+['text':'	  virtual void DispatchMessage(BMessage *m, BHandler *h);','line_number':178,'multiline':False]
+['text':' callbacks:','line_number':196,'multiline':False]
+['text':' callbacks:','line_number':240,'multiline':False]
+['text':' own functions:','line_number':248,'multiline':False]
+['text':'FEAT_TOOLBAR','line_number':340,'multiline':False]
+['text':'FEAT_GUI_TABLINE','line_number':361,'multiline':False]
+['text':' For caching the fonts that are used;','line_number':364,'multiline':False]
+['text':' Vim seems rather sloppy in this regard.','line_number':365,'multiline':False]
+['text':' FEAT_GUI_DIALOG','line_number':461,'multiline':False]
+['text':' ---------------- end of GUI classes ----------------','line_number':463,'multiline':False]
+['text':' These messages are copied through the VDCMP.','line_number':470,'multiline':False]
+['text':' Therefore they ought not to have anything fancy.','line_number':471,'multiline':False]
+['text':' They must be of POD type (Plain Old Data)','line_number':472,'multiline':False]
+['text':' as the C++ standard calls them.','line_number':473,'multiline':False]
+['text':' contains Vim encoding','line_number':482,'multiline':False]
+['text':' ---------------- end of header part ----------------','line_number':554,'multiline':False]
+['text':' for ASCII codes','line_number':560,'multiline':False]
+['text':' for scancodes','line_number':561,'multiline':False]
+['text':' XK_Prior','line_number':575,'multiline':False]
+['text':' XK_Next,','line_number':576,'multiline':False]
+['text':'	{XK_F13,	    'F', '3'},	// would be print screen','line_number':592,'multiline':False]
+['text':' sysreq','line_number':593,'multiline':False]
+['text':' scroll lock','line_number':594,'multiline':False]
+['text':' pause/break','line_number':595,'multiline':False]
+['text':'	{XK_F16,	'F', '6'},','line_number':596,'multiline':False]
+['text':'	{XK_F17,	'F', '7'},','line_number':597,'multiline':False]
+['text':'	{XK_F18,	'F', '8'},','line_number':598,'multiline':False]
+['text':'	{XK_F19,	'F', '9'},','line_number':599,'multiline':False]
+['text':'	 {XK_F20,	'F', 'A'},','line_number':600,'multiline':False]
+['text':'	{XK_F21,	'F', 'B'},','line_number':601,'multiline':False]
+['text':'	{XK_F22,	'F', 'C'},','line_number':602,'multiline':False]
+['text':'	{XK_F23,	'F', 'D'},','line_number':603,'multiline':False]
+['text':'	{XK_F24,	'F', 'E'},','line_number':604,'multiline':False]
+['text':'	{XK_F25,	'F', 'F'},','line_number':605,'multiline':False]
+['text':'	{XK_F26,	'F', 'G'},','line_number':606,'multiline':False]
+['text':'	{XK_F27,	'F', 'H'},','line_number':607,'multiline':False]
+['text':'	{XK_F28,	'F', 'I'},','line_number':608,'multiline':False]
+['text':'	{XK_F29,	'F', 'J'},','line_number':609,'multiline':False]
+['text':'	{XK_F30,	'F', 'K'},','line_number':610,'multiline':False]
+['text':'	{XK_F31,	'F', 'L'},','line_number':611,'multiline':False]
+['text':'	{XK_F32,	'F', 'M'},','line_number':612,'multiline':False]
+['text':'	{XK_F33,	'F', 'N'},','line_number':613,'multiline':False]
+['text':'	{XK_F34,	'F', 'O'},','line_number':614,'multiline':False]
+['text':'	{XK_F35,	'F', 'P'},	// keysymdef.h defines up to F35','line_number':615,'multiline':False]
+['text':'	{XK_Help,	'%', '1'},	// XK_Help','line_number':617,'multiline':False]
+['text':' Keypad keys:','line_number':621,'multiline':False]
+['text':' XK_KP_Left','line_number':622,'multiline':False]
+['text':' XK_KP_Right','line_number':623,'multiline':False]
+['text':' XK_KP_Up','line_number':624,'multiline':False]
+['text':' XK_KP_Down','line_number':625,'multiline':False]
+['text':' XK_KP_Insert','line_number':626,'multiline':False]
+['text':' XK_KP_Delete','line_number':627,'multiline':False]
+['text':' XK_KP_Home','line_number':628,'multiline':False]
+['text':' XK_KP_End','line_number':629,'multiline':False]
+['text':' XK_KP_Prior','line_number':630,'multiline':False]
+['text':' XK_KP_Next','line_number':631,'multiline':False]
+['text':' XK_Undo, keypad 5','line_number':632,'multiline':False]
+['text':' End of list marker:','line_number':635,'multiline':False]
+['text':' ---------------- VimApp ----------------','line_number':641,'multiline':False]
+['text':' Do this to get the side effects of a :cd command','line_number':647,'multiline':False]
+['text':' TODO here we could handle going to a specific position in the dropped','line_number':654,'multiline':False]
+['text':' file (see src/gui_mac.c, deleted in 8.2.1422)','line_number':655,'multiline':False]
+['text':' Update the screen display','line_number':656,'multiline':False]
+['text':' Really handle dropped files and folders.','line_number':660,'multiline':False]
+['text':'fprintf(stderr, "bad!\n"); ','line_number':689,'multiline':True]
+['text':' fprintf(stderr, "case B_REFS_RECEIVED\n");','line_number':705,'multiline':False]
+['text':' Change to parent directory?','line_number':714,'multiline':False]
+['text':' Is it a directory? If so, cd into it.','line_number':721,'multiline':False]
+['text':' don't cd if we already did it','line_number':724,'multiline':False]
+['text':' fprintf(stderr, "%s\n", fname);','line_number':733,'multiline':False]
+['text':' Only do it for the first file/dir','line_number':736,'multiline':False]
+['text':' fprintf(stderr, "case B_ARGV_RECEIVED\n");','line_number':742,'multiline':False]
+['text':' fprintf(stderr, "case default\n");','line_number':753,'multiline':False]
+['text':' Handle the drop, :edit to get to the file','line_number':759,'multiline':False]
+['text':'
+     * Apparently signals are inherited by the created thread -
+     * disable the most annoying ones.
+     ','line_number':784,'multiline':True]
+['text':'
+	 * This can happen if we are set to Single or Exclusive
+	 * Launch. Be nice and open the file(s).
+	 ','line_number':796,'multiline':True]
+['text':' Horrible hack!!! XXX XXX XXX','line_number':811,'multiline':False]
+['text':' The real problem is that b_start_ffc is set too late for','line_number':812,'multiline':False]
+['text':' the initial empty buffer. As a result the window will be','line_number':813,'multiline':False]
+['text':' split instead of abandoned.','line_number':814,'multiline':False]
+['text':'  0.1 s','line_number':817,'multiline':False]
+['text':'
+ * Pass a BMessage on to the main() thread.
+ * Caller must have detached the message.
+ ','line_number':824,'multiline':True]
+['text':'	calls ::RefsReceived','line_number':836,'multiline':False]
+['text':' ---------------- VimWindow ----------------','line_number':885,'multiline':False]
+['text':' Attach the VimFormView','line_number':910,'multiline':False]
+['text':'  disabled in zeta patch','line_number':917,'multiline':False]
+['text':'
+     * Route B_MOUSE_UP messages to MouseUp(), in
+     * a manner that should be compatible with the
+     * intended future system behaviour.
+     ','line_number':921,'multiline':True]
+['text':'	if (!h) h = PreferredHandler();','line_number':928,'multiline':False]
+['text':'	gcc isn't happy without this extra set of braces, complains about','line_number':929,'multiline':False]
+['text':'	jump to case label crosses init of 'class BView * v'','line_number':930,'multiline':False]
+['text':'	richard@whitequeen.com jul 99','line_number':931,'multiline':False]
+['text':' m->PrintToStream();','line_number':935,'multiline':False]
+['text':' the textArea gets the keyboard action','line_number':954,'multiline':False]
+['text':' ---------------- VimFormView ----------------','line_number':975,'multiline':False]
+['text':'  showingTabLine(false),','line_number':985,'multiline':False]
+['text':'  deleting the menuBar leads to SEGV on exit','line_number':998,'multiline':False]
+['text':'  richard@whitequeen.com Jul 99','line_number':999,'multiline':False]
+['text':'  tabLine->PrepareButtonBitmaps();','line_number':1035,'multiline':False]
+['text':' The textArea will be resized later when menus are added','line_number':1042,'multiline':False]
+['text':'
+     * Apparently signals are inherited by the created thread -
+     * disable the most annoying ones.
+     ','line_number':1066,'multiline':True]
+['text':'
+	 * Resize the textArea to fill the space left over by the menu.
+	 * This is somewhat futile since it will be done again once
+	 * menus are added to the menu bar.
+	 ','line_number':1074,'multiline':True]
+['text':'  adjust from width to number of pixels occupied','line_number':1115,'multiline':False]
+['text':'	calls gui_resize_shell(new_width, new_height);','line_number':1129,'multiline':False]
+['text':'
+     * The area below the vertical scrollbar is erased to the colour
+     * set with SetViewColor() automatically, because we had set
+     * B_WILL_DRAW. Resizing the window tight around the vertical
+     * scroll bar also helps to avoid debris.
+     ','line_number':1133,'multiline':True]
+['text':' ---------------- VimTextAreaView ----------------','line_number':1141,'multiline':False]
+['text':' set up global var for fast access','line_number':1168,'multiline':False]
+['text':'
+     * Tell the app server not to erase the view: we will
+     * fill it in completely by ourselves.
+     * (Does this really work? Even if not, it won't harm either.)
+     ','line_number':1171,'multiline':True]
+['text':'
+     * XXX Other ports call here:
+     * out_flush();	 * make sure all output has been processed *
+     * but we can't do that, since it involves too much information
+     * that is owned by other threads...
+     ','line_number':1185,'multiline':True]
+['text':'
+     *	No need to use gui.vimWindow->Lock(): we are locked already.
+     *	However, it would not hurt.
+     ','line_number':1192,'multiline':True]
+['text':' Clear the border areas if needed','line_number':1202,'multiline':False]
+['text':'  left border','line_number':1205,'multiline':False]
+['text':'	top border','line_number':1208,'multiline':False]
+['text':'  right border','line_number':1211,'multiline':False]
+['text':'  bottom border','line_number':1214,'multiline':False]
+['text':' msg->PrintToStream();','line_number':1233,'multiline':False]
+['text':'
+     * Convert special keys to Vim codes.
+     * I think it is better to do it in the window thread
+     * so we use at least a little bit of the potential
+     * of our 2 CPUs. Besides, due to the fantastic mapping
+     * of special keys to UTF-8, we have quite some work to
+     * do...
+     * TODO: I'm not quite happy with detection of special
+     * keys. Perhaps I should use scan codes after all...
+     ','line_number':1235,'multiline':True]
+['text':' This cannot be a special key','line_number':1246,'multiline':False]
+['text':'	should never happen... ???','line_number':1248,'multiline':False]
+['text':'
+	 * For normal, printable ASCII characters, don't look them up
+	 * to check if they might be a special key. They aren't.
+	 ','line_number':1263,'multiline':True]
+['text':'
+	     * Due to the great nature of Be's mapping of special keys,
+	     * viz. into the range of the control characters,
+	     * we can only be sure it is *really* a special key if
+	     * if it is special without using ctrl. So, only if ctrl is
+	     * used, we need to check it unmodified.
+	     ','line_number':1271,'multiline':True]
+['text':'
+		 * Check if still special without the control key.
+		 * This is needed for BACKSPACE: that key does produce
+		 * different values with modifiers (DEL).
+		 * Otherwise we could simply have checked for equality.
+		 ','line_number':1283,'multiline':True]
+['text':'
+	     * If numBytes == 0 that probably always indicates a special key.
+	     * (does not happen yet)
+	     ','line_number':1300,'multiline':True]
+['text':' remap the (non-keypad) ENTER key from \n to \r.','line_number':1309,'multiline':False]
+['text':' Special keys (and a few others) may have modifiers','line_number':1334,'multiline':False]
+['text':'
+		 * For some keys a shift modifier is translated into another key
+		 * code.  Do we need to handle the case where len != 1 and
+		 * string[0] != CSI? (Not for BeOS, since len == 3 implies
+		 * string[0] == CSI...)
+		 ','line_number':1353,'multiline':True]
+['text':'
+     * blank out the pointer if necessary
+     ','line_number':1393,'multiline':True]
+['text':'	calls gui_send_mouse_event()','line_number':1419,'multiline':False]
+['text':'
+     * if our pointer is currently hidden, then we should show it.
+     ','line_number':1421,'multiline':True]
+['text':' gui.vimApp->HideCursor();','line_number':1454,'multiline':False]
+['text':'
+	 * ObscureCursor() would even be easier, but then
+	 * Vim's idea of mouse visibility does not necessarily
+	 * correspond to reality.
+	 ','line_number':1456,'multiline':True]
+['text':' gui.vimApp->ShowCursor();','line_number':1462,'multiline':False]
+['text':' Alt or Meta key','line_number':1475,'multiline':False]
+['text':' Unknown button','line_number':1499,'multiline':False]
+['text':' don't care which one','line_number':1501,'multiline':False]
+['text':' Handle multiple clicks','line_number':1503,'multiline':False]
+['text':' = repeated_click','line_number':1513,'multiline':True]
+['text':' m->PrintToStream();','line_number':1523,'multiline':False]
+['text':' = repeated_click','line_number':1531,'multiline':True]
+['text':'
+     * if our pointer is currently hidden, then we should show it.
+     ','line_number':1539,'multiline':True]
+['text':' could also check m->"buttons"','line_number':1548,'multiline':False]
+['text':' Don't care much about "transit"','line_number':1555,'multiline':False]
+['text':' in case no pointer in msg','line_number':1566,'multiline':False]
+['text':' TODO: sz: break here???','line_number':1643,'multiline':False]
+['text':'
+	 * Try to load other fonts for bold, italic, and bold-italic.
+	 * We should also try to work out what font to use for these when they are
+	 * not specified by X resources, but we don't yet.
+	 ','line_number':1670,'multiline':True]
+['text':'
+     * First we must erase the area, because DrawString won't do
+     * that for us. XXX Most of the time this is a waste of effort
+     * since the bachground has been erased already... DRAW_TRANSP
+     * should be set when appropriate!!!
+     * (Rectangles include the bottom and right edge)
+     ','line_number':1683,'multiline':True]
+['text':'
+ * mchDeleteLines() Lock()s the window by itself.
+ ','line_number':1774,'multiline':True]
+['text':' Clear one column more for when bold has spilled over','line_number':1792,'multiline':False]
+['text':'
+	 * The Draw() callback will be called now if some of the source
+	 * bits were not in the visible region.
+	 ','line_number':1800,'multiline':True]
+['text':' gui_x11_check_copy_area();','line_number':1805,'multiline':False]
+['text':'	}','line_number':1806,'multiline':False]
+['text':'
+ * mchInsertLines() Lock()s the window by itself.
+ ','line_number':1809,'multiline':True]
+['text':' XXX Attempt at a hack:','line_number':1817,'multiline':False]
+['text':' Clear one column more for when bold has spilled over','line_number':1830,'multiline':False]
+['text':'
+	 * The Draw() callback will be called now if some of the source
+	 * bits were not in the visible region.
+	 * However, if we scroll too fast it can't keep up and the
+	 * update region gets messed up. This seems to be because copying
+	 * un-Draw()n bits does not generate Draw() calls for the copy...
+	 * I moved the hack to before the CopyBits() to reduce the
+	 * amount of additional waiting needed.
+	 ','line_number':1836,'multiline':True]
+['text':' gui_x11_check_copy_area();','line_number':1846,'multiline':False]
+['text':'
+ * DrawIMString draws string with IMData.message.
+ ','line_number':1852,'multiline':True]
+['text':' ---------------- VimScrollBar ----------------','line_number':1920,'multiline':False]
+['text':'
+ * BUG: XXX
+ * It seems that BScrollBar determine their direction not from
+ * "posture" but from if they are "tall" or "wide" in shape...
+ *
+ * Also, place them out of sight, because Vim enables them before
+ * they are positioned.
+ ','line_number':1922,'multiline':True]
+['text':'
+     * We want to throttle the amount of scroll messages generated.
+     * Normally I presume you won't get a new message before we've
+     * handled the previous one, but because we're passing them on this
+     * happens very quickly. So instead we keep a counter of how many
+     * scroll events there are (or will be) in the VDCMP, and the
+     * throttling happens at the receiving end.
+     ','line_number':1954,'multiline':True]
+['text':'	calls gui_drag_scrollbar(sb, newValue, TRUE);','line_number':1972,'multiline':False]
+['text':'
+ * When the mouse goes up, report that scrolling has stopped.
+ * MouseUp() is NOT called when the mouse-up occurs outside
+ * the window, even though the thumb does move while the mouse
+ * is outside... This has some funny effects... XXX
+ * So we do special processing when the window de/activates.
+ ','line_number':1975,'multiline':True]
+['text':' BMessage *m = Window()->CurrentMessage();','line_number':1985,'multiline':False]
+['text':' m->PrintToStream();','line_number':1986,'multiline':False]
+['text':'	calls gui_drag_scrollbar(sb, newValue, FALSE);','line_number':1998,'multiline':False]
+['text':' ---------------- VimFont ----------------','line_number':2013,'multiline':False]
+['text':' ---------------- VimDialog ----------------','line_number':2047,'multiline':False]
+['text':'	master view','line_number':2073,'multiline':False]
+['text':'	icon','line_number':2083,'multiline':False]
+['text':'	buttons','line_number':2086,'multiline':False]
+['text':' Check 'v' flag in 'guioptions': vertical button placement.','line_number':2121,'multiline':False]
+['text':'	message view','line_number':2133,'multiline':False]
+['text':'	input view','line_number':2157,'multiline':False]
+['text':'	adjust layout of buttons','line_number':2180,'multiline':False]
+['text':'	try vector icon first?','line_number':2336,'multiline':False]
+['text':'	try bitmap icon now','line_number':2341,'multiline':False]
+['text':'	"client" area view','line_number':2381,'multiline':False]
+['text':'	client view','line_number':2387,'multiline':False]
+['text':'	at first create all controls','line_number':2392,'multiline':False]
+['text':'	layout controls','line_number':2445,'multiline':False]
+['text':'	text control alignment issues','line_number':2478,'multiline':False]
+['text':'	fill lists','line_number':2499,'multiline':False]
+['text':' FEAT_GUI_DIALOG','line_number':2711,'multiline':False]
+['text':'  some forward declaration required by toolbar functions...','line_number':2715,'multiline':False]
+['text':'	first try to load potentially customized $VIRUNTIME/bitmaps/builtin-tools.png','line_number':2771,'multiline':False]
+['text':'  customized not found? dig application resources for "builtin-tools" one','line_number':2774,'multiline':False]
+['text':'	modify grayed bitmap','line_number':2787,'multiline':False]
+['text':'FEAT_TOOLBAR','line_number':2947,'multiline':True]
+['text':'  float size = NULL == normalButtonsBitmap ? 18. : normalButtonsBitmap->Bounds().Height();','line_number':2954,'multiline':False]
+['text':'  return size + ToolbarMargin * 2 + ButtonMargin * 2 + 1;','line_number':2955,'multiline':False]
+['text':'  + ToolbarMargin;','line_number':2956,'multiline':False]
+['text':'  0 means here - no tab found','line_number':2974,'multiline':False]
+['text':'  indexes are 1-based','line_number':2977,'multiline':False]
+['text':'  left button double click on - create new tab','line_number':2985,'multiline':False]
+['text':'  middle button click - close the pointed tab','line_number':2989,'multiline':False]
+['text':'  or create new one in case empty space','line_number':2990,'multiline':False]
+['text':'  right button click - show context menu','line_number':2994,'multiline':False]
+['text':'  default processing','line_number':3009,'multiline':False]
+['text':'	printf("%d:%d:%s\n", i, tabLine->CountTabs(), tabLine->TabAt(i)->Label());','line_number':3036,'multiline':False]
+['text':'  defined(FEAT_GUI_TABLINE)','line_number':3045,'multiline':False]
+['text':' ---------------- ----------------','line_number':3047,'multiline':False]
+['text':'  some global variables','line_number':3049,'multiline':False]
+['text':' Turn CSI into K_CSI.','line_number':3087,'multiline':False]
+['text':'
+		     * If loads of scroll messages queue up, use only the last
+		     * one. Always report when the scrollbar stops dragging.
+		     * This is not perfect yet anyway: these events are queued
+		     * yet again, this time in the keyboard input buffer.
+		     ','line_number':3106,'multiline':True]
+['text':' XXX Signal that scrollbar dragging has stopped?','line_number':3145,'multiline':False]
+['text':' This is needed because we don't get a MouseUp if','line_number':3146,'multiline':False]
+['text':' that happens while outside the window... :-(','line_number':3147,'multiline':False]
+['text':'  gui_update_cursor(TRUE, FALSE);','line_number':3151,'multiline':False]
+['text':'  unrecognised message, ignore it','line_number':3163,'multiline':False]
+['text':'
+     * If size < B_OK, it is an error code.
+     ','line_number':3168,'multiline':True]
+['text':'
+ * Here are some functions to protect access to ScreenLines[] and
+ * LineOffset[]. These are used from the window thread to respond
+ * to a Draw() callback. When that occurs, the window is already
+ * locked by the system.
+ *
+ * Other code that needs to lock is any code that changes these
+ * variables. Other read-only access, or access merely to the
+ * contents of the screen buffer, need not be locked.
+ *
+ * If there is no window, don't call Lock() but do succeed.
+ ','line_number':3174,'multiline':True]
+['text':' Run until Quit() called','line_number':3210,'multiline':False]
+['text':'
+ * Parse the GUI related command-line arguments.  Any arguments used are
+ * deleted from argv, and *argc is decremented accordingly.  This is called
+ * when vim is started, whether or not the GUI has been started.
+ ','line_number':3226,'multiline':True]
+['text':'
+     * We don't have any command line arguments for the BeOS GUI yet,
+     * but this is an excellent place to create our Application object.
+     ','line_number':3236,'multiline':True]
+['text':' May need the port very early on to process RefsReceived()','line_number':3244,'multiline':False]
+['text':'
+	     * This is rather horrible.
+	     * call_main will call main() again...
+	     * There will be no infinite recursion since
+	     * gui.vimApp is set now.
+	     ','line_number':3264,'multiline':True]
+['text':' Run until Quit() called','line_number':3270,'multiline':False]
+['text':' fprintf(stderr, "app.Run() returned...\n");','line_number':3271,'multiline':False]
+['text':'
+	     * This path should be the normal one taken to exit Vim.
+	     * The main() thread calls mch_exit() which calls
+	     * gui_mch_exit() which terminates its thread.
+	     ','line_number':3275,'multiline':True]
+['text':' Don't fork() when starting the GUI. Spawned threads are not','line_number':3284,'multiline':False]
+['text':' duplicated with a fork(). The result is a mess.','line_number':3285,'multiline':False]
+['text':'
+     * XXX Try to determine whether we were started from
+     * the Tracker or the terminal.
+     * It would be nice to have this work, because the Tracker
+     * follows symlinks, so even if you double-click on gvim,
+     * when it is a link to vim it will still pass a command name
+     * of vim...
+     * We try here to see if stdin comes from /dev/null. If so,
+     * (or if there is an error, which should never happen) start the GUI.
+     * This does the wrong thing for vim - </dev/null, and we're
+     * too early to see the command line parsing. Tough.
+     * On the other hand, it starts the gui for vim file & which is nice.
+     ','line_number':3287,'multiline':True]
+['text':'
+ * Check if the GUI can be started.  Called before gvimrc is sourced.
+ * Return OK or FAIL.
+ ','line_number':3311,'multiline':True]
+['text':' TODO: GUI can always be started?','line_number':3318,'multiline':False]
+['text':'
+ * Initialise the GUI.	Create all the windows, set up all the call-backs
+ * etc.
+ ','line_number':3321,'multiline':True]
+['text':'  black','line_number':3329,'multiline':False]
+['text':'  white','line_number':3330,'multiline':False]
+['text':'	initial guess -','line_number':3337,'multiline':False]
+['text':'	correct for my default settings','line_number':3338,'multiline':False]
+['text':'	coordinates are inside window borders','line_number':3340,'multiline':False]
+['text':' hidden and locked','line_number':3346,'multiline':False]
+['text':' Run() unlocks but does not show','line_number':3350,'multiline':False]
+['text':' Get the colors from the "Normal" group (set in syntax.c or in a vimrc','line_number':3352,'multiline':False]
+['text':' file)','line_number':3353,'multiline':False]
+['text':'
+     * Check that none of the colors are the same as the background color
+     ','line_number':3356,'multiline':True]
+['text':' Get the colors for the highlight groups (gui_check_colors() might have','line_number':3361,'multiline':False]
+['text':' changed them)','line_number':3362,'multiline':False]
+['text':' re-init colors and fonts','line_number':3363,'multiline':False]
+['text':' window must exist for this','line_number':3365,'multiline':False]
+['text':'
+ * Called when the foreground or background color has been changed.
+ ','line_number':3370,'multiline':True]
+['text':'  Does this not have too much effect for those small rectangles?','line_number':3380,'multiline':False]
+['text':'
+ * Open the GUI window which was created by a call to gui_mch_init().
+ ','line_number':3386,'multiline':True]
+['text':' Actually open the window','line_number':3395,'multiline':False]
+['text':' Wait until it is truly gone','line_number':3412,'multiline':False]
+['text':'
+     * We are in the main() thread - quit the App thread and
+     * quit ourselves (passing on the exitcode). Use a global since the
+     * value from exit_thread() is only used if wait_for_thread() is
+     * called in time (race condition).
+     ','line_number':3418,'multiline':True]
+['text':' suicide','line_number':3440,'multiline':False]
+['text':' If we are somehow still here, let mch_exit() handle things.','line_number':3444,'multiline':False]
+['text':'
+ * Get the position of the top left corner of the window.
+ ','line_number':3447,'multiline':True]
+['text':'
+ * Set the position of the top left corner of the window to the given
+ * coordinates.
+ ','line_number':3465,'multiline':True]
+['text':'
+ * Set the size of the window to the given width and height in pixels.
+ ','line_number':3478,'multiline':True]
+['text':' TODO: utilize?','line_number':3489,'multiline':False]
+['text':'
+     * We are basically given the size of the VimForm, if I understand
+     * correctly. Since it fills the window completely, this will also
+     * be the size of the window.
+     ','line_number':3491,'multiline':True]
+['text':' set size limits','line_number':3499,'multiline':False]
+['text':'
+	 * Set the resizing alignment depending on font size.
+	 ','line_number':3507,'multiline':True]
+['text':'  window_alignment mode,','line_number':3511,'multiline':False]
+['text':'  int32 h,','line_number':3512,'multiline':False]
+['text':'  int32 hOffset = 0,','line_number':3513,'multiline':False]
+['text':'	int32 width = 0,','line_number':3514,'multiline':False]
+['text':'	int32 widthOffset = 0,','line_number':3515,'multiline':False]
+['text':'  int32 v = 0,','line_number':3516,'multiline':False]
+['text':'  int32 vOffset = 0,','line_number':3517,'multiline':False]
+['text':'  int32 height = 0,','line_number':3518,'multiline':False]
+['text':'	int32 heightOffset = 0','line_number':3519,'multiline':False]
+['text':' XXX approximations...','line_number':3544,'multiline':False]
+['text':' FEAT_GUI_TABLINE','line_number':3571,'multiline':False]
+['text':'
+ * Scrollbar stuff:
+ ','line_number':3578,'multiline':True]
+['text':'
+	 * This function is supposed to be idempotent, but Show()/Hide()
+	 * is not. Therefore we test if they are needed.
+	 ','line_number':3589,'multiline':True]
+['text':'	really only defined in gui.c...','line_number':3621,'multiline':False]
+['text':'
+		 * If the new maximum is lower than the current value,
+		 * setting it would cause the value to be clipped and
+		 * therefore a ValueChanged() call.
+		 * We avoid this by setting the value first, because
+		 * it presumably is <= max.
+		 ','line_number':3625,'multiline':True]
+['text':'
+		 * In the other case, set the range first, since the
+		 * new value might be higher than the current max.
+		 ','line_number':3635,'multiline':True]
+['text':' TODO: Calculate the padding for adjust scrollbar position when the','line_number':3669,'multiline':False]
+['text':' Window is maximized.','line_number':3670,'multiline':False]
+['text':' TODO: Calculate the padding for adjust scrollbar position when the','line_number':3677,'multiline':False]
+['text':' Window is maximized.','line_number':3678,'multiline':False]
+['text':' SBAR_VERT or SBAR_HORIZ','line_number':3685,'multiline':False]
+['text':'
+ * Cursor does not flash
+ ','line_number':3712,'multiline':True]
+['text':'
+ * Cursor blink functions.
+ *
+ * This is a simple state machine:
+ * BLINK_NONE	not blinking at all
+ * BLINK_OFF	blinking, cursor is not shown
+ * BLINK_ON blinking, cursor is shown
+ ','line_number':3721,'multiline':True]
+['text':' TODO','line_number':3746,'multiline':False]
+['text':'
+ * Stop the cursor blinking.  Show the cursor if it wasn't shown.
+ ','line_number':3752,'multiline':True]
+['text':' TODO','line_number':3758,'multiline':False]
+['text':' XtRemoveTimeOut(blink_timer);','line_number':3761,'multiline':False]
+['text':'
+ * Start the cursor blinking.  If it was already blinking, this restarts the
+ * waiting time and shows the cursor.
+ ','line_number':3769,'multiline':True]
+['text':' TODO','line_number':3776,'multiline':False]
+['text':' XtRemoveTimeOut(blink_timer);','line_number':3778,'multiline':False]
+['text':' Only switch blinking on if none of the times is zero','line_number':3779,'multiline':False]
+['text':' XtAppAddTimeOut(app_context, blink_waittime,','line_number':3782,'multiline':False]
+['text':'
+ * Initialise vim to use the font with the given name.	Return FAIL if the font
+ * could not be loaded, OK otherwise.
+ ','line_number':3788,'multiline':True]
+['text':' gui.vimWindow->Unlock();','line_number':3820,'multiline':False]
+['text':' FEAT_GUI_DIALOG','line_number':3825,'multiline':False]
+['text':'  can't do this when GUI not running','line_number':3836,'multiline':False]
+['text':'	storage for locally modified name;','line_number':3839,'multiline':False]
+['text':'	replace underscores with spaces','line_number':3867,'multiline':False]
+['text':'	store the name before strtok corrupt the buffer ;-)','line_number':3872,'multiline':False]
+['text':'  compose for further processing','line_number':3884,'multiline':False]
+['text':'  Set guifont to the name of the selected font.','line_number':3889,'multiline':False]
+['text':'	Replace spaces in the font name with underscores.','line_number':3895,'multiline':False]
+['text':'	Remember font in the static list for later use','line_number':3920,'multiline':False]
+['text':'
+ * Set the current text font.
+ ','line_number':3934,'multiline':True]
+['text':' XXX TODO This is apparently never called...','line_number':3957,'multiline':False]
+['text':'
+ * Adjust gui.char_height (after 'linespace' was changed).
+ ','line_number':3980,'multiline':True]
+['text':' TODO: linespace support?','line_number':3987,'multiline':False]
+['text':' #ifdef FEAT_XFONTSET','line_number':3989,'multiline':False]
+['text':'  if (gui.fontset != NOFONTSET)','line_number':3990,'multiline':False]
+['text':'  {','line_number':3991,'multiline':False]
+['text':'  gui.char_height = fontset_height((XFontSet)gui.fontset) + p_linespace;','line_number':3992,'multiline':False]
+['text':'  gui.char_ascent = fontset_ascent((XFontSet)gui.fontset)','line_number':3993,'multiline':False]
+['text':'  + p_linespace / 2;','line_number':3994,'multiline':False]
+['text':'  }','line_number':3995,'multiline':False]
+['text':'  else','line_number':3996,'multiline':False]
+['text':' #endif','line_number':3997,'multiline':False]
+['text':'int	rootx, rooty, winx, winy;
+      Window	root, child;
+      unsigned int mask;
+
+      if (gui.wid && XQueryPointer(gui.dpy, gui.wid, &root, &child,
+      &rootx, &rooty, &winx, &winy, &mask)) {
+     *x = winx;
+     *y = winy;
+     } else','line_number':4013,'multiline':True]
+['text':'	TODO','line_number':4031,'multiline':False]
+['text':'
+ * This function has been lifted from gui_w32.c and extended a bit.
+ *
+ * Return the Pixel value (color) for the given color name.
+ * Return INVALCOLOR for error.
+ ','line_number':4045,'multiline':True]
+['text':'
+ * Set the current text foreground color.
+ ','line_number':4058,'multiline':True]
+['text':'
+ * Set the current text background color.
+ ','line_number':4072,'multiline':True]
+['text':'
+ * Set the current text special color.
+ ','line_number':4086,'multiline':True]
+['text':' prev_sp_color = color;','line_number':4092,'multiline':False]
+['text':' Return OK if the key with the termcap name "name" is supported.','line_number':4116,'multiline':False]
+['text':' Do a visual beep by reversing the foreground and background colors','line_number':4139,'multiline':False]
+['text':' wait for a few msec','line_number':4147,'multiline':False]
+['text':'
+ * Invert a rectangle from row r, column c, for nr rows and nc columns.
+ ','line_number':4155,'multiline':True]
+['text':'
+ * Iconify the GUI window.
+ ','line_number':4179,'multiline':True]
+['text':'
+ * Bring the Vim window to the foreground.
+ ','line_number':4192,'multiline':True]
+['text':' TODO','line_number':4198,'multiline':False]
+['text':'
+ * Set the window title
+ ','line_number':4202,'multiline':True]
+['text':'
+ * Draw a cursor without focus.
+ ','line_number':4216,'multiline':True]
+['text':' TODO-TODO','line_number':4227,'multiline':False]
+['text':' gui_mch_flush();','line_number':4235,'multiline':False]
+['text':'
+ * Draw part of a cursor, only w pixels wide, and h pixels high.
+ ','line_number':4239,'multiline':True]
+['text':' vertical line should be on the right of current point','line_number':4253,'multiline':False]
+['text':' gui_mch_flush();','line_number':4264,'multiline':False]
+['text':'
+ * Catch up with any queued events.  This may put keyboard input into the
+ * input buffer, call resize call-backs, trigger timers etc.  If there is
+ * nothing in the event queue (& no timers pending), then we return
+ * immediately.
+ ','line_number':4268,'multiline':True]
+['text':' nothing ','line_number':4281,'multiline':True]
+['text':'
+ * GUI input routine called by gui_wait_for_chars().  Waits for a character
+ * from the keyboard.
+ *  wtime == -1	    Wait forever.
+ *  wtime == 0	    This should never happen.
+ *  wtime > 0	    Wait wtime milliseconds for a character.
+ * Returns OK if a character was found to be available within the given time,
+ * or FAIL otherwise.
+ ','line_number':4284,'multiline':True]
+['text':' Stop or start blinking when focus changes','line_number':4312,'multiline':False]
+['text':' Need to recompute the waiting time.','line_number':4331,'multiline':False]
+['text':'
+	 * Don't use gui_mch_update() because then we will spin-lock until a
+	 * char arrives, instead we use gui_haiku_process_event() to hang until
+	 * an event arrives.  No need to check for input_buf_full because we
+	 * are returning as soon as it contains a single char.
+	 ','line_number':4345,'multiline':True]
+['text':' includes B_TIMED_OUT','line_number':4355,'multiline':False]
+['text':'
+	 * Calculate how much longer we're willing to wait for the
+	 * next event.
+	 ','line_number':4358,'multiline':True]
+['text':'
+ * Output routines.
+ ','line_number':4373,'multiline':True]
+['text':'
+ * Flush any output to the screen. This is typically called before
+ * the app goes to sleep.
+ ','line_number':4377,'multiline':True]
+['text':'	does this need to lock the window? Apparently not but be safe.','line_number':4384,'multiline':False]
+['text':'
+ * Clear a rectangular region of the screen from text pos (row1, col1) to
+ * (row2, col2) inclusive.
+ ','line_number':4392,'multiline':True]
+['text':'
+ * Delete the given number of lines from the given row, scrolling up any
+ * text further down within the scroll region.
+ ','line_number':4418,'multiline':True]
+['text':'
+ * Insert the given number of lines before the given row, scrolling down any
+ * following text within the scroll region.
+ ','line_number':4430,'multiline':True]
+['text':'
+ * Menu stuff.
+ ','line_number':4443,'multiline':True]
+['text':' It will be in the right place anyway','line_number':4466,'multiline':False]
+['text':'
+ * Add a sub menu to the menu bar.
+ ','line_number':4469,'multiline':True]
+['text':'	popup menu - just create it unattached','line_number':4479,'multiline':False]
+['text':' Major re-write of the menu code, it was failing with memory corruption when','line_number':4493,'multiline':False]
+['text':' we started loading multiple files (the Buffer menu)','line_number':4494,'multiline':False]
+['text':'','line_number':4495,'multiline':False]
+['text':' Note we don't use the preference values yet, all are inserted into the','line_number':4496,'multiline':False]
+['text':' menubar on a first come-first served basis...','line_number':4497,'multiline':False]
+['text':'','line_number':4498,'multiline':False]
+['text':' richard@whitequeen.com jul 99','line_number':4499,'multiline':False]
+['text':'  make sure we don't try and add the same menu twice. The Buffers menu tries to','line_number':4507,'multiline':False]
+['text':'  do this and Be starts to crash...','line_number':4508,'multiline':False]
+['text':'	when we add a BMenu to another Menu, it creates the interconnecting BMenuItem','line_number':4516,'multiline':False]
+['text':'	Now it's safe to query the menu for the associated MenuItem...','line_number':4519,'multiline':False]
+['text':' no tearoff menus','line_number':4530,'multiline':False]
+['text':'
+ * Add a menu item to a menu
+ ','line_number':4542,'multiline':True]
+['text':' TODO: use menu->actext','line_number':4553,'multiline':False]
+['text':' This is difficult, since on Be, an accelerator must be a single char','line_number':4554,'multiline':False]
+['text':' and a lot of Vim ones are the standard VI commands.','line_number':4555,'multiline':False]
+['text':'','line_number':4556,'multiline':False]
+['text':' Punt for Now...','line_number':4557,'multiline':False]
+['text':' richard@whiequeen.com jul 99','line_number':4558,'multiline':False]
+['text':'
+ * Destroy the machine specific menu widget.
+ ','line_number':4591,'multiline':True]
+['text':'
+	     * Detach this menu from its parent, so that it is not deleted
+	     * twice once we get to delete that parent.
+	     * Deleting a BMenuItem also deletes the associated BMenu, if any
+	     * (which does not have any items anymore since they were
+	     * removed and deleted before).
+	     ','line_number':4610,'multiline':True]
+['text':'
+		 * If we removed the last item from the menu bar,
+		 * resize it out of sight.
+		 ','line_number':4621,'multiline':True]
+['text':'
+ * Make a menu either grey or not grey.
+ ','line_number':4640,'multiline':True]
+['text':'
+ * Make menu item hidden or not hidden
+ ','line_number':4663,'multiline':True]
+['text':'
+ * This is called after setting all the menus to grey/hidden or not.
+ ','line_number':4675,'multiline':True]
+['text':' Nothing to do in BeOS','line_number':4681,'multiline':False]
+['text':' FEAT_MENU','line_number':4704,'multiline':False]
+['text':' Mouse stuff','line_number':4706,'multiline':False]
+['text':'
+ * Clipboard stuff, for cutting and pasting text to other windows.
+ ','line_number':4709,'multiline':True]
+['text':'
+ * Get the current selection and put it in the clipboard register.
+ ','line_number':4715,'multiline':True]
+['text':' m->PrintToStream();','line_number':4724,'multiline':False]
+['text':'
+	     * Try to get the special vim selection type first
+	     ','line_number':4740,'multiline':True]
+['text':' Otherwise use heuristic as documented','line_number':4758,'multiline':False]
+['text':'
+ * Make vim the owner of the current selection.
+ ','line_number':4766,'multiline':True]
+['text':' Nothing needs to be done here','line_number':4772,'multiline':False]
+['text':'
+ * Make vim the owner of the current selection.  Return OK upon success.
+ ','line_number':4775,'multiline':True]
+['text':'
+     * Never actually own the clipboard.  If another application sets the
+     * clipboard, we don't want to think that we still own it.
+     ','line_number':4781,'multiline':True]
+['text':'
+ * Send the current selection to the clipboard.
+ ','line_number':4788,'multiline':True]
+['text':' If the '*' register isn't already filled in, fill it in now','line_number':4800,'multiline':False]
+['text':' Add type of selection','line_number':4816,'multiline':False]
+['text':' FEAT_CLIPBOARD','line_number':4836,'multiline':False]
+['text':'
+ * Pop open a file browser and return the file selected, in allocated memory,
+ * or NULL if Cancel is hit.
+ *  saving  - TRUE if the file will be saved to, FALSE if it will be opened.
+ *  title   - Title message for the file browser dialog.
+ *  dflt    - Default name of file.
+ *  ext     - Default extension to be added to files without extensions.
+ *  initdir - directory in which to open the browser (NULL = current dir)
+ *  filter  - Filter for matched files to choose from.
+ *  Has a format like this:
+ *  "C Files (*.c)\0*.c\0"
+ *  "All Files\0*.*\0\0"
+ *  If these two strings were concatenated, then a choice of two file
+ *  filters will be selectable to the user.  Then only matching files will
+ *  be shown in the browser.  If NULL, the default allows all files.
+ *
+ *  *NOTE* - the filter string must be terminated with TWO nulls.
+ ','line_number':4839,'multiline':True]
+['text':' FEAT_BROWSE','line_number':4896,'multiline':False]
+['text':'
+ * Create a dialog dynamically from the parameter strings.
+ * type	    = type of dialog (question, alert, etc.)
+ * title    = dialog title. may be NULL for default title.
+ * message  = text to display. Dialog sizes to accommodate it.
+ * buttons  = '\n' separated list of button captions, default first.
+ * dfltbutton	= number of default button.
+ *
+ * This routine returns 1 if the first button is pressed,
+ *	    2 for the second, etc.
+ *
+ *	    0 indicates Esc was pressed.
+ *	    -1 for unexpected error
+ *
+ * If stubbing out this fn, return 1.
+ ','line_number':4901,'multiline':True]
+['text':' FEAT_GUI_DIALOG','line_number':4933,'multiline':False]
+['text':'
+ * Return the RGB value of a pixel as long.
+ ','line_number':4936,'multiline':True]
+['text':' TODO','line_number':4952,'multiline':False]
+['text':'
+ * Show or hide the tabline.
+ ','line_number':4990,'multiline':True]
+['text':'
+ * Return TRUE when tabline is displayed.
+ ','line_number':5020,'multiline':True]
+['text':'
+ * Update the labels of the tabline.
+ ','line_number':5030,'multiline':True]
+['text':' Add a label for each tab page.  They all contain the same text area.','line_number':5047,'multiline':False]
+['text':' Remove any old labels.','line_number':5064,'multiline':False]
+['text':'
+ * Set the current tab to "nr".  First tab is 1.
+ ','line_number':5074,'multiline':True]
+['text':' FEAT_GUI_TABLINE','line_number':5092,'multiline':False]

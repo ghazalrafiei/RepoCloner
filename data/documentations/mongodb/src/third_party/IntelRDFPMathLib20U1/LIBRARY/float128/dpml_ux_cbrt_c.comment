@@ -1,0 +1,96 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]
+['text':'
+**  The algorithms used for the cbrt function are detailed in the X_FLOAT_NOTES
+**  file (notes 18.*).
+**
+**  The basic approach is to factor the input x into f * 2^n, where 
+**  1 <= f < 2  and  n = 3*m + i, where i = 0, 1, or 2.  Then 
+**
+**		cbrt(x) = cbrt(2^n * f)
+**		        = cbrt(2^(3*m+i) * f)
+**		        = 2^m * cbrt(2^i) * cbrt(f).
+**
+** To get cbrt(f), we do a poly approx y = P(f) good to about 15 bits, then
+** perform one Newton's iterations in double precision to get 45 bits and then
+** one Newton's iteration in unpacked format good to about 135 bits. We fetch
+** 2^(i/3) from a table in double precision and incorporate during the 
+** double precision Newton's iteration.  The result of the unpacked Newton's
+** iteration is scaled by m and has its sign bit adjusted to get the final
+** result.
+**
+** The poly coefficients and a small table of the roots, 2^(i/3), is generated
+** from dpml_cbrt.c and is shared between this file and the routines generated
+** form dpml_cbrt.c
+**
+** Given z, an approximation to 1/cbrt(f)^2, the double precision Newton's 
+** iteration is of the form:
+**
+**  	y <--  z * f * (14 -  7 * z^3 * f^2  +  2 * z^6 * f^4 ) * 1/9
+**
+** and the unpacked iteration is:
+**
+**	       y    y^3 + 2*x
+**	y <-- --- * ---------
+**	       2    y^3 + x/2
+**
+**
+**  Instead of unbiasing the exponent right away, we add and later subtract
+**  small corrective quantities (ADD_ADJUST, SUB_ADJUST) to get rid of the
+**  BIAS/3 exactly:
+**
+**    (true_expon + BIAS + ADD_ADJUST)*(1/3) - SUB_ADJUST =  true_expon/3
+**
+**  true_expon + BIAS >= 0, so we can do unsigned arithmetic, which has
+**  better performance.
+','line_number':37,'multiline':True]
+['text':'
+** Instead of doing integer division, we can multiply by an integer that
+** corresponds to 1/3 in "fixed point".
+**
+** If the number is small enough and in the right form, the compiler may
+** optimize the multiply into shifts and adds.
+','line_number':85,'multiline':True]
+['text':'
+    **  Get f as a double precision value z ~ 1/cbrt(f)^2 by a polynomial
+    **  approximation
+    ','line_number':124,'multiline':True]
+['text':' Get m and i ','line_number':143,'multiline':True]
+['text':'
+    ** Now evaluate the Newton's iterations and incorporate the factor of
+    ** 2^(i/3).  The grouping chosen here is an attempt to maximize parallelism
+    ** and is probably not a good choice on a sequential machine
+    ','line_number':149,'multiline':True]
+['text':' Convert the double precision result to unpacked x_float ','line_number':162,'multiline':True]
+['text':' Do the Newton's iteration ','line_number':183,'multiline':True]
+['text':' 2*x ','line_number':188,'multiline':True]
+['text':' x/2 ','line_number':191,'multiline':True]
+['text':' Generate coefficients and polynomial form for 1/cbrt(f)^2 ','line_number':241,'multiline':True]
+['text':' Now get powers of cbrt(2) ','line_number':250,'multiline':True]
+['text':' Last but not least, the Newton's iteration constants ','line_number':258,'multiline':True]

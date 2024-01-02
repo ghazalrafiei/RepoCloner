@@ -1,0 +1,191 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]
+['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]
+['text':'
+*******************************************************************************
+* Copyright (C) 2013-2015, International Business Machines
+* Corporation and others.  All Rights Reserved.
+*******************************************************************************
+* collationfastlatin.h
+*
+* created on: 2013aug09
+* created by: Markus W. Scherer
+','line_number':3,'multiline':True]
+['text':' all static ','line_number':26,'multiline':True]
+['text':'*
+     * Fast Latin format version (one byte 1..FF).
+     * Must be incremented for any runtime-incompatible changes,
+     * in particular, for changes to any of the following constants.
+     *
+     * When the major version number of the main data format changes,
+     * we can reset this fast Latin version to 1.
+     ','line_number':28,'multiline':True]
+['text':' UTF-8 lead byte of LATIN_MAX','line_number':41,'multiline':False]
+['text':' excludes U+FFFE & U+FFFF','line_number':46,'multiline':False]
+['text':' Note on the supported weight ranges:','line_number':49,'multiline':False]
+['text':' Analysis of UCA 6.3 and CLDR 23 non-search tailorings shows that','line_number':50,'multiline':False]
+['text':' the CEs for characters in the above ranges, excluding expansions with length >2,','line_number':51,'multiline':False]
+['text':' excluding contractions of >2 characters, and other restrictions','line_number':52,'multiline':False]
+['text':' (see the builder's getCEsFromCE32()),','line_number':53,'multiline':False]
+['text':' use at most about 150 primary weights,','line_number':54,'multiline':False]
+['text':' where about 94 primary weights are possibly-variable (space/punct/symbol/currency),','line_number':55,'multiline':False]
+['text':' at most 4 secondary before-common weights,','line_number':56,'multiline':False]
+['text':' at most 4 secondary after-common weights,','line_number':57,'multiline':False]
+['text':' at most 16 secondary high weights (in secondary CEs), and','line_number':58,'multiline':False]
+['text':' at most 4 tertiary after-common weights.','line_number':59,'multiline':False]
+['text':' The following ranges are designed to support slightly more weights than that.','line_number':60,'multiline':False]
+['text':' (en_US_POSIX is unusual: It creates about 64 variable + 116 Latin primaries.)','line_number':61,'multiline':False]
+['text':' Digits may use long primaries (preserving more short ones)','line_number':63,'multiline':False]
+['text':' or short primaries (faster) without changing this data structure.','line_number':64,'multiline':False]
+['text':' (If we supported numeric collation, then digits would have to have long primaries','line_number':65,'multiline':False]
+['text':' so that special handling does not affect the fast path.)','line_number':66,'multiline':False]
+['text':' bits 15..10','line_number':68,'multiline':False]
+['text':' bits 9..0 for expansions & contractions','line_number':69,'multiline':False]
+['text':' bits 9..5','line_number':70,'multiline':False]
+['text':' bits 4..3','line_number':71,'multiline':False]
+['text':' bits 15..3','line_number':72,'multiline':False]
+['text':' bits 2..0','line_number':73,'multiline':False]
+['text':' 0xfc00fc00','line_number':77,'multiline':False]
+['text':' 0xfff8fff8','line_number':79,'multiline':False]
+['text':' 0x3e003e0','line_number':81,'multiline':False]
+['text':' 0x180018','line_number':83,'multiline':False]
+['text':' 0x70007','line_number':85,'multiline':False]
+['text':'*
+     * Contraction with one fast Latin character.
+     * Use INDEX_MASK to find the start of the contraction list after the fixed table.
+     * The first entry contains the default mapping.
+     * Otherwise use CONTR_CHAR_MASK for the contraction character index
+     * (in ascending order).
+     * Use CONTR_LENGTH_SHIFT for the length of the entry
+     * (1=BAIL_OUT, 2=one CE, 3=two CEs).
+     *
+     * Also, U+0000 maps to a contraction entry, so that the fast path need not
+     * check for NUL termination.
+     * It usually maps to a contraction list with only the completely ignorable default value.
+     ','line_number':87,'multiline':True]
+['text':'*
+     * An expansion encodes two CEs.
+     * Use INDEX_MASK to find the pair of CEs after the fixed table.
+     *
+     * The higher a mini CE value, the easier it is to process.
+     * For expansions and higher, no context needs to be considered.
+     ','line_number':101,'multiline':True]
+['text':'*
+     * Encodes one CE with a long/low mini primary (there are 128).
+     * All potentially-variable primaries must be in this range,
+     * to make the short-primary path as fast as possible.
+     ','line_number':109,'multiline':True]
+['text':'*
+     * Encodes one CE with a short/high primary (there are 60),
+     * plus a secondary CE if the secondary weight is high.
+     * Fast handling: At least all letter primaries should be in this range.
+     ','line_number':117,'multiline':True]
+['text':'* The highest primary weight is reserved for U+FFFF. ','line_number':124,'multiline':True]
+['text':' must add SEC_OFFSET','line_number':127,'multiline':False]
+['text':' 5 before common','line_number':129,'multiline':False]
+['text':' 6 after common','line_number':132,'multiline':False]
+['text':' 20 high secondaries','line_number':133,'multiline':False]
+['text':'*
+     * Lookup: Add this offset to secondary weights, except for completely ignorable CEs.
+     * Must be greater than any special value, e.g., MERGE_WEIGHT.
+     * The exact value is not relevant for the format version.
+     ','line_number':136,'multiline':True]
+['text':' 0x200020','line_number':145,'multiline':False]
+['text':' case bits include this offset','line_number':149,'multiline':False]
+['text':' 0x80008','line_number':150,'multiline':False]
+['text':' must add TER_OFFSET','line_number':152,'multiline':False]
+['text':' 7 after common','line_number':153,'multiline':False]
+['text':'*
+     * Lookup: Add this offset to tertiary weights, except for completely ignorable CEs.
+     * Must be greater than any special value, e.g., MERGE_WEIGHT.
+     * Must be greater than case bits as well, so that with combined case+tertiary weights
+     * plus the offset the tertiary bits does not spill over into the case bits.
+     * The exact value is not relevant for the format version.
+     ','line_number':155,'multiline':True]
+['text':' end of string','line_number':170,'multiline':False]
+['text':'*
+     * Contraction result first word bits 8..0 contain the
+     * second contraction character, as a char index 0..NUM_FAST_CHARS-1.
+     * Each contraction list is terminated with a word containing CONTR_CHAR_MASK.
+     ','line_number':173,'multiline':True]
+['text':'*
+     * Contraction result first word bits 10..9 contain the result length:
+     * 1=bail out, 2=one mini CE, 3=two mini CEs
+     ','line_number':179,'multiline':True]
+['text':'*
+     * Comparison return value when the regular comparison must be used.
+     * The exact value is not relevant for the format version.
+     ','line_number':185,'multiline':True]
+['text':' Not a fast Latin character.','line_number':197,'multiline':False]
+['text':' Note: U+FFFE & U+FFFF are forbidden in tailorings','line_number':198,'multiline':False]
+['text':' and thus do not occur in any contractions.','line_number':199,'multiline':False]
+['text':'*
+     * Computes the options value for the compare functions
+     * and writes the precomputed primary weights.
+     * Returns -1 if the Latin fastpath is not supported for the data and settings.
+     * The capacity must be LATIN_LIMIT.
+     ','line_number':204,'multiline':True]
+['text':' variable','line_number':235,'multiline':False]
+['text':' special mini CE','line_number':236,'multiline':False]
+['text':' no constructor','line_number':252,'multiline':False]
+['text':'
+ * Format of the CollationFastLatin data table.
+ * CollationFastLatin::VERSION = 2.
+ *
+ * This table contains data for a Latin-text collation fastpath.
+ * The data is stored as an array of uint16_t which contains the following parts.
+ *
+ * uint16_t  -- version & header length
+ *   Bits 15..8: version, must match the VERSION
+ *         7..0: length of the header
+ *
+ * uint16_t varTops[header length - 1]
+ *   Version 2:
+ *   varTops[m] is the highest CollationFastLatin long-primary weight
+ *   of supported maxVariable group m
+ *   (special reorder group space, punct, symbol, currency).
+ *
+ *   Version 1:
+ *   Each of these values maps the variable top lead byte of a supported maxVariable group
+ *   to the highest CollationFastLatin long-primary weight.
+ *   The values are stored in ascending order.
+ *   Bits 15..7: max fast-Latin long-primary weight (bits 11..3 shifted left by 4 bits)
+ *         6..0: regular primary lead byte
+ *
+ * uint16_t miniCEs[0x1c0]
+ *   A mini collation element for each character U+0000..U+017F and U+2000..U+203F.
+ *   Each value encodes one or two mini CEs (two are possible if the first one
+ *   has a short mini primary and the second one is a secondary CE, i.e., primary == 0),
+ *   or points to an expansion or to a contraction table.
+ *   U+0000 always has a contraction entry,
+ *   so that NUL-termination need not be tested in the fastpath.
+ *   If the collation elements for a character or contraction cannot be encoded in this format,
+ *   then the BAIL_OUT value is stored.
+ *   For details see the comments for the class constants.
+ *
+ * uint16_t expansions[variable length];
+ *   Expansion mini CEs contain an offset relative to just after the miniCEs table.
+ *   An expansions contains exactly 2 mini CEs.
+ *
+ * uint16_t contractions[variable length];
+ *   Contraction mini CEs contain an offset relative to just after the miniCEs table.
+ *   It points to a list of tuples which map from a contraction suffix character to a result.
+ *   First uint16_t of each tuple:
+ *     Bits 10..9: Length of the result (1..3), see comments on CONTR_LENGTH_SHIFT.
+ *     Bits  8..0: Contraction character, see comments on CONTR_CHAR_MASK.
+ *   This is followed by 0, 1, or 2 uint16_t according to the length.
+ *   Each list is terminated by an entry with CONTR_CHAR_MASK.
+ *   Each list starts with such an entry which also contains the default result
+ *   for when there is no contraction match.
+ *
+ * -----------------
+ * Changes for version 2 (ICU 55)
+ *
+ * Special reorder groups do not necessarily start on whole primary lead bytes any more.
+ * Therefore, the varTops data has a new format:
+ * Version 1 stored the lead bytes of the highest root primaries for
+ * the maxVariable-supported special reorder groups.
+ * Now the top 16 bits would need to be stored,
+ * and it is simpler to store only the fast-Latin weights.
+ ','line_number':255,'multiline':True]
+['text':' !UCONFIG_NO_COLLATION','line_number':318,'multiline':False]
+['text':' __COLLATIONFASTLATIN_H__','line_number':319,'multiline':False]

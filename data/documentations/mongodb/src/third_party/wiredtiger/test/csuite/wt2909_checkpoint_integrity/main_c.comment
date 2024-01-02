@@ -1,0 +1,185 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]
+['text':'
+ * JIRA ticket reference: WT-2909 Test case description:
+ *
+ * This test attempts to check the integrity of checkpoints by injecting failures (by means of a
+ * custom file system) and then trying to recover. To insulate the top level program from various
+ * crashes that may occur when injecting failures, the "populate" code runs in another process, and
+ * is expected to sometimes fail. Then the top level program runs recovery (with the normal file
+ * system) and checks the results. Any failure at the top level indicates a checkpoint integrity
+ * problem.
+ *
+ * Each subtest uses the same kind of schema and data, the only variance is when the faults are
+ * injected. At the moment, this test only injects during checkpoints, and only injects write
+ * failures. It varies in the number of successful writes that occur before an injected failure
+ * (during a checkpoint operation), this can be indicated with "-o N". When N is not specified, the
+ * test attempts to find the optimal range of N for testing. Clearly when N is large, then the
+ * checkpoint may be successfully written, and the data represented by the checkpoint will be fully
+ * present. When N is small, nothing of interest is written and no data is present. To find the
+ * sweet spot where interesting failures occur, the test does a binary search to find the
+ * approximate N that divides the "small" and "large" cases. This is not strictly deterministic, a
+ * given N may give different results on different runs. But approximate optimal N can be
+ * determined, allowing a series of additional tests clustered around this N.
+ *
+ * The data is stored in two tables, one having indices. Both tables have the same keys and are
+ * updated with the same key in a single transaction.
+ *
+ * The keys are int (key_format 'i'); for column-store these are converted on the fly to uint64_t.
+ *
+ * Failure mode: If one table is out of step with the other, that is detected as a failure at the
+ * top level. If an index is missing values (or has extra values), that is likewise a failure at the
+ * top level. If the tables or the home directory cannot be opened, that is a top level error. The
+ * tables must be present as an initial checkpoint is done without any injected fault.
+ ','line_number':33,'multiline':True]
+['text':'
+ * This program does not run on Windows. The non-portable aspects at minimum are fork/exec the use
+ * of environment variables (used by fail_fs), and file name and build locations of dynamically
+ * loaded libraries.
+ ','line_number':66,'multiline':True]
+['text':'
+ * check_results --
+ *     Check all the tables and verify the results.
+ ','line_number':98,'multiline':True]
+['text':' Check the key/values in main table. ','line_number':139,'multiline':True]
+['text':' Check the values in the indices. ','line_number':149,'multiline':True]
+['text':'
+     * Always expect at least one entry, as populate does a checkpoint after the first insert.
+     ','line_number':167,'multiline':True]
+['text':'
+ * check_values --
+ *     Check that the values in the cursor match the given values.
+ ','line_number':188,'multiline':True]
+['text':'
+ * create_big_string --
+ *     Create and fill the "reference" big array.
+ ','line_number':205,'multiline':True]
+['text':'
+ * cursor_count_items --
+ *     Count the number of items in the table by traversing through the cursor.
+ ','line_number':226,'multiline':True]
+['text':'
+ * disable_failures --
+ *     Disable failures in the fail file system.
+ ','line_number':243,'multiline':True]
+['text':'
+ * enable_failures --
+ *     Enable failures in the fail file system.
+ ','line_number':253,'multiline':True]
+['text':'
+ * generate_key --
+ *     Generate a key used by the "subtest" and "subtest2" tables.
+ ','line_number':269,'multiline':True]
+['text':'
+ * generate_value --
+ *     Generate values for the "subtest" table.
+ ','line_number':279,'multiline':True]
+['text':'
+ * run_check_subtest --
+ *     Run the subtest with the given parameters and check the results.
+ ','line_number':292,'multiline':True]
+['text':' "subtest" must appear before arguments ','line_number':310,'multiline':True]
+['text':' subtest is always verbose ','line_number':321,'multiline':True]
+['text':' number of operations ','line_number':325,'multiline':True]
+['text':' number of records ','line_number':328,'multiline':True]
+['text':'
+     * Verify results in parent process.
+     ','line_number':340,'multiline':True]
+['text':'
+ * run_check_subtest_range --
+ *     Run successive tests via binary search that determines the approximate crossover point
+ *     between when data is recoverable or not. Once that is determined, run the subtest in a range
+ *     near that crossover point. The theory is that running at the crossover point will tend to
+ *     trigger "interesting" failures at the borderline when the checkpoint is about to, or has,
+ *     succeeded. If any of those failures creates a WiredTiger home directory that cannot be
+ *     recovered, the top level test will fail.
+ ','line_number':346,'multiline':True]
+['text':'
+     * mid is the number of ops that is the crossover point. Run some tests near that point to try
+     * to trigger weird failures. If mid is too low or too high, it indicates there is a fundamental
+     * problem with the test.
+     ','line_number':378,'multiline':True]
+['text':'
+     * Check that it really ran with a crossover point. If not, perhaps we calibrated the range
+     * incorrectly. Tell caller to try again.
+     ','line_number':398,'multiline':True]
+['text':'
+ * run_check_subtest_range_retry --
+ *     Repeatedly run the subtest range test, retrying some number of times as long as EBUSY is
+ *     returned, a warning that the test did not adequately cover "both sides" of the test
+ *     threshold. Such warning returns should be rare and are not hard failures, no WiredTiger bug
+ *     is demonstrated. Rerunning the subtest range test will determine a new calibration for the
+ *     range.
+ ','line_number':412,'multiline':True]
+['text':'
+         * If we couldn't successfully perform the test, we want to know about it.
+         ','line_number':436,'multiline':True]
+['text':'
+ * run_process --
+ *     Run a program with arguments, wait until it completes.
+ ','line_number':442,'multiline':True]
+['text':'
+ * subtest_error_handler --
+ *     Error event handler.
+ ','line_number':467,'multiline':True]
+['text':' Exit on panic, there's no checking to be done. ','line_number':479,'multiline':True]
+['text':' Message handler ','line_number':486,'multiline':True]
+['text':' Progress handler ','line_number':487,'multiline':True]
+['text':' Close handler ','line_number':488,'multiline':True]
+['text':' General handler ','line_number':489,'multiline':True]
+['text':'
+ * subtest_main --
+ *     The main program for the subtest
+ ','line_number':492,'multiline':True]
+['text':' No core files during fault injection tests. ','line_number':509,'multiline':True]
+['text':' Redirect stderr, stdout. ','line_number':514,'multiline':True]
+['text':'
+ * This macro is used as a substitute for testutil_check, except that it is aware of when a failure
+ * may be expected due to the effects of the fail_fs. This macro is used only in subtest_populate(),
+ * it uses local variables.
+ ','line_number':552,'multiline':True]
+['text':'
+ * subtest_populate --
+ *     Populate the tables.
+ ','line_number':570,'multiline':True]
+['text':'
+             * Force an initial checkpoint, that helps to distinguish a clear failure from just not
+             * running long enough.
+             ','line_number':618,'multiline':True]
+['text':' Attempt to isolate the failures to checkpointing. ','line_number':626,'multiline':True]
+['text':' CHECK should expect failures. ','line_number':629,'multiline':True]
+['text':'
+     * Closing handles after an extreme fail is likely to cause cascading failures (or crashes), so
+     * recommended practice is to immediately exit. We're interested in testing both with and
+     * without the recommended practice.
+     ','line_number':637,'multiline':True]
+['text':'
+ * main --
+ *     The main program for the test. When invoked with "subtest" argument, run the subtest.
+ *     Otherwise, run a separate process for each needed subtest, and check the results.
+ ','line_number':656,'multiline':True]

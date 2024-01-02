@@ -1,0 +1,602 @@
+['text':'
+   LZ4 - Fast LZ compression algorithm
+   Copyright (C) 2011-present, Yann Collet.
+
+   BSD 2-Clause License (http://www.opensource.org/licenses/bsd-license.php)
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are
+   met:
+
+       * Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+       * Redistributions in binary form must reproduce the above
+   copyright notice, this list of conditions and the following disclaimer
+   in the documentation and/or other materials provided with the
+   distribution.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+   You can contact the author at :
+    - LZ4 homepage : http://www.lz4.org
+    - LZ4 source repository : https://github.com/lz4/lz4
+','line_number':1,'multiline':True]
+['text':'-************************************
+*  Tuning parameters
+*************************************','line_number':35,'multiline':True]
+['text':'
+ * LZ4_HEAPMODE :
+ * Select how default compression functions will allocate memory for their hash table,
+ * in memory stack (0:default, fastest), or in memory heap (1:requires malloc()).
+ ','line_number':38,'multiline':True]
+['text':'
+ * LZ4_ACCELERATION_DEFAULT :
+ * Select "acceleration" for LZ4_compress_fast() when parameter value <= 0
+ ','line_number':47,'multiline':True]
+['text':'
+ * LZ4_ACCELERATION_MAX :
+ * Any "acceleration" value higher than this threshold
+ * get treated as LZ4_ACCELERATION_MAX instead (fix #876)
+ ','line_number':52,'multiline':True]
+['text':'-************************************
+*  CPU Feature Detection
+*************************************','line_number':60,'multiline':True]
+['text':' LZ4_FORCE_MEMORY_ACCESS
+ * By default, access to unaligned memory is controlled by `memcpy()`, which is safe and portable.
+ * Unfortunately, on some target/compiler combinations, the generated assembly is sub-optimal.
+ * The below switch allow to select different access method for improved performance.
+ * Method 0 (default) : use `memcpy()`. Safe and portable.
+ * Method 1 : `__packed` statement. It depends on compiler extension (ie, not portable).
+ *            This method is safe if your compiler supports it, and *generally* as fast or faster than `memcpy`.
+ * Method 2 : direct access. This method is portable but violate C standard.
+ *            It can generate buggy code on targets which assembly generation depends on alignment.
+ *            But in some circumstances, it's the only known way to get the most performance (ie GCC + ARMv6)
+ * See https://fastcompression.blogspot.fr/2015/08/accessing-unaligned-memory.html for details.
+ * Prefer these methods in priority order (0 > 1 > 2)
+ ','line_number':63,'multiline':True]
+['text':' can be defined externally ','line_number':76,'multiline':True]
+['text':'
+ * LZ4_FORCE_SW_BITCOUNT
+ * Define this parameter if your target system or compiler does not support hardware bit count
+ ','line_number':86,'multiline':True]
+['text':' Visual Studio for WinCE doesn't support Hardware bit count ','line_number':90,'multiline':True]
+['text':' avoid double def ','line_number':91,'multiline':True]
+['text':'-************************************
+*  Dependency
+*************************************','line_number':97,'multiline':True]
+['text':'
+ * LZ4_SRC_INCLUDED:
+ * Amalgamation flag, whether lz4.c is included
+ ','line_number':100,'multiline':True]
+['text':' due to LZ4_decompress_safe_withPrefix64k ','line_number':113,'multiline':True]
+['text':' LZ4_DISTANCE_MAX ','line_number':116,'multiline':True]
+['text':' see also "memory routines" below ','line_number':118,'multiline':True]
+['text':'-************************************
+*  Compiler Options
+*************************************','line_number':121,'multiline':True]
+['text':' Visual Studio 2005+ ','line_number':124,'multiline':True]
+['text':' only present in VS2005+ ','line_number':125,'multiline':True]
+['text':' disable: C4127: conditional expression is constant ','line_number':126,'multiline':True]
+['text':' _MSC_VER ','line_number':127,'multiline':True]
+['text':' Visual Studio ','line_number':130,'multiline':True]
+['text':' C99 ','line_number':133,'multiline':True]
+['text':' __STDC_VERSION__ ','line_number':141,'multiline':True]
+['text':' _MSC_VER ','line_number':142,'multiline':True]
+['text':' LZ4_FORCE_INLINE ','line_number':143,'multiline':True]
+['text':' LZ4_FORCE_O2 and LZ4_FORCE_INLINE
+ * gcc on ppc64le generates an unrolled SIMDized loop for LZ4_wildCopy8,
+ * together with a simple 8-byte copy loop as a fall-back path.
+ * However, this optimization hurts the decompression speed by >30%,
+ * because the execution does not go to the optimized loop
+ * for typical compressible data, and all of the preamble checks
+ * before going to the fall-back path become useless overhead.
+ * This optimization happens only with the -O3 flag, and -O2 generates
+ * a simple 8-byte copy loop.
+ * With gcc on ppc64le, all of the LZ4_decompress_* and LZ4_wildCopy8
+ * functions are annotated with __attribute__((optimize("O2"))),
+ * and also LZ4_wildCopy8 is forcibly inlined, so that the O2 attribute
+ * of LZ4_wildCopy8 does not affect the compression speed.
+ ','line_number':145,'multiline':True]
+['text':' Should the alignment test prove unreliable, for some reason,
+ * it can be disabled by setting LZ4_ALIGN_TEST to 0 ','line_number':180,'multiline':True]
+['text':' can be externally provided ','line_number':182,'multiline':True]
+['text':'-************************************
+*  Memory routines
+*************************************','line_number':187,'multiline':True]
+['text':' memory management functions can be customized by user project.
+ * Below functions must exist somewhere in the Project
+ * and be available at link time ','line_number':191,'multiline':True]
+['text':' malloc, calloc, free ','line_number':201,'multiline':True]
+['text':' memset, memcpy ','line_number':207,'multiline':True]
+['text':'-************************************
+*  Common Constants
+*************************************','line_number':211,'multiline':True]
+['text':' see ../doc/lz4_Block_format.md#parsing-restrictions ','line_number':217,'multiline':True]
+['text':' see ../doc/lz4_Block_format.md#parsing-restrictions ','line_number':218,'multiline':True]
+['text':' ensure it's possible to write 2 x wildcopyLength without overflowing output buffer ','line_number':219,'multiline':True]
+['text':' max supported by LZ4 format ','line_number':228,'multiline':True]
+['text':'-************************************
+*  Error detection
+*************************************','line_number':238,'multiline':True]
+['text':' use after variable declarations ','line_number':249,'multiline':True]
+['text':' disabled ','line_number':261,'multiline':True]
+['text':'-************************************
+*  Types
+*************************************','line_number':270,'multiline':True]
+['text':' C99 ','line_number':274,'multiline':True]
+['text':' generally true, except OpenVMS-64 ','line_number':291,'multiline':True]
+['text':' 64-bits in x32 mode ','line_number':295,'multiline':True]
+['text':' 32-bits in x32 mode ','line_number':297,'multiline':True]
+['text':'-************************************
+*  Reading and writing into memory
+*************************************','line_number':307,'multiline':True]
+['text':'*
+ * LZ4 relies on memcpy with a constant size being inlined. In freestanding
+ * environments, the compiler can't assume the implementation of memcpy() is
+ * standard compliant, so it can't apply its specialized memcpy() inlining
+ * logic. When possible, use __builtin_memcpy() to tell the compiler to analyze
+ * memcpy() as if it were standard compliant, so it can inline it in freestanding
+ * environments. This is needed when decompressing the Linux Kernel, for example.
+ ','line_number':311,'multiline':True]
+['text':' don't use static : performance detrimental ','line_number':327,'multiline':True]
+['text':' lie to the compiler about data alignment; use with caution ','line_number':333,'multiline':True]
+['text':' __pack instructions are safer, but compiler specific, hence potentially problematic for some compilers ','line_number':344,'multiline':True]
+['text':' currently only defined for gcc and icc ','line_number':345,'multiline':True]
+['text':' safe and portable access using memcpy() ','line_number':355,'multiline':True]
+['text':' LZ4_FORCE_MEMORY_ACCESS ','line_number':382,'multiline':True]
+['text':' customized variant of memcpy, which can overwrite up to 8 bytes beyond dstEnd ','line_number':406,'multiline':True]
+['text':' On aarch64, we disable this optimization for clang because on certain
+      * mobile chipsets, performance is reduced with clang. For information
+      * refer to https://github.com/lz4/lz4/pull/707 ','line_number':425,'multiline':True]
+['text':' silence an msan warning when offset==0 ','line_number':441,'multiline':True]
+['text':' customized variant of memcpy, which can overwrite up to 32 bytes beyond dstEnd
+ * this version copies two times 16 bytes (instead of one time 32 bytes)
+ * because it must be compatible with offsets >= 16. ','line_number':459,'multiline':True]
+['text':' LZ4_memcpy_using_offset()  presumes :
+ * - dstEnd >= dstPtr + MINMATCH
+ * - there is at least 8 bytes available to write after dstEnd ','line_number':472,'multiline':True]
+['text':'-************************************
+*  Common functions
+*************************************','line_number':510,'multiline':True]
+['text':' x64 CPUS without BMI support interpret `TZCNT` as `REP BSF` ','line_number':519,'multiline':True]
+['text':' 32 bits ','line_number':534,'multiline':True]
+['text':' Big Endian CPU ','line_number':548,'multiline':True]
+['text':' this method is probably faster,
+             * but adds a 128 bytes lookup table ','line_number':556,'multiline':True]
+['text':' this method doesn't consume memory space like the previous one,
+             * but it contains several branches,
+             * that may end up slowing execution ','line_number':572,'multiline':True]
+['text':' 32 on 64 bits (goal), 16 on 32 bits.
+            Just to avoid some static analyzer complaining about shift by 32 on 32-bits target.
+            Note that this code path is never triggered in 32-bits mode. ','line_number':575,'multiline':True]
+['text':' 32 bits ','line_number':585,'multiline':True]
+['text':'-************************************
+*  Local Constants
+*************************************','line_number':630,'multiline':True]
+['text':' Increase this value ==> compression run slower on incompressible data ','line_number':634,'multiline':True]
+['text':'-************************************
+*  Local Structures and types
+*************************************','line_number':637,'multiline':True]
+['text':'*
+ * This enum distinguishes several different modes of accessing previous
+ * content in the stream.
+ *
+ * - noDict        : There is no preceding content.
+ * - withPrefix64k : Table entries up to ctx->dictSize before the current blob
+ *                   blob being compressed are valid and refer to the preceding
+ *                   content (of length ctx->dictSize), which is available
+ *                   contiguously preceding in memory the content currently
+ *                   being compressed.
+ * - usingExtDict  : Like withPrefix64k, but the preceding content is somewhere
+ *                   else in memory, starting at ctx->dictionary with length
+ *                   ctx->dictSize.
+ * - usingDictCtx  : Like usingExtDict, but everything concerning the preceding
+ *                   content is in a separate context, pointed to by
+ *                   ctx->dictCtx. ctx->dictionary, ctx->dictSize, and table
+ *                   entries in the current context that refer to positions
+ *                   preceding the beginning of the current compression are
+ *                   ignored. Instead, ctx->dictCtx->dictionary and ctx->dictCtx
+ *                   ->dictSize describe the location and size of the preceding
+ *                   content, and matches are found by looking in the ctx
+ *                   ->dictCtx->hashTable.
+ ','line_number':642,'multiline':True]
+['text':'-************************************
+*  Local Utils
+*************************************','line_number':669,'multiline':True]
+['text':'-************************************
+*  Internal Definitions used in Tests
+*************************************','line_number':678,'multiline':True]
+['text':'-******************************
+*  Compression functions
+*******************************','line_number':695,'multiline':True]
+['text':' fallthrough ','line_number':728,'multiline':True]
+['text':' illegal! ','line_number':729,'multiline':True]
+['text':' fallthrough ','line_number':740,'multiline':True]
+['text':' fallthrough ','line_number':741,'multiline':True]
+['text':' illegal! ','line_number':742,'multiline':True]
+['text':' illegal! ','line_number':754,'multiline':True]
+['text':' LZ4_getIndexOnHash() :
+ * Index of match position registered in hash table.
+ * hash position must be calculated by using base+index, or dictBase+index.
+ * Assumption 1 : only valid if tableType == byU32 or byU16.
+ * Assumption 2 : h is presumed valid (within limits of hash table)
+ ','line_number':767,'multiline':True]
+['text':' forbidden case ','line_number':786,'multiline':True]
+['text':' default, to ensure a return ','line_number':793,'multiline':True]
+['text':' If the table hasn't been used, it's guaranteed to be zeroed out, and is
+     * therefore safe to use no matter what mode we're in. Otherwise, we figure
+     * out if it's safe to leave as is or whether it needs to be reset.
+     ','line_number':809,'multiline':True]
+['text':' Adding a gap, so all previous entries are > LZ4_DISTANCE_MAX back, is faster
+     * than compressing without a gap. However, compressing with
+     * currentOffset == 0 is faster still, so we preserve that case.
+     ','line_number':830,'multiline':True]
+['text':' Finally, clear history ','line_number':839,'multiline':True]
+['text':'* LZ4_compress_generic() :
+ *  inlined, to ensure branches are decided at compilation time.
+ *  Presumed already validated at this stage:
+ *  - source != NULL
+ *  - inputSize > 0
+ ','line_number':845,'multiline':True]
+['text':' only written when outputDirective == fillOutput ','line_number':856,'multiline':True]
+['text':' make indexes in dictCtx comparable with index in current context ','line_number':876,'multiline':True]
+['text':' used when dictDirective == dictSmall ','line_number':879,'multiline':True]
+['text':' the dictCtx currentOffset is indexed on the start of the dictionary,
+     * while a dictionary in the current context precedes the currentOffset ','line_number':886,'multiline':True]
+['text':' If init conditions are not met, we don't have to mark stream
+     * as having dirty context, since no action was taken yet ','line_number':900,'multiline':True]
+['text':' Impossible to store anything ','line_number':902,'multiline':True]
+['text':' Size too large (not within 64K limit) ','line_number':903,'multiline':True]
+['text':' only supported use case with byPtr ','line_number':904,'multiline':True]
+['text':' Update context state ','line_number':909,'multiline':True]
+['text':' Subsequent linked blocks can't use the dictionary. ','line_number':911,'multiline':True]
+['text':' Instead, they use the block we just compressed. ','line_number':912,'multiline':True]
+['text':' Input too small, no compression (all literals) ','line_number':921,'multiline':True]
+['text':' First Byte ','line_number':923,'multiline':True]
+['text':' Main Loop ','line_number':927,'multiline':True]
+['text':' Find a match ','line_number':933,'multiline':True]
+['text':' byU32, byU16 ','line_number':954,'multiline':True]
+['text':' there was no match, try the dictionary ','line_number':974,'multiline':True]
+['text':' make dictCtx index comparable with current context ','line_number':978,'multiline':True]
+['text':' single continuous memory segment ','line_number':994,'multiline':True]
+['text':' match outside of valid area ','line_number':1001,'multiline':True]
+['text':' too far ','line_number':1006,'multiline':True]
+['text':' match now expected within distance ','line_number':1007,'multiline':True]
+['text':' match found ','line_number':1011,'multiline':True]
+['text':' Catch up ','line_number':1017,'multiline':True]
+['text':' Encode Literals ','line_number':1021,'multiline':True]
+['text':' Check output buffer overflow ','line_number':1024,'multiline':True]
+['text':' cannot compress within `dst` budget. Stored indexes in hash table are nonetheless fine ','line_number':1026,'multiline':True]
+['text':' litlen ','line_number':1029,'multiline':True]
+['text':' literals ','line_number':1029,'multiline':True]
+['text':' offset ','line_number':1029,'multiline':True]
+['text':' token ','line_number':1029,'multiline':True]
+['text':' min last literals so last match is <= end - MFLIMIT ','line_number':1029,'multiline':True]
+['text':' Copy Literals ','line_number':1041,'multiline':True]
+['text':' at this stage, the following variables must be correctly set :
+         * - ip : at start of LZ operation
+         * - match : at start of previous pattern occurence; can be within current prefix, or within extDict
+         * - offset : if maybe_ext_memSegment==1 (constant)
+         * - lowLimit : must be == dictionary to mean "match is within extDict"; must be == source otherwise
+         * - token and *token : position to write 4-bits for match length; higher 4-bits for literal length supposed already written
+         ','line_number':1049,'multiline':True]
+['text':' offset ','line_number':1058,'multiline':True]
+['text':' token ','line_number':1058,'multiline':True]
+['text':' min last literals so last match is <= end - MFLIMIT ','line_number':1058,'multiline':True]
+['text':' the match was too close to the end, rewind and go to last literals ','line_number':1059,'multiline':True]
+['text':' Encode Offset ','line_number':1064,'multiline':True]
+['text':' static test ','line_number':1065,'multiline':True]
+['text':' Encode MatchLength ','line_number':1075,'multiline':True]
+['text':' match within extDict ','line_number':1079,'multiline':True]
+['text':' Check output buffer overflow ','line_number':1097,'multiline':True]
+['text':' Match description too long : reduce it ','line_number':1100,'multiline':True]
+['text':' in token ','line_number':1101,'multiline':True]
+['text':' to avoid needing a zero byte ','line_number':1101,'multiline':True]
+['text':' We have already filled up to filledIp so if ip ends up less than filledIp
+                         * we have positions in the hash table beyond the current position. This is
+                         * a problem if we reuse the hash table. So we have to remove these positions
+                         * from the hash table.
+                         ','line_number':1106,'multiline':True]
+['text':' cannot compress within `dst` budget. Stored indexes in hash table are nonetheless fine ','line_number':1120,'multiline':True]
+['text':' Ensure we have enough space for the last literals. ','line_number':1137,'multiline':True]
+['text':' Test end of chunk ','line_number':1142,'multiline':True]
+['text':' Fill table ','line_number':1145,'multiline':True]
+['text':' Test next position ','line_number':1148,'multiline':True]
+['text':' byU32, byU16 ','line_number':1157,'multiline':True]
+['text':' there was no match, try the dictionary ','line_number':1165,'multiline':True]
+['text':' required for match length counter ','line_number':1168,'multiline':True]
+['text':' required for match length counter ','line_number':1172,'multiline':True]
+['text':' required for match length counter ','line_number':1177,'multiline':True]
+['text':' required for match length counter ','line_number':1180,'multiline':True]
+['text':' single memory segment ','line_number':1182,'multiline':True]
+['text':' Prepare next loop ','line_number':1199,'multiline':True]
+['text':' Encode Last Literals ','line_number':1205,'multiline':True]
+['text':' Check output buffer overflow ','line_number':1207,'multiline':True]
+['text':' adapt lastRun to fill 'dst' ','line_number':1210,'multiline':True]
+['text':'token','line_number':1212,'multiline':True]
+['text':'additional length tokens','line_number':1213,'multiline':True]
+['text':' cannot compress within `dst` budget. Stored indexes in hash table are nonetheless fine ','line_number':1216,'multiline':True]
+['text':'* LZ4_compress_generic() :
+ *  inlined, to ensure branches are decided at compilation time;
+ *  takes care of src == (NULL, 0)
+ *  and forward the rest to LZ4_compress_generic_validated ','line_number':1242,'multiline':True]
+['text':' only written when outputDirective == fillOutput ','line_number':1251,'multiline':True]
+['text':' Unsupported srcSize, too large (or negative) ','line_number':1262,'multiline':True]
+['text':' src == NULL supported if srcSize == 0 ','line_number':1263,'multiline':True]
+['text':' no output, can't write anything ','line_number':1264,'multiline':True]
+['text':' only written into if outputDirective == fillOutput ','line_number':1278,'multiline':True]
+['text':'*
+ * LZ4_compress_fast_extState_fastReset() :
+ * A variant of LZ4_compress_fast_extState().
+ *
+ * Using this variant avoids an expensive initialization step. It is only safe
+ * to call if the state buffer is known to be correctly initialized already
+ * (see comment in lz4.h on LZ4_resetStream_fast() for a definition of
+ * "correctly initialized").
+ ','line_number':1307,'multiline':True]
+['text':' malloc-calloc always properly aligned ','line_number':1358,'multiline':True]
+['text':' Note!: This function leaves the stream in an unclean/broken state!
+ * It is not safe to subsequently use the same state with a _fastReset() or
+ * _continue() call without resetting it. ','line_number':1379,'multiline':True]
+['text':' compression success is guaranteed ','line_number':1387,'multiline':True]
+['text':' malloc-calloc always properly aligned ','line_number':1402,'multiline':True]
+['text':'-******************************
+*  Streaming functions
+*******************************','line_number':1419,'multiline':True]
+['text':' A compilation error here means LZ4_STREAMSIZE is not large enough ','line_number':1426,'multiline':True]
+['text':' effectively disabled ','line_number':1439,'multiline':True]
+['text':' resetStream is now deprecated,
+ * prefer initStream() which is more general ','line_number':1453,'multiline':True]
+['text':' support free on NULL ','line_number':1467,'multiline':True]
+['text':' It's necessary to reset the context,
+     * and not just continue it with prepareTable()
+     * to avoid any risk of generating overflowing matchIndex
+     * when compressing using this dictionary ','line_number':1485,'multiline':True]
+['text':' We always increment the offset by 64 KB, since, if the dict is longer,
+     * we truncate it to the last 64k, and if it's shorter, we still want to
+     * advance by a whole window length so we can provide the guarantee that
+     * there are only valid offsets in the window, which allows an optimization
+     * in LZ4_compress_fast_continue() where it uses noDictIssue even when the
+     * dictionary isn't a full 64k. ','line_number':1491,'multiline':True]
+['text':' If the current offset is zero, we will never look in the
+         * external dictionary context, since there is no value a table
+         * entry can take that indicate a miss. In that case, we need
+         * to bump the offset to something non-zero.
+         ','line_number':1526,'multiline':True]
+['text':' Don't actually attach an empty dictionary.
+         ','line_number':1535,'multiline':True]
+['text':' potential ptrdiff_t overflow (32-bits mode) ','line_number':1548,'multiline':True]
+['text':' rescale hash table ','line_number':1549,'multiline':True]
+['text':' avoid index overflow ','line_number':1576,'multiline':True]
+['text':' invalidate tiny dictionaries ','line_number':1580,'multiline':True]
+['text':' intentional underflow ','line_number':1581,'multiline':True]
+['text':' Check overlapping input/dictionary space ','line_number':1589,'multiline':True]
+['text':' prefix mode : source data follows dictionary ','line_number':1599,'multiline':True]
+['text':' external dictionary mode ','line_number':1607,'multiline':True]
+['text':' We depend here on the fact that dictCtx'es (produced by
+             * LZ4_loadDict) guarantee that their tables contain no references
+             * to offsets between dictCtx->currentOffset - 64 KB and
+             * dictCtx->currentOffset - dictCtx->dictSize. This makes it safe
+             * to use noDictIssue even when the dict isn't a full 64 KB.
+             ','line_number':1610,'multiline':True]
+['text':' For compressing large blobs, it is faster to pay the setup
+                 * cost to copy the dictionary's tables into the active context,
+                 * so that the compression loop is only looking into one table.
+                 ','line_number':1617,'multiline':True]
+['text':' Hidden debug function, to force-test external dictionary mode ','line_number':1640,'multiline':True]
+['text':'! LZ4_saveDict() :
+ *  If previously compressed data block is not guaranteed to remain available at its memory location,
+ *  save it into a safer place (char* safeBuffer).
+ *  Note : you don't need to call LZ4_loadDict() afterwards,
+ *         dictionary is immediately usable, you can therefore call LZ4_compress_fast_continue().
+ *  Return : saved dictionary size in bytes (necessarily <= dictSize), or 0 if error.
+ ','line_number':1661,'multiline':True]
+['text':' useless to define a dictionary > 64 KB ','line_number':1673,'multiline':True]
+['text':'-*******************************
+ *  Decompression functions
+ *******************************','line_number':1688,'multiline':True]
+['text':' Read the variable-length literal or match length.
+ *
+ * ip - pointer to use as input.
+ * lencheck - end ip.  Return an error if ip advances >= lencheck.
+ * loop_check - check ip >= lencheck in body of loop.  Returns loop_error if so.
+ * initial_check - check ip >= lencheck before start of loop.  Returns initial_error if so.
+ * error (output) - error code.  Should be set to 0 before call.
+ ','line_number':1698,'multiline':True]
+['text':' overflow detection ','line_number':1714,'multiline':True]
+['text':' overflow detection ','line_number':1722,'multiline':True]
+['text':'! LZ4_decompress_generic() :
+ *  This generic decompression function covers all use cases.
+ *  It shall be instantiated several times, using different sets of directives.
+ *  Note that it is important for performance that this function really get inlined,
+ *  in order to remove useless branches during compilation optimization.
+ ','line_number':1731,'multiline':True]
+['text':' If endOnInput==endOnInputSize, this value is `dstCapacity` ','line_number':1742,'multiline':True]
+['text':' endOnOutputSize, endOnInputSize ','line_number':1744,'multiline':True]
+['text':' full, partial ','line_number':1745,'multiline':True]
+['text':' noDict, withPrefix64k, usingExtDict ','line_number':1746,'multiline':True]
+['text':' always <= dst, == dst when no prefix ','line_number':1747,'multiline':True]
+['text':' only if dict==usingExtDict ','line_number':1748,'multiline':True]
+['text':' note : = 0 if noDict ','line_number':1749,'multiline':True]
+['text':' Set up the "end" pointers for the shortcut. ','line_number':1767,'multiline':True]
+['text':'maxLL','line_number':1768,'multiline':True]
+['text':'offset','line_number':1768,'multiline':True]
+['text':'maxLL','line_number':1769,'multiline':True]
+['text':'maxML','line_number':1769,'multiline':True]
+['text':' Special cases ','line_number':1779,'multiline':True]
+['text':' Empty output buffer ','line_number':1782,'multiline':True]
+['text':' Currently the fast loop shows a regression on qualcomm arm chips. ','line_number':1789,'multiline':True]
+['text':' Fast loop : decode sequences as long as output < iend-FASTLOOP_SAFE_DISTANCE ','line_number':1796,'multiline':True]
+['text':' Main fastloop assertion: We can always wildcopy FASTLOOP_SAFE_DISTANCE ','line_number':1798,'multiline':True]
+['text':' literal length ','line_number':1802,'multiline':True]
+['text':' ip < iend before the increment ','line_number':1804,'multiline':True]
+['text':' decode literal length ','line_number':1806,'multiline':True]
+['text':' overflow detection ','line_number':1811,'multiline':True]
+['text':' overflow detection ','line_number':1812,'multiline':True]
+['text':' copy literals ','line_number':1814,'multiline':True]
+['text':' LZ4_decompress_safe() ','line_number':1817,'multiline':True]
+['text':' LZ4_decompress_fast() ','line_number':1820,'multiline':True]
+['text':' LZ4_decompress_fast() cannot copy more than 8 bytes at a time :
+                                                 * it doesn't know input length, and only relies on end-of-block properties ','line_number':1822,'multiline':True]
+['text':' LZ4_decompress_safe() ','line_number':1828,'multiline':True]
+['text':' We don't need to check oend, since we check it once for each loop below ','line_number':1830,'multiline':True]
+['text':'max lit + offset + nextToken','line_number':1831,'multiline':True]
+['text':' Literals can only be 14, but hope compilers optimize if we copy by a register size ','line_number':1832,'multiline':True]
+['text':' LZ4_decompress_fast() ','line_number':1834,'multiline':True]
+['text':' LZ4_decompress_fast() cannot copy more than 8 bytes at a time :
+                     * it doesn't know input length, and relies on end-of-block properties ','line_number':1835,'multiline':True]
+['text':' get offset ','line_number':1843,'multiline':True]
+['text':' get matchlength ','line_number':1848,'multiline':True]
+['text':' Error : offset outside buffers ','line_number':1853,'multiline':True]
+['text':' overflow detection ','line_number':1856,'multiline':True]
+['text':' Fastpath check: Avoids a branch in LZ4_wildCopy32 if true ','line_number':1867,'multiline':True]
+['text':' Error : offset outside buffers ','line_number':1881,'multiline':True]
+['text':' match starting within external dictionary ','line_number':1882,'multiline':True]
+['text':' end-of-block condition violated ','line_number':1889,'multiline':True]
+['text':' match fits entirely within external dictionary : just copy ','line_number':1893,'multiline':True]
+['text':' match stretches into both external dictionary and current block ','line_number':1897,'multiline':True]
+['text':' overlap copy ','line_number':1902,'multiline':True]
+['text':' copy match within block ','line_number':1913,'multiline':True]
+['text':' wildcopy correction ','line_number':1923,'multiline':True]
+['text':' Main Loop : decode remaining sequences where output < FASTLOOP_SAFE_DISTANCE ','line_number':1928,'multiline':True]
+['text':' literal length ','line_number':1931,'multiline':True]
+['text':' ip < iend before the increment ','line_number':1933,'multiline':True]
+['text':' A two-stage shortcut for the most common case:
+             * 1) If the literal length is 0..14, and there is enough space,
+             * enter the shortcut and copy 16 bytes on behalf of the literals
+             * (in the fast mode, only 8 bytes can be safely copied this way).
+             * 2) Further if the match length is 4..18, copy 18 bytes in a similar
+             * manner; but we ensure that there's enough space in the output for
+             * those 18 bytes earlier, upon entering the shortcut (in other words,
+             * there is a combined check for both stages).
+             ','line_number':1935,'multiline':True]
+['text':' strictly "less than" on input, to re-enter the loop with at least one byte ','line_number':1945,'multiline':True]
+['text':' Copy the literals ','line_number':1947,'multiline':True]
+['text':' The second stage: prepare for match copying, decode full info.
+                 * If it doesn't work out, the info won't be wasted. ','line_number':1951,'multiline':True]
+['text':' match length ','line_number':1953,'multiline':True]
+['text':' check overflow ','line_number':1956,'multiline':True]
+['text':' Do not deal with overlapping matches. ','line_number':1958,'multiline':True]
+['text':' Copy the match. ','line_number':1962,'multiline':True]
+['text':' Both stages worked, load the next token. ','line_number':1967,'multiline':True]
+['text':' The second stage didn't work out, but the info is ready.
+                 * Propel it right to the point of match copying. ','line_number':1971,'multiline':True]
+['text':' decode literal length ','line_number':1976,'multiline':True]
+['text':' overflow detection ','line_number':1981,'multiline':True]
+['text':' overflow detection ','line_number':1982,'multiline':True]
+['text':' copy literals ','line_number':1985,'multiline':True]
+['text':' We've either hit the input parsing restriction or the output parsing restriction.
+                 * In the normal scenario, decoding a full block, it must be the last sequence,
+                 * otherwise it's an error (invalid input or dimensions).
+                 * In partialDecoding scenario, it's necessary to ensure there is no buffer overflow.
+                 ','line_number':1994,'multiline':True]
+['text':' Since we are partial decoding we may be in this block because of the output parsing
+                     * restriction, which is not valid since the output buffer is allowed to be undersized.
+                     ','line_number':2000,'multiline':True]
+['text':' Finishing in the middle of a literals segment,
+                     * due to lack of input.
+                     ','line_number':2008,'multiline':True]
+['text':' Finishing in the middle of a literals segment,
+                     * due to lack of output space.
+                     ','line_number':2015,'multiline':True]
+['text':' We must be on the last sequence because of the parsing limitations so check
+                     * that we exactly regenerate the original size (must be exact when !endOnInput).
+                     ','line_number':2024,'multiline':True]
+['text':' We must be on the last sequence (or invalid) because of the parsing limitations
+                      * so check that we exactly consume the input and don't overrun the output buffer.
+                      ','line_number':2028,'multiline':True]
+['text':' supports overlapping memory regions; only matters for in-place decompression scenarios ','line_number':2038,'multiline':True]
+['text':' Necessarily EOF when !partialDecoding.
+                 * When partialDecoding, it is EOF if we've either
+                 * filled the output buffer or
+                 * can't proceed with reading an offset for following match.
+                 ','line_number':2041,'multiline':True]
+['text':' may overwrite up to WILDCOPYLENGTH beyond cpy ','line_number':2050,'multiline':True]
+['text':' get offset ','line_number':2054,'multiline':True]
+['text':' get matchlength ','line_number':2058,'multiline':True]
+['text':' overflow detection ','line_number':2066,'multiline':True]
+['text':' Error : offset outside buffers ','line_number':2073,'multiline':True]
+['text':' match starting within external dictionary ','line_number':2074,'multiline':True]
+['text':' doesn't respect parsing restriction ','line_number':2078,'multiline':True]
+['text':' match fits entirely within external dictionary : just copy ','line_number':2082,'multiline':True]
+['text':' match stretches into both external dictionary and current block ','line_number':2086,'multiline':True]
+['text':' overlap copy ','line_number':2091,'multiline':True]
+['text':' copy match within block ','line_number':2103,'multiline':True]
+['text':' partialDecoding : may end anywhere within the block ','line_number':2106,'multiline':True]
+['text':' overlap copy ','line_number':2112,'multiline':True]
+['text':' silence msan warning when offset==0 ','line_number':2123,'multiline':True]
+['text':' Error : last LASTLITERALS bytes must be literals (uncompressed) ','line_number':2139,'multiline':True]
+['text':' wildcopy correction ','line_number':2150,'multiline':True]
+['text':' end of decoding ','line_number':2153,'multiline':True]
+['text':' Nb of output bytes decoded ','line_number':2156,'multiline':True]
+['text':' Nb of input bytes read ','line_number':2158,'multiline':True]
+['text':' Overflow error detected ','line_number':2161,'multiline':True]
+['text':'===== Instantiate the API decoding functions. =====','line_number':2168,'multiline':True]
+['text':'===== Instantiate a few more decoding cases, used more than once. =====','line_number':2195,'multiline':True]
+['text':' Exported, an obsolete API function. ','line_number':2197,'multiline':True]
+['text':' Another obsolete API function, paired with the previous one. ','line_number':2205,'multiline':True]
+['text':' LZ4_decompress_fast doesn't validate match offsets,
+     * and thus serves well with any prefixed dictionary. ','line_number':2208,'multiline':True]
+['text':' The "double dictionary" mode, for use with e.g. ring buffers: the first part
+ * of the dictionary is passed as prefix, and the second via dictStart + dictSize.
+ * These routines are used only once, in LZ4_decompress_*_continue().
+ ','line_number':2241,'multiline':True]
+['text':'===== streaming decompression functions =====','line_number':2263,'multiline':True]
+['text':' A compilation error here means LZ4_STREAMDECODESIZE is not large enough ','line_number':2268,'multiline':True]
+['text':' support free on NULL ','line_number':2274,'multiline':True]
+['text':'! LZ4_setStreamDecode() :
+ *  Use this function to instruct where to find the dictionary.
+ *  This function is not necessary if previous data is still available where it was decoded.
+ *  Loading a size of 0 is allowed (same effect as no dictionary).
+ * @return : 1 if OK, 0 if error
+ ','line_number':2279,'multiline':True]
+['text':'! LZ4_decoderRingBufferSize() :
+ *  when setting a ring buffer for streaming decompression (optional scenario),
+ *  provides the minimum size of this ring buffer
+ *  to be compatible with any source respecting maxBlockSize condition.
+ *  Note : in a ring buffer scenario,
+ *  blocks are presumed decompressed next to each other.
+ *  When not enough space remains for next block (remainingSize < maxBlockSize),
+ *  decoding resumes from beginning of ring buffer.
+ * @return : minimum ring buffer size,
+ *           or 0 if there is an error (invalid maxBlockSize).
+ ','line_number':2295,'multiline':True]
+['text':'
+*_continue() :
+    These decoding functions allow decompression of multiple blocks in "streaming" mode.
+    Previously decoded blocks must still be available at the memory position where they were decoded.
+    If it's not possible, save the relevant part of decoded data into a safe buffer,
+    and indicate where it stands using LZ4_setStreamDecode()
+','line_number':2314,'multiline':True]
+['text':' The first call, no dictionary yet. ','line_number':2328,'multiline':True]
+['text':' They're rolling the current segment. ','line_number':2335,'multiline':True]
+['text':' The buffer wraps around, or they're switching to another buffer. ','line_number':2348,'multiline':True]
+['text':'
+Advanced decoding functions :
+*_usingDict() :
+    These decoding functions work the same as "_continue" ones,
+    the dictionary must be explicitly provided within parameters
+','line_number':2397,'multiline':True]
+['text':'=*************************************************
+*  Obsolete Functions
+**************************************************','line_number':2428,'multiline':True]
+['text':' obsolete compression functions ','line_number':2431,'multiline':True]
+['text':'
+These decompression functions are deprecated and should no longer be used.
+They are only provided here for compatibility with older user programs.
+- LZ4_uncompress is totally equivalent to LZ4_decompress_fast
+- LZ4_uncompress_unknownOutputSize is totally equivalent to LZ4_decompress_safe
+','line_number':2457,'multiline':True]
+['text':' Obsolete Streaming functions ','line_number':2472,'multiline':True]
+['text':' avoid const char * -> char * conversion warning ','line_number':2491,'multiline':True]
+['text':' LZ4_COMMONDEFS_ONLY ','line_number':2495,'multiline':True]

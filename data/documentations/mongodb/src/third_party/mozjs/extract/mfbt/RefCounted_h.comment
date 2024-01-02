@@ -1,0 +1,100 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]
+['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]
+['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]
+['text':' CRTP refcounting templates.  Do not use unless you are an Expert. ','line_number':7,'multiline':True]
+['text':' __wasi__','line_number':24,'multiline':False]
+['text':'*
+ * RefCounted<T> is a sort of a "mixin" for a class T.  RefCounted
+ * manages, well, refcounting for T, and because RefCounted is
+ * parameterized on T, RefCounted<T> can call T's destructor directly.
+ * This means T doesn't need to have a virtual dtor and so doesn't
+ * need a vtable.
+ *
+ * RefCounted<T> is created with refcount == 0.  Newly-allocated
+ * RefCounted<T> must immediately be assigned to a RefPtr to make the
+ * refcount > 0.  It's an error to allocate and free a bare
+ * RefCounted<T>, i.e. outside of the RefPtr machinery.  Attempts to
+ * do so will abort DEBUG builds.
+ *
+ * Live RefCounted<T> have refcount > 0.  The lifetime (refcounts) of
+ * live RefCounted<T> are controlled by RefPtr<T> and
+ * RefPtr<super/subclass of T>.  Upon a transition from refcounted==1
+ * to 0, the RefCounted<T> "dies" and is destroyed.  The "destroyed"
+ * state is represented in DEBUG builds by refcount==0xffffdead.  This
+ * state distinguishes use-before-ref (refcount==0) from
+ * use-after-destroy (refcount==0xffffdead).
+ *
+ * Note that when deriving from RefCounted or AtomicRefCounted, you
+ * should add MOZ_DECLARE_REFCOUNTED_TYPENAME(ClassName) to the public
+ * section of your class, where ClassName is the name of your class.
+ *
+ * Note: SpiderMonkey should use js::RefCounted instead since that type
+ * will use appropriate js_delete and also not break ref-count logging.
+ ','line_number':37,'multiline':True]
+['text':' When building code that gets compiled into Gecko, try to use the','line_number':68,'multiline':False]
+['text':' trace-refcount leak logging facilities.','line_number':69,'multiline':False]
+['text':' Called by `RefCounted`-like classes to log a successful AddRef call in the','line_number':72,'multiline':False]
+['text':' Gecko leak-logging system. This call is a no-op outside of Gecko. Should be','line_number':73,'multiline':False]
+['text':' called afer incrementing the reference count.','line_number':74,'multiline':False]
+['text':' Created by `RefCounted`-like classes to log a successful Release call in','line_number':85,'multiline':False]
+['text':' the Gecko leak-logging system. The constructor should be invoked before the','line_number':86,'multiline':False]
+['text':' refcount is decremented to avoid invoking `typeName()` with a zero','line_number':87,'multiline':False]
+['text':' reference count. This call is a no-op outside of Gecko.','line_number':88,'multiline':False]
+['text':' This is used WeakPtr.h as well as this file.','line_number':114,'multiline':False]
+['text':' Memory synchronization is not required when incrementing a','line_number':151,'multiline':False]
+['text':' reference count.  The first increment of a reference count on a','line_number':152,'multiline':False]
+['text':' thread is not important, since the first use of the object on a','line_number':153,'multiline':False]
+['text':' thread can happen before it.  What is important is the transfer','line_number':154,'multiline':False]
+['text':' of the pointer to that thread, which may happen prior to the','line_number':155,'multiline':False]
+['text':' first increment on that thread.  The necessary memory','line_number':156,'multiline':False]
+['text':' synchronization is done by the mechanism that transfers the','line_number':157,'multiline':False]
+['text':' pointer between threads.','line_number':158,'multiline':False]
+['text':' Since this may be the last release on this thread, we need','line_number':163,'multiline':False]
+['text':' release semantics so that prior writes on this thread are visible','line_number':164,'multiline':False]
+['text':' to the thread that destroys the object when it reads mValue with','line_number':165,'multiline':False]
+['text':' acquire semantics.','line_number':166,'multiline':False]
+['text':' We're going to destroy the object on this thread, so we need','line_number':169,'multiline':False]
+['text':' acquire semantics to synchronize with the memory released by','line_number':170,'multiline':False]
+['text':' the last release on other threads, that is, to ensure that','line_number':171,'multiline':False]
+['text':' writes prior to that release are now visible on this thread.','line_number':172,'multiline':False]
+['text':' TSan doesn't understand std::atomic_thread_fence, so in order','line_number':174,'multiline':False]
+['text':' to avoid a false positive for every time a refcounted object','line_number':175,'multiline':False]
+['text':' is deleted, we replace the fence with an atomic operation.','line_number':176,'multiline':False]
+['text':' This method is only called in debug builds, so we're not too concerned','line_number':186,'multiline':False]
+['text':' about its performance.','line_number':187,'multiline':False]
+['text':' Use acquire semantics since we're not sure what the caller is','line_number':194,'multiline':False]
+['text':' doing.','line_number':195,'multiline':False]
+['text':' This can be a relaxed load as any write of 0 that we observe will leave','line_number':200,'multiline':False]
+['text':' the field in a permanently zero (or `DEAD`) state (so a "stale" read of 0','line_number':201,'multiline':False]
+['text':' is fine), and any other value is confirmed by the CAS below.','line_number':202,'multiline':False]
+['text':'','line_number':203,'multiline':False]
+['text':' This roughly matches rust's Arc::upgrade implementation as of rust 1.49.0','line_number':204,'multiline':False]
+['text':' TODO: It may be possible to use relaxed success ordering here?','line_number':209,'multiline':False]
+['text':' Compatibility with RefPtr.','line_number':232,'multiline':False]
+['text':' Note: this method must be thread safe for AtomicRefCounted.','line_number':234,'multiline':False]
+['text':' Note: this method must be thread safe for AtomicRefCounted.','line_number':241,'multiline':False]
+['text':' Note: it's not safe to touch |this| after decrementing the refcount,','line_number':245,'multiline':False]
+['text':' except for below.','line_number':246,'multiline':False]
+['text':' Because we have atomically decremented the refcount above, only','line_number':249,'multiline':False]
+['text':' one thread can get a 0 count here, so as long as we can assume that','line_number':250,'multiline':False]
+['text':' everything else in the system is accessing this object through','line_number':251,'multiline':False]
+['text':' RefPtrs, it's safe to access |this| here.','line_number':252,'multiline':False]
+['text':' Compatibility with wtf::RefPtr.','line_number':260,'multiline':False]
+['text':' Passing override for the optional argument marks the typeName and','line_number':274,'multiline':False]
+['text':' typeSize functions defined by this macro as overrides.','line_number':275,'multiline':False]
+['text':' Note that this macro is expanded unconditionally because it declares only','line_number':283,'multiline':False]
+['text':' two small inline functions which will hopefully get eliminated by the linker','line_number':284,'multiline':False]
+['text':' in non-leak-checking builds.','line_number':285,'multiline':False]
+['text':' namespace detail','line_number':290,'multiline':False]
+['text':'*
+ * AtomicRefCounted<T> is like RefCounted<T>, with an atomically updated
+ * reference counter.
+ *
+ * NOTE: Please do not use this class, use NS_INLINE_DECL_THREADSAFE_REFCOUNTING
+ * instead.
+ ','line_number':303,'multiline':True]
+['text':' namespace external','line_number':320,'multiline':False]
+['text':' namespace mozilla','line_number':322,'multiline':False]
+['text':' mozilla_RefCounted_h','line_number':324,'multiline':False]

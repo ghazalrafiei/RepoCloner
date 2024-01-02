@@ -1,0 +1,206 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Provides facilities for extracting oplog entries of writes in a particular namespace that needs
+ * to be migrated.
+ *
+ * This also ensures that oplog returned are majority committed. This is achieved by calling
+ * waitForWriteConcern. However, waitForWriteConcern does not support waiting for opTimes of
+ * previous terms. To get around this, the waitForWriteConcern is performed in two phases:
+ *
+ * During init() call phase:
+ * 1. Scan the entire config.transactions and extract all the lastWriteOpTime.
+ * 2. Insert a no-op oplog entry and wait for it to be majority committed.
+ * 3. At this point any writes before should be majority committed (including all the oplog
+ *    entries that the collected lastWriteOpTime points to). If the particular oplog with the
+ *    opTime cannot be found: it either means that the oplog was truncated or rolled back.
+ *
+ * New writes/xfer mods phase oplog entries:
+ * In this case, caller is responsible for calling waitForWriteConcern. If getLastFetchedOplog
+ * returns shouldWaitForMajority == true, it should wait for the highest opTime it has got from
+ * getLastFetchedOplog. It should also error if it detects a change of term within a batch since
+ * it would be wrong to wait for the highest opTime in this case.
+ ','line_number':64,'multiline':True]
+['text':' The oplog fetched.','line_number':96,'multiline':False]
+['text':' If this is set to true, oplog returned is not confirmed to be majority committed,','line_number':99,'multiline':False]
+['text':' so the caller has to explicitly wait for it to be committed to majority.','line_number':100,'multiline':False]
+['text':'*
+     * Gets the session oplog entries to be sent to the destination. The initialization is separated
+     * from the constructor to allow the member functions of the SessionCatalogMigrationSource to be
+     * called before the initialization step is finished.
+     ','line_number':109,'multiline':True]
+['text':'*
+     * Returns true if there are more oplog entries to fetch at this moment. Note that new writes
+     * can still continue to come in after this has returned false, so it can become true again.
+     * Once this has returned false, this means that it has depleted the existing buffer so it
+     * is a good time to enter the critical section.
+     ','line_number':116,'multiline':True]
+['text':'*
+     * Returns true if the majority committed oplog entries are drained and false otherwise.
+     ','line_number':124,'multiline':True]
+['text':'*
+     * Returns the estimated bytes of data left to transfer in _newWriteOpTimeList.
+     ','line_number':129,'multiline':True]
+['text':'*
+     * Attempts to fetch the next oplog entry. Returns true if it was able to fetch anything.
+     ','line_number':134,'multiline':True]
+['text':'*
+     * Returns a notification that can be used to wait for new oplog entries to fetch. Note
+     * that this should only be called if hasMoreOplog/fetchNextOplog returned false at
+     * least once.
+     *
+     * If the notification is set to true, then that means that there is no longer a need to
+     * fetch more oplog because the data migration has entered the critical section and
+     * the buffer for oplog to fetch is empty or the data migration has aborted.
+     ','line_number':139,'multiline':True]
+['text':'*
+     * Returns the oplog document that was last fetched by the fetchNextOplog call.
+     * Returns an empty object if there are no oplog to fetch.
+     ','line_number':150,'multiline':True]
+['text':'*
+     * Remembers the oplog timestamp of a new write that just occurred.
+     ','line_number':156,'multiline':True]
+['text':'*
+     * Returns the rollback ID recorded at the beginning of session migration.
+     ','line_number':161,'multiline':True]
+['text':'*
+     * Inform this session migration machinery that the data migration just entered the critical
+     * section.
+     ','line_number':168,'multiline':True]
+['text':'*
+     * Inform this session migration machinery that the data migration just terminated and
+     * entering the cleanup phase (can be aborted or committed).
+     ','line_number':174,'multiline':True]
+['text':'*
+     * This function will utilize the shardKeyPattern and chunkRange to evaluate whether or not
+     * the oplogEntry is relevant to the migration. If not, the chunk should be skipped and the
+     * function will return true. Otherwise the function will return false.
+     *
+     * If the oplogEntry is of type no-op and it has been rewritten by another migration and it's
+     * outside of the chunk range, then it should be skipped. Or if the oplog is a crud operation
+     * and it's outside of the chunk range then it should be skipped.
+     ','line_number':180,'multiline':True]
+['text':'*
+     * Given an Oplog entry, extracts the shard key corresponding to the key pattern for insert,
+     * update, and delete op types. If the op type is not a CRUD operation, an empty BSONObj()
+     * will be returned.
+     *
+     * For update and delete operations, the Oplog entry will contain an object with the document
+     * key.
+     *
+     * For insert operations, the Oplog entry will contain the original document from which the
+     * document key must be extracted
+     *
+     * Examples:
+     *  For KeyPattern {'a.b': 1}
+     *   If the oplog entries contains field op='i'
+     *     oplog contains: { a : { b : "1" } }
+     *   If the oplog entries contains field op='u' or op='d'
+     *     oplog contains: { 'a.b': "1" }
+     ','line_number':196,'multiline':True]
+['text':'*
+     * An iterator for extracting session write oplogs that need to be cloned during migration.
+     ','line_number':218,'multiline':True]
+['text':'*
+         * Returns the next oplog write that happened in this session, or boost::none if there
+         * are no remaining entries for this session.
+         *
+         * If either:
+         *     a) the oplog is lost because the oplog rolled over, or
+         *     b) if the oplog entry is a prepare or commitTransaction entry,
+         * this will return a sentinel oplog entry instead with type 'n' and o2 field set to
+         * Session::kDeadEndSentinel.  This will also mean that next subsequent calls to getNext
+         * will return boost::none.
+         ','line_number':227,'multiline':True]
+['text':'/////////////////////////////////////////////////////////////////////////','line_number':254,'multiline':False]
+['text':' Methods for extracting the oplog entries from session information.','line_number':255,'multiline':False]
+['text':'*
+     * If this returns false, it just means that there are no more oplog entry in the buffer that
+     * needs to be moved over. However, there can still be new incoming operations that can add
+     * new entries. Also see hasNewWrites.
+     ','line_number':257,'multiline':True]
+['text':'*
+     * Attempts to extract the next oplog document by following the oplog chain from the sessions
+     * catalog. Returns true if a document was actually fetched.
+     ','line_number':264,'multiline':True]
+['text':'*
+     * Extracts oplog information from the current writeHistoryIterator to _lastFetchedOplog. This
+     * handles insert/update/delete/findAndModify oplog entries.
+     *
+     * Returns true if current writeHistoryIterator has any oplog entry.
+     ','line_number':270,'multiline':True]
+['text':'/////////////////////////////////////////////////////////////////////////','line_number':278,'multiline':False]
+['text':' Methods for capturing and extracting oplog entries for new writes.','line_number':279,'multiline':False]
+['text':'*
+     * Returns true if there are oplog generated by new writes that needs to be fetched.
+     ','line_number':281,'multiline':True]
+['text':'*
+     * Attempts to fetch the next oplog entry from the new writes that was saved by saveNewWriteTS.
+     * Returns true if there were documents that were retrieved.
+     ','line_number':286,'multiline':True]
+['text':'*
+     * Same as notifyNewWriteOpTime but must be called while holding the _newOplogMutex.
+     ','line_number':292,'multiline':True]
+['text':'
+     * Derives retryable write oplog entries from the given retryable internal transaction applyOps
+     * oplog entry, and adds the ones that are related to the migration the given oplog buffer. Must
+     * be called while holding the mutex that protects the buffer.
+     ','line_number':299,'multiline':True]
+['text':' Namespace for which the migration is happening','line_number':309,'multiline':False]
+['text':' The rollback id just before migration started. This value is needed so that step-down','line_number':312,'multiline':False]
+['text':' followed by step-up situations can be discovered.','line_number':313,'multiline':False]
+['text':' Protects _sessionOplogIterators, _currentOplogIterator, _lastFetchedOplog,','line_number':319,'multiline':False]
+['text':' _lastFetchedOplogImage and _unprocessedOplogBuffer.','line_number':320,'multiline':False]
+['text':' List of remaining session records that needs to be cloned.','line_number':324,'multiline':False]
+['text':' Points to the current session record being cloned.','line_number':327,'multiline':False]
+['text':' Used to store the last fetched and processed oplog entry from _currentOplogIterator. This','line_number':331,'multiline':False]
+['text':' enables calling get() multiple times.','line_number':332,'multiline':False]
+['text':' Used to store the pre/post image for _lastFetchedNewWriteOplog if there is one.','line_number':335,'multiline':False]
+['text':' Used to store the last fetched oplog entries from _currentOplogIterator that have not been','line_number':338,'multiline':False]
+['text':' processed.','line_number':339,'multiline':False]
+['text':' Protects _newWriteOpTimeList, _lastFetchedNewWriteOplog, _lastFetchedNewWriteOplogImage,','line_number':342,'multiline':False]
+['text':' _unprocessedNewWriteOplogBuffer, _state, _newOplogNotification.','line_number':343,'multiline':False]
+['text':' The average size of documents in config.transactions.','line_number':346,'multiline':False]
+['text':' Stores oplog opTime of new writes that are coming in.','line_number':349,'multiline':False]
+['text':' Used to store the last fetched and processed oplog entry from _newWriteOpTimeList. This','line_number':352,'multiline':False]
+['text':' enables calling get() multiple times.','line_number':353,'multiline':False]
+['text':' Used to store the pre/post image oplog entry when _lastFetchedNewWriteOplog if there is one.','line_number':356,'multiline':False]
+['text':' Used to store the last fetched oplog entries from _newWriteOpTimeList that have not been','line_number':359,'multiline':False]
+['text':' processed.','line_number':360,'multiline':False]
+['text':' Stores the current state.','line_number':363,'multiline':False]
+['text':' Holds the latest request for notification of new oplog entries that needs to be fetched.','line_number':366,'multiline':False]
+['text':' Sets to true if there is no need to fetch an oplog anymore (for example, because migration','line_number':367,'multiline':False]
+['text':' aborted).','line_number':368,'multiline':False]
+['text':' The number of session oplog entries that need to be migrated','line_number':371,'multiline':False]
+['text':' from the source to the destination','line_number':372,'multiline':False]
+['text':' There are optimizations so that we do not send all of the oplog','line_number':375,'multiline':False]
+['text':' entries to the destination. This stat provides a lower bound on the number of session oplog','line_number':376,'multiline':False]
+['text':' entries that we did not send to the destination. It is a lower bound because some of the','line_number':377,'multiline':False]
+['text':' optimizations do not allow us to know the exact number of oplog entries we skipped.','line_number':378,'multiline':False]
+['text':' namespace mongo','line_number':382,'multiline':False]

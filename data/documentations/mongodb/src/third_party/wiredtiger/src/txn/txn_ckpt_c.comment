@@ -1,0 +1,944 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __checkpoint_flush_tier_wait --
+ *     Wait for all previous work units queued to be processed.
+ ','line_number':18,'multiline':True]
+['text':'
+     * The internal thread needs the schema lock to perform its operations and flush tier also
+     * acquires the schema lock. We cannot be waiting in this function while holding that lock or no
+     * work will get done.
+     ','line_number':36,'multiline':True]
+['text':'
+     * It may be worthwhile looking at the add and decrement values and make choices of whether to
+     * yield or wait based on how much of the workload has been performed. Flushing operations could
+     * take a long time so yielding may not be effective.
+     ','line_number':47,'multiline':True]
+['text':'
+ * __checkpoint_flush_tier --
+ *     Perform one iteration of tiered storage maintenance.
+ ','line_number':68,'multiline':True]
+['text':'
+     * For supporting splits and merge:
+     * - See if there is any merging work to do to prepare and create an object that is
+     *   suitable for placing onto tiered storage.
+     * - Do the work to create said objects.
+     * - Move the objects.
+     ','line_number':93,'multiline':True]
+['text':' Flushing is part of a checkpoint, use the session's checkpoint time. ','line_number':102,'multiline':True]
+['text':' Storing the last flush timestamp here for the future and for debugging. ','line_number':104,'multiline':True]
+['text':'
+     * It would be more efficient to return here if no tiered storage is enabled in the system. If
+     * the user asks for a flush_tier without tiered storage, the loop below is effectively a no-op
+     * and will not be incorrect. But we could also just return.
+     ','line_number':106,'multiline':True]
+['text':'
+     * Walk the metadata cursor to find tiered tables to flush. This should be optimized to avoid
+     * flushing tables that haven't changed.
+     ','line_number':112,'multiline':True]
+['text':' For now just switch tiers which just does metadata manipulation. ','line_number':120,'multiline':True]
+['text':'
+                 * Check the table's last checkpoint time and only flush trees that have a
+                 * checkpoint more recent than the last flush time.
+                 ','line_number':125,'multiline':True]
+['text':' If nothing has changed, there's nothing to do. ','line_number':134,'multiline':True]
+['text':' Only instantiate the handle if we need to flush. ','line_number':140,'multiline':True]
+['text':'
+             * When we call wt_tiered_switch the session->dhandle points to the tiered: entry and
+             * the arg is the config string that is currently in the metadata. Also, mark the tree
+             * dirty to ensure it participates in the checkpoint process, even if clean. Skip the
+             * trees still open for bulk insertion, we fake checkpoints for them, i.e. we never
+             * really write a checkpoint to the disk - so no point switching just yet.
+             ','line_number':142,'multiline':True]
+['text':' Clear the flag on success. ','line_number':165,'multiline':True]
+['text':'
+ * __checkpoint_name_ok --
+ *     Complain if the checkpoint name isn't acceptable.
+ ','line_number':175,'multiline':True]
+['text':' Check for characters we don't want to see in a metadata file. ','line_number':182,'multiline':True]
+['text':'
+     * The internal checkpoint name is special, applications aren't allowed to use it. Be aggressive
+     * and disallow any matching prefix, it makes things easier when checking in other places.
+     ','line_number':185,'multiline':True]
+['text':' The name "all" is also special. ','line_number':192,'multiline':True]
+['text':'
+ * __checkpoint_name_check --
+ *     Check for an attempt to name a checkpoint that includes anything other than a file object.
+ ','line_number':199,'multiline':True]
+['text':'
+     * This function exists as a place for this comment: named checkpoints are only supported on
+     * file objects, and not on LSM trees. If a target list is configured for the checkpoint, this
+     * function is called with each target list entry; check the entry to make sure it's backed by a
+     * file. If no target list is configured, confirm the metadata file contains no non-file
+     * objects. Skip any internal system objects. We don't want spurious error messages, other code
+     * will skip over them and the user has no control over their existence.
+     ','line_number':213,'multiline':True]
+['text':'
+ * __checkpoint_update_generation --
+ *     Update the checkpoint generation of the current tree. This indicates that the tree will not
+ *     be visited again by the current checkpoint.
+ ','line_number':246,'multiline':True]
+['text':'
+     * Updates to the metadata are made by the checkpoint transaction, so the metadata tree's
+     * checkpoint generation should never be updated.
+     ','line_number':258,'multiline':True]
+['text':'
+ * __checkpoint_apply_operation --
+ *     Apply a preliminary operation to all files involved in a checkpoint.
+ ','line_number':269,'multiline':True]
+['text':' Flag if this is a named checkpoint, and check if the name is OK. ','line_number':285,'multiline':True]
+['text':' Step through the targets and optionally operate on each one. ','line_number':291,'multiline':True]
+['text':' Some objects don't support named checkpoints. ','line_number':304,'multiline':True]
+['text':' Some objects don't support named checkpoints. ','line_number':317,'multiline':True]
+['text':'
+         * If the checkpoint is named or we're dropping checkpoints, we checkpoint both open and
+         * closed files; else, only checkpoint open files.
+         *
+         * XXX We don't optimize unnamed checkpoints of a list of targets, we open the targets and
+         * checkpoint them even if they are quiescent and don't need a checkpoint, believing
+         * applications unlikely to checkpoint a list of closed targets.
+         ','line_number':321,'multiline':True]
+['text':'
+ * __checkpoint_apply_to_dhandles --
+ *     Apply an operation to all handles locked for a checkpoint.
+ ','line_number':349,'multiline':True]
+['text':' If we have already locked the handles, apply the operation. ','line_number':360,'multiline':True]
+['text':'
+ * __checkpoint_data_source --
+ *     Checkpoint all data sources.
+ ','line_number':371,'multiline':True]
+['text':'
+     * A place-holder, to support data sources: we assume calling the underlying data-source session
+     * checkpoint function is sufficient to checkpoint all objects in the data source, open or
+     * closed, and we don't attempt to optimize the checkpoint of individual targets. Those
+     * assumptions are not necessarily going to be true for all data sources.
+     *
+     * It's not difficult to support data-source checkpoints of individual targets
+     * (__wt_schema_worker is the underlying function that will do the work, and it's already
+     * written to support data-sources, although we'd probably need to pass the URI of the object to
+     * the data source checkpoint function which we don't currently do). However, doing a full data
+     * checkpoint is trickier: currently, the connection code is written to ignore all objects other
+     * than "file:", and that code will require significant changes to work with data sources.
+     ','line_number':381,'multiline':True]
+['text':'
+ * __wt_checkpoint_get_handles --
+ *     Get a list of handles to flush.
+ ','line_number':402,'multiline':True]
+['text':' Find out if we have to force a checkpoint. ','line_number':415,'multiline':True]
+['text':' Should not be called with anything other than a live btree handle. ','line_number':423,'multiline':True]
+['text':'
+     * Skip files that are never involved in a checkpoint. Skip the history store file as it is,
+     * checkpointed manually later.
+     ','line_number':428,'multiline':True]
+['text':'
+     * We may have raced between starting the checkpoint transaction and some operation completing
+     * on the handle that updated the metadata (e.g., closing a bulk load cursor). All such
+     * operations either have exclusive access to the handle or hold the schema lock. We are now
+     * holding the schema lock and have an open btree handle, so if we can't update the metadata,
+     * then there has been some state change invisible to the checkpoint transaction.
+     ','line_number':435,'multiline':True]
+['text':'
+             * If create or drop or any schema operation of a table is with in an user transaction
+             * then checkpoint can see the dhandle before the commit, which will lead to the
+             * rollback error. We will ignore this dhandle as part of this checkpoint by returning
+             * from here.
+             ','line_number':450,'multiline':True]
+['text':'
+     * Decide whether the tree needs to be included in the checkpoint and if so, acquire the
+     * necessary locks.
+     ','line_number':465,'multiline':True]
+['text':'
+     * Make sure there is space for the new entry: do this before getting the handle to avoid
+     * cleanup if we can't allocate the memory.
+     ','line_number':476,'multiline':True]
+['text':'
+     * The current tree will be included: get it again because the handle we have is only valid for
+     * the duration of this function.
+     ','line_number':483,'multiline':True]
+['text':'
+     * Save the current eviction walk setting: checkpoint can interfere with eviction and we don't
+     * want to unfairly penalize (or promote) eviction in trees due to checkpoints.
+     ','line_number':493,'multiline':True]
+['text':'
+ * __checkpoint_wait_reduce_dirty_cache --
+ *     Try to reduce the amount of dirty data in cache so there is less work do during the critical
+ *     section of the checkpoint.
+ ','line_number':503,'multiline':True]
+['text':' Give up if scrubbing is disabled. ','line_number':520,'multiline':True]
+['text':'
+     * If the cache size is zero or very small, we're done. The cache size can briefly become zero
+     * if we're transitioning to a shared cache via reconfigure. This avoids potential divide by
+     * zero.
+     ','line_number':526,'multiline':True]
+['text':' Stop if we write as much dirty data as is currently in cache. ','line_number':538,'multiline':True]
+['text':' Set the dirty trigger to the target value. ','line_number':541,'multiline':True]
+['text':' Wait while the dirty level is going down. ','line_number':545,'multiline':True]
+['text':'
+         * We haven't reached the current target.
+         *
+         * Don't wait indefinitely: there might be dirty pages that can't be evicted. If we can't
+         * meet the target, give up and start the checkpoint for real.
+         ','line_number':555,'multiline':True]
+['text':'
+ * __wt_checkpoint_progress --
+ *     Output a checkpoint progress message.
+ ','line_number':567,'multiline':True]
+['text':' Time since the full database checkpoint started ','line_number':581,'multiline':True]
+['text':'
+ * __checkpoint_stats --
+ *     Update checkpoint timer stats.
+ ','line_number':593,'multiline':True]
+['text':' Output a verbose progress message for long running checkpoints. ','line_number':606,'multiline':True]
+['text':' Compute end-to-end timer statistics for checkpoint. ','line_number':610,'multiline':True]
+['text':' Compute timer statistics for the scrub. ','line_number':621,'multiline':True]
+['text':' Compute timer statistics for the checkpoint prepare. ','line_number':631,'multiline':True]
+['text':'
+ * __checkpoint_verbose_track --
+ *     Output a verbose message with timing information
+ ','line_number':642,'multiline':True]
+['text':' Get time diff in milliseconds. ','line_number':659,'multiline':True]
+['text':'
+ * __checkpoint_fail_reset --
+ *     Reset fields when a failure occurs.
+ ','line_number':666,'multiline':True]
+['text':'
+ * __checkpoint_prepare --
+ *     Start the transaction for a checkpoint and gather handles.
+ ','line_number':680,'multiline':True]
+['text':'
+     * Start a snapshot transaction for the checkpoint.
+     *
+     * Note: we don't go through the public API calls because they have side effects on cursors,
+     * which applications can hold open across calls to checkpoint.
+     ','line_number':713,'multiline':True]
+['text':' Wait 1000 microseconds to simulate slowdown in checkpoint prepare. ','line_number':723,'multiline':True]
+['text':' Ensure a transaction ID is allocated prior to sharing it globally ','line_number':731,'multiline':True]
+['text':' Keep track of handles acquired for locking. ','line_number':734,'multiline':True]
+['text':'
+     * Mark the connection as clean. If some data gets modified after generating checkpoint
+     * transaction id, connection will be reset to dirty when reconciliation marks the btree dirty
+     * on encountering the dirty page.
+     ','line_number':738,'multiline':True]
+['text':'
+     * Save the checkpoint session ID.
+     *
+     * We never do checkpoints in the default session (with id zero).
+     ','line_number':745,'multiline':True]
+['text':'
+     * Remove the checkpoint transaction from the global table.
+     *
+     * This allows ordinary visibility checks to move forward because checkpoints often take a long
+     * time and only write to the metadata.
+     ','line_number':753,'multiline':True]
+['text':'
+     * Sanity check that the oldest ID hasn't moved on before we have cleared our entry.
+     ','line_number':763,'multiline':True]
+['text':'
+     * Clear our entry from the global transaction session table. Any operation that needs to know
+     * about the ID for this checkpoint will consider the checkpoint ID in the global structure.
+     * Most operations can safely ignore the checkpoint ID (see the visible all check for details).
+     ','line_number':770,'multiline':True]
+['text':'
+     * Set the checkpoint transaction's timestamp, if requested.
+     *
+     * We rely on having the global transaction data locked so the oldest timestamp can't move past
+     * the stable timestamp.
+     ','line_number':777,'multiline':True]
+['text':'
+         * If the user wants timestamps then set the metadata checkpoint timestamp based on whether
+         * or not a stable timestamp is actually in use. Only set it when we're not running recovery
+         * because recovery doesn't set the recovery timestamp until its checkpoint is complete.
+         ','line_number':787,'multiline':True]
+['text':'
+     * Refresh our snapshot here without publishing our shared ids to the world, doing so prevents
+     * us from racing with the stable timestamp moving ahead of current snapshot. i.e. if the stable
+     * timestamp moves after we begin the checkpoint transaction but before we set the checkpoint
+     * timestamp we can end up missing updates in our checkpoint.
+     ','line_number':806,'multiline':True]
+['text':' Assert that our snapshot min didn't somehow move backwards. ','line_number':814,'multiline':True]
+['text':' Flag as unused for non diagnostic builds. ','line_number':816,'multiline':True]
+['text':'
+     * If we are doing a flush_tier, do the metadata naming switch now while holding the schema lock
+     * in this function.
+     ','line_number':825,'multiline':True]
+['text':'
+     * Get a list of handles we want to sync; for named checkpoints this may pull closed objects
+     * into the session cache.
+     *
+     * First, gather all handles, then start the checkpoint transaction, then release any clean
+     * handles.
+     ','line_number':832,'multiline':True]
+['text':'
+ * __txn_checkpoint_can_skip --
+ *     Determine whether it's safe to skip taking a checkpoint.
+ ','line_number':849,'multiline':True]
+['text':'
+     * Default to not skipping - also initialize the other output parameters - even though they will
+     * always be initialized unless there is an error and callers need to ignore the results on
+     * error.
+     ','line_number':863,'multiline':True]
+['text':'
+     * This function also parses out some configuration options and hands them back to the caller -
+     * make sure it does that parsing regardless of the result.
+     *
+     * Determine if this is going to be a full checkpoint, that is a checkpoint that applies to all
+     * data tables in a database.
+     ','line_number':873,'multiline':True]
+['text':' Never skip non-full checkpoints ','line_number':887,'multiline':True]
+['text':' Never skip if force is configured. ','line_number':891,'multiline':True]
+['text':' Never skip named checkpoints. ','line_number':896,'multiline':True]
+['text':' Never skip if flushing objects. ','line_number':901,'multiline':True]
+['text':'
+     * If the checkpoint is using timestamps, and the stable timestamp hasn't been updated since the
+     * last checkpoint there is nothing more that could be written. Except when a non timestamped
+     * file has been modified, as such if the connection has been modified it is currently unsafe to
+     * skip checkpoints.
+     ','line_number':906,'multiline':True]
+['text':'
+     * Skip checkpointing the database if nothing has been dirtied since the last checkpoint. That
+     * said there can be short instances when a btree gets marked dirty and the connection is yet to
+     * be. We might skip a checkpoint in that short instance, which is okay because by the next time
+     * we get to checkpoint, the connection would have been marked dirty and hence the checkpoint
+     * will not be skipped again.
+     *
+     * If we are using timestamps then we shouldn't skip as the stable timestamp must have moved,
+     * and as such we still need to run checkpoint to update the checkpoint timestamp and the
+     * metadata.
+     ','line_number':919,'multiline':True]
+['text':'
+ * __txn_checkpoint_establish_time --
+ *     Get a time (wall time, not a timestamp) for this checkpoint. The time is left in the session.
+ ','line_number':936,'multiline':True]
+['text':'
+     * If tiered storage is in use, move the time up to at least the most recent flush first. NOTE:
+     * reading the most recent flush time is not an ordered read (or repeated on retry) because
+     * currently checkpoint and flush tier are mutually exclusive.
+     *
+     * Update the global value that tracks the most recent checkpoint, and use it to make sure the
+     * most recent checkpoint time doesn't move backwards. Also make sure that this checkpoint time
+     * is not the same as the previous one, by running the clock forwards as needed.
+     *
+     * Note that while it's possible to run the clock a good long way forward if one tries (e.g. by
+     * doing a large number of schema operations that are fast and generate successive checkpoints
+     * of the metadata) and some tests (e.g. f_ops) do, this is not expected to happen in real use
+     * or lead to significant deviations from wall clock time. In a real database of any size full
+     * checkpoints take more than one second and schema operations are rare. Furthermore, though
+     * these times are saved on disk and displayed by 'wt list' they are not used operationally
+     * except in restricted ways:
+     *    - to manage the interaction between hot backups and checkpointing, where the absolute time
+     *      does not matter;
+     *    - to track when tiered storage was last flushed in order to avoid redoing work, where the
+     *      absolute time does not matter;
+     *    - to detect and retry races between opening checkpoint cursors and checkpoints in progress
+     *      (which only cares about ordering and only since the last database open).
+     *
+     * Currently the checkpoint time can move backwards if something has run it forward and a crash
+     * (or shutdown) and restart happens quickly enough that the wall clock hasn't caught up yet.
+     * This is a property of the way it gets initialized at startup, which is naive, and if issues
+     * arise where this matters it can get adjusted during startup in much the way the base write
+     * generation does. The checkpoint cursor opening code was set up specifically so that this does
+     * not matter.
+     *
+     * It is possible to race here, so use atomic CAS. This code relies on the fact that anyone we
+     * race with will only increase (never decrease) the most recent checkpoint time value.
+     *
+     * We store the time in the session rather than passing it around explicitly because passing it
+     * around explicitly runs afoul of the type signatures of the functions passed to schema_worker.
+     ','line_number':948,'multiline':True]
+['text':'
+ * __txn_checkpoint_clear_time --
+ *     Clear the current checkpoint time in the session.
+ ','line_number':1000,'multiline':True]
+['text':'
+ * __txn_checkpoint --
+ *     Checkpoint a database or a list of objects in the database.
+ ','line_number':1011,'multiline':True]
+['text':' Avoid doing work if possible. ','line_number':1050,'multiline':True]
+['text':' Check if this is a named checkpoint. ','line_number':1057,'multiline':True]
+['text':'
+     * Do a pass over the configuration arguments and figure out what kind of checkpoint this is.
+     ','line_number':1067,'multiline':True]
+['text':' Reset the statistics tracked per checkpoint. ','line_number':1074,'multiline':True]
+['text':' Initialize the verbose tracking timer ','line_number':1082,'multiline':True]
+['text':' Initialize the checkpoint progress tracking data ','line_number':1085,'multiline':True]
+['text':'
+     * Get a time (wall time, not a timestamp) for this checkpoint. This will be applied to all the
+     * trees so they match. The time is left in the session.
+     ','line_number':1090,'multiline':True]
+['text':'
+     * Update the global oldest ID so we do all possible cleanup.
+     *
+     * This is particularly important for compact, so that all dirty pages can be fully written.
+     ','line_number':1096,'multiline':True]
+['text':' Flush data-sources before we start the checkpoint. ','line_number':1104,'multiline':True]
+['text':'
+     * Try to reduce the amount of dirty data in cache so there is less work do during the critical
+     * section of the checkpoint.
+     ','line_number':1107,'multiline':True]
+['text':' Tell logging that we are about to start a database checkpoint. ','line_number':1113,'multiline':True]
+['text':'
+     * Start the checkpoint for real.
+     *
+     * Bump the global checkpoint generation, used to figure out whether checkpoint has visited a
+     * tree. Use an atomic increment even though we are single-threaded because readers of the
+     * checkpoint generation don't hold the checkpoint lock.
+     *
+     * We do need to update it before clearing the checkpoint's entry out of the transaction table,
+     * or a thread evicting in a tree could ignore the checkpoint's transaction.
+     ','line_number':1123,'multiline':True]
+['text':'
+     * We want to skip checkpointing clean handles whenever possible. That is, when the checkpoint
+     * is not named or forced. However, we need to take care about ordering with respect to the
+     * checkpoint transaction.
+     *
+     * We can't skip clean handles before starting the transaction or the checkpoint can miss
+     * updates in trees that become dirty as the checkpoint is starting. If we wait until the
+     * transaction has started before locking a handle, there could be a metadata-changing operation
+     * in between (e.g., salvage) that will cause a write conflict when the checkpoint goes to write
+     * the metadata.
+     *
+     * Hold the schema lock while starting the transaction and gathering handles so the set we get
+     * is complete and correct.
+     ','line_number':1136,'multiline':True]
+['text':'
+     * Save the checkpoint timestamp in a temporary variable, when we release our snapshot it'll be
+     * reset to zero.
+     ','line_number':1153,'multiline':True]
+['text':'
+     * Unblock updates -- we can figure out that any updates to clean pages after this point are too
+     * new to be written in the checkpoint.
+     ','line_number':1161,'multiline':True]
+['text':' Tell logging that we have started a database checkpoint. ','line_number':1168,'multiline':True]
+['text':' Add a ten second wait to simulate checkpoint slowness. ','line_number':1172,'multiline':True]
+['text':' Wait prior to checkpointing the history store to simulate checkpoint slowness. ','line_number':1186,'multiline':True]
+['text':'
+     * Get a history store dhandle. If the history store file is opened for a special operation this
+     * will return EBUSY which we treat as an error. In scenarios where the history store is not
+     * part of the metadata file (performing recovery on backup folder where no checkpoint
+     * occurred), this will return ENOENT which we ignore and continue.
+     ','line_number':1189,'multiline':True]
+['text':'
+     * It is possible that we don't have a history store file in certain recovery scenarios. As such
+     * we could get a dhandle that is not opened.
+     ','line_number':1198,'multiline':True]
+['text':'
+         * Once the history store checkpoint is complete, we increment the checkpoint generation of
+         * the associated b-tree. The checkpoint generation controls whether we include the
+         * checkpoint transaction in our calculations of the pinned and oldest_ids for a given
+         * btree. We increment it here to ensure that the visibility checks performed on updates in
+         * the history store do not include the checkpoint transaction.
+         ','line_number':1212,'multiline':True]
+['text':'
+     * As part of recovery, rollback to stable may have left out clearing stale transaction ids.
+     * Update the connection base write generation based on the latest checkpoint write generations
+     * to reset these transaction ids present on the pages when reading them.
+     ','line_number':1226,'multiline':True]
+['text':'
+     * Clear the dhandle so the visibility check doesn't get confused about the snap min. Don't
+     * bother restoring the handle since it doesn't make sense to carry a handle across a
+     * checkpoint.
+     ','line_number':1234,'multiline':True]
+['text':'
+     * We have to update the system information before we release the snapshot. Drop the system
+     * information for checkpoints we're dropping first in case the names overlap.
+     ','line_number':1241,'multiline':True]
+['text':' Release the snapshot so we aren't pinning updates in cache. ','line_number':1252,'multiline':True]
+['text':' Mark all trees as open for business (particularly eviction). ','line_number':1257,'multiline':True]
+['text':'
+     * Checkpoints have to hit disk (it would be reasonable to configure for lazy checkpoints, but
+     * we don't support them yet).
+     ','line_number':1262,'multiline':True]
+['text':' Sync the history store file. ','line_number':1271,'multiline':True]
+['text':' If the history store file exists on disk, update its statistic. ','line_number':1284,'multiline':True]
+['text':'
+     * Commit the transaction now that we are sure that all files in the checkpoint have been
+     * flushed to disk. It's OK to commit before checkpointing the metadata since we know that all
+     * files in the checkpoint are now in a consistent state.
+     ','line_number':1290,'multiline':True]
+['text':'
+     * Flush all the logs that are generated during the checkpoint. It is possible that checkpoint
+     * may include the changes that are written in parallel by an eviction. To have a consistent
+     * view of the data, make sure that all the logs are flushed to disk before the checkpoint is
+     * complete.
+     ','line_number':1298,'multiline':True]
+['text':'
+     * Ensure that the metadata changes are durable before the checkpoint is resolved. Do this by
+     * either checkpointing the metadata or syncing the log file. Recovery relies on the checkpoint
+     * LSN in the metadata only being updated by full checkpoints so only checkpoint the metadata
+     * for full or non-logged checkpoints.
+     *
+     * This is very similar to __wt_meta_track_off, ideally they would be merged.
+     ','line_number':1307,'multiline':True]
+['text':' Disable metadata tracking during the metadata checkpoint. ','line_number':1317,'multiline':True]
+['text':' Wait prior to flush the checkpoint stop log record. ','line_number':1337,'multiline':True]
+['text':'
+     * Now that the metadata is stable, re-open the metadata file for regular eviction by clearing
+     * the checkpoint_pinned flag.
+     ','line_number':1341,'multiline':True]
+['text':'
+         * If timestamps defined the checkpoint's content, set the saved last checkpoint timestamp,
+         * otherwise clear it. We clear it for a couple of reasons: applications can query it and we
+         * don't want to lie, and we use it to decide if WT_CONNECTION.rollback_to_stable is an
+         * allowed operation. For the same reason, don't set it to WT_TS_NONE when the checkpoint
+         * timestamp is WT_TS_NONE, set it to 1 so we can tell the difference.
+         ','line_number':1350,'multiline':True]
+['text':'
+             * MongoDB assumes the checkpoint timestamp will be initialized with WT_TS_NONE. In such
+             * cases it queries the recovery timestamp to determine the last stable recovery
+             * timestamp. So, if the recovery timestamp is valid, set the last checkpoint timestamp
+             * to recovery timestamp. This should never be a problem, as checkpoint timestamp should
+             * never be less than recovery timestamp. This could potentially avoid MongoDB making
+             * two calls to determine last stable recovery timestamp.
+             ','line_number':1359,'multiline':True]
+['text':'
+     * Reset the timer so that next checkpoint tracks the progress only if configured.
+     ','line_number':1376,'multiline':True]
+['text':'
+     * XXX Rolling back the changes here is problematic.
+     *
+     * If we unroll here, we need a way to roll back changes to the avail list for each tree that
+     * was successfully synced before the error occurred. Otherwise, the next time we try this
+     * operation, we will try to free an old checkpoint again.
+     *
+     * OTOH, if we commit the changes after a failure, we have partially overwritten the checkpoint,
+     * so what ends up on disk is not consistent.
+     ','line_number':1381,'multiline':True]
+['text':'
+         * Clear the dhandle so the visibility check doesn't get confused about the snap min. Don't
+         * bother restoring the handle since it doesn't make sense to carry a handle across a
+         * checkpoint.
+         ','line_number':1405,'multiline':True]
+['text':'
+     * Tell logging that we have finished a database checkpoint. Do not write a log record if the
+     * database was idle.
+     ','line_number':1415,'multiline':True]
+['text':'
+         * If the operation failed, mark all trees dirty so they are included if a future checkpoint
+         * can succeed.
+         ','line_number':1430,'multiline':True]
+['text':'
+ * __txn_checkpoint_wrapper --
+ *     Checkpoint wrapper.
+ ','line_number':1452,'multiline':True]
+['text':'
+     * FIXME-WT-11149: Some reading threads rely on the value of checkpoint running flag being
+     * published before the checkpoint generation number (set inside the checkpoint call below).
+     * Introduce a write barrier here to guarantee the right order.
+     ','line_number':1470,'multiline':True]
+['text':'
+     * Signal the tiered storage thread because it waits for the checkpoint to complete to process
+     * flush units. Indicate that the checkpoint has completed.
+     ','line_number':1481,'multiline':True]
+['text':'
+ * __wt_txn_checkpoint --
+ *     Checkpoint a database or a list of objects in the database.
+ ','line_number':1493,'multiline':True]
+['text':'
+     * Reset open cursors. Do this explicitly, even though it will happen implicitly in the call to
+     * begin_transaction for the checkpoint, the checkpoint code will acquire the schema lock before
+     * we do that, and some implementation of WT_CURSOR::reset might need the schema lock.
+     ','line_number':1505,'multiline':True]
+['text':' Ensure the metadata table is open before taking any locks. ','line_number':1513,'multiline':True]
+['text':'
+     * Don't hijack the session checkpoint thread for eviction.
+     *
+     * Application threads are not generally available for potentially slow operations, but
+     * checkpoint does enough I/O it may be called upon to perform slow operations for the block
+     * manager.
+     *
+     * Application checkpoints wait until the checkpoint lock is available, compaction checkpoints
+     * don't.
+     *
+     * Checkpoints should always use a separate session for history store updates, otherwise those
+     * updates are pinned until the checkpoint commits. Also, there are unfortunate interactions
+     * between the special rules for history store eviction and the special handling of the
+     * checkpoint transaction.
+     ','line_number':1516,'multiline':True]
+['text':'
+     * If this checkpoint includes a flush_tier then this call also must wait for any earlier
+     * flush_tier to have completed all of its copying of objects. This happens if the user chose to
+     * not wait for sync on the previous call.
+     ','line_number':1534,'multiline':True]
+['text':'
+     * Only one checkpoint can be active at a time, and checkpoints must run in the same order as
+     * they update the metadata. It's probably a bad idea to run checkpoints out of multiple
+     * threads, but as compaction calls checkpoint directly, it can be tough to avoid. Serialize
+     * here to ensure we don't get into trouble.
+     ','line_number':1546,'multiline':True]
+['text':'
+     * If this checkpoint is flushing objects, a failure can leave a tree's block manager pointing
+     * to incorrect blocks. Currently we can not recover from this situation. Panic!
+     ','line_number':1556,'multiline':True]
+['text':'
+ * __drop_list_execute --
+ *     Clear the system info (snapshot and timestamp info) for the named checkpoints on the drop
+ *     list.
+ ','line_number':1574,'multiline':True]
+['text':' The list has the form (name, name, ...,) so we can read it with the config parser. ','line_number':1586,'multiline':True]
+['text':'
+ * __drop_list_add --
+ *     Add a checkpoint name to the list of (named) checkpoints being dropped. The list is produced
+ *     by the first tree in the checkpoint (it must be the same in every tree, so it only needs to
+ *     be produced once) and used at the top level to drop the snapshot and timestamp metadata for
+ *     those checkpoints. Note that while there are several places in this file where WT_CKPT_DELETE
+ *     is cleared on the fly, meaning the checkpoint won't actually be dropped, none of these apply
+ *     to named checkpoints.
+ ','line_number':1596,'multiline':True]
+['text':'
+ * __drop --
+ *     Drop all checkpoints with a specific name.
+ ','line_number':1611,'multiline':True]
+['text':'
+     * If we're dropping internal checkpoints, match to the '.' separating the checkpoint name from
+     * the generational number, and take all that we can find. Applications aren't allowed to use
+     * any variant of this name, so the test is still pretty simple, if the leading bytes match,
+     * it's one we want to drop.
+     ','line_number':1621,'multiline':True]
+['text':' Remember the names of named checkpoints we're dropping. ','line_number':1634,'multiline':True]
+['text':'
+ * __drop_from --
+ *     Drop all checkpoints after, and including, the named checkpoint.
+ ','line_number':1643,'multiline':True]
+['text':'
+     * There's a special case -- if the name is "all", then we delete all of the checkpoints.
+     ','line_number':1654,'multiline':True]
+['text':' Remember the names of named checkpoints we're dropping. ','line_number':1659,'multiline':True]
+['text':'
+     * We use the first checkpoint we can find, that is, if there are two checkpoints with the same
+     * name in the list, we'll delete from the first match to the end.
+     ','line_number':1667,'multiline':True]
+['text':' Remember the names of named checkpoints we're dropping. ','line_number':1677,'multiline':True]
+['text':'
+ * __drop_to --
+ *     Drop all checkpoints before, and including, the named checkpoint.
+ ','line_number':1686,'multiline':True]
+['text':'
+     * We use the last checkpoint we can find, that is, if there are two checkpoints with the same
+     * name in the list, we'll delete from the beginning to the second match, not the first.
+     ','line_number':1696,'multiline':True]
+['text':' Remember the names of named checkpoints we're dropping. ','line_number':1709,'multiline':True]
+['text':'
+ * __checkpoint_lock_dirty_tree_int --
+ *     Helper for __checkpoint_lock_dirty_tree. Intended to be called while holding the hot backup
+ *     lock.
+ ','line_number':1721,'multiline':True]
+['text':' Check that it is OK to remove all the checkpoints marked for deletion. ','line_number':1738,'multiline':True]
+['text':'
+         * If we are restarting from a backup and we're in recovery do not delete any checkpoints.
+         * In the event of a crash we may need to restart from the backup and all checkpoints that
+         * were in the backup file must remain.
+         ','line_number':1745,'multiline':True]
+['text':'
+         * If there is a hot backup, don't delete any WiredTiger checkpoint that could possibly have
+         * been created before the backup started. Fail if trying to delete any other named
+         * checkpoint.
+         ','line_number':1754,'multiline':True]
+['text':'
+         * Dropping checkpoints involves a fair amount of work while holding locks. Limit the number
+         * of WiredTiger checkpoints dropped per checkpoint.
+         ','line_number':1769,'multiline':True]
+['text':'
+     * Mark old checkpoints that are being deleted and figure out which trees we can skip in this
+     * checkpoint.
+     ','line_number':1779,'multiline':True]
+['text':'
+         * If we decide to skip checkpointing, clear the delete flag on the checkpoints. The list of
+         * checkpoints will be cached for a future access. Which checkpoints need to be deleted can
+         * change in the meanwhile.
+         ','line_number':1785,'multiline':True]
+['text':'
+     * Lock the checkpoints that will be deleted.
+     *
+     * Checkpoints are only locked when tracking is enabled, which covers checkpoint and drop
+     * operations, but not close. The reasoning is there should be no access to a checkpoint during
+     * close, because any thread accessing a checkpoint will also have the current file handle open.
+     ','line_number':1796,'multiline':True]
+['text':'
+             * We can't delete checkpoints referenced by a cursor. WiredTiger checkpoints are
+             * uniquely named and it's OK to have multiple in the system: clear the delete flag for
+             * them, and otherwise fail.
+             ','line_number':1810,'multiline':True]
+['text':'
+     * There are special trees: those being bulk-loaded, salvaged, upgraded or verified during the
+     * checkpoint. They should never be part of a checkpoint: we will fail to lock them because the
+     * operations have exclusive access to the handles. Named checkpoints will fail in that case,
+     * ordinary checkpoints skip files that cannot be opened normally.
+     ','line_number':1824,'multiline':True]
+['text':'
+ * __checkpoint_lock_dirty_tree --
+ *     Decide whether the tree needs to be included in the checkpoint and if so, acquire the
+ *     necessary locks.
+ ','line_number':1835,'multiline':True]
+['text':'
+     * Only referenced in diagnostic builds and gcc 5.1 isn't satisfied with wrapping the entire
+     * assert condition in the unused macro.
+     ','line_number':1865,'multiline':True]
+['text':'
+     * Most callers need meta tracking to be on here, otherwise it is
+     * possible for this checkpoint to cleanup handles that are still in
+     * use. The exceptions are:
+     *  - Checkpointing the metadata handle itself.
+     *  - On connection close when we know there can't be any races.
+     ','line_number':1871,'multiline':True]
+['text':' This may be a named checkpoint, check the configuration. ','line_number':1880,'multiline':True]
+['text':'
+     * Determine if a drop is part of the configuration. It usually isn't, so delay processing more
+     * until we know if we need to process this tree.
+     ','line_number':1894,'multiline':True]
+['text':'
+     * This is a complicated test to determine if we can avoid the expensive call of getting the
+     * list of checkpoints for this file. We want to avoid that for clean files. But on clean files
+     * we want to periodically check if we need to delete old checkpoints that may have been in use
+     * by an open cursor.
+     ','line_number':1905,'multiline':True]
+['text':' In the common case of the timer set forever, don't even check the time. ','line_number':1912,'multiline':True]
+['text':' Skip the clean btree until the btree has obsolete pages. ','line_number':1920,'multiline':True]
+['text':'
+     * Discard the saved list of checkpoints, and slow path if this is not a WiredTiger checkpoint
+     * or if checkpoint drops are involved. Also, if we do not have checkpoint array size, the
+     * regular checkpoint process did not create the array. It is safer to discard the array in such
+     * a case.
+     ','line_number':1927,'multiline':True]
+['text':' If we have to process this btree for any reason, reset the timer and obsolete pages flag. ','line_number':1936,'multiline':True]
+['text':' We may be dropping specific checkpoints, check the configuration. ','line_number':1942,'multiline':True]
+['text':' Gather the list of named checkpoints to drop (if any) from the first tree visited. ','line_number':1947,'multiline':True]
+['text':' Disallow unsafe checkpoint names. ','line_number':1956,'multiline':True]
+['text':'
+     * Drop checkpoints with the same name as the one we're taking. We don't need to add this to the
+     * drop list for snapshot/timestamp metadata because the metadata will be replaced by the new
+     * checkpoint.
+     ','line_number':1979,'multiline':True]
+['text':' Set the name of the new entry at the end of the list. ','line_number':1986,'multiline':True]
+['text':'
+     * There is some interaction between backups and checkpoints. Perform all backup related
+     * operations that the checkpoint needs now, while holding the hot backup read lock.
+     ','line_number':1991,'multiline':True]
+['text':'
+     * If we decided to skip checkpointing, we need to remove the new checkpoint entry we might have
+     * appended to the list.
+     ','line_number':1999,'multiline':True]
+['text':' Checkpoint(s) to be added are always at the end of the list. ','line_number':2005,'multiline':True]
+['text':' It is possible that we do not have any checkpoint in the list. ','line_number':2018,'multiline':True]
+['text':'
+ * __checkpoint_apply_obsolete --
+ *     Returns true if the checkpoint is obsolete.
+ ','line_number':2031,'multiline':True]
+['text':'
+         * If the checkpoint has a valid stop timestamp, mark the btree as having obsolete pages.
+         * This flag is used to avoid skipping the btree until the obsolete check is performed on
+         * the checkpoints.
+         ','line_number':2042,'multiline':True]
+['text':'
+ * __checkpoint_mark_skip --
+ *     Figure out whether the checkpoint can be skipped for a tree.
+ ','line_number':2060,'multiline':True]
+['text':'
+     * Check for clean objects not requiring a checkpoint.
+     *
+     * If we're closing a handle, and the object is clean, we can skip the checkpoint, whatever
+     * checkpoints we have are sufficient. (We might not have any checkpoints if the object was
+     * never modified, and that's OK: the object creation code doesn't mark the tree modified so we
+     * can skip newly created trees here.)
+     *
+     * If the application repeatedly checkpoints an object (imagine hourly checkpoints using the
+     * same explicit or internal name), there's no reason to repeat the checkpoint for clean
+     * objects. The test is if the only checkpoint we're deleting is the last one in the list and it
+     * has the same name as the checkpoint we're about to take, skip the work. (We can't skip
+     * checkpoints that delete more than the last checkpoint because deleting those checkpoints
+     * might free up space in the file.) This means an application toggling between two (or more)
+     * checkpoint names will repeatedly take empty checkpoints, but that's not likely enough to make
+     * detection worthwhile.
+     *
+     * Checkpoint read-only objects otherwise: the application must be able to open the checkpoint
+     * in a cursor after taking any checkpoint, which means it must exist.
+     ','line_number':2075,'multiline':True]
+['text':'
+             * Don't skip the objects that have obsolete pages to let them to be removed as part of
+             * checkpoint cleanup.
+             ','line_number':2099,'multiline':True]
+['text':'
+         * Complicated test: if the tree is clean and last two checkpoints have the same name
+         * (correcting for internal checkpoint names with their generational suffix numbers), we can
+         * skip the checkpoint, there's nothing to do. The exception is if we're deleting two or
+         * more checkpoints: then we may save space.
+         ','line_number':2110,'multiline':True]
+['text':'
+             * If there are potentially extra checkpoints to delete, we set the timer to recheck
+             * later. If there are at most two checkpoints, the current one and possibly a previous
+             * one, then we know there are no additional ones to delete. In that case, set the timer
+             * to forever. If the table gets dirtied or a checkpoint is forced that will clear the
+             * timer.
+             ','line_number':2122,'multiline':True]
+['text':'
+ * __wt_checkpoint_tree_reconcile_update --
+ *     Update a checkpoint based on reconciliation results.
+ ','line_number':2142,'multiline':True]
+['text':'
+     * Reconciliation just wrote a checkpoint, everything has been written. Update the checkpoint
+     * with reconciliation information. The reason for this function is the reconciliation code just
+     * passes through the btree structure's checkpoint array, it doesn't know any more.
+     ','line_number':2154,'multiline':True]
+['text':'
+ * __checkpoint_save_ckptlist --
+ *     Post processing of the ckptlist to carry forward a cached list for the next checkpoint.
+ ','line_number':2168,'multiline':True]
+['text':' Remove any deleted checkpoints, by shifting the array. ','line_number':2182,'multiline':True]
+['text':' Clean up block manager information. ','line_number':2188,'multiline':True]
+['text':' Update the internal checkpoints to their full names, with the generation count suffix. ','line_number':2192,'multiline':True]
+['text':' Reset the flags, and mark a checkpoint fake if there is no address. ','line_number':2199,'multiline':True]
+['text':' Shift the valid checkpoints, if there are deleted checkpoints in the list. ','line_number':2206,'multiline':True]
+['text':'
+     * Confirm that the last checkpoint has a metadata entry that we can use to base a new
+     * checkpoint on.
+     ','line_number':2214,'multiline':True]
+['text':'
+ * __checkpoint_tree --
+ *     Checkpoint a single tree. Assumes all necessary locks have been acquired by the caller.
+ ','line_number':2226,'multiline':True]
+['text':'
+     * Set the checkpoint LSN to the maximum LSN so that if logging is disabled, recovery will never
+     * roll old changes forward over the non-logged changes in this checkpoint. If logging is
+     * enabled, a real checkpoint LSN will be assigned for this checkpoint and overwrite this.
+     ','line_number':2251,'multiline':True]
+['text':'
+     * If an object has never been used (in other words, if it could become a bulk-loaded file),
+     * then we must fake the checkpoint. This is good because we don't write physical checkpoint
+     * blocks for just-created files, but it's not just a good idea. The reason is because deleting
+     * a physical checkpoint requires writing the file, and fake checkpoints can't write the file.
+     * If you (1) create a physical checkpoint for an empty file which writes blocks, (2) start
+     * bulk-loading records into the file, (3) during the bulk-load perform another checkpoint with
+     * the same name; in order to keep from having two checkpoints with the same name you would have
+     * to use the bulk-load's fake checkpoint to delete a physical checkpoint, and that will end in
+     * tears.
+     ','line_number':2258,'multiline':True]
+['text':'
+     * Mark the root page dirty to ensure something gets written. (If the tree is modified, we must
+     * write the root page anyway, this doesn't add additional writes to the process. If the tree is
+     * not modified, we have to dirty the root page to ensure something gets written.) This is
+     * really about paranoia: if the tree modification value gets out of sync with the set of dirty
+     * pages (modify is set, but there are no dirty pages), we perform a checkpoint without any
+     * writes, no checkpoint is created, and then things get bad. While marking the root page as
+     * dirty, we do not want to dirty the btree because we are marking the btree as clean just after
+     * this call. Also, marking the btree dirty at this stage will unnecessarily mark the connection
+     * as dirty causing checkpoint-skip code to fail.
+     ','line_number':2276,'multiline':True]
+['text':'
+     * Clear the tree's modified flag; any changes before we clear the flag are guaranteed to be
+     * part of this checkpoint (unless reconciliation skips updates for transactional reasons), and
+     * changes subsequent to the checkpoint start, which might not be included, will re-set the
+     * modified flag. The "unless reconciliation skips updates" problem is handled in the
+     * reconciliation code: if reconciliation skips updates, it sets the modified flag itself.
+     ','line_number':2290,'multiline':True]
+['text':' Tell logging that a file checkpoint is starting. ','line_number':2300,'multiline':True]
+['text':' Tell the block manager that a file checkpoint is starting. ','line_number':2304,'multiline':True]
+['text':' Flush the file from the cache, creating the checkpoint. ','line_number':2308,'multiline':True]
+['text':'
+     * If we're faking a checkpoint and logging is enabled, recovery should roll forward any changes
+     * made between now and the next checkpoint, so set the checkpoint LSN to the beginning of time.
+     ','line_number':2318,'multiline':True]
+['text':'
+     * Update the object's metadata.
+     *
+     * If the object is the metadata, the call to __wt_meta_ckptlist_set will update the turtle file
+     * and swap the new one into place. We need to make sure the metadata is on disk before the
+     * turtle file is updated.
+     *
+     * If we are doing a checkpoint in a file without a transaction (e.g., closing a dirty tree
+     * before an exclusive operation like verify), the metadata update will be auto-committed. In
+     * that case, we need to sync the file here or we could roll forward the metadata in recovery
+     * and open a checkpoint that isn't yet durable.
+     ','line_number':2325,'multiline':True]
+['text':'
+     * If we wrote a checkpoint (rather than faking one), we have to resolve it. Normally, tracking
+     * is enabled and resolution deferred until transaction end. The exception is if the handle is
+     * being discarded, in which case the handle will be gone by the time we try to apply or unroll
+     * the meta tracking event.
+     ','line_number':2342,'multiline':True]
+['text':' Tell logging that the checkpoint is complete. ','line_number':2357,'multiline':True]
+['text':' Resolved the checkpoint for the block manager in the error path. ','line_number':2362,'multiline':True]
+['text':'
+     * If the checkpoint didn't complete successfully, make sure the tree is marked dirty.
+     ','line_number':2366,'multiline':True]
+['text':' For a successful checkpoint, post process the ckptlist, to keep a cached copy around. ','line_number':2374,'multiline':True]
+['text':' Discard the saved checkpoint list if processing the list did not work. ','line_number':2380,'multiline':True]
+['text':'
+ * __checkpoint_presync --
+ *     Visit all handles after the checkpoint writes are complete and before syncing. At this point,
+ *     all trees should be completely open for business.
+ ','line_number':2388,'multiline':True]
+['text':'
+ * __checkpoint_tree_helper --
+ *     Checkpoint a tree (suitable for use in *_apply functions).
+ ','line_number':2408,'multiline':True]
+['text':' Add a two seconds wait to simulate checkpoint slowness for every handle. ','line_number':2424,'multiline':True]
+['text':' Are we using a read timestamp for this checkpoint transaction? ','line_number':2429,'multiline':True]
+['text':' Logged tables ignore any read timestamp configured for the checkpoint. ','line_number':2432,'multiline':True]
+['text':' Restore the use of the timestamp for other tables. ','line_number':2438,'multiline':True]
+['text':'
+     * Whatever happened, we aren't visiting this tree again in this checkpoint. Don't keep updates
+     * pinned any longer.
+     ','line_number':2442,'multiline':True]
+['text':'
+     * In case this tree was being skipped by the eviction server during the checkpoint, restore the
+     * previous state.
+     ','line_number':2448,'multiline':True]
+['text':'
+     * Wake the eviction server, in case application threads have stalled while the eviction server
+     * decided it couldn't make progress. Without this, application threads will be stalled until
+     * the eviction server next wakes.
+     ','line_number':2454,'multiline':True]
+['text':'
+ * __wt_checkpoint --
+ *     Checkpoint a file.
+ ','line_number':2464,'multiline':True]
+['text':' Should not be called with a checkpoint handle. ','line_number':2475,'multiline':True]
+['text':' We must hold the metadata lock if checkpointing the metadata. ','line_number':2478,'multiline':True]
+['text':' If we're already in a global checkpoint, don't get a new time. Otherwise, we need one. ','line_number':2483,'multiline':True]
+['text':' Do not store the cached checkpoint list when checkpointing a single file alone. ','line_number':2499,'multiline':True]
+['text':'
+ * __wt_checkpoint_sync --
+ *     Sync a file that has been checkpointed, and wait for the result.
+ ','line_number':2504,'multiline':True]
+['text':' Should not be called with a checkpoint handle. ','line_number':2517,'multiline':True]
+['text':' Unnecessary if checkpoint_sync has been configured "off". ','line_number':2520,'multiline':True]
+['text':'
+ * __wt_checkpoint_close --
+ *     Checkpoint a single file as part of closing the handle.
+ ','line_number':2528,'multiline':True]
+['text':'
+     * We've done the final checkpoint before the final close, subsequent writes to normal objects
+     * are wasted effort. Discard the objects to validate exit accounting.
+     ','line_number':2545,'multiline':True]
+['text':' Closing an unmodified file. ','line_number':2552,'multiline':True]
+['text':'
+     * Don't flush data from modified trees independent of system-wide checkpoint. Flushing trees
+     * can lead to files that are inconsistent on disk after a crash.
+     ','line_number':2556,'multiline':True]
+['text':'
+     * Make sure there isn't a potential race between backup copying the metadata and a checkpoint
+     * changing the metadata. Backup holds both the checkpoint and schema locks. Checkpoint should
+     * hold those also except on the final checkpoint during close. Confirm the caller either is the
+     * final checkpoint or holds at least one of the locks.
+     ','line_number':2563,'multiline':True]
+['text':'
+     * Turn on metadata tracking if:
+     * - The session is not already doing metadata tracking.
+     * - The file was not bulk loaded.
+     * - The close is not during connection close.
+     ','line_number':2573,'multiline':True]
+['text':' Do not store the cached checkpoint list when closing the handle. ','line_number':2594,'multiline':True]
+['text':'
+ * __checkpoint_timing_stress --
+ *     Optionally add a delay to a checkpoint to simulate a long running checkpoint for debug
+ *     purposes. The reason for this option is finding operations that can block while waiting for a
+ *     checkpoint to complete.
+ ','line_number':2603,'multiline':True]
+['text':'
+     * We only want to sleep if the flag is set and the checkpoint comes from the API, so check if
+     * the session used is either of the two sessions set aside for internal checkpoints.
+     ','line_number':2619,'multiline':True]

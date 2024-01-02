@@ -1,0 +1,100 @@
+['text':'*
+ * Sets up a test for the backup/restore process:
+ * - 3 node replica set
+ * - Mongo CRUD client
+ * - Mongo FSM client
+ * - fsyncLock, stop or open a backupCursor on a Secondary
+ * - cp (or rsync) DB files
+ * - fsyncUnlock, start or close a backupCursor on the Secondary
+ * - Start mongod as hidden secondary
+ * - Wait until new hidden node becomes secondary
+ *
+ * @param {Object} options An object with the following fields:
+ *   {
+ *     backup {string}: backup method. Must be one of: fsyncLock, rolling, stopStart. Required.
+ *     nodes {number}: number of nodes in replica set initially (excluding hidden secondary node to
+ *                     be added during test). Default: 3.
+ *     clientTime {number}: Time (in milliseconds) for clients to run before getting the new
+ *                          secondary its data. Default: 10,000.
+ *   }
+ ','line_number':1,'multiline':True]
+['text':' We use the implicitly_retry_on_database_drop_pending.js override file to','line_number':22,'multiline':False]
+['text':' handle the retry logic for DatabaseDropPending error responses.','line_number':23,'multiline':False]
+['text':' Capture the 'this' reference','line_number':34,'multiline':False]
+['text':'*
+     * Runs a command in the bash shell.
+     ','line_number':39,'multiline':True]
+['text':'*
+     * Starts a client that will run a CRUD workload.
+     ','line_number':46,'multiline':True]
+['text':' Launch CRUD client','line_number':50,'multiline':False]
+['text':' Run indefinitely.','line_number':64,'multiline':False]
+['text':' We periodically use a write concern of w='numNodes' as a backpressure mechanism','line_number':68,'multiline':False]
+['text':' to prevent the secondaries from falling off the primary's oplog. The CRUD client','line_number':69,'multiline':False]
+['text':' inserts ~1KB documents 1000 at a time, so in the worst case we'll have rolled the','line_number':70,'multiline':False]
+['text':' primary's oplog over every ~1000 iterations. We use 100 iterations for the','line_number':71,'multiline':False]
+['text':' frequency of when to use a write concern of w='numNodes' to lessen the risk of','line_number':72,'multiline':False]
+['text':' being unlucky as a result of running concurrently with the FSM client. Note that','line_number':73,'multiline':False]
+['text':' although the updates performed by the CRUD client may in the worst case modify','line_number':74,'multiline':False]
+['text':' every document, the oplog entries produced as a result are 10x smaller than the','line_number':75,'multiline':False]
+['text':' document itself.','line_number':76,'multiline':False]
+['text':' 20% of the operations: bulk insert bulkNum docs.','line_number':83,'multiline':False]
+['text':' 20% of the operations: update docs.','line_number':93,'multiline':False]
+['text':' 50% of the operations: find matchings docs.','line_number':99,'multiline':False]
+['text':' itcount() consumes the cursor','line_number':100,'multiline':False]
+['text':' 10% of the operations: remove matching docs.','line_number':103,'multiline':False]
+['text':' Returns the pid of the started mongo shell so the CRUD test client can be terminated','line_number':115,'multiline':False]
+['text':' without waiting for its execution to finish.','line_number':116,'multiline':False]
+['text':'*
+     * Starts a client that will run a FSM workload.
+     ','line_number':125,'multiline':True]
+['text':' Launch FSM client','line_number':129,'multiline':False]
+['text':' Returns the pid of the FSM test client so it can be terminated without waiting for its','line_number':137,'multiline':False]
+['text':' execution to finish.','line_number':138,'multiline':False]
+['text':'*
+     * Runs the test.
+     ','line_number':142,'multiline':True]
+['text':' skipValidationOnNamespaceNotFound must be set to true for correct operation of this test.','line_number':150,'multiline':False]
+['text':' Test options','line_number':154,'multiline':False]
+['text':' Test name','line_number':155,'multiline':False]
+['text':' Backup type (must be specified)','line_number':158,'multiline':False]
+['text':' Number of nodes in initial replica set (default 3)','line_number':166,'multiline':False]
+['text':' Time for clients to run before getting the new secondary it's data (default 10 seconds)','line_number':169,'multiline':False]
+['text':' Set the dbpath for the replica set','line_number':172,'multiline':False]
+['text':' Start numNodes node replSet','line_number':177,'multiline':False]
+['text':' Avoid stepdowns due to heavy workloads on slow machines.','line_number':187,'multiline':False]
+['text':' Initialize replica set using default timeout. This should give us sufficient time to','line_number':193,'multiline':False]
+['text':' allocate 1GB oplogs on slow test hosts.','line_number':194,'multiline':False]
+['text':' Launch CRUD client','line_number':201,'multiline':False]
+['text':' Launch FSM client','line_number':206,'multiline':False]
+['text':' Let clients run for specified time before backing up secondary','line_number':209,'multiline':False]
+['text':' Perform fsync to create checkpoint. We doublecheck if the storage engine','line_number':212,'multiline':False]
+['text':' supports fsync here.','line_number':213,'multiline':False]
+['text':' Configure new hidden secondary','line_number':222,'multiline':False]
+['text':' Windows paths for rsync','line_number':229,'multiline':False]
+['text':' Perform the data backup to new secondary','line_number':236,'multiline':False]
+['text':' Test that the secondary supports fsyncLock','line_number':239,'multiline':False]
+['text':' Simulate a rolling rsync, do it 3 times before stopping process','line_number':257,'multiline':False]
+['text':' Stop the mongod process','line_number':263,'multiline':False]
+['text':' One final rsync','line_number':266,'multiline':False]
+['text':' Stop the mongod process','line_number':275,'multiline':False]
+['text':' Wait up to 5 minutes until restarted node is in state secondary.','line_number':295,'multiline':False]
+['text':' Stop CRUD client and FSM client.','line_number':300,'multiline':False]
+['text':' The mongo shell calls TerminateProcess() on Windows rather than more gracefully','line_number':315,'multiline':False]
+['text':' interrupting resmoke.py test execution.','line_number':316,'multiline':False]
+['text':' resmoke.py may exit cleanly on SIGINT, returning 130 if the suite tests were running','line_number':318,'multiline':False]
+['text':' and returning SIGINT otherwise. It may also exit uncleanly, in which case','line_number':319,'multiline':False]
+['text':' stopMongoProgramByPid returns -SIGINT. See SERVER-67390 and SERVER-72449.','line_number':320,'multiline':False]
+['text':' Make sure the databases are not in a drop-pending state. This can happen if we','line_number':326,'multiline':False]
+['text':' killed the FSM client while it was in the middle of dropping them.','line_number':327,'multiline':False]
+['text':' Add the new hidden node to replSetTest.','line_number':341,'multiline':False]
+['text':' ReplSetTest.add() will use default values for --oplogSize and --replSet consistent with','line_number':345,'multiline':False]
+['text':' existing nodes.','line_number':346,'multiline':False]
+['text':' Add the new hidden secondary to the replica set. This triggers an election, so it must be','line_number':351,'multiline':False]
+['text':' done after stopping the background workloads to prevent the workloads from failing if a','line_number':352,'multiline':False]
+['text':' new primary is elected.','line_number':353,'multiline':False]
+['text':' Wait up to 5 minutes until the new hidden node is in state SECONDARY.','line_number':364,'multiline':False]
+['text':' Wait for secondaries to finish catching up before shutting down.','line_number':369,'multiline':False]
+['text':' Stop set.','line_number':387,'multiline':False]
+['text':' Cleanup the files from the test','line_number':392,'multiline':False]
+['text':' This is not done properly for replSetTest if dbpath is provided','line_number':393,'multiline':False]

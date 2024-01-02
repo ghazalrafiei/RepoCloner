@@ -1,6 +1,6 @@
 import os
 import shutil
-from config import GITHUB_REPOS_LINKS, DATA_DIR, DOCS_DIR, DOC_FILE_FORMATS
+from config import GITHUB_REPOS_LINKS, DATA_DIR, DOCS_DIR, DOC_FILE_FORMATS, DOC_FOLDER_NAMES
 from utils import recursive_file_finder
 from comment_parser import comment_parser
 
@@ -31,6 +31,13 @@ def naive_document_extractor(repo_dir):
     
     for file_format in DOC_FILE_FORMATS:
         copy_files_with_same_structure(repo_dir, doc_dir, file_format)
+    
+    #in the list of doc_folder_names, find the first one that exists in the repo_dir and copy it to doc_dir
+    for doc_folder_name in DOC_FOLDER_NAMES:
+        src_dir = os.path.join(repo_dir, doc_folder_name)
+        if os.path.exists(src_dir):
+            copy_files_with_same_structure(src_dir, doc_dir, '.**')
+            # break
 
 def raw_comment_extractor(repo_dir):
     """
@@ -55,7 +62,7 @@ def raw_comment_extractor(repo_dir):
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             with open(dest, 'w') as f:
                 for c in comments:
-                    f.write(f"['text':'{c._text}','line_number':{c._line_number},'multiline':{c._multiline}]\n".strip())
+                    f.write(f"['text':'{c._text}','line_number':{c._line_number},'multiline':{c._multiline}]".strip()+'\n')
 
 def main():
     for repo in GITHUB_REPOS_LINKS.keys():
@@ -65,4 +72,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    # './data/datasets/bazel/src/main/cpp/archive_utils.cc'

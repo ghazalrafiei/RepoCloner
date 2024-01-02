@@ -1,0 +1,308 @@
+['text':'
+*******************************************************************************
+* Copyright (C) 1997-2016, International Business Machines Corporation and    *
+* others. All Rights Reserved.                                                *
+*******************************************************************************
+*
+* File DTFMTSYM.CPP
+*
+* Modification History:
+*
+*   Date        Name        Description
+*   02/19/97    aliu        Converted from java.
+*   07/21/98    stephen     Added getZoneIndex
+*                            Changed weekdays/short weekdays to be one-based
+*   06/14/99    stephen     Removed SimpleDateFormat::fgTimeZoneDataSuffix
+*   11/16/99    weiv        Added 'Y' and 'e' to fgPatternChars
+*   03/27/00    weiv        Keeping resource bundle around!
+*   06/30/05    emmons      Added eraNames, narrow month/day, standalone context
+*   10/12/05    emmons      Added setters for eraNames, month/day by width/context
+*******************************************************************************
+','line_number':1,'multiline':True]
+['text':' *****************************************************************************','line_number':45,'multiline':False]
+['text':' class DateFormatSymbols','line_number':46,'multiline':False]
+['text':' *****************************************************************************','line_number':47,'multiline':False]
+['text':'*
+ * These are static arrays we use only in the case where we have no
+ * resource data.
+ ','line_number':49,'multiline':True]
+['text':'*
+ * Unlocalized date-time pattern characters. For example: 'y', 'd', etc. All
+ * locales use the same these unlocalized pattern characters.
+ ','line_number':60,'multiline':True]
+['text':' if UDAT_HAS_PATTERN_CHAR_FOR_TIME_SEPARATOR:','line_number':65,'multiline':False]
+['text':'   GyMdkHmsSEDFwWahKzYeugAZvcLQqVUOXxrbB:','line_number':66,'multiline':False]
+['text':' else:','line_number':67,'multiline':False]
+['text':'   GyMdkHmsSEDFwWahKzYeugAZvcLQqVUOXxrbB','line_number':68,'multiline':False]
+['text':'------------------------------------------------------','line_number':80,'multiline':False]
+['text':' Strings of last resort.  These are only used if we have no resource','line_number':81,'multiline':False]
+['text':' files.  They aren't designed for actual use, just for backup.','line_number':82,'multiline':False]
+['text':' These are the month names and abbreviations of last resort.','line_number':84,'multiline':False]
+['text':' "01" ','line_number':87,'multiline':True]
+['text':' "02" ','line_number':88,'multiline':True]
+['text':' "03" ','line_number':89,'multiline':True]
+['text':' "04" ','line_number':90,'multiline':True]
+['text':' "05" ','line_number':91,'multiline':True]
+['text':' "06" ','line_number':92,'multiline':True]
+['text':' "07" ','line_number':93,'multiline':True]
+['text':' "08" ','line_number':94,'multiline':True]
+['text':' "09" ','line_number':95,'multiline':True]
+['text':' "10" ','line_number':96,'multiline':True]
+['text':' "11" ','line_number':97,'multiline':True]
+['text':' "12" ','line_number':98,'multiline':True]
+['text':' "13" ','line_number':99,'multiline':True]
+['text':' These are the weekday names and abbreviations of last resort.','line_number':102,'multiline':False]
+['text':' "0" ','line_number':105,'multiline':True]
+['text':' "1" ','line_number':106,'multiline':True]
+['text':' "2" ','line_number':107,'multiline':True]
+['text':' "3" ','line_number':108,'multiline':True]
+['text':' "4" ','line_number':109,'multiline':True]
+['text':' "5" ','line_number':110,'multiline':True]
+['text':' "6" ','line_number':111,'multiline':True]
+['text':' "7" ','line_number':112,'multiline':True]
+['text':' These are the quarter names and abbreviations of last resort.','line_number':115,'multiline':False]
+['text':' "1" ','line_number':118,'multiline':True]
+['text':' "2" ','line_number':119,'multiline':True]
+['text':' "3" ','line_number':120,'multiline':True]
+['text':' "4" ','line_number':121,'multiline':True]
+['text':' These are the am/pm and BC/AD markers of last resort.','line_number':124,'multiline':False]
+['text':' "AM" ','line_number':127,'multiline':True]
+['text':' "PM" ','line_number':128,'multiline':True]
+['text':' "BC" ','line_number':133,'multiline':True]
+['text':' "AD" ','line_number':134,'multiline':True]
+['text':' Sizes for the last resort string arrays ','line_number':137,'multiline':True]
+['text':'unusedContext','line_number':169,'multiline':True]
+['text':'*
+ * These are the tags we expect to see in normal resource bundle files associated
+ * with a locale and calendar
+ ','line_number':193,'multiline':True]
+['text':' static const char gZoneStringsTag[]="zoneStrings";','line_number':221,'multiline':False]
+['text':' static const char gLocalPatternCharsTag[]="localPatternChars";','line_number':223,'multiline':False]
+['text':'*
+ * Jitterbug 2974: MSVC has a bug whereby new X[0] behaves badly.
+ * Work around this.
+ ','line_number':229,'multiline':True]
+['text':'------------------------------------------------------','line_number':237,'multiline':False]
+['text':' assignArray() is only called by copyData(), which in turn implements the','line_number':296,'multiline':False]
+['text':' copy constructor and the assignment operator.','line_number':297,'multiline':False]
+['text':' All strings in a DateFormatSymbols object are created in one of the following','line_number':298,'multiline':False]
+['text':' three ways that all allow to safely use UnicodeString::fastCopyFrom():','line_number':299,'multiline':False]
+['text':' - readonly-aliases from resource bundles','line_number':300,'multiline':False]
+['text':' - readonly-aliases or allocated strings from constants','line_number':301,'multiline':False]
+['text':' - safely cloned strings (with owned buffers) from setXYZ() functions','line_number':302,'multiline':False]
+['text':'','line_number':303,'multiline':False]
+['text':' Note that this is true for as long as DateFormatSymbols can be constructed','line_number':304,'multiline':False]
+['text':' only from a locale bundle or set via the cloning API,','line_number':305,'multiline':False]
+['text':' *and* for as long as all the strings are in *private* fields, preventing','line_number':306,'multiline':False]
+['text':' a subclass from creating these strings in an "unsafe" way (with respect to fastCopyFrom()).','line_number':307,'multiline':False]
+['text':'*
+ * Create a copy, in fZoneStrings, of the given zone strings array.  The
+ * member variables fZoneStringsRowCount and fZoneStringsColCount should
+ * be set already by the caller.
+ ','line_number':318,'multiline':True]
+['text':' fastCopyFrom() - see assignArray comments','line_number':339,'multiline':False]
+['text':' If memory allocation failed, roll back and delete fZoneStrings','line_number':344,'multiline':False]
+['text':'*
+ * Copy all of the other's data to this.
+ ','line_number':354,'multiline':True]
+['text':' fastCopyFrom() - see assignArray comments','line_number':383,'multiline':False]
+['text':' Other zone strings data is created on demand','line_number':430,'multiline':False]
+['text':' fastCopyFrom() - see assignArray comments','line_number':433,'multiline':False]
+['text':'*
+ * Assignment operator.
+ ','line_number':439,'multiline':True]
+['text':' First do cheap comparisons','line_number':531,'multiline':False]
+['text':' Now compare the arrays themselves','line_number':569,'multiline':False]
+['text':' Compare the contents of fZoneStrings','line_number':607,'multiline':False]
+['text':'------------------------------------------------------','line_number':628,'multiline':False]
+['text':' no month data for this, defaults to ABBREVIATED','line_number':678,'multiline':False]
+['text':' no month data for this, defaults to ABBREVIATED','line_number':697,'multiline':False]
+['text':' no quarter data for this, defaults to ABBREVIATED','line_number':797,'multiline':False]
+['text':' no quarter data for this, defaults to ABBREVIATED','line_number':816,'multiline':False]
+['text':' fastCopyFrom() - see assignArray comments','line_number':837,'multiline':False]
+['text':'ignored','line_number':857,'multiline':True]
+['text':'ignored','line_number':857,'multiline':True]
+['text':'ignored','line_number':879,'multiline':True]
+['text':'ignored','line_number':879,'multiline':True]
+['text':'------------------------------------------------------','line_number':899,'multiline':False]
+['text':' delete the old list if we own it','line_number':904,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':908,'multiline':False]
+['text':' than adopting the list passed in)','line_number':909,'multiline':False]
+['text':' delete the old list if we own it','line_number':918,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':922,'multiline':False]
+['text':' than adopting the list passed in)','line_number':923,'multiline':False]
+['text':' delete the old list if we own it','line_number':932,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':936,'multiline':False]
+['text':' than adopting the list passed in)','line_number':937,'multiline':False]
+['text':' delete the old list if we own it','line_number':946,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':950,'multiline':False]
+['text':' than adopting the list passed in)','line_number':951,'multiline':False]
+['text':' delete the old list if we own it','line_number':960,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':964,'multiline':False]
+['text':' than adopting the list passed in)','line_number':965,'multiline':False]
+['text':' delete the old list if we own it','line_number':974,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':975,'multiline':False]
+['text':' than adopting the list passed in)','line_number':976,'multiline':False]
+['text':' delete the old list if we own it','line_number':1040,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':1044,'multiline':False]
+['text':' than adopting the list passed in)','line_number':1045,'multiline':False]
+['text':' delete the old list if we own it','line_number':1054,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':1058,'multiline':False]
+['text':' than adopting the list passed in)','line_number':1059,'multiline':False]
+['text':' delete the old list if we own it','line_number':1068,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':1069,'multiline':False]
+['text':' than adopting the list passed in)','line_number':1070,'multiline':False]
+['text':' delete the old list if we own it','line_number':1149,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':1150,'multiline':False]
+['text':' than adopting the list passed in)','line_number':1151,'multiline':False]
+['text':'
+            if (fNarrowQuarters)
+                delete[] fNarrowQuarters;
+            fNarrowQuarters = newUnicodeStringArray(count);
+            uprv_arrayCopy( quartersArray,fNarrowQuarters,count);
+            fNarrowQuartersCount = count;
+        ','line_number':1171,'multiline':True]
+['text':'
+           if (fStandaloneNarrowQuarters)
+                delete[] fStandaloneNarrowQuarters;
+            fStandaloneNarrowQuarters = newUnicodeStringArray(count);
+            uprv_arrayCopy( quartersArray,fStandaloneNarrowQuarters,count);
+            fStandaloneNarrowQuartersCount = count;
+        ','line_number':1200,'multiline':True]
+['text':' delete the old list if we own it','line_number':1220,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':1223,'multiline':False]
+['text':' than adopting the list passed in)','line_number':1224,'multiline':False]
+['text':' For now, we include all zones','line_number':1257,'multiline':False]
+['text':' This code must be called within a synchronized block','line_number':1260,'multiline':False]
+['text':' dummy do-while','line_number':1274,'multiline':False]
+['text':' Allocate array','line_number':1282,'multiline':False]
+['text':' since deleting a 2-d array is a pain in the butt, we offload that task to','line_number':1345,'multiline':False]
+['text':' a separate function','line_number':1346,'multiline':False]
+['text':' we always own the new list, which we create here (we duplicate rather','line_number':1348,'multiline':False]
+['text':' than adopting the list passed in)','line_number':1349,'multiline':False]
+['text':'------------------------------------------------------','line_number':1355,'multiline':False]
+['text':' y','line_number':1374,'multiline':False]
+['text':' d','line_number':1375,'multiline':False]
+['text':' k','line_number':1376,'multiline':False]
+['text':' H','line_number':1377,'multiline':False]
+['text':' m','line_number':1378,'multiline':False]
+['text':' s','line_number':1379,'multiline':False]
+['text':' S','line_number':1380,'multiline':False]
+['text':' D','line_number':1381,'multiline':False]
+['text':' F','line_number':1382,'multiline':False]
+['text':' w','line_number':1383,'multiline':False]
+['text':' W','line_number':1384,'multiline':False]
+['text':' h','line_number':1385,'multiline':False]
+['text':' K','line_number':1386,'multiline':False]
+['text':' Y','line_number':1387,'multiline':False]
+['text':' u','line_number':1388,'multiline':False]
+['text':' g','line_number':1389,'multiline':False]
+['text':' A','line_number':1390,'multiline':False]
+['text':' r','line_number':1391,'multiline':False]
+['text':' M or MM','line_number':1394,'multiline':False]
+['text':' e or ee','line_number':1395,'multiline':False]
+['text':' c or cc','line_number':1396,'multiline':False]
+['text':' L or LL','line_number':1397,'multiline':False]
+['text':' Q or QQ','line_number':1398,'multiline':False]
+['text':' q or qq','line_number':1399,'multiline':False]
+['text':'------------------------------------------------------','line_number':1415,'multiline':False]
+['text':' fastCopyFrom() - see assignArray comments','line_number':1420,'multiline':False]
+['text':'------------------------------------------------------','line_number':1424,'multiline':False]
+['text':'------------------------------------------------------','line_number':1432,'multiline':False]
+['text':' setTo() - see assignArray comments','line_number':1443,'multiline':False]
+['text':' readonly aliases - all "data" strings are constant','line_number':1461,'multiline':False]
+['text':' -1 as length for variable-length strings (gLastResortDayNames[0] is empty)','line_number':1462,'multiline':False]
+['text':' Entries must be sorted by usageTypeName; entry with NULL name terminates list.','line_number':1492,'multiline':False]
+['text':' Resource keys to look up localized strings for day periods.','line_number':1509,'multiline':False]
+['text':' The first one must be midnight and the second must be noon, so that their indices coincide','line_number':1510,'multiline':False]
+['text':' with the am/pm field. Formatting and parsing code for day periods relies on this coincidence.','line_number':1511,'multiline':False]
+['text':'TODO: Check if there are fallbacks/aliases defined in the data; e.g., if there','line_number':1533,'multiline':False]
+['text':'is no wide string, then use the narrow one?','line_number':1534,'multiline':False]
+['text':' string[i] will be bogus if ures_getUnicodeString() returns with an error,','line_number':1537,'multiline':False]
+['text':' which is just the behavior we want. Simply reset the error code.','line_number':1538,'multiline':False]
+['text':' In case something goes wrong, initialize all of the data to NULL. ','line_number':1551,'multiline':True]
+['text':' We need to preserve the requested locale for','line_number':1623,'multiline':False]
+['text':' lazy ZoneStringFormat instantiation.  ZoneStringFormat','line_number':1624,'multiline':False]
+['text':' is region sensitive, thus, bundle locale bundle's locale','line_number':1625,'multiline':False]
+['text':' is not sufficient.','line_number':1626,'multiline':False]
+['text':'*
+     * Retrieve the string arrays we need from the resource bundle file.
+     * We cast away const here, but that's okay; we won't delete any of
+     * these.
+     ','line_number':1631,'multiline':True]
+['text':' load the first data item','line_number':1638,'multiline':False]
+['text':' Workaround because eras/wide was omitted from CLDR 1.3','line_number':1643,'multiline':False]
+['text':' current ICU4J falls back to abbreviated if narrow eras are missing, so we will too','line_number':1647,'multiline':False]
+['text':' Hack to fix bad C inheritance for dangi monthPatterns (OK in J); this should be handled by aliases in root, but isn't.','line_number':1668,'multiline':False]
+['text':' The ordering of the following statements is important.','line_number':1669,'multiline':False]
+['text':' end of hack','line_number':1682,'multiline':False]
+['text':' linear search; list is short and we cannot be sure that bsearch is available','line_number':1735,'multiline':False]
+['text':' These functions all fail gracefully if passed NULL pointers and','line_number':1755,'multiline':False]
+['text':' do nothing unless U_SUCCESS(tempStatus), so it's only necessary','line_number':1756,'multiline':False]
+['text':' to check for errors once after all calls are made.','line_number':1757,'multiline':False]
+['text':' Data closed by calData','line_number':1791,'multiline':False]
+['text':' Data closed by calData','line_number':1792,'multiline':False]
+['text':' Data closed by calData','line_number':1793,'multiline':False]
+['text':' Data closed by calData','line_number':1794,'multiline':False]
+['text':' Data closed by calData','line_number':1795,'multiline':False]
+['text':' Data closed by calData','line_number':1796,'multiline':False]
+['text':' Data closed by calData','line_number':1797,'multiline':False]
+['text':' Data closed by calData','line_number':1798,'multiline':False]
+['text':' Handle the case in which there is no resource data present.','line_number':1805,'multiline':False]
+['text':' We don't have to generate usable patterns in this situation;','line_number':1806,'multiline':False]
+['text':' we just need to produce something that will be semi-intelligible','line_number':1807,'multiline':False]
+['text':' in most locales.','line_number':1808,'multiline':False]
+['text':' if we make it to here, the resource data is cool, and we can get everything out','line_number':1840,'multiline':False]
+['text':' of it that we need except for the time-zone and localized-pattern data, which','line_number':1841,'multiline':False]
+['text':' are stored in a separate file','line_number':1842,'multiline':False]
+['text':' If format/narrow not available, use format/abbreviated ','line_number':1858,'multiline':True]
+['text':' If standalone/wide not available, use format/wide ','line_number':1864,'multiline':True]
+['text':' If standalone/abbreviated not available, use format/abbreviated ','line_number':1869,'multiline':True]
+['text':' if standalone/narrow not availabe, try format/narrow ','line_number':1874,'multiline':True]
+['text':' if still not there, use format/abbreviated ','line_number':1877,'multiline':True]
+['text':' ICU 3.8 or later version no longer uses localized date-time pattern characters by default (ticket#5597)','line_number':1900,'multiline':False]
+['text':'
+    // fastCopyFrom()/setTo() - see assignArray comments
+    resStr = ures_getStringByKey(fResourceBundle, gLocalPatternCharsTag, &len, &status);
+    fLocalPatternChars.setTo(TRUE, resStr, len);
+    // If the locale data does not include new pattern chars, use the defaults
+    // TODO: Consider making this an error, since this may add conflicting characters.
+    if (len < PATTERN_CHARS_LEN) {
+        fLocalPatternChars.append(UnicodeString(TRUE, &gPatternChars[len], PATTERN_CHARS_LEN-len));
+    }
+    ','line_number':1901,'multiline':True]
+['text':' Format wide weekdays -> fWeekdays','line_number':1913,'multiline':False]
+['text':' {sfb} fixed to handle 1-based weekdays','line_number':1914,'multiline':False]
+['text':' pin the blame on system. If we cannot get a chunk of memory .. the system is dying!','line_number':1918,'multiline':True]
+['text':' leave fWeekdays[0] empty','line_number':1923,'multiline':False]
+['text':' setTo() - see assignArray comments','line_number':1926,'multiline':False]
+['text':' Format abbreviated weekdays -> fShortWeekdays','line_number':1931,'multiline':False]
+['text':' test for NULL ','line_number':1935,'multiline':True]
+['text':' leave fShortWeekdays[0] empty','line_number':1940,'multiline':False]
+['text':' setTo() - see assignArray comments','line_number':1943,'multiline':False]
+['text':' Format short weekdays -> fShorterWeekdays (fall back to abbreviated)','line_number':1948,'multiline':False]
+['text':' test for NULL ','line_number':1956,'multiline':True]
+['text':' leave fShorterWeekdays[0] empty','line_number':1961,'multiline':False]
+['text':' setTo() - see assignArray comments','line_number':1964,'multiline':False]
+['text':' Format narrow weekdays -> fNarrowWeekdays','line_number':1969,'multiline':False]
+['text':' test for NULL ','line_number':1981,'multiline':True]
+['text':' leave fNarrowWeekdays[0] empty','line_number':1986,'multiline':False]
+['text':' setTo() - see assignArray comments','line_number':1989,'multiline':False]
+['text':' Stand-alone wide weekdays -> fStandaloneWeekdays','line_number':1994,'multiline':False]
+['text':' test for NULL ','line_number':2002,'multiline':True]
+['text':' leave fStandaloneWeekdays[0] empty','line_number':2007,'multiline':False]
+['text':' setTo() - see assignArray comments','line_number':2010,'multiline':False]
+['text':' Stand-alone abbreviated weekdays -> fStandaloneShortWeekdays','line_number':2015,'multiline':False]
+['text':' test for NULL ','line_number':2023,'multiline':True]
+['text':' leave fStandaloneShortWeekdays[0] empty','line_number':2028,'multiline':False]
+['text':' setTo() - see assignArray comments','line_number':2031,'multiline':False]
+['text':' Stand-alone short weekdays -> fStandaloneShorterWeekdays (fall back to format abbreviated)','line_number':2036,'multiline':False]
+['text':' test for NULL ','line_number':2044,'multiline':True]
+['text':' leave fStandaloneShorterWeekdays[0] empty','line_number':2049,'multiline':False]
+['text':' setTo() - see assignArray comments','line_number':2052,'multiline':False]
+['text':' Stand-alone narrow weekdays -> fStandaloneNarrowWeekdays','line_number':2057,'multiline':False]
+['text':' test for NULL ','line_number':2069,'multiline':True]
+['text':' leave fStandaloneNarrowWeekdays[0] empty','line_number':2074,'multiline':False]
+['text':' setTo() - see assignArray comments','line_number':2077,'multiline':False]
+['text':' #if !UCONFIG_NO_FORMATTING ','line_number':2096,'multiline':True]
+['text':'eof','line_number':2098,'multiline':False]

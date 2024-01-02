@@ -1,0 +1,624 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]
+['text':'
+ * vim9compile.c: compiling a :def function
+ ','line_number':10,'multiline':True]
+['text':' When not generating protos this is included in proto.h','line_number':19,'multiline':False]
+['text':' Functions defined with :def are stored in this growarray.','line_number':24,'multiline':False]
+['text':' They are never removed, so that they can be found by index.','line_number':25,'multiline':False]
+['text':' Deleted functions have the df_deleted flag set.','line_number':26,'multiline':False]
+['text':'
+ * Lookup variable "name" in the local scope and return it in "lvar".
+ * "lvar->lv_from_outer" is incremented accordingly.
+ * If "lvar" is NULL only check if the variable can be found.
+ * Return FAIL if not found.
+ ','line_number':31,'multiline':True]
+['text':' Find local in current function scope.','line_number':90,'multiline':False]
+['text':' If the variable was declared inside a loop set','line_number':102,'multiline':False]
+['text':' lvar->lv_loop_idx and lvar->lv_loop_depth.','line_number':103,'multiline':False]
+['text':' Find local in outer function scope.','line_number':110,'multiline':False]
+['text':'
+ * Lookup an argument in the current function and an enclosing function.
+ * Returns the argument index in "idxp"
+ * Returns the argument type in "type"
+ * Sets "gen_load_outer" to TRUE if found in outer scope.
+ * Returns OK when found, FAIL otherwise.
+ ','line_number':127,'multiline':True]
+['text':' Arguments are located above the frame pointer.  One further','line_number':156,'multiline':False]
+['text':' if there is a vararg argument','line_number':157,'multiline':False]
+['text':' varargs is always the last argument','line_number':177,'multiline':False]
+['text':' Lookup the name for an argument of the outer function.','line_number':186,'multiline':False]
+['text':'
+ * Lookup a script-local variable in the current script, possibly defined in a
+ * block that contains the function "cctx->ctx_ufunc".
+ * "cctx" is NULL at the script level, "cstack" is NULL in a function.
+ * If "len" is <= 0 "name" must be NUL terminated.
+ * Return NULL when not found.
+ ','line_number':199,'multiline':True]
+['text':' Find the list of all script variables with the right name.','line_number':215,'multiline':False]
+['text':' variable defined in the top script scope is always visible','line_number':229,'multiline':False]
+['text':' Not in a function scope, find variable with block ID equal to or','line_number':237,'multiline':False]
+['text':' smaller than the current block id.  Use "cstack" to go up the block','line_number':238,'multiline':False]
+['text':' scopes.','line_number':239,'multiline':False]
+['text':' Go over the variables with this name and find one that was visible','line_number':254,'multiline':False]
+['text':' from the function.','line_number':255,'multiline':False]
+['text':' Go over the blocks that this function was defined in.  If the','line_number':261,'multiline':False]
+['text':' variable block ID matches it was visible to the function.','line_number':262,'multiline':False]
+['text':' Not found, variable was not visible.','line_number':269,'multiline':False]
+['text':'
+ * If "name" can be found in the current script set it's "block_id".
+ ','line_number':273,'multiline':True]
+['text':'
+ * Return TRUE if the script context is Vim9 script.
+ ','line_number':290,'multiline':True]
+['text':'
+ * Lookup a variable (without s: prefix) in the current script.
+ * "cctx" is NULL at the script level, "cstack" is NULL in a function.
+ * Returns OK or FAIL.
+ ','line_number':299,'multiline':True]
+['text':' Check script variables that were visible where the function was','line_number':311,'multiline':False]
+['text':' defined.','line_number':312,'multiline':False]
+['text':' Check script variables that are currently visible','line_number':322,'multiline':False]
+['text':'
+ * Returns the index of a class method or class variable with name "name"
+ * accessible in the currently compiled function.
+ * If "cl_ret" is not NULL set it to the class.
+ * Otherwise return -1.
+ ','line_number':334,'multiline':True]
+['text':' Search for the class method or variable in the class where the calling','line_number':353,'multiline':False]
+['text':' function is defined.','line_number':354,'multiline':False]
+['text':'
+ * Returns the index of a class method with name "name" accessible in the
+ * currently compiled function.  Returns -1 if not found.  The class where the
+ * method is defined is returned in "cl_ret".
+ ','line_number':380,'multiline':True]
+['text':'
+ * Returns the index of a class variable with name "name" accessible in the
+ * currently compiled function.  Returns -1 if not found.  The class where the
+ * variable is defined is returned in "cl_ret".
+ ','line_number':395,'multiline':True]
+['text':'
+ * Return TRUE if "name" is a local variable, argument, script variable or
+ * imported.  Also if "name" is "this" and in a class method.
+ ','line_number':410,'multiline':True]
+['text':'
+ * Return TRUE if "name" is a local variable, argument, script variable,
+ * imported or function.  Or commands are being skipped, a declaration may have
+ * been skipped then.
+ ','line_number':429,'multiline':True]
+['text':'
+ * Check if "p[len]" is already defined, either in script "import_sid" or in
+ * compilation context "cctx".
+ * "cctx" is NULL at the script level, "cstack" is NULL in a function.
+ * Does not check the global namespace.
+ * If "is_arg" is TRUE the error message is for an argument name.
+ * Return FAIL and give an error if it defined.
+ ','line_number':440,'multiline':True]
+['text':' underscore argument is OK','line_number':459,'multiline':False]
+['text':' A local or script-local function can shadow a global function.','line_number':488,'multiline':False]
+['text':'
+ * Return TRUE if "actual" could be "expected" and a runtime typecheck is to be
+ * used.  Return FALSE if the types will never match.
+ ','line_number':506,'multiline':True]
+['text':' This takes care of a nested list or dict.','line_number':527,'multiline':False]
+['text':'
+ * Check that
+ * - "actual" matches "expected" type or
+ * - "actual" is a type that can be "expected" type: add a runtime check; or
+ * - return FAIL.
+ * If "actual_is_const" is TRUE then the type won't change at runtime, do not
+ * generate a TYPECHECK.
+ ','line_number':532,'multiline':True]
+['text':' expect VAR_FLOAT but VAR_NUMBER is OK','line_number':544,'multiline':False]
+['text':' Using "0", "1" or the result of an expression with "&&" or "||" as a','line_number':556,'multiline':False]
+['text':' boolean is OK but requires a conversion.','line_number':557,'multiline':False]
+['text':' If actual a constant a runtime check makes no sense.  If it's','line_number':566,'multiline':False]
+['text':' null_function it is OK.','line_number':567,'multiline':False]
+['text':' If the actual type can be the expected type add a runtime check.','line_number':571,'multiline':False]
+['text':' when expected is float number is also OK','line_number':588,'multiline':False]
+['text':'
+ * Set type of variable "lvar" to "type".  If the variable is a constant then
+ * the type gets TTFLAG_CONST.
+ ','line_number':606,'multiline':True]
+['text':' entry in static_types[] is followed by const type','line_number':618,'multiline':False]
+['text':'
+ * Reserve space for a local variable.
+ * "assign" can be ASSIGN_VAR for :var, ASSIGN_CONST for :const and
+ * ASSIGN_FINAL for :final.
+ * Return the variable or NULL if it failed.
+ ','line_number':629,'multiline':True]
+['text':' Every local variable uses the next entry on the stack.  We could re-use','line_number':657,'multiline':False]
+['text':' the last ones when leaving a scope, but then variables used in a closure','line_number':658,'multiline':False]
+['text':' might get overwritten.  To keep things simple do not re-use stack','line_number':659,'multiline':False]
+['text':' entries.  This is less efficient, but memory is cheap these days.','line_number':660,'multiline':False]
+['text':' type not known yet, may be inferred from RHS','line_number':667,'multiline':False]
+['text':' may use TTFLAG_CONST','line_number':670,'multiline':False]
+['text':' Remember the name for debugging.','line_number':673,'multiline':False]
+['text':'
+ * If "check_writable" is ASSIGN_CONST give an error if the variable was
+ * defined with :final or :const, if "check_writable" is ASSIGN_FINAL give an
+ * error if the variable was defined with :const.
+ ','line_number':683,'multiline':True]
+['text':'
+ * Find "name" in script-local items of script "sid".
+ * Pass "check_writable" to check_item_writable().
+ * "cctx" is NULL at the script level, "cstack" is NULL in a function.
+ * Returns the index in "sn_var_vals" if found.
+ * If found but not in "sn_var_vals" returns -1.
+ * If not found or the variable is not writable returns -2.
+ ','line_number':701,'multiline':True]
+['text':' First look the name up in the hashtable.','line_number':738,'multiline':False]
+['text':' A variable exported from an autoload script is in the global','line_number':747,'multiline':False]
+['text':' variables, we can find it in the all_vars table.','line_number':748,'multiline':False]
+['text':' Now find the svar_T index in sn_var_vals.','line_number':756,'multiline':False]
+['text':'
+ * Find "name" in imported items of the current script.
+ * If "len" is 0 use any length that works.
+ * If "load" is TRUE and the script was not loaded yet, load it now.
+ ','line_number':791,'multiline':True]
+['text':' Skip over "s:" before "s:something" to find the import name.','line_number':802,'multiline':False]
+['text':' "emsg_off" will be set when evaluating an expression silently, but','line_number':812,'multiline':False]
+['text':' we do want to know about errors in a script.  Also because it then','line_number':813,'multiline':False]
+['text':' aborts when an error is encountered.','line_number':814,'multiline':False]
+['text':' script found before but not loaded yet','line_number':817,'multiline':False]
+['text':' If the script is a symlink it may be sourced with another name, may','line_number':821,'multiline':False]
+['text':' need to adjust the script ID for that.','line_number':822,'multiline':False]
+['text':'
+ * Called when checking for a following operator at "arg".  When the rest of
+ * the line is empty or only a comment, peek the next line.  If there is a next
+ * line return a pointer to it and set "nextp".
+ * Otherwise skip over white space.
+ ','line_number':831,'multiline':True]
+['text':'
+ * Return a pointer to the next line that isn't empty or only contains a
+ * comment. Skips over white space.
+ * Returns NULL if there is none.
+ ','line_number':852,'multiline':True]
+['text':' ignore NULLs inserted for continuation lines','line_number':867,'multiline':False]
+['text':'
+ * Get the next line of the function from "cctx".
+ * Skips over empty lines.  Skips over comment lines if "skip_comment" is TRUE.
+ * Returns NULL when at the end.
+ ','line_number':880,'multiline':True]
+['text':'
+ * Skip over white space at "whitep" and assign to "*arg".
+ * If "*arg" is at the end of the line, advance to the next line.
+ * Also when "whitep" points to white space and "*arg" is on a "#".
+ * Return FAIL if beyond the last line, "*arg" is unmodified then.
+ ','line_number':906,'multiline':True]
+['text':'
+ * Idem, and give an error when failed.
+ ','line_number':929,'multiline':True]
+['text':'
+ * Get a line from the compilation context, compatible with exarg_T getline().
+ * Return a pointer to the line in allocated memory.
+ * Return NULL for end-of-file or some error.
+ ','line_number':944,'multiline':True]
+['text':' Comment lines result in NULL pointers, skip them.','line_number':965,'multiline':False]
+['text':'
+ * Return TRUE if "ufunc" should be compiled, taking into account whether
+ * "profile" indicates profiling is to be done.
+ ','line_number':979,'multiline':True]
+['text':'
+ * Compile a nested :def command.
+ ','line_number':1017,'multiline':True]
+['text':' "def" or "def Name": list functions','line_number':1060,'multiline':False]
+['text':' Only g:Func() can use a namespace.','line_number':1066,'multiline':False]
+['text':' We use the special <Lamba>99 name, but it's not really a lambda.','line_number':1086,'multiline':False]
+['text':' This may free the current line, make a copy of the name.','line_number':1091,'multiline':False]
+['text':' Make sure "KeyTyped" is not set, it may cause indent to be written.','line_number':1100,'multiline':False]
+['text':' copy over the block scope IDs before compiling','line_number':1122,'multiline':False]
+['text':' Define the funcref before compiling, so that it is found by any','line_number':1136,'multiline':False]
+['text':' recursive call.','line_number':1137,'multiline':False]
+['text':' Define a local variable for the function reference.','line_number':1146,'multiline':False]
+['text':' If the outer function is profiled, also compile the nested function for','line_number':1158,'multiline':False]
+['text':' profiling.','line_number':1159,'multiline':False]
+['text':' Now the local variable can't be used.','line_number':1168,'multiline':False]
+['text':' impossible value','line_number':1169,'multiline':False]
+['text':' When the outer function is compiled for profiling, the nested function','line_number':1174,'multiline':False]
+['text':' may be called without profiling.  Compile it here in the right context.','line_number':1175,'multiline':False]
+['text':' If a FUNCREF instruction was generated, set the index after compiling.','line_number':1180,'multiline':False]
+['text':'
+ * Compile one Vim expression {expr} in string "p".
+ * "p" points to the opening "{".
+ * Return a pointer to the character after "}", NULL for an error.
+ ','line_number':1194,'multiline':True]
+['text':' Skip the opening {.','line_number':1205,'multiline':False]
+['text':' The block must be closed by a }.','line_number':1211,'multiline':False]
+['text':'
+ * Compile a string "str" (either containing a literal string or a mix of
+ * literal strings and Vim expressions of the form `{expr}`).  This is used
+ * when compiling a heredoc assignment to a variable or an interpolated string
+ * in a Vim9 def function.  Vim9 instructions are generated to push strings,
+ * evaluate expressions, concatenate them and create a list of lines.  When
+ * "evalstr" is TRUE, Vim expressions in "str" are evaluated.
+ ','line_number':1224,'multiline':True]
+['text':' Literal string, possibly empty.','line_number':1244,'multiline':False]
+['text':' Push all the string pieces to the stack, followed by a ISN_CONCAT.','line_number':1249,'multiline':False]
+['text':' Look for a block start.','line_number':1255,'multiline':False]
+['text':' Escaped brace, unescape and continue.','line_number':1262,'multiline':False]
+['text':' Include the brace in the literal string.','line_number':1263,'multiline':False]
+['text':' Append the literal part.','line_number':1273,'multiline':False]
+['text':' Skip the second brace.','line_number':1287,'multiline':False]
+['text':' Small optimization, if there's only a single piece skip the ISN_CONCAT.','line_number':1298,'multiline':False]
+['text':'
+ * Return the length of an assignment operator, or zero if there isn't one.
+ ','line_number':1305,'multiline':True]
+['text':'
+ * Generate the load instruction for "name".
+ ','line_number':1327,'multiline':True]
+['text':' Include $ in the name here','line_number':1368,'multiline':False]
+['text':' list or dict value should already be on the stack.','line_number':1393,'multiline':False]
+['text':'
+ * Skip over "[expr]" or ".member".
+ * Does not check for any errors.
+ ','line_number':1400,'multiline':True]
+['text':' if (*p == '.')','line_number':1418,'multiline':False]
+['text':'
+ * Return TRUE if "name" is a valid register to use.
+ * Return FALSE and give an error message if not.
+ ','line_number':1445,'multiline':True]
+['text':'
+ * For one assignment figure out the type of destination.  Return it in "dest".
+ * When not recognized "dest" is not set.
+ * For an option "option_scope" is set.
+ * For a v:var "vimvaridx" is set.
+ * "type" is set to the destination type if known, unchanted otherwise.
+ * Return FAIL if an error message was given.
+ ','line_number':1458,'multiline':True]
+['text':' cannot happen?','line_number':1495,'multiline':False]
+['text':' might be a Funcref, check the type later','line_number':1513,'multiline':False]
+['text':' We use the current value of "sandbox" here, is that OK?','line_number':1571,'multiline':False]
+['text':'
+ * Returns TRUE if the class or object variable in "lhs" is modifiable.
+ * "var_start" points to the start of the variable name and "lhs->lhs_varlen"
+ * has the total length.  Note that the "lhs" can be nested an object reference
+ * (e.g.  a.b.c.d.var).
+ ','line_number':1588,'multiline':True]
+['text':' If it is private member variable, then accessing it outside the','line_number':1611,'multiline':False]
+['text':' class is not allowed.','line_number':1612,'multiline':False]
+['text':' If it is a read only class variable, then it can be modified','line_number':1613,'multiline':False]
+['text':' only inside the class where it is defined.','line_number':1614,'multiline':False]
+['text':'
+ * Figure out the LHS type and other properties for an assignment or one item
+ * of ":unlet" with an index.
+ * Returns OK or FAIL.
+ ','line_number':1629,'multiline':True]
+['text':' "var" before "var_start"','line_number':1640,'multiline':False]
+['text':' "dest_end" is the end of the destination, including "[expr]" or','line_number':1653,'multiline':False]
+['text':' ".name".','line_number':1654,'multiline':False]
+['text':' "var_end" is the end of the variable/option/etc. name.','line_number':1655,'multiline':False]
+['text':' skip over the leading "&", "&l:", "&g:" and "$"','line_number':1665,'multiline':False]
+['text':' "a: type" is declaring variable "a" with a type, not dict "a:".','line_number':1670,'multiline':False]
+['text':' compute the length of the destination without "[expr]" or ".name"','line_number':1678,'multiline':False]
+['text':' Something follows after the variable: "var[idx]" or "var.key".','line_number':1686,'multiline':False]
+['text':' Specific kind of variable recognized.','line_number':1705,'multiline':False]
+['text':' No specific kind of variable recognized, just a name.','line_number':1712,'multiline':False]
+['text':' if we come here with what looks like an assignment like','line_number':1742,'multiline':False]
+['text':' .= but which has been rejected by assignment_len() from','line_number':1743,'multiline':False]
+['text':' may_compile_assignment give a better error message','line_number':1744,'multiline':False]
+['text':' type specified in a non-var assignment','line_number':1749,'multiline':False]
+['text':' A class variable can be accessed without the class name','line_number':1761,'multiline':False]
+['text':' only inside a class.','line_number':1762,'multiline':False]
+['text':' existing script-local variables should have a type','line_number':1823,'multiline':False]
+['text':' for an import the name is what comes after the dot','line_number':1830,'multiline':False]
+['text':' TODO: where do we check this name is exported?','line_number':1852,'multiline':False]
+['text':' Check if something follows: "exp.var[idx]" or','line_number':1854,'multiline':False]
+['text':' "exp.var.key".','line_number':1855,'multiline':False]
+['text':' Check writable only when no index follows.','line_number':1861,'multiline':False]
+['text':' handle "a:name" as a name, not index "name" in "a"','line_number':1890,'multiline':False]
+['text':' parse optional type: "let var: type = expr"','line_number':1900,'multiline':False]
+['text':' +=, /=, etc. require an existing variable','line_number':1937,'multiline':False]
+['text':' Check the name is valid for a funcref.','line_number':1948,'multiline':False]
+['text':' New local variable.','line_number':1954,'multiline':False]
+['text':' Something follows after the variable: "var[idx]" or "var.key".','line_number':1970,'multiline':False]
+['text':' Now: var_start[lhs->lhs_varlen] is '[' or '.'','line_number':1980,'multiline':False]
+['text':' Only the last index is used below, if there are others','line_number':1981,'multiline':False]
+['text':' before it generate code for the expression.  Thus for','line_number':1982,'multiline':False]
+['text':' "ll[1][2]" the expression is "ll[1]" and "[2]" is the index.','line_number':1983,'multiline':False]
+['text':' We don't know the type before evaluating the expression,','line_number':1998,'multiline':False]
+['text':' use "any" until then.','line_number':1999,'multiline':False]
+['text':' for an object or class member get the type of the member','line_number':2014,'multiline':False]
+['text':' If it is private member variable, then accessing it outside the','line_number':2028,'multiline':False]
+['text':' class is not allowed.','line_number':2029,'multiline':False]
+['text':' If it is a read only class variable, then it can be modified','line_number':2030,'multiline':False]
+['text':' only inside the class where it is defined.','line_number':2031,'multiline':False]
+['text':'
+ * Figure out the LHS and check a few errors.
+ ','line_number':2051,'multiline':True]
+['text':' "var" before "var_start"','line_number':2061,'multiline':False]
+['text':'
+ * Return TRUE if "lhs" has a range index: "[expr : expr]".
+ ','line_number':2084,'multiline':True]
+['text':'
+ * For an assignment with an index, compile the "idx" in "var[idx]" or "key" in
+ * "var.key".
+ ','line_number':2107,'multiline':True]
+['text':' empty first index, push zero','line_number':2130,'multiline':False]
+['text':' unlet var[idx : idx]','line_number':2139,'multiline':False]
+['text':' blob[idx : idx] = value','line_number':2140,'multiline':False]
+['text':' empty second index, push "none"','line_number':2153,'multiline':False]
+['text':' this should not happen','line_number':2161,'multiline':False]
+['text':' object member index','line_number':2168,'multiline':False]
+['text':' if (*p == '.')','line_number':2171,'multiline':False]
+['text':'
+ * For a LHS with an index, load the variable to be indexed.
+ ','line_number':2181,'multiline':True]
+['text':' Evaluate "ll[expr]" of "ll[expr][idx]".  End the line with a NUL and','line_number':2198,'multiline':False]
+['text':' limit the lines array length to avoid skipping to a following line.','line_number':2199,'multiline':False]
+['text':' this should not happen','line_number':2208,'multiline':False]
+['text':' Check whether the object variable is modifiable','line_number':2219,'multiline':False]
+['text':' Now we can properly check the type.  The variable is indexed, thus','line_number':2224,'multiline':False]
+['text':' we need the member type.  For a class or object we don't know the','line_number':2225,'multiline':False]
+['text':' type yet, it depends on what member is used.','line_number':2226,'multiline':False]
+['text':' The top item in the stack is the Dict, followed by the key and then','line_number':2227,'multiline':False]
+['text':' the type of the value.','line_number':2228,'multiline':False]
+['text':'
+ * Produce code for loading "lhs" and also take care of an index.
+ * Return OK/FAIL.
+ ','line_number':2244,'multiline':True]
+['text':' "this.value": load "this" object and get the value at index for an','line_number':2253,'multiline':False]
+['text':' object or class member get the type of the member.','line_number':2254,'multiline':False]
+['text':' Also for "obj.value".','line_number':2255,'multiline':False]
+['text':' load "this"','line_number':2268,'multiline':False]
+['text':' load object variable or argument','line_number':2274,'multiline':False]
+['text':' "<classname>.value": load class variable "classname.value"','line_number':2284,'multiline':False]
+['text':' Get member from list or dict.  First compile the','line_number':2306,'multiline':False]
+['text':' index value.','line_number':2307,'multiline':False]
+['text':' Get the member.','line_number':2317,'multiline':False]
+['text':'
+ * Assignment to a list or dict member, or ":unlet" for the item, using the
+ * information in "lhs".
+ * Returns OK or FAIL.
+ ','line_number':2324,'multiline':True]
+['text':' Index on variable of unknown type: check at runtime.','line_number':2353,'multiline':False]
+['text':' Load the dict, list or object.  On the stack we then have:','line_number':2389,'multiline':False]
+['text':' - value (for assignment, not for :unlet)','line_number':2390,'multiline':False]
+['text':' - index','line_number':2391,'multiline':False]
+['text':' - for [a : b] second index','line_number':2392,'multiline':False]
+['text':' - variable','line_number':2393,'multiline':False]
+['text':' "this.value": load "this" object and get the value','line_number':2426,'multiline':False]
+['text':' at index for an object or class member get the type','line_number':2427,'multiline':False]
+['text':' of the member','line_number':2428,'multiline':False]
+['text':'
+ * Generate an instruction to push the default value for "vartype".
+ * if "dest_local" is TRUE then for some types no instruction is generated.
+ * "skip_store" is set to TRUE if no PUSH instruction is generated.
+ * Returns OK or FAIL.
+ ','line_number':2455,'multiline':True]
+['text':' cannot happen','line_number':2510,'multiline':False]
+['text':' This is skipped for local variables, they are always','line_number':2511,'multiline':False]
+['text':' initialized to zero.  But in a "for" or "while" loop','line_number':2512,'multiline':False]
+['text':' the value may have been changed.','line_number':2513,'multiline':False]
+['text':'
+ * Compile declaration and assignment:
+ * "let name"
+ * "var name = expr"
+ * "final name = expr"
+ * "const name = expr"
+ * "name = expr"
+ * "arg" points to "name".
+ * "++arg" and "--arg"
+ * Return NULL for an error.
+ * Return "arg" if it does not look like a variable list.
+ ','line_number':2523,'multiline':True]
+['text':' Use a JUMP_IF_ARG_NOT_SET instruction to skip if the value was not','line_number':2571,'multiline':False]
+['text':' given and the default value is "v:none".','line_number':2572,'multiline':False]
+['text':' Skip over the "varname" or "[varname, varname]" to get to any "=".','line_number':2581,'multiline':False]
+['text':' can be something like "[1, 2]->func()"','line_number':2606,'multiline':False]
+['text':' [let] varname =<< [trim] {end}','line_number':2620,'multiline':False]
+['text':' for "[var, var] = expr" evaluate the expression here, loop over the','line_number':2635,'multiline':False]
+['text':' list of variables below.','line_number':2636,'multiline':False]
+['text':' A line break may follow the "=".','line_number':2637,'multiline':False]
+['text':' If a constant list was used we can check the length right here.','line_number':2662,'multiline':False]
+['text':'
+     * Loop over variables in "[var, var] = expr".
+     * For "var = expr" and "let var: type" this is done only once.
+     ','line_number':2687,'multiline':True]
+['text':' skip over the "["','line_number':2692,'multiline':False]
+['text':' Ignore underscore in "[a, _, b] = list".','line_number':2704,'multiline':False]
+['text':'
+	 * Figure out the LHS type and other properties.
+	 ','line_number':2715,'multiline':True]
+['text':' skip over the "=" and the expression','line_number':2736,'multiline':False]
+['text':' for "+=", "*=", "..=" etc. first load the current value','line_number':2746,'multiline':False]
+['text':' For "var = expr" evaluate the expression.','line_number':2752,'multiline':False]
+['text':' Compile the expression.','line_number':2757,'multiline':False]
+['text':' Temporarily hide the new local variable here, it is','line_number':2765,'multiline':False]
+['text':' not available to this expression.','line_number':2766,'multiline':False]
+['text':' For "[var; var] = expr" get the rest of the list','line_number':2785,'multiline':False]
+['text':' For "[var, var] = expr" get the "var_idx" item from the','line_number':2792,'multiline':False]
+['text':' list.','line_number':2793,'multiline':False]
+['text':' An empty list or dict has a &t_unknown member,','line_number':2821,'multiline':False]
+['text':' for a variable that implies &t_any.','line_number':2822,'multiline':False]
+['text':' Without operator check type here, otherwise below.','line_number':2842,'multiline':False]
+['text':' Use the line number of the assignment.','line_number':2843,'multiline':False]
+['text':' If assigning to a list or dict member, use the','line_number':2850,'multiline':False]
+['text':' member type.  Not for "list[:] =".','line_number':2851,'multiline':False]
+['text':' Special case: assigning to @# can use a number or a','line_number':2865,'multiline':False]
+['text':' string.','line_number':2866,'multiline':False]
+['text':' Also: can assign a number to a float.','line_number':2867,'multiline':False]
+['text':' variables are always initialized','line_number':2895,'multiline':False]
+['text':' no need to parse more when skipping','line_number':2908,'multiline':False]
+['text':' If variable is float operation with number is OK.','line_number':2927,'multiline':False]
+['text':' Use the line number of the assignment for store instruction.','line_number':2952,'multiline':False]
+['text':' Use the info in "lhs" to store the value at the index in the','line_number':2958,'multiline':False]
+['text':' list, dict or object.','line_number':2959,'multiline':False]
+['text':' ":const var": lock the value, but not referenced variables','line_number':2972,'multiline':False]
+['text':' Set the type in the list or dict, so that it can be checked,','line_number':2980,'multiline':False]
+['text':' also in legacy script.','line_number':2981,'multiline':False]
+['text':' Set the type in the list or dict, so that it can be checked,','line_number':2989,'multiline':False]
+['text':' also in legacy script.','line_number':2990,'multiline':False]
+['text':' set instruction index in JUMP_IF_ARG_SET to here','line_number':3007,'multiline':False]
+['text':' For "[var, var] = expr" drop the "expr" value.','line_number':3013,'multiline':False]
+['text':' Also for "[var, var; _] = expr".','line_number':3014,'multiline':False]
+['text':'
+ * Check for an assignment at "eap->cmd", compile it if found.
+ * Return NOTDONE if there is none, FAIL for failure, OK if done.
+ ','line_number':3028,'multiline':True]
+['text':' Assuming the command starts with a variable or function name,','line_number':3038,'multiline':False]
+['text':' find what follows.','line_number':3039,'multiline':False]
+['text':' Skip over "var.member", "var[idx]" and the like.','line_number':3040,'multiline':False]
+['text':' Also "&opt = val", "$ENV = val" and "@r = val".','line_number':3041,'multiline':False]
+['text':' Recognize an assignment if we recognize the variable','line_number':3061,'multiline':False]
+['text':' name:','line_number':3062,'multiline':False]
+['text':' "&opt = expr"','line_number':3063,'multiline':False]
+['text':' "$ENV = expr"','line_number':3064,'multiline':False]
+['text':' "@r = expr"','line_number':3065,'multiline':False]
+['text':' "g:var = expr"','line_number':3066,'multiline':False]
+['text':' "g:[key] = expr"','line_number':3067,'multiline':False]
+['text':' "local = expr"  where "local" is a local var.','line_number':3068,'multiline':False]
+['text':' "script = expr"  where "script" is a script-local var.','line_number':3069,'multiline':False]
+['text':' "import = expr"  where "import" is an imported var','line_number':3070,'multiline':False]
+['text':' might be "[var, var] = expr" or "ifargisset this.member = expr"','line_number':3086,'multiline':False]
+['text':'
+ * Check if arguments of "ufunc" shadow variables in "cctx".
+ * Return OK or FAIL.
+ ','line_number':3098,'multiline':True]
+['text':' Make sure arguments are not found when compiling a second time.','line_number':3109,'multiline':False]
+['text':' Check for arguments shadowing variables from the context.','line_number':3112,'multiline':False]
+['text':'
+ * Get a count before a command.  Can only be a number.
+ * Returns zero if there is no count.
+ * Returns -1 if there is something wrong.
+ ','line_number':3127,'multiline':True]
+['text':' skip over colons and white space','line_number':3137,'multiline':False]
+['text':' The command or modifiers must be following.  Assume a lower case','line_number':3142,'multiline':False]
+['text':' character means there is a modifier.','line_number':3143,'multiline':False]
+['text':'
+ * Get the compilation type that should be used for "ufunc".
+ * Keep in sync with INSTRUCTIONS().
+ ','line_number':3155,'multiline':True]
+['text':' Update uf_has_breakpoint if needed.','line_number':3162,'multiline':False]
+['text':'
+ * Add a function to the list of :def functions.
+ * This sets "ufunc->uf_dfunc_idx" but the function isn't compiled yet.
+ ','line_number':3181,'multiline':True]
+['text':' The first position is not used, so that a zero uf_dfunc_idx means it','line_number':3192,'multiline':False]
+['text':' wasn't set.','line_number':3193,'multiline':False]
+['text':' Add the function to "def_functions".','line_number':3199,'multiline':False]
+['text':'
+ * After ex_function() has collected all the function lines: parse and compile
+ * the lines into instructions.
+ * Adds the function to "def_functions".
+ * When "check_return_type" is set then set ufunc->uf_ret_type to the type of
+ * the return statement (used for lambda).  When uf_ret_type is already set
+ * then check that it matches.
+ * When "profiling" is true add ISN_PROF_START instructions.
+ * "outer_cctx" is set for a nested function.
+ * This can be used recursively through compile_lambda(), which may reallocate
+ * "def_functions".
+ * Returns OK or FAIL.
+ ','line_number':3214,'multiline':True]
+['text':' error message','line_number':3237,'multiline':False]
+['text':' allocated lines are freed at the end','line_number':3253,'multiline':False]
+['text':' When using a function that was compiled before: Free old instructions.','line_number':3256,'multiline':False]
+['text':' The index is reused.  Otherwise add a new entry in "def_functions".','line_number':3257,'multiline':False]
+['text':' Was compiled in this mode before: Free old instructions.','line_number':3274,'multiline':False]
+['text':' Each entry on the type stack consists of two type pointers.','line_number':3302,'multiline':False]
+['text':' Set the context to the function, it may be compiled when called from','line_number':3308,'multiline':False]
+['text':' another script.  Set the script version to the most modern one.','line_number':3309,'multiline':False]
+['text':' The line number will be set in next_line_from_context().','line_number':3310,'multiline':False]
+['text':' Don't use the flag from ":legacy" here.','line_number':3314,'multiline':False]
+['text':' Make sure error messages are OK.','line_number':3317,'multiline':False]
+['text':' For an object method and constructor "this" is the first local variable.','line_number':3326,'multiline':False]
+['text':' In the constructor allocate memory for the object and initialize the','line_number':3337,'multiline':False]
+['text':' object members.','line_number':3338,'multiline':False]
+['text':' If the member variable type is not yet set, then use','line_number':3362,'multiline':False]
+['text':' the initialization expression type.','line_number':3363,'multiline':False]
+['text':' The type of the member initialization expression is','line_number':3368,'multiline':False]
+['text':' determined at run time.  Add a runtime type check.','line_number':3369,'multiline':False]
+['text':' Produce instructions for the default values of optional arguments.','line_number':3394,'multiline':False]
+['text':' line number unknown','line_number':3395,'multiline':False]
+['text':' "arg = v:none" means the argument is optional without','line_number':3400,'multiline':False]
+['text':' setting a value when the argument is missing.','line_number':3401,'multiline':False]
+['text':' Use a JUMP_IF_ARG_SET instruction to skip if the value was given.','line_number':3410,'multiline':False]
+['text':' Make sure later arguments are not found.','line_number':3415,'multiline':False]
+['text':' If no type specified use the type of the default value.','line_number':3422,'multiline':False]
+['text':' Otherwise check that the default value type matches the','line_number':3423,'multiline':False]
+['text':' specified type.','line_number':3424,'multiline':False]
+['text':' set instruction index in JUMP_IF_ARG_SET to here','line_number':3440,'multiline':False]
+['text':' Compiling a function in an interface is done to get the function type.','line_number':3450,'multiline':False]
+['text':' No code is actually compiled.','line_number':3451,'multiline':False]
+['text':'
+     * Loop over all the lines of the function and generate instructions.
+     ','line_number':3460,'multiline':True]
+['text':' Bail out on the first error to avoid a flood of errors and report','line_number':3470,'multiline':False]
+['text':' the right line number when inside try/catch.','line_number':3471,'multiline':False]
+['text':' the line continues after a '|'','line_number':3476,'multiline':False]
+['text':' beyond the last line','line_number':3492,'multiline':False]
+['text':' Make a copy, splitting off nextcmd and removing trailing spaces','line_number':3499,'multiline':False]
+['text':' may change it.','line_number':3500,'multiline':False]
+['text':' "#" starts a comment, but "#{" is an error','line_number':3516,'multiline':False]
+['text':' Some things can be recognized by the first character.','line_number':3541,'multiline':False]
+['text':' "}" ends a block scope','line_number':3546,'multiline':False]
+['text':' "{" starts a block scope','line_number':3566,'multiline':False]
+['text':' "{'a': 1}->func() is something else','line_number':3567,'multiline':False]
+['text':'
+	 * COMMAND MODIFIERS
+	 ','line_number':3576,'multiline':True]
+['text':' Check if there was a colon after the last command modifier or before','line_number':3586,'multiline':False]
+['text':' the current position.','line_number':3587,'multiline':False]
+['text':' Skip ":call" to get to the function name, unless using :legacy','line_number':3596,'multiline':False]
+['text':' not for "call()"','line_number':3603,'multiline':False]
+['text':' Check for assignment after command modifiers.','line_number':3613,'multiline':False]
+['text':'
+	 * COMMAND after range
+	 * 'text'->func() should not be confused with 'a mark
+	 * 0z1234->func() should not be confused with a zero line number
+	 * "++nr" and "--nr" are eval commands
+	 * in "$ENV->func()" the "$" is not a range
+	 * "123->func()" is a method call
+	 ','line_number':3622,'multiline':True]
+['text':' A range without a command: jump to the line.','line_number':3651,'multiline':False]
+['text':' When using ":legacy cmd" always use compile_exec().','line_number':3670,'multiline':False]
+['text':' ":legacy return expr" needs to be handled differently.','line_number':3696,'multiline':False]
+['text':' "eval" is used for "val->func()" and "var" for "var = val", then','line_number':3705,'multiline':False]
+['text':' "p" is equal to "ea.cmd" for a valid command.','line_number':3706,'multiline':False]
+['text':' We don't check for a next command here.','line_number':3934,'multiline':False]
+['text':' heredoc lines have been concatenated with NL','line_number':3951,'multiline':False]
+['text':' characters in get_function_body()','line_number':3952,'multiline':False]
+['text':' FALLTHROUGH','line_number':3973,'multiline':False]
+['text':' Not recognized, execute with do_cmdline_cmd().','line_number':3975,'multiline':False]
+['text':' Undo any command modifiers.','line_number':3985,'multiline':False]
+['text':' END of the loop over all the function body lines.','line_number':3993,'multiline':False]
+['text':' TODO: if a function ends in "throw" but there was a return elsewhere we','line_number':4008,'multiline':False]
+['text':' should not assume the return type is "void".','line_number':4009,'multiline':False]
+['text':' Return void if there is no return at the end.','line_number':4021,'multiline':False]
+['text':' For a constructor return the object.','line_number':4022,'multiline':False]
+['text':' When compiled with ":silent!" and there was an error don't consider the','line_number':4032,'multiline':False]
+['text':' function compiled.','line_number':4033,'multiline':False]
+['text':' Compiling aborted, free the generated instructions.','line_number':4079,'multiline':False]
+['text':' If using the last entry in the table and it was added above, we','line_number':4084,'multiline':False]
+['text':' might as well remove it.','line_number':4085,'multiline':False]
+['text':' Create a type for the function, with the return type and any','line_number':4132,'multiline':False]
+['text':' argument types.','line_number':4133,'multiline':False]
+['text':' A vararg is included in uf_args.ga_len but not in uf_arg_types.','line_number':4134,'multiline':False]
+['text':' The type is included in "tt_args".','line_number':4135,'multiline':False]
+['text':' Add argument types to the function type.','line_number':4142,'multiline':False]
+['text':' lambda does not have argument types.','line_number':4154,'multiline':False]
+['text':' No arguments, can use a predefined type.','line_number':4169,'multiline':False]
+['text':'
+ * Free all instructions for "dfunc" except df_name.
+ ','line_number':4174,'multiline':True]
+['text':' In same cases the instructions may refer to a class in which the','line_number':4182,'multiline':False]
+['text':' function is defined and unreferencing the class may call back here','line_number':4183,'multiline':False]
+['text':' recursively.  Set the df_delete_busy to avoid problems.','line_number':4184,'multiline':False]
+['text':'
+ * When a user function is deleted, clear the contents of any associated def
+ * function, unless another user function still uses it.
+ * The position in def_functions can be re-used.
+ ','line_number':4221,'multiline':True]
+['text':'
+ * Used when a user function refers to an existing dfunc.
+ ','line_number':4243,'multiline':True]
+['text':'
+ * Free all functions defined with ":def".
+ ','line_number':4259,'multiline':True]
+['text':' FEAT_EVAL','line_number':4280,'multiline':False]

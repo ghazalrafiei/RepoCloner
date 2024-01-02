@@ -1,0 +1,158 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __sweep_mark --
+ *     Mark idle handles with a time of death, and note if we see dead handles.
+ ','line_number':15,'multiline':True]
+['text':'
+         * There are some internal increments of the in-use count such as eviction. Don't keep
+         * handles alive because of those cases, but if we see multiple cursors open, clear the time
+         * of death.
+         ','line_number':31,'multiline':True]
+['text':'
+         * If the handle is open exclusive or currently in use, or the time of death is already set,
+         * move on.
+         ','line_number':39,'multiline':True]
+['text':'
+         * Never close out the history store handle via sweep. It can cause a deadlock if eviction
+         * needs to re-open a handle to the history store while a checkpoint is getting started.
+         ','line_number':47,'multiline':True]
+['text':'
+ * __sweep_close_dhandle_locked --
+ *     Close write-locked dhandle.
+ ','line_number':59,'multiline':True]
+['text':' This method expects dhandle write lock. ','line_number':72,'multiline':True]
+['text':' Only sweep clean trees. ','line_number':75,'multiline':True]
+['text':'
+     * Mark the handle dead and close the underlying handle.
+     *
+     * For btree handles, closing the handle decrements the open file count, meaning the close loop
+     * won't overrun the configured minimum.
+     ','line_number':79,'multiline':True]
+['text':'
+ * __sweep_expire_one --
+ *     Mark a single handle dead.
+ ','line_number':88,'multiline':True]
+['text':'
+     * Acquire an exclusive lock on the handle and mark it dead.
+     *
+     * The close would require I/O if an update cannot be written (updates in a no-longer-referenced
+     * file might not yet be globally visible if sessions have disjoint sets of files open). In that
+     * case, skip it: we'll retry the close the next time, after the transaction state has
+     * progressed.
+     *
+     * We don't set WT_DHANDLE_EXCLUSIVE deliberately, we want opens to block on us and then retry
+     * rather than returning an EBUSY error to the application. This is done holding the handle list
+     * lock so that connection-level handle searches never need to retry.
+     ','line_number':97,'multiline':True]
+['text':'
+ * __sweep_expire --
+ *     Mark trees dead if they are clean and haven't been accessed recently, until we have reached
+ *     the configured minimum number of handles.
+ ','line_number':114,'multiline':True]
+['text':'
+         * Ignore open files once the btree file count is below the minimum number of handles.
+         ','line_number':129,'multiline':True]
+['text':'
+         * For tables, we need to hold the table lock to avoid racing with cursor opens.
+         ','line_number':140,'multiline':True]
+['text':'
+ * __sweep_discard_trees --
+ *     Discard pages from dead trees.
+ ','line_number':154,'multiline':True]
+['text':' If the handle is marked dead, flush it from cache. ','line_number':176,'multiline':True]
+['text':' We closed the btree handle. ','line_number':179,'multiline':True]
+['text':'
+ * __sweep_remove_one --
+ *     Remove a closed handle from the connection list.
+ ','line_number':192,'multiline':True]
+['text':' Try to get exclusive access. ','line_number':201,'multiline':True]
+['text':'
+     * If there are no longer any references to the handle in any sessions, attempt to discard it.
+     ','line_number':204,'multiline':True]
+['text':'
+     * If the handle was not successfully discarded, unlock it and don't retry the discard until it
+     * times out again.
+     ','line_number':212,'multiline':True]
+['text':'
+ * __sweep_remove_handles --
+ *     Remove closed handles from the connection list.
+ ','line_number':224,'multiline':True]
+['text':'
+ * __sweep_server_run_chk --
+ *     Check to decide if the sweep server should continue running.
+ ','line_number':261,'multiline':True]
+['text':'
+ * __sweep_check_session_callback --
+ *     Check if a given session hasn't swept. Callback from the session array walk.
+ ','line_number':271,'multiline':True]
+['text':'
+     * Get the earlier of the two timestamps, as they refer to sweeps of two different data
+     * structures that reference data handles
+     ','line_number':288,'multiline':True]
+['text':'
+     * Check if the session did not run a sweep in 5 minutes. Handle the issue only once per
+     * violation.
+     ','line_number':297,'multiline':True]
+['text':'
+     * The same for 60 minutes.
+     ','line_number':310,'multiline':True]
+['text':'
+ * __sweep_check_session_sweep --
+ *     Check for any "rogue" sessions, which did not run a session sweep in a long time.
+ ','line_number':329,'multiline':True]
+['text':'
+ * __sweep_server --
+ *     The handle sweep server thread.
+ ','line_number':344,'multiline':True]
+['text':'
+     * Sweep for dead and excess handles.
+     ','line_number':362,'multiline':True]
+['text':' Wait until the next event. ','line_number':367,'multiline':True]
+['text':' Check if we're quitting or being reconfigured. ','line_number':375,'multiline':True]
+['text':'
+         * See if it is time to sweep the data handles. Those are swept less frequently than the
+         * history store table by default and the frequency is controlled by a user setting. We want
+         * to avoid sweeping while checkpoint is gathering handles. Both need to lock the dhandle
+         * list and sweep acquiring that lock can interfere with checkpoint and cause it to take
+         * longer. Sweep is an operation that typically has long intervals so skipping some for
+         * checkpoint should have little impact.
+         ','line_number':381,'multiline':True]
+['text':'
+         * Mark handles with a time of death, and report whether any handles are marked dead. If
+         * sweep_idle_time is 0, handles never become idle.
+         ','line_number':396,'multiline':True]
+['text':'
+         * Close handles if we have reached the configured limit. If sweep_idle_time is 0, handles
+         * never become idle.
+         ','line_number':403,'multiline':True]
+['text':'
+         * Check for any "rogue" sessions, which did not run a session sweep in a long time.
+         ','line_number':415,'multiline':True]
+['text':' Remember the last sweep time. ','line_number':420,'multiline':True]
+['text':'
+ * __wt_sweep_config --
+ *     Pull out sweep configuration settings
+ ','line_number':431,'multiline':True]
+['text':'
+     * A non-zero idle time is incompatible with in-memory, and the default is non-zero; set the
+     * in-memory configuration idle time to zero.
+     ','line_number':443,'multiline':True]
+['text':'
+ * __wt_sweep_create --
+ *     Start the handle sweep thread.
+ ','line_number':463,'multiline':True]
+['text':' Set first, the thread might run before we finish up. ','line_number':475,'multiline':True]
+['text':'
+     * Handle sweep does enough I/O it may be called upon to perform slow operations for the block
+     * manager. Sweep should not block due to the cache being full.
+     ','line_number':478,'multiline':True]
+['text':'
+ * __wt_sweep_destroy --
+ *     Destroy the handle-sweep thread.
+ ','line_number':495,'multiline':True]

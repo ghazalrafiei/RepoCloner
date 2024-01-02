@@ -1,0 +1,596 @@
+['text':' linenoise.c -- guerrilla line editing library against the idea that a
+ *
+ * Copyright (c) 2010, Salvatore Sanfilippo <antirez at gmail dot com>
+ * Copyright (c) 2010, Pieter Noordhuis <pcnoordhuis at gmail dot com>
+ *
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright notice,
+ *     this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in the
+ *     documentation and/or other materials provided with the distribution.
+ *   * Neither the name of Redis nor the names of its contributors may be used
+ *     to endorse or promote products derived from this software without
+ *     specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * line editing lib needs to be 20,000 lines of C code.
+ *
+ * You can find the latest source code at:
+ *
+ *   http://github.com/antirez/linenoise
+ *
+ * Does a number of crazy assumptions that happen to be true in 99.9999% of
+ * the 2010 UNIX computers around.
+ *
+ * References:
+ * - http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+ * - http://www.3waylabs.com/nw/WWW/products/wizcon/vt220.html
+ *
+ * Todo list:
+ * - Switch to gets() if $TERM is something we can't support.
+ * - Filter bogus Ctrl+<char> combinations.
+ * - Win32 support
+ *
+ * Bloat:
+ * - Completion?
+ * - History search like Ctrl+r in readline?
+ *
+ * List of escape sequences used by this program, we do everything just
+ * with three sequences. In order to be so cheap we may have some
+ * flickering effect with some slow terminal, but the lesser sequences
+ * the more compatible.
+ *
+ * CHA (Cursor Horizontal Absolute)
+ *    Sequence: ESC [ n G
+ *    Effect: moves cursor to column n (1 based)
+ *
+ * EL (Erase Line)
+ *    Sequence: ESC [ n K
+ *    Effect: if n is 0 or missing, clear from cursor to end of line
+ *    Effect: if n is 1, clear from beginning of line to cursor
+ *    Effect: if n is 2, clear entire line
+ *
+ * CUF (Cursor Forward)
+ *    Sequence: ESC [ n C
+ *    Effect: moves cursor forward of n chars
+ *
+ * The following are used to clear the screen: ESC [ H ESC [ 2 J
+ * This is actually composed of two sequences:
+ *
+ * cursorhome
+ *    Sequence: ESC [ H
+ *    Effect: moves the cursor to upper left corner
+ *
+ * ED2 (Clear entire screen)
+ *    Sequence: ESC [ 2 J
+ *    Effect: clear the whole screen
+ *
+ ','line_number':1,'multiline':True]
+['text':' _WIN32 ','line_number':97,'multiline':True]
+['text':' _WIN32 ','line_number':105,'multiline':True]
+['text':' IWYU pragma: no_include "ext/alloc_traits.h"','line_number':122,'multiline':False]
+['text':' IWYU pragma: keep','line_number':126,'multiline':False]
+['text':' make control-characters more readable','line_number':159,'multiline':False]
+['text':'*
+ * Recompute widths of all characters in a UChar32 buffer
+ * @param text          input buffer of Unicode characters
+ * @param widths        output buffer of character widths
+ * @param charCount     number of characters in buffer
+ ','line_number':162,'multiline':True]
+['text':'*
+ * Calculate a new screen position given a starting position, screen width and character count
+ * @param x             initial x position (zero-based)
+ * @param y             initial y position (zero-based)
+ * @param screenColumns screen column count
+ * @param charCount     character positions to advance
+ * @param xOut          returned x position (zero-based)
+ * @param yOut          returned y position (zero-based)
+ ','line_number':174,'multiline':True]
+['text':' we have to special-case line wrap','line_number':197,'multiline':False]
+['text':'*
+ * Calculate a column width using mk_wcswidth()
+ * @param buf32  text to calculate
+ * @param len    length of text to calculate
+ ','line_number':203,'multiline':True]
+['text':' C0 controls','line_number':217,'multiline':False]
+['text':' DEL and C1 controls','line_number':218,'multiline':False]
+['text':' a convenience struct for grouping prompt info','line_number':221,'multiline':False]
+['text':' our copy of the prompt text, edited','line_number':222,'multiline':False]
+['text':' character widths from mk_wcwidth()','line_number':223,'multiline':False]
+['text':' chars in promptText','line_number':224,'multiline':False]
+['text':' extra lines (beyond 1) occupied by prompt','line_number':225,'multiline':False]
+['text':' column offset to end of prompt','line_number':226,'multiline':False]
+['text':' index into promptText where last line begins','line_number':227,'multiline':False]
+['text':' promptChars of previous input line, for clearing','line_number':228,'multiline':False]
+['text':' where the cursor is relative to the start of the prompt','line_number':229,'multiline':False]
+['text':' width of screen in columns','line_number':230,'multiline':False]
+['text':' help erasing','line_number':231,'multiline':False]
+['text':' error code (invalid UTF-8) or zero','line_number':232,'multiline':False]
+['text':' strip control characters from the prompt -- we do allow newline','line_number':245,'multiline':False]
+['text':' Used with DynamicPrompt (history search)','line_number':281,'multiline':False]
+['text':'','line_number':282,'multiline':False]
+['text':' remembered across invocations of linenoise()','line_number':287,'multiline':False]
+['text':' changing prompt for "(reverse-i-search)`text':" etc.','line_number':289,'multiline':False]
+['text':'','line_number':290,'multiline':False]
+['text':' text we are searching for','line_number':292,'multiline':False]
+['text':' character widths from mk_wcwidth()','line_number':293,'multiline':False]
+['text':' chars in searchText','line_number':294,'multiline':False]
+['text':' current search direction, 1=forward, -1=reverse','line_number':295,'multiline':False]
+['text':' TODO fix this, we are asssuming that the history prompt won't wrap (!)','line_number':308,'multiline':False]
+['text':' input buffer','line_number':416,'multiline':False]
+['text':' character widths from mk_wcwidth()','line_number':417,'multiline':False]
+['text':' buffer size in characters','line_number':418,'multiline':False]
+['text':' length of text in input buffer','line_number':419,'multiline':False]
+['text':' character position in buffer ( 0 <= pos <= len )','line_number':420,'multiline':False]
+['text':' Special codes for keyboard input:','line_number':446,'multiline':False]
+['text':'','line_number':447,'multiline':False]
+['text':' Between Windows and the various Linux "terminal" programs, there is some','line_number':448,'multiline':False]
+['text':' pretty diverse behavior in the "scan codes" and escape sequences we are','line_number':449,'multiline':False]
+['text':' presented with.  So ... we'll translate them all into our own pidgin','line_number':450,'multiline':False]
+['text':' pseudocode, trying to stay out of the way of UTF-8 and international','line_number':451,'multiline':False]
+['text':' characters.  Here's the general plan.','line_number':452,'multiline':False]
+['text':'','line_number':453,'multiline':False]
+['text':' "User input keystrokes" (key chords, whatever) will be encoded as a single value.','line_number':454,'multiline':False]
+['text':' The low 21 bits are reserved for Unicode characters.  Popular function-type keys','line_number':455,'multiline':False]
+['text':' get their own codes in the range 0x10200000 to (if needed) 0x1FE00000, currently','line_number':456,'multiline':False]
+['text':' just arrow keys, Home, End and Delete.  Keypresses with Ctrl get ORed with','line_number':457,'multiline':False]
+['text':' 0x20000000, with Alt get ORed with 0x40000000.  So, Ctrl+Alt+Home is encoded','line_number':458,'multiline':False]
+['text':' as 0x20000000 + 0x40000000 + 0x10A00000 == 0x70A00000.  To keep things complicated,','line_number':459,'multiline':False]
+['text':' the Alt key is equivalent to prefixing the keystroke with ESC, so ESC followed by','line_number':460,'multiline':False]
+['text':' D is treated the same as Alt + D ... we'll just use Emacs terminology and call','line_number':461,'multiline':False]
+['text':' this "Meta".  So, we will encode both ESC followed by D and Alt held down while D','line_number':462,'multiline':False]
+['text':' is pressed the same, as Meta-D, encoded as 0x40000064.','line_number':463,'multiline':False]
+['text':'','line_number':464,'multiline':False]
+['text':' Here are the definitions of our component constants:','line_number':465,'multiline':False]
+['text':'','line_number':466,'multiline':False]
+['text':' Maximum unsigned 32-bit value    = 0xFFFFFFFF;   // For reference, max 32-bit value','line_number':467,'multiline':False]
+['text':' Highest allocated Unicode char   = 0x001FFFFF;   // For reference, max Unicode value','line_number':468,'multiline':False]
+['text':' Meta key combination','line_number':469,'multiline':False]
+['text':' Ctrl key combination','line_number':470,'multiline':False]
+['text':' Common bit for all special keys','line_number':471,'multiline':False]
+['text':' Special keys','line_number':472,'multiline':False]
+['text':' in order to restore at exit ','line_number':490,'multiline':True]
+['text':' for atexit() function to check if restore is needed','line_number':495,'multiline':True]
+['text':' register atexit just 1 time ','line_number':496,'multiline':True]
+['text':' used to emulate Windows command prompt on down-arrow after a recall','line_number':502,'multiline':False]
+['text':' we use -2 as our "not set" value because we add 1 to the previous index on down-arrow,','line_number':503,'multiline':False]
+['text':' and zero is a valid index (so -1 is a valid "previous index")','line_number':504,'multiline':False]
+['text':' ctrl-G == bell/beep','line_number':522,'multiline':False]
+['text':' modify the original mode ','line_number':559,'multiline':True]
+['text':' input modes: no break, no CR to NL, no parity check, no strip char,
+                         * no start/stop output control. ','line_number':560,'multiline':True]
+['text':' output modes - disable post processing ','line_number':563,'multiline':True]
+['text':' this is wrong, we don't want raw output, it turns newlines into straight linefeeds','line_number':564,'multiline':False]
+['text':' raw.c_oflag &= ~(OPOST);','line_number':565,'multiline':False]
+['text':' control modes - set 8 bit chars ','line_number':566,'multiline':True]
+['text':' local modes - echoing off, canonical off, no extended functions,
+     * no signal chars (^Z,^C) ','line_number':568,'multiline':True]
+['text':' control chars - set return condition: min number of bytes and timer.
+     * We want read to return every single byte, without timeout. ','line_number':571,'multiline':True]
+['text':' 1 byte, no timer ','line_number':574,'multiline':True]
+['text':' put terminal in raw mode after flushing ','line_number':576,'multiline':True]
+['text':' At exit we'll try to fix the terminal to the initial conditions','line_number':599,'multiline':False]
+['text':' cols is 0 in certain circumstances like inside debugger, which creates further issues','line_number':614,'multiline':False]
+['text':' newLowByte = FOREGROUND_BLUE | FOREGROUND_INTENSITY;  // too dim','line_number':641,'multiline':False]
+['text':' newLowByte = FOREGROUND_BLUE;                         // even dimmer','line_number':642,'multiline':False]
+['text':' most similar to xterm appearance','line_number':644,'multiline':False]
+['text':' default to inverse video','line_number':650,'multiline':False]
+['text':' bright blue (visible with both B&W bg) ','line_number':661,'multiline':True]
+['text':' reset ','line_number':664,'multiline':True]
+['text':'*
+ * Display the dynamic incremental search prompt and the current user input line.
+ * @param pi   PromptBase struct holding information about the prompt and our screen position
+ * @param buf32  input buffer to be displayed
+ * @param len  count of characters in the buffer
+ * @param pos  current cursor position within the buffer (0 <= pos <= len)
+ ','line_number':669,'multiline':True]
+['text':' calculate the position of the end of the prompt','line_number':677,'multiline':False]
+['text':' calculate the position of the end of the input line','line_number':683,'multiline':False]
+['text':' calculate the desired position of the cursor','line_number':692,'multiline':False]
+['text':' position at the start of the prompt, clear to end of previous input','line_number':702,'multiline':False]
+['text':'- pi.promptExtraLines','line_number':706,'multiline':True]
+['text':' display the prompt','line_number':717,'multiline':False]
+['text':' display the input line','line_number':721,'multiline':False]
+['text':' position the cursor','line_number':725,'multiline':False]
+['text':' 0-based on Win32','line_number':727,'multiline':False]
+['text':' _WIN32','line_number':730,'multiline':False]
+['text':' move the cursor up as required','line_number':733,'multiline':False]
+['text':' position at the start of the prompt, clear to end of screen','line_number':738,'multiline':False]
+['text':' 1-based on VT100','line_number':739,'multiline':False]
+['text':' display the prompt','line_number':743,'multiline':False]
+['text':' display the input line','line_number':747,'multiline':False]
+['text':' we have to generate our own newline on line wrap','line_number':751,'multiline':False]
+['text':' position the cursor','line_number':756,'multiline':False]
+['text':' move the cursor up as required','line_number':758,'multiline':False]
+['text':' position the cursor within the line','line_number':763,'multiline':False]
+['text':' 1-based on VT100','line_number':764,'multiline':False]
+['text':' remember row for next pass','line_number':769,'multiline':False]
+['text':'*
+ * Refresh the user's input line: the prompt is already onscreen and is not redrawn here
+ * @param pi   PromptBase struct holding information about the prompt and our screen position
+ ','line_number':772,'multiline':True]
+['text':' check for a matching brace/bracket/paren, remember its position if found','line_number':777,'multiline':False]
+['text':' this scans for a brace matching buf32[pos] to highlight ','line_number':780,'multiline':True]
+['text':' backwards ','line_number':783,'multiline':True]
+['text':' forwards ','line_number':785,'multiline':True]
+['text':' TODO: the right thing when inside a string ','line_number':790,'multiline':True]
+['text':' calculate the position of the end of the input line','line_number':804,'multiline':False]
+['text':' calculate the desired position of the cursor','line_number':813,'multiline':False]
+['text':' position at the end of the prompt, clear to end of previous input','line_number':823,'multiline':False]
+['text':' 0-based on Win32','line_number':826,'multiline':False]
+['text':' display the input line','line_number':835,'multiline':False]
+['text':' bright blue (visible with both B&W bg) ','line_number':842,'multiline':True]
+['text':' position the cursor','line_number':850,'multiline':False]
+['text':' 0-based on Win32','line_number':852,'multiline':False]
+['text':' _WIN32','line_number':855,'multiline':False]
+['text':' move the cursor up as required','line_number':858,'multiline':False]
+['text':' position at the end of the prompt, clear to end of screen','line_number':863,'multiline':False]
+['text':' 1-based on VT100','line_number':864,'multiline':False]
+['text':' write unhighlighted text','line_number':868,'multiline':False]
+['text':' highlight the matching brace/bracket/parenthesis','line_number':871,'multiline':False]
+['text':' we have to generate our own newline on line wrap','line_number':882,'multiline':False]
+['text':' position the cursor','line_number':887,'multiline':False]
+['text':' move the cursor up as required','line_number':889,'multiline':False]
+['text':' position the cursor within the line','line_number':894,'multiline':False]
+['text':' 1-based on VT100','line_number':895,'multiline':False]
+['text':' remember row for next pass','line_number':900,'multiline':False]
+['text':'*
+ * Read a UTF-8 sequence from the non-Windows keyboard and return the Unicode (UChar32) character it
+ * encodes
+ *
+ * @return  UChar32 Unicode character
+ ','line_number':905,'multiline':True]
+['text':' short circuit ASCII','line_number':918,'multiline':False]
+['text':' this shouldn't happen: got four bytes but no UTF-8 character','line_number':933,'multiline':False]
+['text':' move these out of global namespace','line_number':938,'multiline':False]
+['text':' This chunk of code does parsing of the escape sequences sent by various Linux terminals.','line_number':940,'multiline':False]
+['text':'','line_number':941,'multiline':False]
+['text':' It handles arrow keys, Home, End and Delete keys by interpreting the sequences sent by','line_number':942,'multiline':False]
+['text':' gnome terminal, xterm, rxvt, konsole, aterm and yakuake including the Alt and Ctrl key','line_number':943,'multiline':False]
+['text':' combinations that are understood by linenoise.','line_number':944,'multiline':False]
+['text':'','line_number':945,'multiline':False]
+['text':' The parsing uses tables, a bunch of intermediate dispatch routines and a doDispatch','line_number':946,'multiline':False]
+['text':' loop that reads the tables and sends control to "deeper" routines to continue the','line_number':947,'multiline':False]
+['text':' parsing.  The starting call to doDispatch( c, initialDispatch ) will eventually return','line_number':948,'multiline':False]
+['text':' either a character (with optional CTRL and META bits set), or -1 if parsing fails, or','line_number':949,'multiline':False]
+['text':' zero if an attempt to read from the keyboard fails.','line_number':950,'multiline':False]
+['text':'','line_number':951,'multiline':False]
+['text':' This is rather sloppy escape sequence processing, since we're not paying attention to what the','line_number':952,'multiline':False]
+['text':' actual TERM is set to and are processing all key sequences for all terminals, but it works with','line_number':953,'multiline':False]
+['text':' the most common keystrokes on the most common terminals.  It's intricate, but the nested 'if'','line_number':954,'multiline':False]
+['text':' statements required to do it directly would be worse.  This way has the advantage of allowing','line_number':955,'multiline':False]
+['text':' changes and extensions without having to touch a lot of code.','line_number':956,'multiline':False]
+['text':' This is a typedef for the routine called by doDispatch().  It takes the current character','line_number':958,'multiline':False]
+['text':' as input, does any required processing including reading more characters and calling other','line_number':959,'multiline':False]
+['text':' dispatch routines, then eventually returns the final (possibly extended or special) character.','line_number':960,'multiline':False]
+['text':'','line_number':961,'multiline':False]
+['text':' This structure is used by doDispatch() to hold a list of characters to test for and','line_number':964,'multiline':False]
+['text':' a list of routines to call if the character matches.  The dispatch routine list is one','line_number':965,'multiline':False]
+['text':' longer than the character list; the final entry is used if no character matches.','line_number':966,'multiline':False]
+['text':'','line_number':967,'multiline':False]
+['text':' length of the chars list','line_number':969,'multiline':False]
+['text':' chars to test','line_number':970,'multiline':False]
+['text':' array of routines to call','line_number':971,'multiline':False]
+['text':' This dispatch routine is given a dispatch table and then farms work out to routines','line_number':974,'multiline':False]
+['text':' listed in the table based on the character it is called with.  The dispatch routines can','line_number':975,'multiline':False]
+['text':' read more input characters to decide what should eventually be returned.  Eventually,','line_number':976,'multiline':False]
+['text':' a called routine returns either a character or -1 to indicate parsing failure.','line_number':977,'multiline':False]
+['text':'','line_number':978,'multiline':False]
+['text':' holds pre-set Meta and/or Ctrl modifiers','line_number':988,'multiline':False]
+['text':' Final dispatch routines -- return something','line_number':990,'multiline':False]
+['text':'','line_number':991,'multiline':False]
+['text':' key labeled Backspace','line_number':1021,'multiline':False]
+['text':' key labeled Delete','line_number':1024,'multiline':False]
+['text':' Handle ESC [ 1 ; 3 (or 5) <more stuff> escape sequences','line_number':1042,'multiline':False]
+['text':'','line_number':1043,'multiline':False]
+['text':' Handle ESC [ 1 ; <more stuff> escape sequences','line_number':1052,'multiline':False]
+['text':'','line_number':1053,'multiline':False]
+['text':' Handle ESC [ 1 <more stuff> escape sequences','line_number':1073,'multiline':False]
+['text':'','line_number':1074,'multiline':False]
+['text':' Handle ESC [ 3 <more stuff> escape sequences','line_number':1085,'multiline':False]
+['text':'','line_number':1086,'multiline':False]
+['text':' Handle ESC [ 4 <more stuff> escape sequences','line_number':1090,'multiline':False]
+['text':'','line_number':1091,'multiline':False]
+['text':' Handle ESC [ 5 <more stuff> escape sequences','line_number':1095,'multiline':False]
+['text':'','line_number':1096,'multiline':False]
+['text':' Handle ESC [ 6 <more stuff> escape sequences','line_number':1100,'multiline':False]
+['text':'','line_number':1101,'multiline':False]
+['text':' Handle ESC [ 7 <more stuff> escape sequences','line_number':1105,'multiline':False]
+['text':'','line_number':1106,'multiline':False]
+['text':' Handle ESC [ 8 <more stuff> escape sequences','line_number':1110,'multiline':False]
+['text':'','line_number':1111,'multiline':False]
+['text':' Handle ESC [ <digit> escape sequences','line_number':1115,'multiline':False]
+['text':'','line_number':1116,'multiline':False]
+['text':' Insert key, unused','line_number':1127,'multiline':False]
+['text':' Handle ESC [ <more stuff> escape sequences','line_number':1169,'multiline':False]
+['text':'','line_number':1170,'multiline':False]
+['text':' Handle ESC O <char> escape sequences','line_number':1190,'multiline':False]
+['text':'','line_number':1191,'multiline':False]
+['text':' Initial ESC dispatch -- could be a Meta prefix or the start of an escape sequence','line_number':1205,'multiline':False]
+['text':'','line_number':1206,'multiline':False]
+['text':' need forward reference','line_number':1219,'multiline':False]
+['text':' Initial dispatch -- we are not in the middle of anything yet','line_number':1224,'multiline':False]
+['text':'','line_number':1225,'multiline':False]
+['text':' Special handling for the ESC key because it does double duty','line_number':1236,'multiline':False]
+['text':'','line_number':1237,'multiline':False]
+['text':' another ESC, stay in ESC processing mode','line_number':1240,'multiline':False]
+['text':' namespace EscapeSequenceProcessing','line_number':1249,'multiline':False]
+['text':' #ifndef _WIN32','line_number':1251,'multiline':False]
+['text':' linenoiseReadChar -- read a keystroke or keychord from the keyboard, and translate it','line_number':1253,'multiline':False]
+['text':' into an encoded "keystroke".  When convenient, extended keys are translated into their','line_number':1254,'multiline':False]
+['text':' simpler Emacs keystrokes, so an unmodified "left arrow" becomes Ctrl-B.','line_number':1255,'multiline':False]
+['text':'','line_number':1256,'multiline':False]
+['text':' A return value of zero means "no input available", and a return value of -1 means "invalid key".','line_number':1257,'multiline':False]
+['text':'','line_number':1258,'multiline':False]
+['text':' helper for debugging keystrokes, display info in the debug "Output" window in the debugger','line_number':1268,'multiline':False]
+['text':'if ( rec.Event.KeyEvent.uChar.UnicodeChar ) {','line_number':1271,'multiline':False]
+['text':'}','line_number':1292,'multiline':False]
+['text':' Windows provides for entry of characters that are not on your keyboard by sending the','line_number':1299,'multiline':False]
+['text':' Unicode characters as a "key up" with virtual keycode 0x12 (VK_MENU == Alt key) ...','line_number':1300,'multiline':False]
+['text':' accept these characters, otherwise only process characters on "key down"','line_number':1301,'multiline':False]
+['text':' AltGr is encoded as ( LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED ), so don't treat this','line_number':1306,'multiline':False]
+['text':' combination as either CTRL or META we just turn off those two bits, so it is still','line_number':1307,'multiline':False]
+['text':' possible to combine CTRL and/or META with an AltGr key by using right-Ctrl and/or','line_number':1308,'multiline':False]
+['text':' left-Alt','line_number':1309,'multiline':False]
+['text':' in raw mode, ReadConsoleInput shows shift, ctrl ...','line_number':1344,'multiline':False]
+['text':'  ... ignore them','line_number':1345,'multiline':False]
+['text':' ESC, set flag for later','line_number':1347,'multiline':False]
+['text':' we got a real character, return it','line_number':1351,'multiline':False]
+['text':' If _DEBUG_LINUX_KEYBOARD is set, then ctrl-^ puts us into a keyboard debugging mode','line_number':1362,'multiline':False]
+['text':' where we print out decimal and decoded values for whatever the "terminal" program','line_number':1363,'multiline':False]
+['text':' gives us on different keystrokes.  Hit ctrl-C to exit this mode.','line_number':1364,'multiline':False]
+['text':'','line_number':1365,'multiline':False]
+['text':' ctrl-^, special debug mode, prints all keys hit, ctrl-C to get out','line_number':1368,'multiline':False]
+['text':' printable','line_number':1383,'multiline':False]
+['text':' go to first column of new line','line_number':1405,'multiline':False]
+['text':' drop out of this loop on ctrl-C','line_number':1407,'multiline':False]
+['text':' _DEBUG_LINUX_KEYBOARD','line_number':1415,'multiline':False]
+['text':' no modifiers yet at initialDispatch','line_number':1417,'multiline':False]
+['text':' #_WIN32','line_number':1419,'multiline':False]
+['text':'*
+ * Free memory used in a recent command completion session
+ *
+ * @param lc pointer to a linenoiseCompletions struct
+ ','line_number':1422,'multiline':True]
+['text':'*
+ * convert {CTRL + 'A'}, {CTRL + 'a'} and {CTRL + ctrlChar( 'A' )} into ctrlChar( 'A' )
+ * leave META alone
+ *
+ * @param c character to clean up
+ * @return cleaned-up character
+ ','line_number':1431,'multiline':True]
+['text':' break characters that may precede items to be completed','line_number':1454,'multiline':False]
+['text':' maximum number of completions to display without asking','line_number':1457,'multiline':False]
+['text':'*
+ * Handle command completion, using a completionCallback() routine to provide possible substitutions
+ * This routine handles the mechanics of updating the user's input buffer with possible replacement
+ * of text as the user selects a proposed completion string, or cancels the completion attempt.
+ * @param pi     PromptBase struct holding information about the prompt and our screen position
+ ','line_number':1460,'multiline':True]
+['text':' completionCallback() expects a parsable entity, so find the previous break character and','line_number':1470,'multiline':False]
+['text':' extract a copy to parse.  we also handle the case where tab is hit while not at end-of-line.','line_number':1471,'multiline':False]
+['text':' get a list of completions','line_number':1483,'multiline':False]
+['text':' if no completions, we are done','line_number':1486,'multiline':False]
+['text':' at least one completion','line_number':1493,'multiline':False]
+['text':' beep if ambiguous','line_number':1514,'multiline':False]
+['text':' if we can extend the item, extend it and return to main loop','line_number':1518,'multiline':False]
+['text':' don't overflow buffer','line_number':1522,'multiline':False]
+['text':' truncate the insertion','line_number':1523,'multiline':False]
+['text':' and make a noise','line_number':1524,'multiline':False]
+['text':' we can't complete any further, wait for second tab','line_number':1542,'multiline':False]
+['text':' if any character other than tab, pass it to the main loop','line_number':1548,'multiline':False]
+['text':' we got a second tab, maybe show list of possible completions','line_number':1554,'multiline':False]
+['text':' move cursor to EOL to avoid overwriting the command line','line_number':1558,'multiline':False]
+['text':' Display the ^C we got','line_number':1582,'multiline':False]
+['text':' if showing the list, do it the way readline does it','line_number':1588,'multiline':False]
+['text':' skip this if we showed "Display all %d possibilities?"','line_number':1603,'multiline':False]
+['text':' move cursor to EOL to avoid overwriting the command line','line_number':1604,'multiline':False]
+['text':' Display the ^C we got','line_number':1649,'multiline':False]
+['text':' display the prompt on a new line, then redisplay the input buffer','line_number':1678,'multiline':False]
+['text':' we have to generate our own newline on line wrap on Linux','line_number':1686,'multiline':False]
+['text':'*
+ * Clear the screen ONLY (no redisplay of anything)
+ ','line_number':1696,'multiline':True]
+['text':' we have to generate our own newline on line wrap on Linux','line_number':1719,'multiline':False]
+['text':'*
+ * Incremental history search -- take over the prompt and keyboard as the user types a search
+ * string, deletes characters from it, changes direction, and either accepts the found line (for
+ * execution orediting) or cancels.
+ * @param pi        PromptBase struct holding information about the (old, static) prompt and our
+ *                  screen position
+ * @param startChar the character that began the search, used to set the initial direction
+ ','line_number':1728,'multiline':True]
+['text':' if not already recalling, add the current line to the history list so we don't have to','line_number':1741,'multiline':False]
+['text':' special case it','line_number':1742,'multiline':False]
+['text':' erase the old input first','line_number':1756,'multiline':False]
+['text':' draw user's text with our prompt','line_number':1762,'multiline':False]
+['text':' loop until we get an exit character','line_number':1764,'multiline':False]
+['text':' convert CTRL + <char> into normal ctrl','line_number':1772,'multiline':False]
+['text':' these characters keep the selected text but do not execute it','line_number':1775,'multiline':False]
+['text':' ctrl-A, move cursor to start of line','line_number':1776,'multiline':False]
+['text':' ctrl-B, move cursor left by one character','line_number':1778,'multiline':False]
+['text':' meta-B, move cursor left by one word','line_number':1780,'multiline':False]
+['text':' Emacs allows Meta, bash & readline don't','line_number':1783,'multiline':False]
+['text':' meta-D, kill word to right of cursor','line_number':1785,'multiline':False]
+['text':' ctrl-E, move cursor to end of line','line_number':1787,'multiline':False]
+['text':' ctrl-F, move cursor right by one character','line_number':1789,'multiline':False]
+['text':' meta-F, move cursor right by one word','line_number':1791,'multiline':False]
+['text':' Emacs allows Meta, bash & readline don't','line_number':1794,'multiline':False]
+['text':' ctrl-K, kill from cursor to end of line','line_number':1797,'multiline':False]
+['text':' ctrl-N, recall next line in history','line_number':1799,'multiline':False]
+['text':' ctrl-P, recall previous line in history','line_number':1800,'multiline':False]
+['text':' ctrl-T, transpose characters','line_number':1803,'multiline':False]
+['text':' ctrl-U, kill all characters to the left of the cursor','line_number':1804,'multiline':False]
+['text':' meta-Y, "yank-pop", rotate popped text','line_number':1806,'multiline':False]
+['text':' start of history','line_number':1810,'multiline':False]
+['text':' end of history','line_number':1812,'multiline':False]
+['text':' these characters revert the input line to its previous state','line_number':1817,'multiline':False]
+['text':' ctrl-C, abort this line','line_number':1818,'multiline':False]
+['text':' ctrl-L, clear screen and redisplay line','line_number':1820,'multiline':False]
+['text':' ctrl-C and ctrl-G just abort the search and do nothing else','line_number':1824,'multiline':False]
+['text':' these characters stay in search mode and update the display','line_number':1828,'multiline':False]
+['text':' if no current search text, recall previous text','line_number':1831,'multiline':False]
+['text':' reverse direction','line_number':1838,'multiline':False]
+['text':' change the prompt','line_number':1839,'multiline':False]
+['text':' same direction, search again','line_number':1841,'multiline':False]
+['text':' job control is its own thing','line_number':1845,'multiline':False]
+['text':' ctrl-Z, job control','line_number':1847,'multiline':False]
+['text':' Returning to Linux (whatever) shell, leave raw mode','line_number':1848,'multiline':False]
+['text':' Break out in mid-line','line_number':1849,'multiline':False]
+['text':' Back from Linux shell, re-enter raw mode','line_number':1850,'multiline':False]
+['text':' these characters update the search string, and hence the selected input line','line_number':1865,'multiline':False]
+['text':' backspace/ctrl-H, delete char to left of cursor','line_number':1866,'multiline':False]
+['text':' ctrl-Y, yank killed text','line_number':1878,'multiline':False]
+['text':' not an action character','line_number':1882,'multiline':False]
+['text':' switch','line_number':1891,'multiline':False]
+['text':' if we are staying in search mode, search now','line_number':1893,'multiline':False]
+['text':' while','line_number':1941,'multiline':False]
+['text':' draw user's text with our prompt','line_number':1950,'multiline':False]
+['text':' while','line_number':1952,'multiline':False]
+['text':' leaving history search, restore previous prompt, maybe make searched line current','line_number':1954,'multiline':False]
+['text':' redraw the original prompt with current input','line_number':1974,'multiline':False]
+['text':' save search text for possible reuse on ctrl-R ctrl-R','line_number':1977,'multiline':False]
+['text':' pass a character or -1 back to main loop','line_number':1978,'multiline':False]
+['text':' The latest history entry is always our current buffer','line_number':1986,'multiline':False]
+['text':' display the prompt','line_number':1998,'multiline':False]
+['text':' we have to generate our own newline on line wrap on Linux','line_number':2003,'multiline':False]
+['text':' the cursor starts out at the end of the prompt','line_number':2009,'multiline':False]
+['text':' kill and yank start in "other" mode','line_number':2012,'multiline':False]
+['text':' when history search returns control to us, we execute its terminating keystroke','line_number':2015,'multiline':False]
+['text':' if there is already text in the buffer, display it first','line_number':2018,'multiline':False]
+['text':' loop collecting characters, respond to line editing characters','line_number':2023,'multiline':False]
+['text':' get a new keystroke','line_number':2027,'multiline':False]
+['text':' use the terminating keystroke from search','line_number':2029,'multiline':False]
+['text':' clear it once we've used it','line_number':2030,'multiline':False]
+['text':' convert CTRL + <char> into normal ctrl','line_number':2032,'multiline':False]
+['text':' ctrl-I/tab, command completion, needs to be before switch statement','line_number':2050,'multiline':False]
+['text':' SERVER-4967 -- in earlier versions, you could paste previous output','line_number':2052,'multiline':False]
+['text':'  back into the shell ... this output may have leading tabs.','line_number':2053,'multiline':False]
+['text':' This hack (i.e. what the old code did) prevents command completion','line_number':2054,'multiline':False]
+['text':'  on an empty line but lets users paste text with leading tabs.','line_number':2055,'multiline':False]
+['text':' completeLine does the actual completion and replacement','line_number':2060,'multiline':False]
+['text':' return on error','line_number':2063,'multiline':False]
+['text':' read next character when 0','line_number':2066,'multiline':False]
+['text':' deliberate fall-through here, so we use the terminating character','line_number':2069,'multiline':False]
+['text':' ctrl-A, move cursor to start of line','line_number':2073,'multiline':False]
+['text':' ctrl-B, move cursor left by one character','line_number':2080,'multiline':False]
+['text':' meta-B, move cursor left by one word','line_number':2089,'multiline':False]
+['text':' Emacs allows Meta, bash & readline don't','line_number':2092,'multiline':False]
+['text':' ctrl-C, abort this line','line_number':2105,'multiline':False]
+['text':' we need one last refresh with the cursor at the end of the line','line_number':2111,'multiline':False]
+['text':' so we don't display the next prompt over the previous input line','line_number':2112,'multiline':False]
+['text':' pass len as pos for EOL','line_number':2113,'multiline':False]
+['text':' Display the ^C we got','line_number':2116,'multiline':False]
+['text':' meta-C, give word initial Cap','line_number':2119,'multiline':False]
+['text':' ctrl-D, delete the character under the cursor','line_number':2143,'multiline':False]
+['text':' on an empty line, exit the shell','line_number':2144,'multiline':False]
+['text':' meta-D, kill word to right of cursor','line_number':2159,'multiline':False]
+['text':' ctrl-E, move cursor to end of line','line_number':2179,'multiline':False]
+['text':' ctrl-F, move cursor right by one character','line_number':2186,'multiline':False]
+['text':' meta-F, move cursor right by one word','line_number':2195,'multiline':False]
+['text':' Emacs allows Meta, bash & readline don't','line_number':2198,'multiline':False]
+['text':' backspace/ctrl-H, delete char to left of cursor','line_number':2211,'multiline':False]
+['text':' meta-Backspace, kill word to left of cursor','line_number':2222,'multiline':False]
+['text':' ctrl-J/linefeed/newline, accept line','line_number':2243,'multiline':False]
+['text':' ctrl-M/return/enter','line_number':2244,'multiline':False]
+['text':' we need one last refresh with the cursor at the end of the line','line_number':2246,'multiline':False]
+['text':' so we don't display the next prompt over the previous input line','line_number':2247,'multiline':False]
+['text':' pass len as pos for EOL','line_number':2248,'multiline':False]
+['text':' ctrl-K, kill from cursor to end of line','line_number':2255,'multiline':False]
+['text':' ctrl-L, clear screen and redisplay line','line_number':2264,'multiline':False]
+['text':' meta-L, lowercase word','line_number':2268,'multiline':False]
+['text':' ctrl-N, recall next line in history','line_number':2286,'multiline':False]
+['text':' ctrl-P, recall previous line in history','line_number':2287,'multiline':False]
+['text':' if not already recalling, add the current line to the history list so we don't','line_number':2291,'multiline':False]
+['text':' have to special case it','line_number':2292,'multiline':False]
+['text':' emulate Windows down-arrow','line_number':2306,'multiline':False]
+['text':' ctrl-R, reverse history search','line_number':2327,'multiline':False]
+['text':' ctrl-S, forward history search','line_number':2328,'multiline':False]
+['text':' ctrl-T, transpose characters','line_number':2332,'multiline':False]
+['text':' ctrl-U, kill all characters to the left of the cursor','line_number':2346,'multiline':False]
+['text':' meta-U, uppercase word','line_number':2358,'multiline':False]
+['text':' ctrl-W, kill to whitespace (not word) to left of cursor','line_number':2376,'multiline':False]
+['text':' ctrl-Y, yank killed text','line_number':2397,'multiline':False]
+['text':' meta-Y, "yank-pop", rotate popped text','line_number':2426,'multiline':False]
+['text':' ctrl-Z, job control','line_number':2468,'multiline':False]
+['text':' Returning to Linux (whatever) shell, leave raw mode','line_number':2469,'multiline':False]
+['text':' Break out in mid-line','line_number':2470,'multiline':False]
+['text':' Back from Linux shell, re-enter raw mode','line_number':2471,'multiline':False]
+['text':' Redraw prompt','line_number':2473,'multiline':False]
+['text':' Refresh the line','line_number':2474,'multiline':False]
+['text':' DEL, delete the character under the cursor','line_number':2478,'multiline':False]
+['text':' meta-<, beginning of history','line_number':2490,'multiline':False]
+['text':' Page Up, beginning of history','line_number':2491,'multiline':False]
+['text':' meta->, end of history','line_number':2492,'multiline':False]
+['text':' Page Down, end of history','line_number':2493,'multiline':False]
+['text':' if not already recalling, add the current line to the history list so we don't','line_number':2495,'multiline':False]
+['text':' have to special case it','line_number':2496,'multiline':False]
+['text':' not one of our special characters, maybe insert it in the buffer','line_number':2517,'multiline':False]
+['text':' beep on unknown Ctrl and/or Meta keys','line_number':2521,'multiline':False]
+['text':' don't insert control characters','line_number':2526,'multiline':False]
+['text':' at end of buffer','line_number':2530,'multiline':False]
+['text':' Avoid a full update of the line in the
+                             * trivial case. ','line_number':2539,'multiline':True]
+['text':' not at end of buffer, have to move characters to our right','line_number':2546,'multiline':False]
+['text':' buffer is full, beep on new characters','line_number':2555,'multiline':False]
+['text':' used with linenoisePreloadBuffer','line_number':2563,'multiline':False]
+['text':'*
+ * linenoisePreloadBuffer provides text to be inserted into the command buffer
+ *
+ * the provided text will be processed to be usable and will be used to preload
+ * the input buffer on the next call to linenoise()
+ *
+ * @param preloadText text to begin with on the next call to linenoise()
+ ','line_number':2566,'multiline':True]
+['text':' remove characters that won't display correctly','line_number':2582,'multiline':False]
+['text':' we need unsigned so chars 0x80 and above are allowed','line_number':2588,'multiline':False]
+['text':' silently skip CR','line_number':2589,'multiline':False]
+['text':' note newline or tab','line_number':2592,'multiline':False]
+['text':' remove other control characters, flag for message','line_number':2596,'multiline':False]
+['text':' convert whitespace to a single space','line_number':2601,'multiline':False]
+['text':'*
+ * linenoise is a readline replacement.
+ *
+ * call it with a prompt to display and it will return a line of input from the user
+ *
+ * @param prompt text of prompt to display to the user
+ * @return       the returned string belongs to the caller on return and must be freed to prevent
+ *               memory leaks
+ ','line_number':2631,'multiline':True]
+['text':' input is from a terminal','line_number':2641,'multiline':False]
+['text':' caller must free buffer','line_number':2667,'multiline':False]
+['text':' caller must free buffer','line_number':2671,'multiline':False]
+['text':' caller must free buffer','line_number':2694,'multiline':False]
+['text':' input not from a terminal, we should work with piped input, i.e. redirected stdin','line_number':2696,'multiline':False]
+['text':' if fgets() gave us the newline, remove it','line_number':2702,'multiline':False]
+['text':' caller must free buffer','line_number':2711,'multiline':False]
+['text':' Register a callback function to be called for tab-completion. ','line_number':2715,'multiline':True]
+['text':' convert newlines in multi-line code to spaces before storing','line_number':2748,'multiline':False]
+['text':' namespace','line_number':2794,'multiline':False]
+['text':' Save the history in the specified file. ','line_number':2796,'multiline':True]
+['text':' We've already failed, so no need to report any close() failure.','line_number':2808,'multiline':False]
+['text':' _POSIX_C_SOURCE >= 1 || _XOPEN_SOURCE || _POSIX_SOURCE || defined(__APPLE__)','line_number':2818,'multiline':False]
+['text':' We've already failed, so no need to report any fclose() failure.','line_number':2824,'multiline':False]
+['text':' Closing fp also causes fd to be closed.','line_number':2831,'multiline':False]
+['text':' Load the history from the specified file. ','line_number':2839,'multiline':True]
+['text':' Not having a history file isn't an error condition.','line_number':2844,'multiline':False]
+['text':' For example, it's always the case when the shell is run for the first time.','line_number':2845,'multiline':False]
+['text':' fgets() returns NULL on error or EOF (with nothing read).','line_number':2873,'multiline':False]
+['text':' So if we aren't EOF, it must have been an error.','line_number':2874,'multiline':False]
+['text':' We've already failed, so no need to report any fclose() failure.','line_number':2877,'multiline':False]

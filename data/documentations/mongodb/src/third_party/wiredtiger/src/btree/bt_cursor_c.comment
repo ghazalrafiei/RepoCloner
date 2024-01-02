@@ -1,0 +1,864 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * When returning an error, we need to restore the cursor to a valid state, the upper-level cursor
+ * code is likely to retry. This structure and the associated functions are used save and restore
+ * the cursor state.
+ ','line_number':11,'multiline':True]
+['text':'
+ * __btcur_bounds_contains_key --
+ *     Determine if a given key is within the bounds set on a cursor.
+ ','line_number':23,'multiline':True]
+['text':'
+ * __btcur_bounds_search_near_reposition --
+ *     This function validates whether a given key is within the provided cursor bounds. If not the
+ *     search near key is updated to the nearest bound.
+ ','line_number':52,'multiline':True]
+['text':'
+     * Suppose a caller calls with the search key set to the lower bound but also specifies that the
+     * lower bound isn't inclusive. We cannot know which key to set the lower bound to so we would
+     * set it to the lower bound. The same is true for the upper bound. We can optimize for this
+     * scenario by either disabling and re-enabling the flags or passing a boolean to the key within
+     * bounds calls. However for the time being we will leave it as is as it is unlikely to present
+     * a performance issue.
+     ','line_number':67,'multiline':True]
+['text':'
+         * Given that we have positioned the cursor on either of the upper or lower bounds we can
+         * determine the "exact" return argument. If we positioned at the upper bound then any key
+         * we find must be less than or equal to that bound which is guaranteed to be less than the
+         * original search near key. The reverse holds true for the lower bound.
+         ','line_number':80,'multiline':True]
+['text':'
+ * __cursor_state_save --
+ *     Save the cursor's external state.
+ ','line_number':92,'multiline':True]
+['text':'
+ * __cursor_state_restore --
+ *     Restore the cursor's external state.
+ ','line_number':105,'multiline':True]
+['text':'
+ * __cursor_page_pinned --
+ *     Return if we have a page pinned.
+ ','line_number':121,'multiline':True]
+['text':'
+     * Check the page active flag, asserting the page reference with any external key.
+     ','line_number':134,'multiline':True]
+['text':'
+     * Check if the key references an item on a page. When returning from search, the page is pinned
+     * and the key is internal. After the application sets a key, the key becomes external. For the
+     * search and search-near operations, we assume locality and check any pinned page first on each
+     * new search operation. For operations other than search and search-near, check if we have an
+     * internal key. If the page is pinned and we're pointing into the page, we don't need to search
+     * at all, we can proceed with the operation. However, if the key has been set, that is, it's an
+     * external key, we're going to have to do a full search.
+     ','line_number':142,'multiline':True]
+['text':'
+     * XXX No fast-path searches at read-committed isolation. Underlying transactional functions
+     * called by the fast and slow path search code handle transaction IDs differently, resulting in
+     * different search results at read-committed isolation. This makes no difference for the update
+     * functions, but in the case of a search, we will see different results based on the cursor's
+     * initial location. See WT-5134 for the details.
+     ','line_number':154,'multiline':True]
+['text':'
+     * Fail if the page is flagged for forced eviction (so we periodically release pages grown too
+     * large).
+     *
+     * If we are resolving a prepared transaction we cannot release the page otherwise validating
+     * whether we correctly resolved the transaction becomes hard. It is easier to skip this check
+     * in that instance.
+     ','line_number':164,'multiline':True]
+['text':'
+ * __cursor_size_chk --
+ *     Return if an inserted item is too large.
+ ','line_number':178,'multiline':True]
+['text':' Fixed-size column-stores take a single byte. ','line_number':194,'multiline':True]
+['text':' Don't waste effort, 1GB is always cool. ','line_number':203,'multiline':True]
+['text':' Check what we are willing to store in the tree. ','line_number':207,'multiline':True]
+['text':' Check what the block manager can actually write. ','line_number':214,'multiline':True]
+['text':'
+ * __cursor_fix_implicit --
+ *     Return if search went past the end of the tree.
+ ','line_number':223,'multiline':True]
+['text':'
+     * When there's no exact match, column-store search returns the key nearest the searched-for key
+     * (continuing past keys smaller than the searched-for key to return the next-largest key).
+     * Therefore, if the returned comparison is -1, the searched-for key was larger than any row on
+     * the page's standard information or column-store insert list.
+     *
+     * If the returned comparison is NOT -1, there's a row equal to or larger than the searched-for
+     * key, and we implicitly create missing rows. The "equal to" is important, this function does
+     * not do anything special for exact matches, and where behavior for exact matches differs from
+     * behavior for implicitly created records, our caller is responsible to handling it.
+     ','line_number':230,'multiline':True]
+['text':'
+ * __cursor_valid_insert --
+ *     Check the insert list for a valid update.
+ ','line_number':244,'multiline':True]
+['text':' Get the insert list key. ','line_number':262,'multiline':True]
+['text':' The key we found is out of bounds. ','line_number':272,'multiline':True]
+['text':'
+ * __cursor_valid_ondisk --
+ *     Check the on-disk value or history store for a valid update.
+ ','line_number':283,'multiline':True]
+['text':'
+     * Check for an on-disk value or in the history store, passing in any update.
+     *
+     * Potentially checking an update chain twice (both here, and above if the insert list is set in
+     * the case of column-store), isn't a mistake. In a modify chain, if rollback-to-stable recovers
+     * a history store record into the update list, the base update may be in the update list and we
+     * must use it rather than falling back to the on-disk value as the base update.
+     ','line_number':294,'multiline':True]
+['text':'
+ * __cursor_valid_row --
+ *     Determine if a valid update is being referenced by the cursor for row-store.
+ ','line_number':308,'multiline':True]
+['text':' For all row-store cases we can extract the key from cbt->tmp if the compare value is zero. ','line_number':327,'multiline':True]
+['text':'
+     * In the case of row-store, an insert object implies ignoring any page objects, no insert
+     * object can have the same key as an on-page object.
+     *
+     * For row-store:
+     *	if there's an insert object:
+     *		if there's a visible update:
+     *			exact match
+     *		else
+     *			no exact match
+     *	else
+     *		use the on-page object (which may have an associated update object that may or may
+     *		not be visible to us). If there are no entries, exit.
+     ','line_number':331,'multiline':True]
+['text':'
+     * In case of prepare conflict, the slot might not have a valid value, if the update in the
+     * insert list of a new page scanned is in prepared state.
+     ','line_number':349,'multiline':True]
+['text':'
+     * The key can be NULL only when we didn't find an exact match, copy the search found key into
+     * the temporary buffer for further use.
+     ','line_number':355,'multiline':True]
+['text':' The key we found is out of bounds. ','line_number':366,'multiline':True]
+['text':' Check for an update. ','line_number':371,'multiline':True]
+['text':'
+ * __cursor_valid_col --
+ *     Determine if a valid update is being referenced by the cursor for col-store.
+ ','line_number':379,'multiline':True]
+['text':'
+     * Column-store is more complicated than row-store because an insert object can have the same
+     * key as an on-page object: updates to column-store rows are insert/object pairs, and an
+     * invisible update isn't the end as there may be an on-page object that is visible.
+     *
+     * For column-store:
+     *	if there's an insert object:
+     *		if there's a visible update:
+     *			exact match
+     *		else if the on-page object's key matches the insert key
+     *			use the on-page object
+     *	else
+     *		use the on-page object
+     ','line_number':401,'multiline':True]
+['text':'
+     * In the case of column-store, there's an insert object but no update was visible to us and the
+     * key on the page is the same as the insert object's key, and the slot as set by the search
+     * function is valid, we can use the original page information.
+     ','line_number':419,'multiline':True]
+['text':'
+         * If search returned an insert, we might be past the end of page in the append list, so
+         * there's no on-disk value.
+         ','line_number':425,'multiline':True]
+['text':'
+         * Check for an update. For column store, modifications are handled with insert lists, so an
+         * insert can have the same key as an on-page or history store object.
+         *
+         * Note: we do not want to replace tombstones with zero here; it skips cases in other code
+         * below that expect to handle it themselves, and then doesn't work.
+         ','line_number':432,'multiline':True]
+['text':' The search function doesn't check for empty pages. ','line_number':441,'multiline':True]
+['text':'
+         * In case of prepare conflict, the slot might not have a valid value, if the update in the
+         * insert list of a new page scanned is in prepared state.
+         ','line_number':444,'multiline':True]
+['text':'
+         * Column-store updates are stored as "insert" objects. If search returned an insert object
+         * we can't return, the returned on-page object must be checked for a match. The flag tells
+         * us whether the insert was actually an append to allow skipping the on-disk check. Note
+         * that appends can't have history store content. This is true both for "real" appends at
+         * the end of the tree and also for appends that are filling in truncated gaps in the middle
+         * of the tree -- the gap only appears after the truncation becomes globally visible and at
+         * that point by definition nothing older can be accessible.
+         ','line_number':450,'multiline':True]
+['text':'
+         * Although updates would have appeared as an "insert" objects, variable-length column store
+         * deletes are written into the backing store; check the cell for a record already deleted
+         * when read.
+         ','line_number':462,'multiline':True]
+['text':' The key value pair we were trying to return weren't within the given bounds. ','line_number':475,'multiline':True]
+['text':'
+         * Check for an update. For column store, modifications are handled with insert lists, so an
+         * insert can have the same key as an on-page or history store object. Setting update here,
+         * even after checking the insert list above, is correct, see the comment below for details.
+         ','line_number':480,'multiline':True]
+['text':'
+ * __wt_cursor_valid --
+ *     Return if the cursor references a valid key/value pair.
+ ','line_number':491,'multiline':True]
+['text':' If the cursor is operating in key only mode we don't need to do any more work. ','line_number':500,'multiline':True]
+['text':'
+     * We may be pointing to an insert object, and we may have a page with existing entries. Insert
+     * objects always have associated update objects (the value). Any update object may be deleted,
+     * or invisible to us. In the case of an on-page entry, it may also be invisible to us.
+     *
+     * Unfortunately, the objects we might have and their relationships are different for the
+     * underlying page types.
+     ','line_number':506,'multiline':True]
+['text':'
+ * __cursor_col_search --
+ *     Column-store search from a cursor.
+ ','line_number':527,'multiline':True]
+['text':'
+     * Turn off cursor-order checks in all cases on search. The search/search-near functions turn
+     * them back on after a successful search.
+     ','line_number':540,'multiline':True]
+['text':'
+ * __cursor_row_search --
+ *     Row-store search from a cursor.
+ ','line_number':552,'multiline':True]
+['text':'
+     * Turn off cursor-order checks in all cases on search. The search/search-near functions turn
+     * them back on after a successful search.
+     ','line_number':565,'multiline':True]
+['text':'
+ * __cursor_col_modify --
+ *     Column-store modify from a cursor.
+ ','line_number':577,'multiline':True]
+['text':'
+ * __cursor_row_modify --
+ *     Row-store modify from a cursor.
+ ','line_number':587,'multiline':True]
+['text':'
+ * __cursor_restart --
+ *     Common cursor restart handling.
+ ','line_number':597,'multiline':True]
+['text':'
+ * __wt_btcur_reset --
+ *     Invalidate the cursor position.
+ ','line_number':608,'multiline':True]
+['text':' Initialize the update value as we are not pointing to any value. ','line_number':624,'multiline':True]
+['text':'
+ * __wt_btcur_search_prepared --
+ *     Search and return exact matching records only.
+ ','line_number':631,'multiline':True]
+['text':' -Wuninitialized ','line_number':643,'multiline':True]
+['text':'
+     * Set the key only flag to indicate to the search that we don't want to check visibility we
+     * just want to position on a key. This short circuits validity checking.
+     ','line_number':647,'multiline':True]
+['text':'
+     * The search logic searches the pinned page first, which would be the previously resolved
+     * update chain's page. If that doesn't find the key we want it searches from the root.
+     ','line_number':652,'multiline':True]
+['text':'
+     * The following assertion relies on the fact that for every prepared update there must be an
+     * associated key. However this is only true if we pin the page to prevent eviction. By calling
+     * into the standard search function we avoid releasing our hazard pointer between update chain
+     * resolutions. It also depends on sorting the transaction modifications by key, if we didn't do
+     * that we would unpin the page between searches and later come back to the same key. We rely on
+     * resolving all updates for a single key in sequence.
+     *
+     * This is a complex scenario, suppose we have two updates to the same key by our transaction,
+     * and are resolving the prepared updates. The first pass resolves the update chain, now if we
+     * let eviction run it could evict the page and it will treat the update chain as a regular non
+     * prepared update chain. If we were rolling back the transaction the key may not exist after
+     * eviction, similarly if we wrote a globally visible tombstone. Thus our second attempt at
+     * resolution would fail as it wouldn't find a key.
+     ','line_number':658,'multiline':True]
+['text':' Get any uncommitted update from the in-memory page. ','line_number':675,'multiline':True]
+['text':'
+         * Any update must be either in the insert list, in which case search will have returned a
+         * pointer for us, or as an update in a particular key's update list, in which case the slot
+         * will be returned to us. In either case, we want the most recent update (any update
+         * attempted after the prepare would have failed).
+         ','line_number':678,'multiline':True]
+['text':'
+         * Any update must be in the insert list and we want the most recent update (any update
+         * attempted after the prepare would have failed).
+         ','line_number':691,'multiline':True]
+['text':'
+ * __cursor_reposition_timing_stress --
+ *     Optionally reposition the cursor 10% of times
+ ','line_number':704,'multiline':True]
+['text':'
+ * __wt_btcur_evict_reposition --
+ *     Try to evict the page and reposition the cursor on the saved key.
+ ','line_number':722,'multiline':True]
+['text':' It's not always OK to release the cursor position ','line_number':736,'multiline':True]
+['text':'
+     * Try to evict the page and then reposition the cursor back to the page for operations with
+     * snapshot isolation and for pages that require urgent eviction. Snapshot isolation level
+     * maintains a snapshot allowing the cursor to point at the correct value after a reposition
+     * unlike read committed isolation level.
+     ','line_number':740,'multiline':True]
+['text':'
+         * If we got a WT_ROLLBACK it is because there is a lot of cache pressure and the
+         * transaction is being killed - don't panic in that case.
+         ','line_number':760,'multiline':True]
+['text':'
+ * __wt_btcur_search --
+ *     Search for a matching record in the tree.
+ ','line_number':771,'multiline':True]
+['text':'
+     * The pinned page goes away if we search the tree, get a local copy of any pinned key and
+     * discard any pinned value, then re-save the cursor state. Done before searching pinned pages
+     * (unlike other cursor functions), because we don't anticipate applications searching for a key
+     * they currently have pinned.)
+     ','line_number':796,'multiline':True]
+['text':'
+     * Check that the provided search key is within bounds. If not, return WT_NOTFOUND and early
+     * exit.
+     ','line_number':806,'multiline':True]
+['text':'
+     * If we have a page pinned, search it; if we don't have a page pinned, or the search of the
+     * pinned page doesn't find an exact match, search from the root.
+     ','line_number':817,'multiline':True]
+['text':'
+         * Creating a record past the end of the tree in a fixed-length column-store implicitly
+         * fills the gap with empty records.
+         ','line_number':848,'multiline':True]
+['text':'
+     * The format test program does repeatable reads testing, and wants to dump the cursor page on
+     * failure. It sets up a callback for that purpose, and we pay a cache miss per search to make
+     * that work.
+     ','line_number':861,'multiline':True]
+['text':'
+ * __btcur_search_neighboring --
+ *     Search for a valid record around the cursor location.
+ *
+ ','line_number':885,'multiline':True]
+['text':'
+     * We didn't find an exact match: try after the search key, then before. We have to loop here
+     * because at low isolation levels, new records could appear as we are stepping through the
+     * tree.
+     ','line_number':902,'multiline':True]
+['text':'
+     * We walked to the end of the tree without finding a match. Walk backwards instead.
+     ','line_number':917,'multiline':True]
+['text':'
+ * __btcur_search_near_row_pinned_page --
+ *     Search a row store pinned page before searching from the root in search near.
+ ','line_number':932,'multiline':True]
+['text':' We only do this search for row-store. ','line_number':945,'multiline':True]
+['text':' If we have a row-store page pinned, search it. ','line_number':949,'multiline':True]
+['text':'
+     * Set the "insert" flag for row-store search; we may intend to position the cursor at the the
+     * end of the tree, rather than match an existing record. (LSM requires this semantic.)
+     ','line_number':952,'multiline':True]
+['text':'
+     * Only use the pinned page search results if search returns an exact match or a slot other than
+     * the page's boundary slots, if that's not the case, a neighbor page might offer a better
+     * match. This test is simplistic as we're ignoring append lists (there may be no page slots or
+     * we might be legitimately positioned after the last page slot). Ignore those cases, it makes
+     * things too complicated.
+     *
+     * If there's an exact match, the row-store search function built the key in the cursor's
+     * temporary buffer.
+     ','line_number':958,'multiline':True]
+['text':'
+ * __wt_btcur_search_near --
+ *     Search for a record in the tree.
+ ','line_number':975,'multiline':True]
+['text':'
+     * The pinned page goes away if we search the tree, get a local copy of any pinned key and
+     * discard any pinned value, then re-save the cursor state. Done before searching pinned pages
+     * (unlike other cursor functions), because we don't anticipate applications searching for a key
+     * they currently have pinned.)
+     ','line_number':1001,'multiline':True]
+['text':'
+     * If the given cursor has bounds set we should search from those bounds. This is required when
+     * the search key is outside the bounds. Otherwise search near should behave as normal with an
+     * additional bounds check after the call to row/col search.
+     ','line_number':1011,'multiline':True]
+['text':'
+     * For row-store search the pinned page if there is one. Unlike WT_CURSOR.search, ignore pinned
+     * pages in the case of column-store, search-near isn't an interesting enough case for
+     * column-store to add the complexity needed to avoid the tree search.
+     ','line_number':1019,'multiline':True]
+['text':' The general case is that valid is false here as we didn't have a pinned page. ','line_number':1026,'multiline':True]
+['text':'
+         * Set the "insert" flag for row-store search; we may intend to position the cursor at the
+         * the end of the tree, rather than match an existing record. (LSM requires this semantic.)
+         ','line_number':1030,'multiline':True]
+['text':'
+     * If we find a valid key return the record.
+     *
+     * Else, creating a record past the end of the tree in a fixed-length column-store implicitly
+     * fills the gap with empty records. In this case, we instantiate the empty record, it's an
+     * exact match.
+     *
+     * Else, move to the next key in the tree (bias for prefix searches). Cursor next skips invalid
+     * rows, so we don't have to test for them again.
+     *
+     * Else, redo the search and move to the previous key in the tree. Cursor previous skips invalid
+     * rows, so we don't have to test for them again.
+     *
+     * If that fails, quit, there's no record to return.
+     ','line_number':1041,'multiline':True]
+['text':' If the bounded cursor logic repositioned the cursor override exact. ','line_number':1057,'multiline':True]
+['text':' We didn't find an exact match, try to find the nearest one. ','line_number':1069,'multiline':True]
+['text':'
+         * It is important that this reset is kept as the cursor state is modified in the above prev
+         * and next loops. Those internally do reset the cursor but not when performing a prefix
+         * search near.
+         ','line_number':1086,'multiline':True]
+['text':'
+ * __wt_btcur_insert --
+ *     Insert a record into the tree.
+ ','line_number':1097,'multiline':True]
+['text':' It's no longer possible to bulk-load into the tree. ','line_number':1126,'multiline':True]
+['text':'
+     * Insert a new record if WT_CURSTD_APPEND configured, (ignoring any application set record
+     * number). Although append can't be configured for a row-store, this code would break if it
+     * were, and that's owned by the upper cursor layer, be cautious.
+     ','line_number':1129,'multiline':True]
+['text':' Save the cursor state. ','line_number':1136,'multiline':True]
+['text':'
+     * Check that the provided insert key is within bounds. If not, return WT_NOTFOUND and early
+     * exit.
+     ','line_number':1139,'multiline':True]
+['text':'
+     * If inserting with overwrite configured, and positioned to an on-page key, the update doesn't
+     * require another search. Cursors configured for append aren't included, regardless of whether
+     * or not they meet all other criteria.
+     *
+     * Fixed-length column store can never use a positioned cursor to update because the cursor may
+     * not be positioned to the correct record in the case of implicit records in the append list.
+     * FIXME: it appears that this is no longer true.
+     ','line_number':1148,'multiline':True]
+['text':'
+         * The cursor position may not be exact (the cursor's comparison value not equal to zero).
+         * Correct to an exact match so we can update whatever we're pointing at.
+         ','line_number':1160,'multiline':True]
+['text':'
+         * The pinned page goes away if we fail for any reason, get a local copy of any pinned key
+         * or value. (Restart could still use the pinned page, but that's an unlikely path.) Re-save
+         * the cursor state: we may retry but eventually fail.
+         ','line_number':1171,'multiline':True]
+['text':'
+     * The pinned page goes away if we do a search, get a local copy of any pinned key or value.
+     * Re-save the cursor state: we may retry but eventually fail.
+     ','line_number':1182,'multiline':True]
+['text':'
+         * If not overwriting, fail if the key exists, else insert the key/value pair.
+         ','line_number':1195,'multiline':True]
+['text':'
+         * Optionally insert a new record (ignoring the application's record number). The real
+         * record number is allocated by the serialized append operation.
+         ','line_number':1206,'multiline':True]
+['text':'
+         * If not overwriting, fail if the key exists. Creating a record past the end of the tree in
+         * a fixed-length column-store implicitly fills the gap with empty records. Fail in that
+         * case, the record exists.
+         ','line_number':1218,'multiline':True]
+['text':'
+                 * Removed FLCS records read as 0 values, there's no out-of-band value. Therefore,
+                 * the FLCS cursor validity check cannot return "does not exist", fail the insert.
+                 * Even so, we still have to call the cursor validity check function so we return
+                 * the found value for any duplicate key, and for FLCS we need to set 0 explicitly.
+                 ','line_number':1225,'multiline':True]
+['text':' Return the found value for any duplicate key. ','line_number':1259,'multiline':True]
+['text':' Insert doesn't maintain a position across calls, clear resources. ','line_number':1271,'multiline':True]
+['text':'
+ * __curfile_update_check --
+ *     Check whether an update would conflict. This function expects the cursor to already be
+ *     positioned. It should be called before deciding whether to skip an update operation based on
+ *     existence of a visible update for a key --
+ *     even if there is no value visible to the transaction, an update could still conflict.
+ ','line_number':1285,'multiline':True]
+['text':'
+ * __wt_btcur_insert_check --
+ *     Check whether an update would conflict. This can replace WT_CURSOR::insert, so it only checks
+ *     for conflicts without updating the tree. It is used to maintain snapshot isolation for
+ *     transactions that span multiple chunks in an LSM tree.
+ ','line_number':1317,'multiline':True]
+['text':'
+     * The pinned page goes away if we do a search, get a local copy of any pinned key and discard
+     * any pinned value. Unlike most of the btree cursor routines, we don't have to save/restore the
+     * cursor key state, none of the work done here changes the cursor state.
+     ','line_number':1337,'multiline':True]
+['text':' Just check for conflicts. ','line_number':1349,'multiline':True]
+['text':' Insert doesn't maintain a position across calls, clear resources. ','line_number':1358,'multiline':True]
+['text':'
+ * __wt_btcur_remove --
+ *     Remove a record from the tree.
+ ','line_number':1366,'multiline':True]
+['text':' Save the cursor state. ','line_number':1392,'multiline':True]
+['text':'
+     * If remove is positioned to an on-page key, the remove doesn't require another search. There's
+     * trickiness in the page-pinned check. By definition a remove operation leaves a cursor
+     * positioned if it's initially positioned. However, if every item on the page is deleted and we
+     * unpin the page, eviction might delete the page and our search will re-instantiate an empty
+     * page for us. Cursor remove returns not-found whether or not that eviction/deletion happens,
+     * and in that case, we'll fail when we try to point the cursor at the key on the page to
+     * satisfy the positioned requirement. It's arguably safe to simply leave the key initialized in
+     * the cursor (as that's all a positioned cursor implies), but it's probably safer to avoid page
+     * eviction entirely in the positioned case.
+     *
+     * Fixed-length column store can never use a positioned cursor to update because the cursor may
+     * not be positioned to the correct record in the case of implicit records in the append list.
+     * FIXME: it appears that this is no longer true.
+     ','line_number':1395,'multiline':True]
+['text':'
+         * The cursor position may not be exact (the cursor's comparison value not equal to zero).
+         * Correct to an exact match so we can remove whatever we're pointing at.
+         ','line_number':1413,'multiline':True]
+['text':'
+     * Note these steps must be repeatable, we'll continue to take this path as long as we encounter
+     * WT_RESTART.
+     *
+     * Any pinned page goes away if we do a search, including as a result of a restart. Get a local
+     * copy of any pinned key and re-save the cursor state: we may retry but eventually fail.
+     ','line_number':1426,'multiline':True]
+['text':'
+             * If we find a matching record, check whether an update would conflict. Do this before
+             * checking if the update is visible in __wt_cursor_valid, or we can miss conflicts.
+             ','line_number':1442,'multiline':True]
+['text':'
+             * If we find a matching record, check whether an update would conflict. Do this before
+             * checking if the update is visible in __wt_cursor_valid, or we can miss conflicts.
+             ','line_number':1458,'multiline':True]
+['text':'
+                 * To preserve the illusion that deleted values are 0 and that we can therefore
+                 * delete them, without violating the system restriction against consecutive
+                 * tombstones, generate a dummy value for the new tombstone to delete. Make the
+                 * dummy value zero for good measure.
+                 ','line_number':1469,'multiline':True]
+['text':'
+             * Creating a record past the end of the tree in a fixed-length column-store implicitly
+             * fills the gap with empty records, delete the record.
+             *
+             * Correct the btree cursor's location: the search will have pointed us at the
+             * previous/next item, and that's not correct.
+             ','line_number':1479,'multiline':True]
+['text':'
+         * If positioned originally, but we had to do a search, acquire a position so we can return
+         * success.
+         *
+         * If not positioned originally, leave it that way, clear any key and reset the cursor.
+         ','line_number':1499,'multiline':True]
+['text':'
+         * Check the return status again as we might have encountered an error setting the return
+         * key or resetting the cursor after an otherwise successful remove.
+         ','line_number':1513,'multiline':True]
+['text':'
+         * Reset the cursor and restore the original cursor key: done after clearing the return
+         * value in the clause immediately above so we don't lose an error value if cursor reset
+         * fails.
+         ','line_number':1522,'multiline':True]
+['text':'
+     * Upper level cursor removes don't expect the cursor value to be set after a successful remove
+     * (and check in diagnostic mode). Error handling may have converted failure to a success, do a
+     * final check.
+     ','line_number':1532,'multiline':True]
+['text':'
+ * __btcur_update --
+ *     Update a record in the tree.
+ ','line_number':1543,'multiline':True]
+['text':' It's no longer possible to bulk-load into the tree. ','line_number':1563,'multiline':True]
+['text':' Save the cursor state. ','line_number':1566,'multiline':True]
+['text':'
+     * Check that the provided update key is within bounds. If not, return WT_NOTFOUND and early
+     * exit.
+     ','line_number':1569,'multiline':True]
+['text':'
+     * If update positioned to an on-page key, the update doesn't require another search. We don't
+     * care about the "overwrite" configuration because regardless of the overwrite setting, any
+     * existing record is updated, and the record must exist with a positioned cursor.
+     *
+     * Fixed-length column store can never use a positioned cursor to update because the cursor may
+     * not be positioned to the correct record in the case of implicit records in the append list.
+     * FIXME: it appears that this is no longer true.
+     ','line_number':1578,'multiline':True]
+['text':'
+         * The cursor position may not be exact (the cursor's comparison value not equal to zero).
+         * Correct to an exact match so we can update whatever we're pointing at.
+         ','line_number':1590,'multiline':True]
+['text':'
+         * The pinned page goes away if we fail for any reason, get a local copy of any pinned key
+         * or value. (Restart could still use the pinned page, but that's an unlikely path.) Re-save
+         * the cursor state: we may retry but eventually fail.
+         ','line_number':1600,'multiline':True]
+['text':'
+     * The pinned page goes away if we do a search, get a local copy of any pinned key or value.
+     * Re-save the cursor state: we may retry but eventually fail.
+     ','line_number':1611,'multiline':True]
+['text':'
+         * If not overwriting, fail if the key does not exist. If we find a matching record, check
+         * whether an update would conflict. Do this before checking if the update is visible in
+         * __wt_cursor_valid, or we can miss conflicts.
+         ','line_number':1625,'multiline':True]
+['text':'
+         * If not overwriting, fail if the key does not exist. If we find a matching record, check
+         * whether an update would conflict. Do this before checking if the update is visible in
+         * __wt_cursor_valid, or we can miss conflicts.
+         *
+         * Creating a record past the end of the tree in a fixed-length column-store implicitly
+         * fills the gap with empty records. Update the record in that case, the record exists.
+         ','line_number':1642,'multiline':True]
+['text':'
+                 * Removed FLCS records read as 0 values, there's no out-of-band value. Therefore,
+                 * the FLCS cursor validity check cannot return "does not exist", the update is OK.
+                 ','line_number':1653,'multiline':True]
+['text':'
+     * If successful, point the cursor at internal copies of the data. We could shuffle memory in
+     * the cursor so the key/value pair are in local buffer memory, but that's a data copy. We don't
+     * want to do another search (and we might get a different update structure if we race). To make
+     * this work, we add a field to the btree cursor to pass back a pointer to the modify function's
+     * allocated update structure.
+     ','line_number':1675,'multiline':True]
+['text':'
+             * WT_CURSOR.update returns a key and a value.
+             ','line_number':1686,'multiline':True]
+['text':'
+             * WT_CURSOR.reserve doesn't return any value.
+             ','line_number':1692,'multiline':True]
+['text':' FALLTHROUGH ','line_number':1696,'multiline':True]
+['text':'
+             * WT_CURSOR.modify has already created the return value and our job is to leave it
+             * untouched.
+             ','line_number':1698,'multiline':True]
+['text':'
+ * __cursor_chain_needs_full_upd --
+ *     Return if the update chain needs to have a full update (rather than a modify) placed at the
+ *     head.
+ ','line_number':1718,'multiline':True]
+['text':'
+     * Don't put a new update on top of an aborted update or non-aborted tombstone. Anything reading
+     * the update chain cannot tell the difference between (1) an aborted set of updates from a
+     * rolled-back transaction, and (2) an in-flight, uncommitted rollback.
+     *
+     * This becomes a problem when trying to construct full values from a sequence of modifies,
+     * since the deltas are calculated using normal visibility rules - but if we can't disambiguate
+     * those two cases, we can't know which transaction the aborted entries belong to, so we can't
+     * calculate a correct delta. (This is only a problem in read-uncommitted isolation.)
+     ','line_number':1744,'multiline':True]
+['text':'
+     * Step through the modify operations at the beginning of the chain.
+     *
+     * Deleted or standard updates are anticipated to be sufficient to base the modify (although
+     * that's not guaranteed: they may not be visible or might abort before we read them). Also,
+     * this is not a hard limit, threads can race modifying updates.
+     *
+     * If the total size in bytes of the updates exceeds some factor of the underlying value size
+     * (which we know because the cursor is positioned), create a new full copy of the value. This
+     * limits the cache pressure from creating full copies to that factor: with the default factor
+     * of 1, the total size in memory of a set of modify updates is limited to double the size of
+     * the modifies.
+     *
+     * Otherwise, limit the length of the update chain to bound the cost of rebuilding the value
+     * during reads. When history has to be maintained, creating extra copies of large documents
+     * multiplies cache pressure because the old ones cannot be freed, so allow the modify chain to
+     * grow.
+     ','line_number':1757,'multiline':True]
+['text':'
+ * __wt_btcur_modify --
+ *     Modify a record in the tree.
+ ','line_number':1788,'multiline':True]
+['text':' Save the cursor state. ','line_number':1806,'multiline':True]
+['text':'
+     * Get the current value and apply the modification to it, for a few reasons: first, we set the
+     * updated value so the application can retrieve the cursor's value; second, we use the updated
+     * value as the update if the update chain is too long; third, there's a check if the updated
+     * value is too large to store; fourth, to simplify the count of bytes being added/removed;
+     * fifth, we can get into serious trouble if we attempt to modify a value that doesn't exist or
+     * read a value that might not exist in the future. For the fifth reason, fail if in anything
+     * other than a snapshot transaction, read-committed and read-uncommitted imply values that
+     * might disappear out from under us or an inability to repeat point-in-time reads.
+     *
+     * Also, an application might read a value outside of a transaction and then call modify. For
+     * that to work, the read must be part of the transaction that performs the update for
+     * correctness, otherwise we could race with another thread and end up modifying the wrong
+     * value. A clever application could get this right (imagine threads that only updated
+     * non-overlapping, fixed-length byte strings), but it's unsafe because it will work most of the
+     * time and the failure is unlikely to be detected. Require explicit transactions for modify
+     * operations.
+     ','line_number':1809,'multiline':True]
+['text':'
+     * WT_CURSOR.modify is update-without-overwrite.
+     *
+     * Use the modify buffer as the update if the data package saves us some memory and the update
+     * chain is under the limit, else use the complete value.
+     ','line_number':1846,'multiline':True]
+['text':'
+     * We have our own cursor state restoration because we've modified the cursor before calling the
+     * underlying cursor update function and we need to restore it to its original state. This means
+     * multiple calls to reset the cursor, but that shouldn't be a problem.
+     ','line_number':1861,'multiline':True]
+['text':'
+ * __wt_btcur_reserve --
+ *     Reserve a record in the tree.
+ ','line_number':1876,'multiline':True]
+['text':' WT_CURSOR.reserve is update-without-overwrite and a special value. ','line_number':1893,'multiline':True]
+['text':'
+ * __wt_btcur_update --
+ *     Update a record in the tree.
+ ','line_number':1902,'multiline':True]
+['text':'
+ * __wt_btcur_compare --
+ *     Return a comparison between two cursors.
+ ','line_number':1927,'multiline':True]
+['text':' Confirm both cursors reference the same object. ','line_number':1943,'multiline':True]
+['text':'
+         * Compare the interface's cursor record, not the underlying cursor reference: the
+         * interface's cursor reference is the one being returned to the application.
+         ','line_number':1950,'multiline':True]
+['text':'
+ * __cursor_equals --
+ *     Return if two cursors reference the same row.
+ ','line_number':1968,'multiline':True]
+['text':'
+         * Compare the interface's cursor record, not the underlying cursor reference: the
+         * interface's cursor reference is the one being returned to the application.
+         ','line_number':1978,'multiline':True]
+['text':'
+ * __wt_btcur_equals --
+ *     Return an equality comparison between two cursors.
+ ','line_number':2000,'multiline':True]
+['text':' Confirm both cursors reference the same object. ','line_number':2016,'multiline':True]
+['text':'
+     * The reason for an equals method is because we can avoid doing a full key comparison in some
+     * cases. If both cursors point into the tree, take the fast path, otherwise fall back to the
+     * slower compare method; in both cases, return 1 if the cursors are equal, 0 if they are not.
+     ','line_number':2020,'multiline':True]
+['text':'
+ * __wt_cursor_truncate --
+ *     Discard a cursor range from row-store or variable-width column-store tree.
+ ','line_number':2034,'multiline':True]
+['text':'
+ * First, call the cursor search method to re-position the cursor: we may not have a cursor position
+ * (if the higher-level truncate code switched the cursors to have an "external" cursor key, and
+ * because we don't save a copy of the page's write generation information, which we need to remove
+ * records).
+ *
+ * Once that's done, we can delete records without a full search, unless we encounter a restart
+ * error because the page was modified by some other thread of control; in that case, repeat the
+ * full search to refresh the page's modification information.
+ *
+ * If this is a row-store, we delete leaf pages having no overflow items without reading them; for
+ * that to work, we have to ensure we read the page referenced by the ending cursor, since we may be
+ * deleting only a partial page at the end of the truncation. Our caller already fully instantiated
+ * the end cursor, so we know that page is pinned in memory and we can proceed without concern.
+ ','line_number':2050,'multiline':True]
+['text':' Exact match ','line_number':2084,'multiline':True]
+['text':'
+ * __cursor_truncate_fix --
+ *     Discard a cursor range from fixed-width column-store tree.
+ ','line_number':2095,'multiline':True]
+['text':'
+ * Handle fixed-length column-store objects separately: for row-store and variable-length
+ * column-store objects we have "deleted" values and so returned objects actually exist:
+ * fixed-length column-store objects are filled-in if they don't exist, that is, if you create
+ * record 37, records 1-36 magically appear. Those records can't be deleted, which means we have to
+ * ignore already "deleted" records.
+ *
+ * First, call the cursor search method to re-position the cursor: we may not have a cursor position
+ * (if the higher-level truncate code switched the cursors to have an "external" cursor key, and
+ * because we don't save a copy of the page's write generation information, which we need to remove
+ * records).
+ *
+ * Once that's done, we can delete records without a full search, unless we encounter a restart
+ * error because the page was modified by some other thread of control; in that case, repeat the
+ * full search to refresh the page's modification information.
+ ','line_number':2111,'multiline':True]
+['text':' Removes skipped because the row is already deleted require a conflict check. ','line_number':2136,'multiline':True]
+['text':' Exact match ','line_number':2146,'multiline':True]
+['text':'
+ * __wt_btcur_range_truncate --
+ *     Discard a cursor range from the tree.
+ ','line_number':2157,'multiline':True]
+['text':'
+     * Allow performing truncate operation without a timestamp on non logged tables for non
+     * standalone builds (MongoDB). MongoDB does perform truncate operation only on a table that
+     * does not have historical versions to avoid the problem. Remove this standalone build specific
+     * code when MongoDB switches to perform truncate operation with timestamps.
+     ','line_number':2178,'multiline':True]
+['text':'
+     * All historical versions must be removed when a key is updated with no timestamp, but that
+     * isn't possible in fast truncate operations. Disallow fast truncate in transactions configured
+     * to commit without a timestamp (excluding logged tables as timestamps cannot be relevant to
+     * them).
+     ','line_number':2185,'multiline':True]
+['text':'
+     * For recovery, log the start and stop keys for a truncate operation, not the individual
+     * records removed. On the other hand, for rollback we need to keep track of all the in-memory
+     * operations.
+     *
+     * We deal with this here by logging the truncate range first, then (in the logging code)
+     * disabling writing of the in-memory remove records to disk.
+     ','line_number':2200,'multiline':True]
+['text':'
+         * The underlying cursor comparison routine requires cursors be fully instantiated when
+         * truncating row-store objects because it's comparing page and/or skiplist positions, not
+         * keys. (Key comparison would work, it's only that a key comparison would be relatively
+         * expensive, especially with custom collators. Column-store objects have record number
+         * keys, so the key comparison is cheap.) The session truncate code did cursor searches when
+         * setting up the truncate so we're good to go: if that ever changes, we'd need to do
+         * something here to ensure a fully instantiated cursor.
+         ','line_number':2219,'multiline':True]
+['text':'
+ * __wt_btcur_init --
+ *     Initialize a cursor used for internal purposes.
+ ','line_number':2238,'multiline':True]
+['text':'
+ * __wt_btcur_open --
+ *     Open a btree cursor.
+ ','line_number':2251,'multiline':True]
+['text':' Initialize the value. ','line_number':2263,'multiline':True]
+['text':'
+ * __wt_btcur_cache --
+ *     Discard buffers when caching a cursor.
+ ','line_number':2276,'multiline':True]
+['text':'
+ * __wt_btcur_close --
+ *     Close a btree cursor.
+ ','line_number':2293,'multiline':True]
+['text':'
+     * The in-memory split, history store table, and fast-truncate instantiation code creates
+     * low-level btree cursors to search/modify leaf pages. Those cursors don't hold hazard
+     * pointers, nor are they counted in the session handle's cursor count. Skip the usual cursor
+     * tear-down in that case.
+     ','line_number':2305,'multiline':True]
+['text':'
+ * __wt_btcur_bounds_position --
+ *     An unpositioned bounded cursor need to start its cursor next and prev walk from the lower or
+ *     upper bound depending on which direction it is going. This function calls cursor row search
+ *     or cursor col search to position the cursor appropriately.
+ ','line_number':2325,'multiline':True]
+['text':'
+             * If our compare value is 0 we found the exact key we were looking for, if the bound we
+             * are searching for is inclusive we can return it without walking.
+             ','line_number':2356,'multiline':True]
+['text':'
+             * We landed on the other side of the search key with respect to the direction.
+             *
+             * We need to check if the relevant bound is being honored. In the case of next that
+             * would be the upper bound, and prev would be the lower bound. We could optimize the
+             * call to cursor valid and have it only check a single bound, but we would need to
+             * indicate the bound and direction.
+             ','line_number':2366,'multiline':True]
+['text':'
+             * In the case of a next traversal we are positioned before the lower bounded, in the
+             * case of a prev traversal we are positioned after the upper bound. This is valid as
+             * such we need to keep walking.
+             *
+             * We are making the assumption that the actual key which the bound is equal to doesn't
+             * exist as if it does we could in theory walk onto that. However if it did exist we
+             * should've returned it in the cursor row search and thus have had a cbt compare value
+             * of 0. Either way we check the assumption later with an assertion.
+             ','line_number':2376,'multiline':True]
+['text':' Column store bound comparisons are fast and don't require optimization. ','line_number':2390,'multiline':True]
+['text':'
+     * Clear the cursor key set flag, as we don't want to return the internal set key to the user.
+     ','line_number':2395,'multiline':True]
+['text':' If the record is valid, set the cursor's key to the record. ','line_number':2399,'multiline':True]

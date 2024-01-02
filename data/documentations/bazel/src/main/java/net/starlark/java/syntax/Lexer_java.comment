@@ -1,0 +1,159 @@
+['text':' Copyright 2014 The Bazel Authors. All rights reserved.','line_number':1,'multiline':False]
+['text':'','line_number':2,'multiline':False]
+['text':' Licensed under the Apache License, Version 2.0 (the "License");','line_number':3,'multiline':False]
+['text':' you may not use this file except in compliance with the License.','line_number':4,'multiline':False]
+['text':' You may obtain a copy of the License at','line_number':5,'multiline':False]
+['text':'','line_number':6,'multiline':False]
+['text':'    http://www.apache.org/licenses/LICENSE-2.0','line_number':7,'multiline':False]
+['text':'','line_number':8,'multiline':False]
+['text':' Unless required by applicable law or agreed to in writing, software','line_number':9,'multiline':False]
+['text':' distributed under the License is distributed on an "AS IS" BASIS,','line_number':10,'multiline':False]
+['text':' WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.','line_number':11,'multiline':False]
+['text':' See the License for the specific language governing permissions and','line_number':12,'multiline':False]
+['text':' limitations under the License.','line_number':13,'multiline':False]
+['text':'* A scanner for Starlark. ','line_number':27,'multiline':True]
+['text':' We intern identifiers and keywords to avoid retaining redundant String objects via the AST.','line_number':30,'multiline':False]
+['text':'','line_number':31,'multiline':False]
+['text':' The parser handles interning of string literal values. Benchmarking did not show significant','line_number':32,'multiline':False]
+['text':' benefit to any further internment. See discussion on Google-internal cl/385193833 for details.','line_number':33,'multiline':False]
+['text':' --- These fields are accessed directly by the parser: ---','line_number':36,'multiline':False]
+['text':' Mapping from file offsets to Locations.','line_number':38,'multiline':False]
+['text':' Information about current token. Updated by nextToken.','line_number':41,'multiline':False]
+['text':' raw and value are defined only for STRING, INT, FLOAT, IDENTIFIER, and COMMENT.','line_number':42,'multiline':False]
+['text':' TODO(adonovan): rename s/xyz/tokenXyz/','line_number':43,'multiline':False]
+['text':' start offset','line_number':45,'multiline':False]
+['text':' end offset','line_number':46,'multiline':False]
+['text':' String, Integer/Long/BigInteger, or Double value of token','line_number':47,'multiline':False]
+['text':' --- end of parser-visible fields ---','line_number':49,'multiline':False]
+['text':' Input buffer and position','line_number':55,'multiline':False]
+['text':' The stack of enclosing indentation levels in spaces.','line_number':59,'multiline':False]
+['text':' The first (outermost) element is always zero.','line_number':60,'multiline':False]
+['text':' The number of unclosed open-parens ("(", '{', '[') at the current point in','line_number':65,'multiline':False]
+['text':' the stream. Whitespace is handled differently when this is nonzero.','line_number':66,'multiline':False]
+['text':' True after a NEWLINE token. In other words, we are outside an','line_number':69,'multiline':False]
+['text':' expression and we have to check the indentation.','line_number':70,'multiline':False]
+['text':' Number of saved INDENT (>0) or OUTDENT (<0) tokens detected but not yet returned.','line_number':73,'multiline':False]
+['text':' Characters that can come immediately prior to an '=' character to generate','line_number':76,'multiline':False]
+['text':' a different token','line_number':77,'multiline':False]
+['text':' Constructs a lexer which tokenizes the parser input.','line_number':94,'multiline':False]
+['text':' Errors are appended to errors.','line_number':95,'multiline':False]
+['text':'*
+   * Reads the next token, updating the Lexer's token fields. It is an error to call nextToken after
+   * an EOF token.
+   ','line_number':112,'multiline':True]
+['text':' Like Python, always end with a NEWLINE token, even if no '\n' in input:','line_number':121,'multiline':False]
+['text':' TODO(adonovan): fix: the input ')' should not report an indentation error.','line_number':129,'multiline':False]
+['text':' setValue sets the value associated with a STRING, FLOAT, INT,','line_number':147,'multiline':False]
+['text':' IDENTIFIER, or COMMENT token, and records the raw text of the token.','line_number':148,'multiline':False]
+['text':'* Returns the raw input text associated with the current token. ','line_number':153,'multiline':True]
+['text':'*
+   * Parses an end-of-line sequence, handling statement indentation correctly.
+   *
+   * <p>UNIX newlines are assumed (LF). Carriage returns are always ignored.
+   ','line_number':158,'multiline':True]
+['text':' in an expression: ignore space','line_number':165,'multiline':False]
+['text':'* Computes indentation (updates dent) and advances pos. ','line_number':184,'multiline':True]
+['text':' we're in a stmt: suck up space at beginning of next line','line_number':186,'multiline':False]
+['text':' entirely blank line: discard','line_number':199,'multiline':False]
+['text':' line containing only indented comment','line_number':202,'multiline':False]
+['text':' printing character','line_number':209,'multiline':False]
+['text':' trailing space on last line','line_number':216,'multiline':False]
+['text':' push a level','line_number':219,'multiline':False]
+['text':' pop one or more levels','line_number':223,'multiline':False]
+['text':'*
+   * Returns true if current position is in the middle of a triple quote
+   * delimiter (3 x quot), and advances 'pos' by two if so.
+   ','line_number':236,'multiline':True]
+['text':'*
+   * Scans a string literal delimited by 'quot', containing escape sequences.
+   *
+   * <p>ON ENTRY: 'pos' is 1 + the index of the first delimiter
+   * ON EXIT: 'pos' is 1 + the index of the last delimiter.
+   ','line_number':249,'multiline':True]
+['text':' more expensive second choice that expands escaped into a buffer','line_number':258,'multiline':False]
+['text':' Insert \ and the following character.','line_number':282,'multiline':False]
+['text':' As in Python, it means that a raw string can never end with a single \.','line_number':283,'multiline':False]
+['text':' ignore end of line character','line_number':308,'multiline':False]
+['text':' octal escape','line_number':348,'multiline':False]
+['text':' unknown char escape => "\literal"','line_number':376,'multiline':False]
+['text':' Non-matching quote, treat it like a regular char.','line_number':386,'multiline':False]
+['text':' Matching close-delimiter, all done.','line_number':389,'multiline':False]
+['text':'*
+   * Scans a string literal delimited by 'quot'.
+   *
+   * <ul>
+   * <li> ON ENTRY: 'pos' is 1 + the index of the first delimiter
+   * <li> ON EXIT: 'pos' is 1 + the index of the last delimiter.
+   * </ul>
+   *
+   * @param isRaw if true, do not escape the string.
+   ','line_number':408,'multiline':True]
+['text':' Don't even attempt to parse triple-quotes here.','line_number':422,'multiline':False]
+['text':' first quick optimistic scan for a simple non-escaped string','line_number':429,'multiline':False]
+['text':' There was a CRLF after the newline. No shortcut possible, since it needs to be','line_number':441,'multiline':False]
+['text':' transformed into a single LF.','line_number':442,'multiline':False]
+['text':' oops, hit an escape, need to start over & build a new string buffer','line_number':451,'multiline':False]
+['text':' close-quote, all done.','line_number':458,'multiline':False]
+['text':' If we're requiring ASCII-only, do another scan for validation.','line_number':461,'multiline':False]
+['text':' Can report multiple errors per string literal.','line_number':465,'multiline':False]
+['text':' fall out','line_number':473,'multiline':False]
+['text':' If the current position is beyond the end of the file, need to move it backwards','line_number':477,'multiline':False]
+['text':' Possible if the file ends with `r"\` (unclosed raw string literal with a backslash)','line_number':478,'multiline':False]
+['text':'*
+   * Scans an identifier or keyword.
+   *
+   * <p>ON ENTRY: 'pos' is 1 + the index of the first char in the identifier.
+   * ON EXIT: 'pos' is 1 + the index of the last char in the identifier.
+   ','line_number':524,'multiline':True]
+['text':' setValue allocates a new String for the raw text, but it's not retained so we don't bother','line_number':536,'multiline':False]
+['text':' interning it.','line_number':537,'multiline':False]
+['text':' Keep consistent with Identifier.isValid.','line_number':545,'multiline':False]
+['text':' TODO(laurentlb): Handle Unicode letters.','line_number':546,'multiline':False]
+['text':'*
+   * Tokenizes a two-char operator.
+   * @return true if it tokenized an operator
+   ','line_number':572,'multiline':True]
+['text':' Returns the ith unconsumed char, or -1 for EOF.','line_number':596,'multiline':False]
+['text':' Consumes a char and returns the next unconsumed char, or -1 for EOF.','line_number':601,'multiline':False]
+['text':'*
+   * Performs tokenization of the character buffer of file contents provided to the constructor. At
+   * least one token will be added to the tokens queue.
+   ','line_number':607,'multiline':True]
+['text':' Return saved indentation tokens.','line_number':617,'multiline':False]
+['text':' TODO(adonovan): cleanup: replace break after setToken with return,','line_number':629,'multiline':False]
+['text':' and eliminate null-check of this.kind.','line_number':630,'multiline':False]
+['text':' /= is handled by tokenizeTwoChars.','line_number':724,'multiline':False]
+['text':' ignore ','line_number':737,'multiline':True]
+['text':' Backslash character is valid only at the end of a line (or in a string)','line_number':740,'multiline':False]
+['text':' skip the end of line character','line_number':742,'multiline':False]
+['text':' skip the CRLF at the end of line','line_number':744,'multiline':False]
+['text':' detect raw strings, e.g. r"str"','line_number':770,'multiline':False]
+['text':' int or float literal, or dot','line_number':780,'multiline':False]
+['text':' unconsume','line_number':782,'multiline':False]
+['text':' switch','line_number':793,'multiline':False]
+['text':' stop here if we scanned a token','line_number':794,'multiline':False]
+['text':' while','line_number':797,'multiline':False]
+['text':' top of stack is always zero','line_number':799,'multiline':False]
+['text':' Scans a number (INT or FLOAT) or DOT.','line_number':811,'multiline':False]
+['text':' Precondition: c == peek(0) (a dot or digit)','line_number':812,'multiline':False]
+['text':'','line_number':813,'multiline':False]
+['text':' TODO(adonovan): make this the precondition for all scan functions;','line_number':814,'multiline':False]
+['text':' currenly most assume their argument c has been consumed already.','line_number':815,'multiline':False]
+['text':' dot or start of fraction','line_number':822,'multiline':False]
+['text':' consume '.'','line_number':824,'multiline':False]
+['text':' hex, octal, binary or float','line_number':831,'multiline':False]
+['text':' hex','line_number':837,'multiline':False]
+['text':' octal','line_number':847,'multiline':False]
+['text':' binary','line_number':854,'multiline':False]
+['text':' "0" or float or obsolete octal "0755"','line_number':864,'multiline':False]
+['text':' decimal','line_number':876,'multiline':False]
+['text':' consume '.'','line_number':888,'multiline':False]
+['text':' consume [eE]','line_number':899,'multiline':False]
+['text':' float?','line_number':908,'multiline':False]
+['text':' int','line_number':924,'multiline':False]
+['text':'
+   * Returns a string containing the part of the source buffer beginning at offset {@code start} and
+   * ending immediately before offset {@code end} (so the length of the resulting string is {@code
+   * end - start}).
+   ','line_number':948,'multiline':True]
+['text':' TODO(adonovan): don't retain comments unconditionally.','line_number':957,'multiline':False]

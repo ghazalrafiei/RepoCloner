@@ -1,0 +1,90 @@
+['text':'*
+ * Wrapper around ReplSetTest for testing initial sync behavior. It allows the caller to easily
+ * pause in the middle of initial sync to allow the sync source to run commands.
+ *
+ * The test fixture pauses the secondary during both the collection cloning and oplog application
+ * phases of initial sync. During collection cloning, the secondary is paused before each time it
+ * would reach out to the sync source. During oplog application, the secondary is paused before
+ * applying each batch of oplog entries. This enables a test to run commands on the sync source at a
+ * deterministic point of the initial sync process and have the effects be observed by the
+ * secondary. For example, this means that a test can exercise what happens if a collection returned
+ * by the listCollections command is dropped before a cursor is established on it.
+ *
+ ','line_number':1,'multiline':True]
+['text':'*
+ * This fixture allows the user to optionally pass in a custom ReplSetTest to be used for the test.
+ * The underlying replica set must have exactly two nodes: a primary, and a secondary.
+ *
+ * If the caller does not provide their own replica set, a two node replset will be initialized
+ * instead, with all nodes running the latest version.
+ *
+ * @param {string} [name] the name of the test being run
+ * @param {Object} [replSet] the ReplSetTest instance to adopt
+ * @param {int} [timeout] how long to wait for initial sync to start
+ ','line_number':15,'multiline':True]
+['text':' Make sure we have a replica set up and running.','line_number':45,'multiline':False]
+['text':'*
+     * Return an instance of ReplSetTest initialized with a standard two-node replica set running
+     * with the latest version.
+     ','line_number':57,'multiline':True]
+['text':'*
+     * Transition from the current State to `newState` if it's a valid transition, otherwise throw
+     * an error.
+     ','line_number':81,'multiline':True]
+['text':' Transitioning to a disallowed State is likely a bug in the code, so we throw an','line_number':90,'multiline':False]
+['text':' error here instead of silently failing.','line_number':91,'multiline':False]
+['text':' We know initial sync has completed if the node has transitioned to SECONDARY state.','line_number':121,'multiline':False]
+['text':'*
+     * Asserts that there are no open transactions.
+     ','line_number':125,'multiline':True]
+['text':'*
+     * Restarts the secondary with the first synchronization failpoint enabled so that we ensure
+     * that initial sync pauses the first time the node reaches out to the sync source.
+     ','line_number':134,'multiline':True]
+['text':' Skip validation when stopping the node in case there are transactions in prepare.','line_number':139,'multiline':False]
+['text':' Restart the node with the first synchronization failpoint enabled so that initial sync','line_number':155,'multiline':False]
+['text':' doesn't finish before we can pause it.','line_number':156,'multiline':False]
+['text':'*
+     * Wait until the first synchronization fail point is hit to show that initial sync is paused
+     * or until initial sync has completed.
+     ','line_number':160,'multiline':True]
+['text':'*
+     * Flip failpoints and wait until the second synchronization failpoint is hit so that we know
+     * it is safe to let initial sync resume again. This step is necessary before issuing the next
+     * command to ensure that we only run one command before pausing at the first synchronization
+     * failpoint again.
+     ','line_number':174,'multiline':True]
+['text':'*
+     * Flip failpoints and wait until the first synchronization failpoint is hit so that initial
+     * sync can make progress by issuing the next command, but pausing before the following command
+     * can be issued.
+     ','line_number':188,'multiline':True]
+['text':'*
+     * This function will resume initial sync and run the next command before using the
+     * synchronization failpoints to make sure initial sync is either paused or completed. Other
+     * than before initial sync has started and after initial sync has completed, when this
+     * function is called the secondary should be paused at the first synchronization failpoint
+     * before and after running the next command. This ensures that we can deterministically pause
+     * initial sync and only one command is run each function call. During collection cloning, we
+     * pause before running listDatabases, listCollections and listIndexes commands on the sync
+     * source. During the oplog application phase, we pause before applying each batch of oplog
+     * entries on the initial syncing node.
+     *
+     * If initial sync hasn't started yet, the function will restart the secondary without data to
+     * cause it to go through initial sync. It will throw an exception if called after initial sync
+     * has already completed or stop() has been called.
+     *
+     * @return true if initial sync has completed
+     ','line_number':202,'multiline':True]
+['text':' If initial sync has not started yet, restart the node without data to cause it to go','line_number':220,'multiline':False]
+['text':' through initial sync.','line_number':221,'multiline':False]
+['text':' Wait until initial sync has started.','line_number':225,'multiline':False]
+['text':' Make sure this wasn't called after the test fixture was stopped or this function already','line_number':235,'multiline':False]
+['text':' returned that initial sync was completed.','line_number':236,'multiline':False]
+['text':' Clear ramlog so checkLog can't find log messages from previous times either failpoint was','line_number':244,'multiline':False]
+['text':' enabled.','line_number':245,'multiline':False]
+['text':' If initial sync is completed, let the caller know.','line_number':250,'multiline':False]
+['text':'*
+     * Performs data consistency checks and then stops the replica set. Will fail if there is a
+     * transaction that wasn't aborted or committed.
+     ','line_number':276,'multiline':True]

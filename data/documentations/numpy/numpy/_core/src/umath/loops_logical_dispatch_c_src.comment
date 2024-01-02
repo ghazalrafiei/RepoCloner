@@ -1,0 +1,101 @@
+['text':'@targets
+ ** $maxopt baseline
+ ** neon asimd
+ ** sse2 avx2 avx512_skx
+ ** vsx2
+ ** vx
+ *','line_number':1,'multiline':True]
+['text':' Provides the various *_LOOP macros','line_number':16,'multiline':False]
+['text':'******************************************************************************
+ ** Defining the SIMD kernels
+ *****************************************************************************','line_number':19,'multiline':True]
+['text':'
+ * convert any bit set to boolean true so vectorized and normal operations are
+ * consistent, should not be required if bool is used correctly everywhere but
+ * you never know
+ ','line_number':24,'multiline':True]
+['text':' cmpeq(v, 0) turns 0x00 -> 0xff and non-zero -> 0x00','line_number':33,'multiline':False]
+['text':' tmp is filled with 0xff/0x00, negate and mask to boolean true','line_number':35,'multiline':False]
+['text':'
+ * convert mask vector (0xff/0x00) to boolean true.  similar to byte_to_true(),
+ * but we've already got a mask and can skip negation.
+ ','line_number':38,'multiline':True]
+['text':'
+ * For logical_and, we have to be careful to handle non-bool inputs where
+ * bits of each operand might not overlap. Example: a = 0x01, b = 0x80
+ * Both evaluate to boolean true, however, a & b is false.  Return value
+ * should be consistent with byte_to_true().
+ ','line_number':47,'multiline':True]
+['text':'
+ * We don't really need the following, but it simplifies the templating code
+ * below since it is paired with simd_logical_and_u8() above.
+ ','line_number':62,'multiline':True]
+['text':'*begin repeat
+ * #kind = logical_and, logical_or#
+ * #and  = 1, 0#
+ * #scalar_op = &&, ||#
+ * #intrin = and, or#
+ * #reduce = min, max#
+ * #scalar_cmp = ==, !=#
+ * #anyall = all, any#
+ ','line_number':73,'multiline':True]
+['text':' Unrolled vectors loop','line_number':90,'multiline':False]
+['text':'*begin repeat1
+         * #unroll = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15#
+         ','line_number':92,'multiline':True]
+['text':'*end repeat1*','line_number':101,'multiline':True]
+['text':' Single vectors loop','line_number':105,'multiline':False]
+['text':' Scalar loop to finish off','line_number':113,'multiline':False]
+['text':' Unrolled vectors loop','line_number':127,'multiline':False]
+['text':' Single vectors loop','line_number':157,'multiline':False]
+['text':' Scalar loop to finish off','line_number':166,'multiline':False]
+['text':'*end repeat*','line_number':175,'multiline':True]
+['text':'*begin repeat
+ * #kind = logical_not, absolute#
+ * #op = ==, !=#
+ * #not = 1, 0#
+ ','line_number':177,'multiline':True]
+['text':' Unrolled vectors loop','line_number':194,'multiline':False]
+['text':'*begin repeat1
+         * #unroll = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15#
+         ','line_number':196,'multiline':True]
+['text':'*end repeat1*','line_number':208,'multiline':True]
+['text':' Single vectors loop','line_number':212,'multiline':False]
+['text':' Scalar loop to finish off','line_number':223,'multiline':False]
+['text':'*end repeat*','line_number':228,'multiline':True]
+['text':' NPY_SIMD','line_number':230,'multiline':False]
+['text':'******************************************************************************
+ ** Defining ufunc inner functions
+ *****************************************************************************','line_number':232,'multiline':True]
+['text':'*begin repeat
+ * # kind = logical_or, logical_and#
+ ','line_number':236,'multiline':True]
+['text':'*end repeat*','line_number':267,'multiline':True]
+['text':'*begin repeat
+ * #kind = logical_not, absolute#
+ ','line_number':269,'multiline':True]
+['text':'*end repeat*','line_number':284,'multiline':True]
+['text':'*begin repeat
+ * #kind = logical_and, logical_or#
+ * #OP =  &&, ||#
+ * #SC =  ==, !=#
+ * #and = 1, 0#
+ ','line_number':287,'multiline':True]
+['text':'
+         * stick with our variant for more reliable performance, only known
+         * platform which outperforms it by ~20% is an i7 with glibc 2.17
+         ','line_number':298,'multiline':True]
+['text':' for now only use libc on 32-bit/non-x86 ','line_number':306,'multiline':True]
+['text':' np.all(), search for a zero (false) ','line_number':310,'multiline':True]
+['text':'
+             * np.any(), search for a non-zero (true) via comparing against
+             * zero blocks, memcmp is faster than memchr on SSE4 machines
+             * with glibc >= 2.12 and memchr can only check for equal 1
+             ','line_number':315,'multiline':True]
+['text':' zero by C standard ','line_number':320,'multiline':True]
+['text':'*end repeat*','line_number':357,'multiline':True]
+['text':'*begin repeat
+ * #kind = logical_not, absolute#
+ * #OP = ==, !=#
+ *','line_number':359,'multiline':True]
+['text':'*end repeat*','line_number':376,'multiline':True]

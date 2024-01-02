@@ -1,0 +1,340 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]
+['text':'
+** MULTIPLY essentially computes the high 128 bits of the product of two
+** unpacked x-float values.  The algorithm attempts to limit the number
+** of integer multiplications performed.  The resulting product has roughly
+** a 6 lsb error bound in the worst case.
+','line_number':36,'multiline':True]
+['text':'
+** EXTENDED_MULTIPLY computes the exact 256 bit product of two unpacked
+** x-float values. The result is stored in two unpacked x-float values
+** containing the high and low 128 bits of the result
+','line_number':73,'multiline':True]
+['text':'
+** This routine divides two unpacked numbers:
+**
+**	o The 'flags' argument controls whether a FULL or HALF precision
+**	  result is generated.
+**	o If the pointer to one of the unpacked results is 0, then that
+**	  argument is implicitly treated as being equal to 1.
+**	o both argument pointers *CANNOT* be zero.
+*
+** A detailed description of the algorithm is presented in note 6.2 of the
+** X_FLOAT notes conference.  Note that to the extent possible, the variable
+** names in this routine were chosen to match the description in the design
+** note.  In particular, upper case name imply 64 bit integer data types, while
+** double precision values are denoted with lower case names.
+','line_number':132,'multiline':True]
+['text':'
+    ** for performance reasons, pre-load some of the interesting items even
+    ** though we might not actually use them.  Specifically, by loading B1
+    ** and B2 before the normalization check allows the compiler to better
+    ** schedule the code after the check.
+    ','line_number':168,'multiline':True]
+['text':'
+    ** If b isn't normalized, then the whole algorithm falls apart.  So make
+    ** sure that b is normalized.
+    ','line_number':186,'multiline':True]
+['text':'
+    ** The first step is to estimate 1/b in double precsion to more then 70
+    ** bits. This is done by getting an initial estimate to 1/b and use a 
+    ** variation of Newton's iteration to improve the accuracy.  The basic
+    ** approach is
+    **
+    **		b'    = high 53 bits of b
+    **		b_hi' = high 26 bits of b
+    **		b_lo' = bits 27 through 80 of b
+    **
+    **		r'    = 1/b'
+    **		r_hi' = high 26 bits of r
+    **		r_lo' = [ (1 - b_hi'*r_hi') - b_lo'*r_hi'] * r'
+    **
+    ** However, there is certain amount of weird scaling of the values that
+    ** takes place to deal with the integer to float conversion and subsequent
+    ** uses of the results.
+    **
+    ** Note that the two macros below are used to convert *signed* integers
+    ** to and from double precision.  We use signed conversions because they
+    ** are generally faster than unsigned conversions.
+    ','line_number':198,'multiline':True]
+['text':'
+        ** While the divide is going on, we can compute all sorts of stuff
+        ','line_number':226,'multiline':True]
+['text':'
+    ** Get the high part of r as both an integer and a floating point value.
+    ** In the process, bias r_hi downward to insure that r_lo is positive.
+    ** (See the design note for details.)
+    ','line_number':241,'multiline':True]
+['text':'
+    ** At this point we have:
+    **
+    ** 		r    = 2^61 * r'
+    **		r_hi = 2^61 * r_hi'
+    **		b_hi = 2^63 * b_hi'
+    **		b_lo = 2^63 * b_lo'
+    **
+    ** so that
+    **
+    **		2*r_lo' = [ (2^124 - b_hi*r_hi) - b_lo*r_hi ] * (r/2^184)
+    ','line_number':251,'multiline':True]
+['text':'
+    ** Now that we have 1/b ~ r_hi' + r_lo' (scaling notwithstanding), we can
+    ** compute an approximation to q = a/b = a*(1/b), where the product is
+    ** performed in high and low pieces:
+    **
+    **		q = (a_hi' + a_lo') * (r_hi' + r_lo')
+    **		  = a_hi' * r_hi' + [ a_lo' * r_hi' + (a_hi' + a_lo') * r_lo' ]
+    **		  = a_hi' * r_hi' + [ a_lo' * r_hi' + a' * r_lo' ]
+    **		  = q_hi' + q_lo'
+    **
+    ** Note that in the above, we want to insure that a' ~ a_hi' + a_lo' is
+    ** less than the actual value of a to insure that the computed value of
+    ** q is less that 2.
+    ','line_number':266,'multiline':True]
+['text':'
+    ** With the above conversions and computations we have
+    **
+    **		a    = 2^63*a'
+    **		a_hi = 2^63*a_hi'
+    **		a_lo = 2^63*a_lo'
+    **		r_hi = 2*r_hi'
+    **		r_lo = 2*r_lo'
+    **		q_hi = 2^64 * q_hi'
+    **		q_lo = 2^64 * q_lo'
+    **
+    ** We would like to convert the high 65 bits of q_hi + q_lo into integers,
+    ** S' and Q1'.  Note that converting q_hi to an integer can cause an
+    ** overflow.  However since q_hi contains only 52 significant bits, we
+    ** can convert .25 * q_hi instead which won't overflow.
+    ','line_number':289,'multiline':True]
+['text':'
+    ** While we're at it, compute an integer approximation to 1/b.  I.e. get
+    ** and integer R such that R/2^63 ~ 1/b.
+    **
+    **		 R = 2^63 * (r_hi' + r_lo' )
+    **		   = 2^63 * r_hi' + 2^63 * r_lo'
+    **		   = 2^63 * r_hi' + 2^62 * r_lo
+    **
+    ** Recall that in the original computation of r_hi, we previously computed
+    ** the integer value R as 2^61*r_hi', so that we can now compute
+    ** 
+    **		R <-- 4*R + 2^62 * r_lo 
+    **
+    ** Note that for b very close to 1/2, R will be 2^64 which can't be 
+    ** represented in 64 bits.  In this case, we take R = 2^64 - 1 which is
+    ** close enough and can be represented in 64 bits.
+    ','line_number':316,'multiline':True]
+['text':'
+    ** Using S and Q1 as the current guess for the high 65 bits of the result
+    ** compute the remainder:
+    **
+    **             +----------+----------+
+    **             |    A1    |    A2    |                2^128*(2^64*A1 + A2)
+    **             +----------+----------+
+    **
+    **             +----------+----------+
+    **             |    B1    |    B2    |              s'*2^128*(2^64*B1 + B2)
+    **             +----------+----------+
+    **             |       Q1'*B1        |                2^128*Q1'*B1
+    **             +----------+----------+----------+
+    **                        |       Q1'*B2        |      2^64*Q1'*B2
+    **                        +----------+----------+
+    **
+    **  +----------+----------+----------+----------+
+    **  |    N0'   |    N1'   |   N2'    |   N3'    |
+    **  +----------+----------+----------+----------+
+    **
+    ** Start by summing all the products into N0:N1:N2:N3
+    **
+    **		NOTE: for performance reasons, we don't actually
+    **		compute N3'
+    ','line_number':337,'multiline':True]
+['text':' N2/N1 = B2/B1 if S = 1, 0 otherwise ','line_number':369,'multiline':True]
+['text':' Subtract the sum from A1:A2 ','line_number':382,'multiline':True]
+['text':'
+    ** Since the original estimate to S:Q1 was good to more then 70 bits, the
+    ** current value of S:Q1 can be off by at most one.  By looking at the
+    ** values of N0 and N1, we can determine an adjustment, E, to S:Q1.
+    ** With the adjusted S:Q1 we know that N0 = N1 = 0, so we only need to
+    ** adjust N2.
+    ','line_number':392,'multiline':True]
+['text':'
+    ** Using R/2^63 ~ 1/b and the adjusted N2, compute an approximation to Q2
+    ** Note that if Q2 has it's high bit set, then the original value of E was
+    ** one too low.
+    ','line_number':404,'multiline':True]
+['text':' Make sure 0/b is zero ','line_number':413,'multiline':True]
+['text':' Adjust S and Q1 using the final value of E ','line_number':415,'multiline':True]
+['text':' Last but not least, pack it ','line_number':420,'multiline':True]
+['text':'
+**
+** The following two routines evaluate polynomials, P(x), via Horner's
+** scheme for positive x:
+**
+**		s(k) <-- c(k) +/- x*s(k+1)  for k = n-1, ..., 0
+**
+** where the c(k)'s are the polynomial coefficients and	s(n) = c(n). The
+** arguments to these routines (not in order) are
+**
+**	x		a pointer to the unpacked bits of x
+**	cnt		the degree of the polynomial
+**	coef		A pointer to pairs of quadwords specifying the hi/lo
+**			bits of the coefficient.  We assume the coefficients
+**			are stored reverse order: c(n) to c(0)
+**	shift		cnt*(x->exp) - This is passed in rather than computed
+**			here sense on the calling side, cnt is a known
+**			constant, so the multiply can be done by shifts and
+**			adds rather than a real integer multiply.
+**	p		a pointer to the unpacked result.
+**
+** The routines return the high bits of the result.
+**
+** IMPORTANT ASSUMPTIONS:
+** ######################
+**
+**	o This routine assumes that the terms of the polynomial are decreasing.
+**	  I.e. that c(k) > x*s(k+1) for all k.
+**
+**	o shift = cnt*(x->exp), so that if shift is decremented by x->exp
+**	  each time cnt decremented, then shift will become 0 before cnt
+**	  becomes negative.
+','line_number':432,'multiline':True]
+['text':' Initialize internal copies and accumulators ','line_number':475,'multiline':True]
+['text':'
+    ** If the shift count is >= 128, than this product won't contribute to
+    ** the final product.  Skip over all of the coefficients that correspond
+    ** to large shifts
+    ','line_number':483,'multiline':True]
+['text':'printf("Eval_pos_poly, shift=%lld !!\n",shift);','line_number':496,'multiline':False]
+['text':'
+    ** Each time through this loop, c_hi = 0.  Since we assume that c(k) >
+    ** x*s(k+1), if there is a carry out on the sum s(k) = c(k) + x*s(k*1),
+    ** then the shift count for the next iteration must be less than 64.
+    ** Consequently, we need only worry about the carry out from the sum
+    ** when we leave this loop.  That means each time we enter the top of
+    ** the loop, both c_hi and s_hi = 0;
+    ','line_number':498,'multiline':True]
+['text':'
+    ** Depending on the size of shift_inc and the rate at which the
+    ** coefficients decrease, several of the next Horner's scheme iterations
+    ** will yield zero results, so there is no need to do the multiply.
+    ** Since multiplies are likely to be expensive, we check for this case
+    ** and skip over them.
+    ','line_number':510,'multiline':True]
+['text':'printf("s_lo, sh, sh_inc, c: %llx, %llx, %llx, %llx (%llx)\n",s_lo,shift, shift_inc,coef->digits[1],coef->digits[0]);','line_number':522,'multiline':False]
+['text':'
+    ** s_lo is no longer zero, so do the multiply and accumulate the
+    ** products.
+    ','line_number':529,'multiline':True]
+['text':'printf("s_lo,x_hi,p1: %llx, %llx, %llx\n",s_lo,x_hi,p1);','line_number':535,'multiline':False]
+['text':'printf("s_lo,x_hi,p1: %llx, %llx, %llx\n",s_lo,x_hi,p1);','line_number':537,'multiline':False]
+['text':' Set carry out from last add ','line_number':545,'multiline':True]
+['text':' 
+    ** When shift = 0, the complementary shift is 64.  ANSI C does not
+    ** specify the result of a shift by 64, so we need to handle this as
+    ** a special case.
+    ','line_number':548,'multiline':True]
+['text':'
+    ** Depending on the size of shift_inc and the rate at which the
+    ** coefficients decrease, several of the next Horner's scheme iterations
+    ** will yield zero results for s_hi, so there is no need to do the
+    ** multiplies associated with s_hi.  Since multiplies are likely to be
+    ** expensive, we check for this case and skip over them.
+    ','line_number':558,'multiline':True]
+['text':' Skip over all the big shifts ','line_number':680,'multiline':True]
+['text':'
+     * Each time through this loop, c_hi = 0.  Since we assume that c(k) >
+     * x*s(k+1), s(k) = c(k) - x*s(k*1) < c(k).  Consequently, there is
+     * no borrow from the computation of s(k) into it high 64 bits.
+     * That means each time we enter the top of the loop, both c_hi and
+     * s_hi = 0;
+     ','line_number':688,'multiline':True]
+['text':'
+     * Depending on the size of shift_inc and the rate at which the
+     * coefficients decrease, several of the next Horner's scheme iterations
+     * will yield zero results, so there is no need to do the multiply.
+     * Since multiplies are likely to be expensive, we check for this case
+     * and skip over them.
+     ','line_number':699,'multiline':True]
+['text':'
+     * s_lo is no longer zero, so do the multiply and accumulate the
+     * products.
+     ','line_number':717,'multiline':True]
+['text':' 
+     * When shift = 0, the complementary shift is 64.  ANSI C does not
+     * specify the result of a shift by 64, so we need to handle this as
+     * a special case.
+     ','line_number':731,'multiline':True]
+['text':'
+     * Depending on the size of shift_inc and the rate at which the
+     * coefficients decrease, several of the next Horner's scheme iterations
+     * will yield zero results for s_hi, so there is no need to do the
+     * multiplies associated with s_hi.  Since multiplies are likely to be
+     * expensive, we check for this case and skip over them.
+     ','line_number':740,'multiline':True]
+['text':'
+** EVALUATE_RATIONAL is a driver routine for the two polynomial evaluation
+** routines.  Even though it is architecture and word size independent, it
+** is included in this file to increase "locality".
+**
+** EVALUATE_RATIONAL generally computes a rational approximation, however,
+** by specifying the appropriate set of flags, one, or two polynomial
+** evaluation can be performed.
+**
+** The following flags are used to independently control the "form" of the
+** numerator and denominator polynomials:
+**
+**		SQUARE_TERM
+**		ALTERNATE_SIGN
+**		POST_MULTIPLY
+**		STANDARD
+**
+** The following flags control whether or not a rational approximation is
+** performed and what form it has:
+**
+**		SWAP
+**		SKIP
+**		NO_DIVIDE
+**
+** If the SKIP flag is specified in conjunction with the flags for either
+** the numerator or denominator being zero, only one part of a rational
+** will be evaluated.
+','line_number':821,'multiline':True]
+['text':' Scale argument and squared it if its needed ','line_number':872,'multiline':True]
+['text':' Start calculation of shift parameter. ','line_number':888,'multiline':True]
+['text':' allocate locations for 1st and 2nd result ','line_number':896,'multiline':True]
+['text':'printf("NUMERATOR_MASK !!\n");','line_number':904,'multiline':False]
+['text':'printf("f_result= (%x %x) %llx %llx\n",first_result->sign,first_result->exponent,first_result->fraction[0],first_result->fraction[1]);','line_number':916,'multiline':False]
+['text':'printf("fl & NUMERATOR_FLAGS(POST_MULTIPLY) = %llx (%llx)\n", flags & NUMERATOR_FLAGS(POST_MULTIPLY), flags); ','line_number':918,'multiline':False]
+['text':'printf("result..= (%x %x) %llx %llx\n",result->sign,result->exponent,result->fraction[0],result->fraction[1]);','line_number':921,'multiline':False]
+['text':'printf("DENOMINATOR_MASK !!\n");','line_number':937,'multiline':False]
+['text':' Numerator was skipped, we're done ','line_number':955,'multiline':True]
+['text':'printf("fl & NO_DIV = %llx\n", flags & NO_DIVIDE);','line_number':965,'multiline':False]
+['text':'printf("result0= (%x %x) %llx %llx\n",result->sign,result->exponent,result->fraction[0],result->fraction[1]);','line_number':966,'multiline':False]

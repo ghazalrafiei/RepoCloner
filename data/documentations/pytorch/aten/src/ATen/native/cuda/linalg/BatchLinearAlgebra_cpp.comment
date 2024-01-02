@@ -1,0 +1,407 @@
+['text':' namespace (anonymous)','line_number':55,'multiline':False]
+['text':' Check that MAGMA never releases MAGMA_VERSION_MINOR >= 10 or MAGMA_VERSION_MICRO >= 10','line_number':59,'multiline':False]
+['text':' All registrations with PyTorch runtime should be done dynamically','line_number':71,'multiline':False]
+['text':' so if library is lazy loaded it must not export anything, otherwise','line_number':72,'multiline':False]
+['text':' it can result in symbol clashes','line_number':73,'multiline':False]
+['text':' AT_MAGMA_VERSION >= 254','line_number':243,'multiline':False]
+['text':' unused','line_number':690,'multiline':False]
+['text':' unused','line_number':691,'multiline':False]
+['text':' unused','line_number':702,'multiline':False]
+['text':' unused','line_number':703,'multiline':False]
+['text':' magma [sd]geev wants to separate output arrays: wr and wi for the real','line_number':744,'multiline':False]
+['text':' and imaginary parts','line_number':745,'multiline':False]
+['text':' unused','line_number':748,'multiline':False]
+['text':' unused','line_number':766,'multiline':False]
+['text':' unused','line_number':819,'multiline':False]
+['text':' unused','line_number':831,'multiline':False]
+['text':'
+  MAGMA can return errors both as a return value and in the info argument.
+  The return value and info should always be identical.
+  In general, the meaning is as given in this table.
+  Predefined error codes are large negative numbers. Using the symbolic
+  constants below is preferred, but the numeric values can be found in
+  include/magma_types.h.
+
+  Info                       |  Description
+  -----------                |  -----------
+  info = 0 (MAGMA_SUCCESS)   |  Successful exit
+  info < 0, but small        |  For info = -i, the i-th argument had an illegal value
+  info > 0                   |  Function-specific error such as singular matrix
+  MAGMA_ERR_DEVICE_ALLOC     |  Could not allocate GPU device memory
+  MAGMA_ERR_HOST_ALLOC       |  Could not allocate CPU host memory
+  MAGMA_ERR_ILLEGAL_VALUE    |  An argument had an illegal value (deprecated; instead it should return -i to say the i-th argument was bad)
+  MAGMA_ERR_INVALID_PTR      |  Can't free pointer
+  MAGMA_ERR_NOT_IMPLEMENTED  |  Function or option not implemented
+  MAGMA_ERR_NOT_SUPPORTED    |  Function or option not supported on the current architecture
+','line_number':991,'multiline':True]
+['text':' if info > 0 the error is function-specific, do nothing in this case','line_number':1012,'multiline':False]
+['text':' anonymous namespace','line_number':1028,'multiline':False]
+['text':' AT_MAGMA_ENABLED()','line_number':1029,'multiline':False]
+['text':' By default use cusolver if available and magma otherwise.','line_number':1116,'multiline':False]
+['text':' If cusolver and magma 2.5.4+ are both available and hermitian=true,','line_number':1117,'multiline':False]
+['text':' call magma for complex inputs','line_number':1118,'multiline':False]
+['text':' TODO: It should be possible to add the MAGMA backend for this function when using MAGMA 2.6.0','line_number':1140,'multiline':False]
+['text':' https://bitbucket.org/icl/magma/src/c703d112dcf19eb8c73676cef10888aa2ef73457/ReleaseNotes#lines-48','line_number':1141,'multiline':False]
+['text':' anonymous namespace','line_number':1151,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ cholesky_solve ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':1156,'multiline':False]
+['text':' Set up the created arrays','line_number':1188,'multiline':False]
+['text':' Compute as many batches of 65535 possible','line_number':1197,'multiline':False]
+['text':' The number of "mini"-batches are floor(batch_size / batch_limit)','line_number':1198,'multiline':False]
+['text':' and these cover floor(batch_size / batch_limit) * batch_limit matrix solves','line_number':1199,'multiline':False]
+['text':' Compute whatever is left = batch_size - floor(batch_size / batch_limit) * batch_limit','line_number':1214,'multiline':False]
+['text':' which concisely is equal to batch_size % batch_limit','line_number':1215,'multiline':False]
+['text':' Todo: cusolverDn<T>potrsBatched only supports nrhs == 1 and does not have good performance.','line_number':1238,'multiline':False]
+['text':'     Batched cholesky_solve is dispatched to magma.','line_number':1239,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ cholesky ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':1260,'multiline':False]
+['text':' magmaCholesky requires info to be on CPU','line_number':1277,'multiline':False]
+['text':' magmaCholeskyBatched supports only upper=false','line_number':1285,'multiline':False]
+['text':' Set up the created arrays','line_number':1295,'multiline':False]
+['text':' Compute as many batches of 262140 possible','line_number':1302,'multiline':False]
+['text':' 262140 is the size of the largest batch of matrices that can be run with','line_number':1303,'multiline':False]
+['text':' violating maximum kernel configuration','line_number':1304,'multiline':False]
+['text':' For complex input the batch limit is 65535 (determined experimentally, see https://github.com/pytorch/pytorch/pull/47047#discussion_r516086923 for more information)','line_number':1305,'multiline':False]
+['text':' MAGMA's batched cholesky operator has an off-by-one error causing IMA','line_number':1323,'multiline':False]
+['text':' (see https://github.com/pytorch/pytorch/issues/42666). This code is based','line_number':1324,'multiline':False]
+['text':' on the #cloneBatchedColumnMajor function however it pads the input with','line_number':1325,'multiline':False]
+['text':' one extra element utilizing the fact that the resize_as_ method preserves','line_number':1326,'multiline':False]
+['text':' the storage even if it's larger than the new sizes. This way if MAGMA','line_number':1327,'multiline':False]
+['text':' reads off bounds it will still be valid user memory.','line_number':1328,'multiline':False]
+['text':' batched MAGMA doesn't support upper=true','line_number':1333,'multiline':False]
+['text':' we transpose and conjugate the input as a workaround','line_number':1334,'multiline':False]
+['text':' if upper=true we need to tranpose and conjugate the result tensor','line_number':1344,'multiline':False]
+['text':' because the cholesky decomposition is stored in the lower triangular part','line_number':1345,'multiline':False]
+['text':' USE_LINALG_SOLVER','line_number':1373,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ cholesky_inverse ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':1378,'multiline':False]
+['text':'
+Computes the inverse of a symmetric (Hermitian) positive-definite matrix n-by-n matrix 'input' using the Cholesky solver
+This is an in-place routine, content of 'input' is overwritten.
+'infos' is an int Tensor containing error codes for each matrix in the batched input.
+MAGMA requires 'infos' to reside in CPU memory.
+For more information see MAGMA's documentation for POTRS routine.
+','line_number':1380,'multiline':True]
+['text':' magmaCholeskyInverse (magma_dpotri_gpu) is slow because internally','line_number':1392,'multiline':False]
+['text':' it transfers data several times between GPU and CPU and calls lapack routine on CPU','line_number':1393,'multiline':False]
+['text':' using magmaCholeskySolveBatched is a lot faster','line_number':1394,'multiline':False]
+['text':' note that magmaCholeskySolve is also slow','line_number':1395,'multiline':False]
+['text':' 'input' is modified in-place we need to clone it and replace with a diagonal matrix','line_number':1397,'multiline':False]
+['text':' for apply_cholesky_solve','line_number':1398,'multiline':False]
+['text':' 'input' tensor has to be a batch of diagonal matrix','line_number':1401,'multiline':False]
+['text':'offset=','line_number':1403,'multiline':True]
+['text':'dim1=','line_number':1403,'multiline':True]
+['text':'dim2=','line_number':1403,'multiline':True]
+['text':' unsqueezing here so that the batched version is used','line_number':1407,'multiline':False]
+['text':' magma's potrs_batched doesn't take matrix-wise array of ints as an 'info' argument','line_number':1415,'multiline':False]
+['text':' it returns a single 'magma_int_t'','line_number':1416,'multiline':False]
+['text':' if info = 0 the operation is successful, if info = -i, the i-th parameter had an illegal value.','line_number':1417,'multiline':False]
+['text':' This is a type dispatching helper function for 'apply_cholesky_inverse'','line_number':1424,'multiline':False]
+['text':' This function calculates the inverse matrix in-place','line_number':1433,'multiline':False]
+['text':' result should be in column major order and contain matrices to invert','line_number':1434,'multiline':False]
+['text':' the content of result is overwritten by 'apply_cholesky_inverse'','line_number':1435,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ lu ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':1459,'multiline':False]
+['text':'
+  Computes the LU decomposition of a m×n matrix or batch of matrices in 'input' tensor.
+  This is an in-place routine, content of 'input', 'pivots', and 'infos' is overwritten.
+  This is a "looped" variant for calling single input MAGMA function on batched input.
+
+  Args:
+  * `input` - [in] the input matrix for LU decomposition
+              [out] the LU decomposition
+  * `pivots` - [out] the pivot indices
+  * `infos` - [out] error codes, positive values indicate singular matrices
+  * `compute_pivots` - controls whether LU is computed with or without pivoting
+
+  For further details, please see the MAGMA documentation for magma_dgetrf_gpu.
+','line_number':1461,'multiline':True]
+['text':' This should never be thrown if the calling functions are correct.','line_number':1478,'multiline':False]
+['text':' magmaLu and magmaLuNoPiv require infos and pivots tensor to be on CPU','line_number':1481,'multiline':False]
+['text':' the data is later copied back to the appropriate output tensor','line_number':1482,'multiline':False]
+['text':'
+  Computes the LU decomposition of a m×n matrix or batch of matrices in 'input' tensor.
+  This is an in-place routine, content of 'input', 'pivots', and 'infos' is overwritten.
+  This is a specialized batched variant, it is expected to be faster than the "looped" version only for small inputs.
+
+  Args:
+  * `input` - [in] the input matrix for LU decomposition
+              [out] the LU decomposition
+  * `pivots` - [out] the pivot indices
+  * `infos` - [out] error codes, positive values indicate singular matrices
+  * `compute_pivots` - controls whether LU is computed with or without pivoting
+
+  For further details, please see the MAGMA documentation for magma_dgetrf_batched.
+','line_number':1515,'multiline':True]
+['text':' There is a bug in lu_factor_batched_magma in MAGMA < 2.5.2, see','line_number':1537,'multiline':False]
+['text':' https://bitbucket.org/icl/magma/issues/13/getrf_batched-kernel-produces-nans-on','line_number':1538,'multiline':False]
+['text':' Set up array of pointers to matrices','line_number':1556,'multiline':False]
+['text':' needed to run lu tests in parallel, see https://github.com/pytorch/pytorch/issues/82894 for examples','line_number':1561,'multiline':False]
+['text':' of failures','line_number':1562,'multiline':False]
+['text':' fill pivots with ones to avoid memory access violations inside magma kernels','line_number':1569,'multiline':False]
+['text':' magmaLuBatched might not set the values for it','line_number':1570,'multiline':False]
+['text':' see https://github.com/pytorch/pytorch/pull/53064','line_number':1571,'multiline':False]
+['text':' block CPU until all operations on the queue are finished','line_number':1583,'multiline':False]
+['text':' this explicit sync prevents garbage results from the subsequent magmaLuSolveBatched call from a different queue','line_number':1584,'multiline':False]
+['text':' Silence unused warning in some builds','line_number':1603,'multiline':False]
+['text':' In CUDA 10.2, lu_factor_looped_cusolver does not finish the computations when the input','line_number':1618,'multiline':False]
+['text':' matrix is exactly singular. The returned pivots contain garbage. This breaks linalg.det','line_number':1619,'multiline':False]
+['text':' Now, batched_cublas does not handle rectangular matrices, so we still dispatch to','line_number':1620,'multiline':False]
+['text':' looped_cusolver even if m != n.','line_number':1621,'multiline':False]
+['text':' ifdef USE_LINALG_SOLVER','line_number':1637,'multiline':False]
+['text':' preferred backend == default','line_number':1640,'multiline':False]
+['text':' If magma batched is buggy, we use cusolver','line_number':1643,'multiline':False]
+['text':' otherwise, lu_factor just works for square matrices, for non-square matrices magma batched is the fastest','line_number':1644,'multiline':False]
+['text':' otherwise (i.e. for square matrices), we choose between cusolver and magma using a heuristic','line_number':1645,'multiline':False]
+['text':' ROCm: magma_batched is buggy on rocm also. If we are here, we have access to hipSOLVER so always use','line_number':1646,'multiline':False]
+['text':' it instead of magma','line_number':1647,'multiline':False]
+['text':' USE_ROCM','line_number':1656,'multiline':False]
+['text':' !AT_MAGMA_ENABLED','line_number':1657,'multiline':False]
+['text':' AT_MAGMA_ENABLED','line_number':1659,'multiline':False]
+['text':' !USE_LINALG_SOLVER','line_number':1660,'multiline':False]
+['text':' USE_LINALG_SOLVER','line_number':1662,'multiline':False]
+['text':' We return the trivial permutation of pivots starting with 1 (FORTRAN indexing)','line_number':1665,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ triangular_solve ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':1675,'multiline':False]
+['text':' This allows to pass rectangular A and b when left = True','line_number':1690,'multiline':False]
+['text':' magma returns early if m <= 0 || n <= 0 for magmaTriangularSolveBatched','line_number':1693,'multiline':False]
+['text':' magmaTriangularSolve is calling cuBLAS and it prints','line_number':1694,'multiline':False]
+['text':' ** On entry to DTRSM  parameter number 9 had an illegal value','line_number':1695,'multiline':False]
+['text':' so let's use proper lda parameter here','line_number':1696,'multiline':False]
+['text':' Set up the created arrays','line_number':1710,'multiline':False]
+['text':' Compute as many batches of 65535 as possible','line_number':1719,'multiline':False]
+['text':' The number of "mini"-batches are floor(batch_size / batch_limit)','line_number':1720,'multiline':False]
+['text':' and these cover floor(batch_size / batch_limit) * batch_limit matrix solves','line_number':1721,'multiline':False]
+['text':' this is outside the loop because it is used for the case batch_size % batch_limit != 0','line_number':1723,'multiline':False]
+['text':' Compute whatever is left = batch_size - floor(batch_size / batch_limit) * batch_limit','line_number':1733,'multiline':False]
+['text':' which concisely is equal to batch_size % batch_limit','line_number':1734,'multiline':False]
+['text':' For batches smaller than 8 and matrix sizes larger than 64x64 cuBLAS forloop is faster than batched version','line_number':1750,'multiline':False]
+['text':' cuBLAS batched is faster than MAGMA batched up until 512x512, after that MAGMA is faster','line_number':1757,'multiline':False]
+['text':' AT_MAGMA_ENABLED()','line_number':1763,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ orgqr ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':1769,'multiline':False]
+['text':' TODO: It is possible to implement efficient batched orgqr for small tau (tau.size(-1) <= 32)','line_number':1772,'multiline':False]
+['text':' using MAGMA, however it fails on Windows because of some illegal memory reads inside MAGMA.','line_number':1773,'multiline':False]
+['text':' See discussions in https://github.com/pytorch/pytorch/pull/51348 for comparison of cuSOLVER-MAGMA','line_number':1774,'multiline':False]
+['text':' and Windows failure.','line_number':1775,'multiline':False]
+['text':' For reference here is the MAGMA-based implementation: https://gist.github.com/IvanYashchuk/2db50002c9d3c1462ff769e6410ad983','line_number':1776,'multiline':False]
+['text':' cusolver','line_number':1778,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ qr ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':1799,'multiline':False]
+['text':' magmaGeqrf uses a hybrid CPU-GPU algorithm to compute the elementary reflectors.','line_number':1819,'multiline':False]
+['text':' The driver routine geqrf2_gpu accepts a tensor on the CPU for elementary reflectors.','line_number':1820,'multiline':False]
+['text':' workspace is not needed for geqrf2_gpu','line_number':1823,'multiline':False]
+['text':' now compute the actual QR and tau','line_number':1830,'multiline':False]
+['text':' MAGMA's geqrf2_gpu function is used, this version has LAPACK-complaint arguments.','line_number':1831,'multiline':False]
+['text':'is_v2=','line_number':1832,'multiline':True]
+['text':'non_blocking=','line_number':1835,'multiline':True]
+['text':' This is a type dispatching helper function for 'apply_geqrf'','line_number':1839,'multiline':False]
+['text':' For the benchmarks see','line_number':1849,'multiline':False]
+['text':' https://github.com/pytorch/pytorch/pull/56253#discussion_r622851107','line_number':1850,'multiline':False]
+['text':' TODO Investigate whether the following magma bug is still occuring.','line_number':1861,'multiline':False]
+['text':' It may be the case that geqrf followed by orgqr is wrong for the magma backend','line_number':1862,'multiline':False]
+['text':' geqrf_magma currently uses geqrf2_gpu','line_number':1863,'multiline':False]
+['text':'','line_number':1864,'multiline':False]
+['text':' We require to perform ?geqrf_gpu again due to this bug in MAGMA:','line_number':1865,'multiline':False]
+['text':' - ?geqrf_gpu allows fast computation of Q via ?orgqr_gpu, but doesn't give R properly.','line_number':1866,'multiline':False]
+['text':' - ?geqrf2_gpu gives correct R, but doesn't allow computation of Q via ?orgqr_gpu','line_number':1867,'multiline':False]
+['text':' Refer to the below link for more details:','line_number':1868,'multiline':False]
+['text':' http://icl.cs.utk.edu/magma/forum/viewtopic.php?f=2&t=1015&p=2800&hilit=geqrf_gpu#p2800','line_number':1869,'multiline':False]
+['text':' Run once, first to get the optimum work sizes.','line_number':1913,'multiline':False]
+['text':' Since we deal with batches of matrices with the same dimensions, doing this outside','line_number':1914,'multiline':False]
+['text':' the loop saves (batch_size - 1) workspace queries which would provide the same result','line_number':1915,'multiline':False]
+['text':' and (batch_size - 1) calls to allocate and deallocate workspace using at::empty()','line_number':1916,'multiline':False]
+['text':' The current behaviour for Linear Algebra functions to raise an error if something goes wrong','line_number':1947,'multiline':False]
+['text':' or input doesn't satisfy some requirement','line_number':1948,'multiline':False]
+['text':' therefore return early since further computations will be wasted anyway','line_number':1949,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ linalg_eigh ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':1957,'multiline':False]
+['text':' This is a type dispatch function for 'apply_magma_eigh'','line_number':1959,'multiline':False]
+['text':' For small inputs result is computed on CPU','line_number':1960,'multiline':False]
+['text':' MAGMA just calls LAPACK for eigenvectors.size(-1) <= 128','line_number':1962,'multiline':False]
+['text':' See https://bitbucket.org/icl/magma/src/e6fdca447bd402693e8b0b950a898b6879bbcc41/src/zheevd_gpu.cpp?at=master#lines-258','line_number':1963,'multiline':False]
+['text':' in addition lda is ignored breaking 0x0 inputs','line_number':1964,'multiline':False]
+['text':' MAGMA requires eigenvalues and infos tensors to reside on CPU','line_number':1966,'multiline':False]
+['text':' Transfer computed by MAGMA results from CPU to GPU','line_number':1976,'multiline':False]
+['text':' eigenvectors.size(-1) <= 128','line_number':1979,'multiline':False]
+['text':' transfer to CPU, compute the result and copy back to GPU','line_number':1980,'multiline':False]
+['text':' this is faster than going through MAGMA that does the same','line_number':1981,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ linalg_eig ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':2012,'multiline':False]
+['text':'
+Computes the eigenvalues and eigenvectors of n-by-n matrix 'input'.
+This is an in-place routine, content of 'input', 'values', 'vectors' is overwritten.
+'infos' is an int Tensor containing error codes for each matrix in the batched input.
+For more information see MAGMA's documentation for GEEV routine.
+','line_number':2014,'multiline':True]
+['text':' only right eigenvectors are computed','line_number':2036,'multiline':False]
+['text':' only right eigenvectors are computed','line_number':2046,'multiline':False]
+['text':' call magmaEig once to get the optimal size of work_data','line_number':2058,'multiline':False]
+['text':' This is a type dispatching helper function for 'apply_linalg_eig'','line_number':2078,'multiline':False]
+['text':' This function calculates the non-symmetric eigendecomposition in-place','line_number':2080,'multiline':False]
+['text':' tensors should be in batched column major memory format','line_number':2081,'multiline':False]
+['text':' the content of eigenvalues, eigenvectors and infos is overwritten by 'apply_linalg_eig'','line_number':2082,'multiline':False]
+['text':' apply_linalg_eig modifies the provided input matrix in-place, therefore we need a copy','line_number':2084,'multiline':False]
+['text':' MAGMA doesn't have GPU interface for the eigendecomposition and it forces us to transfer 'input' to CPU','line_number':2085,'multiline':False]
+['text':' make input_working_copy to have Fortran contiguous memory layout','line_number':2088,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ svd ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':2098,'multiline':False]
+['text':' Query svd for the optimal lwork size','line_number':2142,'multiline':False]
+['text':' MAGMA might not set the value for the optimal workspace therefore use 1 as the default value','line_number':2145,'multiline':False]
+['text':' Compute S, U (optionally), Vh (optionally)','line_number':2158,'multiline':False]
+['text':' A is on GPU and may not have the right strides.','line_number':2177,'multiline':False]
+['text':' We copy it into CPU with the correct strides and in pinned_memory as MAGMA moves things between CPU and GPU','line_number':2178,'multiline':False]
+['text':' U, S, Vh, info are the right size and strides, but are on GPU','line_number':2185,'multiline':False]
+['text':' We copy them into CPU in pinned_memory','line_number':2186,'multiline':False]
+['text':' Copy from CPU back to CUDA','line_number':2199,'multiline':False]
+['text':' We can do a non_blocking copy, as there is an unconditional check of the infos in','line_number':2200,'multiline':False]
+['text':' the calling function','line_number':2201,'multiline':False]
+['text':'non_blocking','line_number':2203,'multiline':True]
+['text':'non_blocking','line_number':2204,'multiline':True]
+['text':'non_blocking','line_number':2206,'multiline':True]
+['text':'non_blocking','line_number':2207,'multiline':True]
+['text':' We always use cuSOLVER unless the user has specified they want to use MAGMA','line_number':2219,'multiline':False]
+['text':' svd_cusolver computes V rather than Vh, so we pass a view of Vh.mT','line_number':2224,'multiline':False]
+['text':' and then conjugate Vh in-place','line_number':2225,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ lu_solve ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':2238,'multiline':False]
+['text':'
+  Solves the matrix equation A X = B
+  X and B are n-by-nrhs matrices, A is represented using the LU factorization.
+  This is an in-place routine, content of `B` is overwritten.
+  This is a "looped" variant for calling single input MAGMA function on batched input.
+
+  Args:
+  * `LU` - [in] the LU factorization of matrix A (see at::linalg_lu_factor)
+  * `pivots` - [in] the pivot indices (see at::linalg_lu_factor)
+  * `B` -  [in] the right hand side matrix B
+           [out] the solution matrix X
+
+  For further details, please see the MAGMA documentation for magma_dgetrs_gpu.
+','line_number':2240,'multiline':True]
+['text':' MAGMA requires pivots to be a CPU tensor','line_number':2266,'multiline':False]
+['text':' LU and pivots tensors can be broadcasted to B','line_number':2279,'multiline':False]
+['text':' here we construct a helper indexing tensor to linearly index into lu and pivots','line_number':2280,'multiline':False]
+['text':' info from magmaLuSolve only reports if the i-th parameter is wrong','line_number':2295,'multiline':False]
+['text':' so we don't need to check it all the time','line_number':2296,'multiline':False]
+['text':'
+  Solves the matrix equation A X = B
+  X and B are n-by-nrhs matrices, A is represented using the LU factorization.
+  This is an in-place routine, content of `B` is overwritten.
+  This is a specialized batched variant, it is expected to be faster than the "looped" version only for small inputs.
+
+  Args:
+  * `lu` - [in] the LU factorization of matrix A (see at::linalg_lu_factor)
+  * `pivots` - [in] the pivot indices (see at::linalg_lu_factor)
+  * `B` -  [in] the right hand side matrix B
+           [out] the solution matrix X
+
+  For further details, please see the MAGMA documentation for magma_dgetrs_batched.
+','line_number':2302,'multiline':True]
+['text':' Compute the result in batches of 65535','line_number':2357,'multiline':False]
+['text':' that is the maximum allowed number for batch_size in MAGMA','line_number':2358,'multiline':False]
+['text':' info from magmaLuSolveBatched only reports if the i-th parameter is wrong','line_number':2373,'multiline':False]
+['text':' so we don't need to check it all the time','line_number':2374,'multiline':False]
+['text':' There is a bug in MAGMA when TransposeType is transpose or conj-transpose.','line_number':2381,'multiline':False]
+['text':' B and LU have the same number of dimensions','line_number':2395,'multiline':False]
+['text':' B and pivots have the same number of dimensions','line_number':2408,'multiline':False]
+['text':' Trivial case. Remove it once `torch.solve` is removed, as linalg.solve already shortcuts this case','line_number':2419,'multiline':False]
+['text':' magma implementation of LU solve cannot handle a b tensor with last dim > 1024','line_number':2427,'multiline':False]
+['text':' See https://bitbucket.org/icl/magma/issues/19/dgesv_batched-dgetrs_batched-fails-for','line_number':2428,'multiline':False]
+['text':' heuristics determined from tests dicussed in https://github.com/pytorch/pytorch/pull/72935','line_number':2430,'multiline':False]
+['text':' Computes X = U^{-1}L^{-1}P^T B via triangular solves','line_number':2432,'multiline':False]
+['text':' Helps mitigating the bugs in magma','line_number':2433,'multiline':False]
+['text':' LAPACK / cublas / etc returns the permutation in an odd format','line_number':2437,'multiline':False]
+['text':' Here we transform it to a vector representing a permutation, i.e. a (batch of) vectors st. P(i) = j','line_number':2438,'multiline':False]
+['text':'squash_dim=','line_number':2444,'multiline':True]
+['text':' Get the inverse permutation','line_number':2451,'multiline':False]
+['text':' This is an insertion sort, and it's equivalent to','line_number':2452,'multiline':False]
+['text':' perm = at::argsort(perm);','line_number':2453,'multiline':False]
+['text':' but more parallelisable and O(n), exploiting that perm is a permutation','line_number':2454,'multiline':False]
+['text':' B1 = P^T @ B  (must be done out-of-place as B is both source and target)','line_number':2457,'multiline':False]
+['text':' B = L^{-1} @ B1','line_number':2459,'multiline':False]
+['text':'upper=','line_number':2460,'multiline':True]
+['text':'left=','line_number':2460,'multiline':True]
+['text':'unitriangular=','line_number':2460,'multiline':True]
+['text':' B = U^{-1} @ B','line_number':2461,'multiline':False]
+['text':'upper=','line_number':2462,'multiline':True]
+['text':' B = U^{-H} @ B','line_number':2465,'multiline':False]
+['text':'upper=','line_number':2466,'multiline':True]
+['text':' B = L^{-H} @ B','line_number':2467,'multiline':False]
+['text':'upper=','line_number':2468,'multiline':True]
+['text':'left=','line_number':2468,'multiline':True]
+['text':'unitriangular=','line_number':2468,'multiline':True]
+['text':' B = P @ B','line_number':2469,'multiline':False]
+['text':' Preferred Backend','line_number':2489,'multiline':False]
+['text':' ifdef USE_LINALG_SOLVER','line_number':2500,'multiline':False]
+['text':' Looped magma is very slow, but batched magma is buggy in these two cases','line_number':2502,'multiline':False]
+['text':' Heuristic','line_number':2512,'multiline':False]
+['text':'if (n == k) {','line_number':2513,'multiline':False]
+['text':' if (k <= 16) batched_cublas','line_number':2514,'multiline':False]
+['text':' else solve_triag','line_number':2515,'multiline':False]
+['text':'} else {','line_number':2516,'multiline':False]
+['text':'if (n <= 8) {','line_number':2517,'multiline':False]
+['text':' if (k >= 256 && NoTranspose) batched_magma','line_number':2518,'multiline':False]
+['text':' else batched_cusolver','line_number':2519,'multiline':False]
+['text':'} else if (n <= 32) {','line_number':2520,'multiline':False]
+['text':'  b <= 2 looped_cusolver','line_number':2521,'multiline':False]
+['text':'  k <= 8 batched_cusolver','line_number':2522,'multiline':False]
+['text':'  solve_triag','line_number':2523,'multiline':False]
+['text':'} else if (n <= 64) {','line_number':2524,'multiline':False]
+['text':'  b <= 2 && (k <= 64 || adjoint) looped_cusolver','line_number':2525,'multiline':False]
+['text':'  k <= 8 batched_cusolver','line_number':2526,'multiline':False]
+['text':'  solve_triag','line_number':2527,'multiline':False]
+['text':'} else if (n <= 128) {','line_number':2528,'multiline':False]
+['text':'  if (b <= 2 && k <= 2) looped_cusolver','line_number':2529,'multiline':False]
+['text':'  else if (k <= 2) batched_cusolver','line_number':2530,'multiline':False]
+['text':'  else solve_triag','line_number':2531,'multiline':False]
+['text':'} else { // n > 128','line_number':2532,'multiline':False]
+['text':'  solve_triag','line_number':2533,'multiline':False]
+['text':'}','line_number':2534,'multiline':False]
+['text':'}','line_number':2535,'multiline':False]
+['text':' Particular case when multiplying A^{-1}B where B is square','line_number':2539,'multiline':False]
+['text':' In this case doing two triangular solves is almost always fastest','line_number':2540,'multiline':False]
+['text':' n > 128','line_number':2572,'multiline':False]
+['text':' No cublas or cusolver','line_number':2576,'multiline':False]
+['text':' lu_solve_triangular is almost always best','line_number':2577,'multiline':False]
+['text':' ifdef USE_LINALG_SOLVER','line_number':2579,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ lstsq ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~','line_number':2584,'multiline':False]
+['text':' MAGMA requires infos tensor to live on CPU','line_number':2608,'multiline':False]
+['text':'infos','line_number':2630,'multiline':True]
+['text':' The steps for using the QR decomposition for solving least squares problems','line_number':2631,'multiline':False]
+['text':' are outlined here https://en.wikipedia.org/wiki/QR_decomposition#Using_for_solution_to_linear_inverse_problems','line_number':2632,'multiline':False]
+['text':' explicitly broadcast the batch dimensions of A','line_number':2637,'multiline':False]
+['text':' TODO: revisit this later to use batch_iterator_with_broadcasting in triangular_solve','line_number':2638,'multiline':False]
+['text':' Step 1: compute QR factorization using geqrf','line_number':2649,'multiline':False]
+['text':' explicitly broadcast the batch dimensions of A','line_number':2652,'multiline':False]
+['text':' we do it after geqrf so that we don't do redundant computations for the same input','line_number':2653,'multiline':False]
+['text':' Step 2: B <- Q^H B','line_number':2663,'multiline':False]
+['text':'left=','line_number':2664,'multiline':True]
+['text':'transpose=','line_number':2664,'multiline':True]
+['text':' Step 3: solve R X = B','line_number':2666,'multiline':False]
+['text':'left=','line_number':2670,'multiline':True]
+['text':'upper=','line_number':2671,'multiline':True]
+['text':'transpose=','line_number':2672,'multiline':True]
+['text':'unitriangular=','line_number':2673,'multiline':True]
+['text':' underdetermined case','line_number':2674,'multiline':False]
+['text':' Step 1: compute QR factorization of conjugate transpose of A using geqrf','line_number':2677,'multiline':False]
+['text':' explicitly broadcast the batch dimensions of A','line_number':2680,'multiline':False]
+['text':' we do it after geqrf so that we don't do redundant computations for the same input','line_number':2681,'multiline':False]
+['text':' Step 2: R^H Z = B','line_number':2688,'multiline':False]
+['text':'left=','line_number':2694,'multiline':True]
+['text':'upper=','line_number':2695,'multiline':True]
+['text':'transpose=','line_number':2696,'multiline':True]
+['text':'unitriangular=','line_number':2697,'multiline':True]
+['text':' B matrix has the size max(m, n) x nrhs','line_number':2699,'multiline':False]
+['text':' triangular_solve_kernel writes its output into the first m rows of B leaving the rest untouched','line_number':2700,'multiline':False]
+['text':' we need to set the rest of the rows to zero so that the multiplication from step 3 is correct','line_number':2701,'multiline':False]
+['text':' Step 3: X <- Q Z','line_number':2708,'multiline':False]
+['text':'left=','line_number':2709,'multiline':True]
+['text':'transpose=','line_number':2709,'multiline':True]
+['text':' linalg_lstsq_gels is a generic function that is implemented using','line_number':2721,'multiline':False]
+['text':' geqrf_stub, ormqr_stub, and triangular_solve_stub','line_number':2722,'multiline':False]
+['text':' It dispatches to cuSOLVER for CUDA inputs if USE_LINALG_SOLVER is defined','line_number':2723,'multiline':False]
+['text':'rank','line_number':2731,'multiline':True]
+['text':'singular_values','line_number':2731,'multiline':True]
+['text':'rcond','line_number':2731,'multiline':True]
+['text':'driver_name','line_number':2731,'multiline':True]
+['text':' first handle the underdetermined case (m < n)','line_number':2735,'multiline':False]
+['text':' this case is not supported by MAGMA or cuBLAS','line_number':2736,'multiline':False]
+['text':' m >= n','line_number':2746,'multiline':False]
+['text':' On CUDA platform we use either cuBLAS or cuSOLVER here','line_number':2748,'multiline':False]
+['text':' the batched vs looped dispatch is implemented based on the following performance results','line_number':2749,'multiline':False]
+['text':' https://github.com/pytorch/pytorch/pull/54725#issuecomment-832234456','line_number':2750,'multiline':False]
+['text':' On ROCm platform we can only use MAGMA here','line_number':2757,'multiline':False]
+['text':' If MAGMA is not available, an error will be thrown','line_number':2758,'multiline':False]
+['text':' !AT_ROCM_ENABLED()','line_number':2760,'multiline':False]
+['text':' namespace lazy_linalg','line_number':2775,'multiline':False]
+['text':' namespace at::native','line_number':2777,'multiline':False]

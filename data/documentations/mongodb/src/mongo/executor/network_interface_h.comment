@@ -1,0 +1,163 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Interface to networking for use by TaskExecutor implementations.
+ ','line_number':67,'multiline':True]
+['text':' Indicates that there is no expiration time by when a request needs to complete','line_number':80,'multiline':False]
+['text':'*
+     * Returns diagnostic info.
+     ','line_number':85,'multiline':True]
+['text':'*
+     * Appends information about the connections on this NetworkInterface.
+     ','line_number':90,'multiline':True]
+['text':'*
+     * Appends information about this instance of NetworkInterface.
+     ','line_number':95,'multiline':True]
+['text':'*
+     * Starts up the network interface.
+     *
+     * It is valid to call all methods except shutdown() before this method completes.  That is,
+     * implementations may not assume that startup() completes before startCommand() first
+     * executes.
+     *
+     * Called by the owning TaskExecutor inside its run() method.
+     ','line_number':100,'multiline':True]
+['text':'*
+     * Shuts down the network interface. Must be called before this instance gets deleted,
+     * if startup() is called.
+     *
+     * Called by the owning TaskExecutor inside its run() method.
+     ','line_number':111,'multiline':True]
+['text':'*
+     * Returns true if shutdown has been called, false otherwise.
+     ','line_number':119,'multiline':True]
+['text':'*
+     * Blocks the current thread (presumably the executor thread) until the network interface
+     * knows of work for the executor to perform.
+     ','line_number':124,'multiline':True]
+['text':'*
+     * Similar to waitForWork, but only blocks until "when".
+     ','line_number':130,'multiline':True]
+['text':'*
+     * Signals to the network interface that there is new work (such as a signaled event) for
+     * the executor to process.  Wakes the executor from waitForWork() and friends.
+     ','line_number':135,'multiline':True]
+['text':'*
+     * Returns the current time.
+     ','line_number':141,'multiline':True]
+['text':'*
+     * Returns the hostname of the current process.
+     ','line_number':146,'multiline':True]
+['text':'
+     * Returns a copy of the operation counters (see struct Counters above). This method should
+     * only be used in tests, and will invariant if testing diagnostics are not enabled.
+     ','line_number':159,'multiline':True]
+['text':'*
+     * Starts asynchronous execution of the command described by "request".
+     *
+     * The request mutated to append request metadata to be merged into the request messages.
+     *
+     * Returns ErrorCodes::ShutdownInProgress if NetworkInterface::shutdown has already started
+     * and Status::OK() otherwise. If it returns Status::OK(), then the onFinish argument will be
+     * executed by NetworkInterface eventually; otherwise, it will not.
+     *
+     * Note that if you pass a baton to startCommand and that baton refuses work, then your onFinish
+     * function will not run.
+     ','line_number':165,'multiline':True]
+['text':'*
+     * Requests cancellation of the network activity associated with "cbHandle" if it has not yet
+     * completed.
+     *
+     * Note that the work involved in onFinish may run locally as a result of invoking this
+     * function. Do not hold locks while calling cancelCommand(...).
+     ','line_number':206,'multiline':True]
+['text':'*
+     * Sets an alarm, which schedules "action" to run no sooner than "when".
+     *
+     * Returns ErrorCodes::ShutdownInProgress if NetworkInterface::shutdown has already started
+     * and true otherwise. If it returns Status::OK(), then the action will be executed by
+     * NetworkInterface eventually if no error occurs while waiting for the alarm; otherwise,
+     * it will not.
+     *
+     * "action" should not do anything that requires a lot of computation, or that might block for a
+     * long time, as it may execute in a network thread.
+     *
+     * Any callbacks invoked from setAlarm must observe onNetworkThread to
+     * return true. See that method for why.
+     ','line_number':216,'multiline':True]
+['text':'*
+     * Requests cancellation of the alarm associated with "cbHandle" if it has not yet completed.
+     ','line_number':234,'multiline':True]
+['text':'*
+     * Schedules the specified action to run as soon as possible on the network interface's
+     * execution resource
+     ','line_number':239,'multiline':True]
+['text':'*
+     * Returns true if called from a thread dedicated to networking. I.e. not a
+     * calling thread.
+     *
+     * This is meant to be used to avoid context switches, so callers must be
+     * able to rely on this returning true in a callback or completion handler.
+     * In the absence of any actual networking thread, always return true.
+     ','line_number':245,'multiline':True]
+['text':'*
+     * Drops all connections to the given host in the connection pool.
+     ','line_number':255,'multiline':True]
+['text':'*
+     * Acquire a connection and subsequently release it.
+     * If status is not OK, the connection will be dropped,
+     * otherwise the connection will be returned to the pool.
+     ','line_number':260,'multiline':True]
+['text':'*
+     * An RAII type that NetworkInterface uses to allow users to access a stream corresponding to a
+     * single network-level (i.e. TCP, UDS) connection on which to run commands directly. Generally
+     * speaking, users should use the NetworkInterface itself to run commands to take advantage of
+     * connection-pooling, hedging, and other features - but for special cases where users need to
+     * borrow their own network-stream for manual use, they can lease one through this type.
+     * LeasedStreams are minimal and do not offer automated health-management/automated refreshing
+     * while on lease - users are responsible for examining the health of the stream as-needed if
+     * they desire. Users are also responsible for reporting on the health of stream before the
+     * lease ends so that it can be subsequently re-used; see comments below for detail.
+     ','line_number':270,'multiline':True]
+['text':' AsyncDBClient provides the mongoRPC-API for running commands over this stream. This','line_number':285,'multiline':False]
+['text':' stream owns the AsyncDBClient and no outstanding networking should be scheduled on the','line_number':286,'multiline':False]
+['text':' client when it is destroyed.','line_number':287,'multiline':False]
+['text':' Indicates that the user is done with this leased stream, and no failures on it occured.','line_number':290,'multiline':False]
+['text':' Users MUST call either this function or indicateFailure before the LeasedStream is','line_number':291,'multiline':False]
+['text':' destroyed.','line_number':292,'multiline':False]
+['text':' Indicates that the stream is unhealthy (i.e. the user received a network error indicating','line_number':294,'multiline':False]
+['text':' the stream failed). This prevents the stream from being reused.','line_number':295,'multiline':False]
+['text':' Indicates that the stream has successfully performed networking over the stream. Updates','line_number':297,'multiline':False]
+['text':' metadata indicating the last healthy networking over the stream so that appropriate','line_number':298,'multiline':False]
+['text':' health-checks can be done after the lease ends.','line_number':299,'multiline':False]
+['text':'*
+     * Lease a stream from this NetworkInterface for manual use.
+     ','line_number':303,'multiline':True]
+['text':' namespace executor','line_number':314,'multiline':False]
+['text':' namespace mongo','line_number':315,'multiline':False]

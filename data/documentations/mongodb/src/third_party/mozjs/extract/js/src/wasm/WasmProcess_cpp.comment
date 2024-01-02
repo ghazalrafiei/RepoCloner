@@ -1,0 +1,95 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ *
+ * Copyright 2017 Mozilla Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ','line_number':1,'multiline':True]
+['text':' Per-process map from values of program-counter (pc) to CodeSegments.','line_number':40,'multiline':False]
+['text':'','line_number':41,'multiline':False]
+['text':' Whenever a new CodeSegment is ready to use, it has to be registered so that','line_number':42,'multiline':False]
+['text':' we can have fast lookups from pc to CodeSegments in numerous places. Since','line_number':43,'multiline':False]
+['text':' wasm compilation may be tiered, and the second tier doesn't have access to','line_number':44,'multiline':False]
+['text':' any JSContext/JS::Compartment/etc lying around, we have to use a process-wide','line_number':45,'multiline':False]
+['text':' map instead.','line_number':46,'multiline':False]
+['text':' Because of profiling, the thread running wasm might need to know to which','line_number':52,'multiline':False]
+['text':' CodeSegment the current PC belongs, during a call to lookup(). A lookup','line_number':53,'multiline':False]
+['text':' is a read-only operation, and we don't want to take a lock then','line_number':54,'multiline':False]
+['text':' (otherwise, we could have a deadlock situation if an async lookup','line_number':55,'multiline':False]
+['text':' happened on a given thread that was holding mutatorsMutex_ while getting','line_number':56,'multiline':False]
+['text':' sampled). Since the writer could be modifying the data that is getting','line_number':57,'multiline':False]
+['text':' looked up, the writer functions use spin-locks to know if there are any','line_number':58,'multiline':False]
+['text':' observers (i.e. calls to lookup()) of the atomic data.','line_number':59,'multiline':False]
+['text':' Since writes (insertions or removals) can happen on any background','line_number':64,'multiline':False]
+['text':' thread at the same time, we need a lock here.','line_number':65,'multiline':False]
+['text':' Except during swapAndWait(), there are no lookup() observers of the','line_number':72,'multiline':False]
+['text':' vector pointed to by mutableCodeSegments_','line_number':73,'multiline':False]
+['text':' Both vectors are consistent for lookup at this point although their','line_number':93,'multiline':False]
+['text':' contents are different: there is no way for the looked up PC to be','line_number':94,'multiline':False]
+['text':' in the code segment that is getting registered, because the code','line_number':95,'multiline':False]
+['text':' segment is not even fully created yet.','line_number':96,'multiline':False]
+['text':' If a lookup happens before this instruction, then the','line_number':98,'multiline':False]
+['text':' soon-to-become-former read-only pointer is used during the lookup,','line_number':99,'multiline':False]
+['text':' which is valid.','line_number':100,'multiline':False]
+['text':' If a lookup happens after this instruction, then the updated vector','line_number':105,'multiline':False]
+['text':' is used, which is valid:','line_number':106,'multiline':False]
+['text':' - in case of insertion, it means the new vector contains more data,','line_number':107,'multiline':False]
+['text':' but it's fine since the code segment is getting registered and thus','line_number':108,'multiline':False]
+['text':' isn't even fully created yet, so the code can't be running.','line_number':109,'multiline':False]
+['text':' - in case of removal, it means the new vector contains one less','line_number':110,'multiline':False]
+['text':' entry, but it's fine since unregistering means the code segment','line_number':111,'multiline':False]
+['text':' isn't used by any live instance anymore, thus PC can't be in the','line_number':112,'multiline':False]
+['text':' to-be-removed code segment's range.','line_number':113,'multiline':False]
+['text':' A lookup could have happened on any of the two vectors. Wait for','line_number':115,'multiline':False]
+['text':' observers to be done using any vector before mutating.','line_number':116,'multiline':False]
+['text':' Although we could simply revert the insertion in the read-only','line_number':161,'multiline':False]
+['text':' vector, it is simpler to just crash and given that each CodeSegment','line_number':162,'multiline':False]
+['text':' consumes multiple pages, it is unlikely this insert() would OOM in','line_number':163,'multiline':False]
+['text':' practice','line_number':164,'multiline':False]
+['text':' It is fine returning a raw CodeSegment*, because we assume we are','line_number':210,'multiline':False]
+['text':' looking up a live PC in code which is on the stack, keeping the','line_number':211,'multiline':False]
+['text':' CodeSegment alive.','line_number':212,'multiline':False]
+['text':' This field is only atomic to handle buggy scenarios where we crash during','line_number':218,'multiline':False]
+['text':' startup or shutdown and thus racily perform wasm::LookupCodeSegment() from','line_number':219,'multiline':False]
+['text':' the crashing thread.','line_number':220,'multiline':False]
+['text':' This function cannot race with startup/shutdown.','line_number':227,'multiline':False]
+['text':' This function cannot race with startup/shutdown.','line_number':234,'multiline':False]
+['text':'= nullptr ','line_number':241,'multiline':True]
+['text':' Since wasm::LookupCodeSegment() can race with wasm::ShutDown(), we must','line_number':242,'multiline':False]
+['text':' additionally keep sNumActiveLookups above zero for the duration we're','line_number':243,'multiline':False]
+['text':' using the ProcessCodeSegmentMap. wasm::ShutDown() spin-waits on','line_number':244,'multiline':False]
+['text':' sNumActiveLookups getting to zero.','line_number':245,'multiline':False]
+['text':' = nullptr ','line_number':274,'multiline':True]
+['text':'*
+ * ReadLockFlag maintains a flag that can be mutated multiple times before it
+ * is read, at which point it maintains the same value.
+ ','line_number':290,'multiline':True]
+['text':'
+ * Some 64 bit systems greatly limit the range of available virtual memory. We
+ * require about 6GiB for each wasm huge memory, which can exhaust the address
+ * spaces of these systems quickly. In order to avoid this, we only enable huge
+ * memory if we observe a large enough address space.
+ *
+ * This number is conservatively chosen to continue using huge memory on our
+ * smallest address space system, Android on ARM64 (39 bits), along with a bit
+ * for error in detecting the address space limit.
+ ','line_number':317,'multiline':True]
+['text':'
+ * In addition to the above, some systems impose an independent limit on the
+ * amount of virtual memory that may be used.
+ ','line_number':329,'multiline':True]
+['text':' If there are live runtimes then we are already pretty much leaking the','line_number':391,'multiline':False]
+['text':' world, so to avoid spurious assertions (which are valid and valuable when','line_number':392,'multiline':False]
+['text':' there are not live JSRuntimes), don't bother releasing anything here.','line_number':393,'multiline':False]
+['text':' After signalling shutdown by clearing sProcessCodeSegmentMap, wait for','line_number':398,'multiline':False]
+['text':' concurrent wasm::LookupCodeSegment()s to finish.','line_number':399,'multiline':False]

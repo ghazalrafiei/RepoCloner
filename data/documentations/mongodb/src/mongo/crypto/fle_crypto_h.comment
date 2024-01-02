@@ -1,0 +1,735 @@
+['text':'*
+ *    Copyright (C) 2022-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' IWYU pragma: keep','line_number':70,'multiline':False]
+['text':'*
+ * Generate tokens from the Index Key
+ ','line_number':75,'multiline':True]
+['text':'*
+     * CollectionsLevel1Token = HMAC(IndexKey, 1) = K_{f,1}
+     ','line_number':80,'multiline':True]
+['text':'*
+     * ServerTokenDerivationLevel1Token = HMAC(IndexKey, 2) = K_{f,2}
+     ','line_number':85,'multiline':True]
+['text':'*
+     * ServerDataEncryptionLevel1Token = HMAC(IndexKey, 3) = K_{f,3}
+     ','line_number':91,'multiline':True]
+['text':'*
+ * Generate tokens from the CollectionsLevel1Token for use with the various collections.
+ ','line_number':98,'multiline':True]
+['text':'*
+     * EDCToken = HMAC(CollectionsLevel1Token, 1) = K^{edc}_f
+     ','line_number':103,'multiline':True]
+['text':'*
+     * ESCToken = HMAC(CollectionsLevel1Token, 2) = K^{esc}_f
+     ','line_number':108,'multiline':True]
+['text':'*
+     * ECCToken = HMAC(CollectionsLevel1Token, 3) = K^{ecc}_f
+     ','line_number':113,'multiline':True]
+['text':'*
+     * ECOCToken = HMAC(CollectionsLevel1Token, 4) = K^{ecoc}_f
+     ','line_number':118,'multiline':True]
+['text':'*
+ * Generate tokens for the various collections derived from the user data.
+ ','line_number':125,'multiline':True]
+['text':'*
+     * EDCDerivedFromDataToken = HMAC(EDCToken, v) = K^{edc}_{f,v}
+     ','line_number':130,'multiline':True]
+['text':'*
+     * ESCDerivedFromDataToken = HMAC(ESCToken, v) = K^{esc}_{f,v}
+     ','line_number':136,'multiline':True]
+['text':'*
+     * ECCDerivedFromDataToken = HMAC(ECCToken, v) = K^{ecc}_{f,v}
+     ','line_number':142,'multiline':True]
+['text':'*
+     * ServerDerivedFromDataToken = HMAC(ServerTokenDerivationLevel1Token, v)
+     ','line_number':148,'multiline':True]
+['text':'*
+ * Generate tokens for the various collections derived from the user data and a contention factor.
+ ','line_number':155,'multiline':True]
+['text':'*
+     * EDCDerivedFromDataTokenAndContentionFactorToken = HMAC(EDCDerivedFromDataToken, u)
+     ','line_number':160,'multiline':True]
+['text':'*
+     * ESCDerivedFromDataTokenAndContentionFactorToken = HMAC(ESCDerivedFromDataToken, u)
+     ','line_number':167,'multiline':True]
+['text':'*
+     * ECCDerivedFromDataTokenAndContentionFactorToken = HMAC(ECCDerivedFromDataToken, u)
+     ','line_number':174,'multiline':True]
+['text':'*
+ * Generate tokens for the various collections derived from counter tokens.
+ ','line_number':182,'multiline':True]
+['text':'*
+     * EDCTwiceDerivedToken = HMAC(EDCDerivedFromDataTokenAndContentionFactorToken, 1)
+     ','line_number':187,'multiline':True]
+['text':'*
+     * ESCTwiceDerivedTagToken = HMAC(ESCDerivedFromDataTokenAndContentionFactorToken, 1)
+     ','line_number':193,'multiline':True]
+['text':'*
+     * ESCTwiceDerivedValueToken = HMAC(ESCDerivedFromDataTokenAndContentionFactorToken, 2)
+     ','line_number':199,'multiline':True]
+['text':'*
+     * ECCTwiceDerivedTagToken = HMAC(ECCDerivedFromDataTokenAndContentionFactorToken, 1)
+     ','line_number':205,'multiline':True]
+['text':'*
+     * ECCTwiceDerivedValueToken = HMAC(ECCDerivedFromDataTokenAndContentionFactorToken, 2)
+     ','line_number':211,'multiline':True]
+['text':'*
+ * Generate tokens for encrypting the metadata in version 2 on-disk payload formats.
+ ','line_number':218,'multiline':True]
+['text':'*
+     * ServerCountAndContentionFactorEncryptionToken = HMAC(ServerDerivedFromDataToken, 1)
+     ','line_number':223,'multiline':True]
+['text':'*
+     * ServerZerosEncryptionToken = HMAC(ServerDerivedFromDataToken, 2)
+     ','line_number':229,'multiline':True]
+['text':'*
+ * ESC Collection schema
+ * {
+ *    _id : HMAC(ESCTwiceDerivedTagToken, type || pos )
+ *    value : Encrypt(ESCTwiceDerivedValueToken,  count_type || count)
+ * }
+ *
+ * where
+ *  type = uint64_t
+ *  pos = uint64_t
+ *  count_type = uint64_t
+ *  count = uint64_t
+ *  - Note: There is a lifetime limit of 2^64 - 1 count of a value/pairs for an index
+ *
+ * where type
+ *   0 - null record
+ *   1 - insert record, positional record, or compaction record
+ *
+ * where count_type:
+ *   0 - regular count
+ *   [1, UINT64_MAX) = position
+ *   UINT64_MAX - compaction placeholder
+ *
+ * Record types:
+ *
+ * Document Counts
+ * Null: 0 or 1
+ * Insert: 0 or more
+ * Positional: 0 or more
+ * Compaction: 0 or 1
+ *
+ * Null record:
+ * {
+ *    _id : HMAC(ESCTwiceDerivedTagToken, null )
+ *    value : Encrypt(ESCTwiceDerivedValueToken,  pos || count)
+ * }
+ *
+ * Insert record:
+ * {
+ *    _id : HMAC(ESCTwiceDerivedTagToken, pos )
+ *    value : Encrypt(ESCTwiceDerivedValueToken,  0 || count)
+ * }
+ *
+ * Positional record:
+ * {
+ *    _id : HMAC(ESCTwiceDerivedTagToken, pos )
+ *    value : Encrypt(ESCTwiceDerivedValueToken,  pos' || count)
+ * }
+ *
+ * Compaction placeholder record:
+ * {
+ *    _id : HMAC(ESCTwiceDerivedTagToken, pos )
+ *    value : Encrypt(ESCTwiceDerivedValueToken,  UINT64_MAX || 0)
+ * }
+ *
+ * PlainText of _id
+ * struct {
+ *    uint64_t type;
+ *    uint64_t pos;
+ * }
+ *
+ * PlainText of value
+ * struct {
+ *    uint64_t count_type;
+ *    uint64_t count;
+ * }
+ *
+ * ===== Protocol Version 2 =====
+ * Positional values:
+ *   cpos = position of non-anchor record in the range [1..UINT64_MAX]
+ *   apos = position of anchor record in the range [1..UINT64_MAX]
+ *
+ * Non-anchor record:
+ * {
+ *    _id : HMAC(ESCTwiceDerivedTagToken, cpos)
+ * }
+ *
+ * Non-null anchor record:
+ * {
+ *    _id : HMAC(ESCTwiceDerivedTagToken, (0 || apos))
+ *    value : Encrypt(ESCTwiceDerivedValueToken, (0 || cpos))
+ * }
+ *
+ * Null anchor record:
+ * {
+ *    _id : HMAC(ESCTwiceDerivedTagToken, (0 || 0))
+ *    value : Encrypt(ESCTwiceDerivedValueToken, (apos || cpos))
+ * }
+ *
+ ','line_number':236,'multiline':True]
+['text':' Id is not included as it is HMAC generated and cannot be reversed','line_number':329,'multiline':False]
+['text':' Id is not included as it is HMAC generated and cannot be reversed','line_number':336,'multiline':False]
+['text':'*
+ * Basic set of functions to read/query data from state collections to perform EmuBinary.
+ ','line_number':343,'multiline':True]
+['text':'*
+     * Retrieve a single document by _id == BSONElement from nss.
+     *
+     * Returns an empty BSONObj if no document is found.
+     * Expected to throw an error if it detects more then one documents.
+     ','line_number':352,'multiline':True]
+['text':'*
+     * Count the documents in the collection.
+     *
+     * Throws if the collection is not found.
+     ','line_number':360,'multiline':True]
+['text':'*
+     * Get the set of counts from ESC for a set of tags. Returns counts for these fields suitable
+     * either for query or insert based on the type parameter.
+     *
+     * Returns a vector of zeros if the collection does not exist.
+     ','line_number':367,'multiline':True]
+['text':'*
+ * Interface for reading from a collection for the "EmuBinary" algorithm
+ ','line_number':380,'multiline':True]
+['text':'*
+     * Get a count of documents in the collection.
+     ','line_number':387,'multiline':True]
+['text':'*
+     * Get a document by its _id.
+     ','line_number':392,'multiline':True]
+['text':'*
+     * Return true by a document by _id if it exists.
+     ','line_number':397,'multiline':True]
+['text':'*
+     * Generate the _id value
+     ','line_number':409,'multiline':True]
+['text':'*
+     * Generate a null document which will be the "first" document for a given field.
+     ','line_number':414,'multiline':True]
+['text':'*
+     * Generate a insert ESC document.
+     ','line_number':422,'multiline':True]
+['text':'*
+     * Generate a compaction placeholder ESC document.
+     ','line_number':430,'multiline':True]
+['text':'*
+     * Decrypt the null document.
+     ','line_number':438,'multiline':True]
+['text':'*
+     * Decrypt the null document.
+     ','line_number':444,'multiline':True]
+['text':'*
+     * Decrypt a regular document.
+     ','line_number':450,'multiline':True]
+['text':'*
+     * Decrypt a regular document.
+     ','line_number':456,'multiline':True]
+['text':'*
+     * Search for the highest document id for a given field/value pair based on the token.
+     ','line_number':462,'multiline':True]
+['text':' ===== Protocol Version 2 =====','line_number':469,'multiline':False]
+['text':'*
+     * Generate the _id value for a non-anchor record
+     ','line_number':470,'multiline':True]
+['text':'*
+     * Generate the _id value for an anchor record
+     ','line_number':475,'multiline':True]
+['text':'*
+     * Generate the _id value for a null anchor record
+     ','line_number':480,'multiline':True]
+['text':'*
+     * Generate a non-anchor ESC document for inserts.
+     ','line_number':485,'multiline':True]
+['text':'*
+     * Generate an anchor ESC document for compacts.
+     ','line_number':491,'multiline':True]
+['text':'*
+     * Generate a null anchor ESC document for cleanups.
+     ','line_number':499,'multiline':True]
+['text':'*
+     * Decrypts an anchor document (either null or non-null).
+     * If the input document is a non-null anchor, then the resulting ESCDocument.position
+     * is 0, and ESCDocument.count is the non-anchor position (cpos).
+     * If the input document is a null anchor, then ESCDocument.position is the non-zero
+     * anchor position (apos), and ESCDocument.count is the cpos.
+     ','line_number':507,'multiline':True]
+['text':'
+     * Note on EmuBinaryV2 results:
+     *    i = non-anchor position (cpos)
+     *    x = anchor position (apos)
+     *
+     *    (i == 0) means no non-anchors AND no anchors exist at all. (implies x == 0).
+     *    (i == null) means no new non-anchors since the last-recorded cpos in an anchor.
+     *                Implies at least one anchor exists (x == null OR x > 0).
+     *    (i > 0) means only non-anchors exist OR new non-anchors have been added since
+     *            the last-recorded cpos in an anchor.
+     *    (x == 0) means no anchors exist.
+     *    (x == null) means a null anchor exists, and no new anchors since the apos in
+     *                the null anchor.
+     *    (x > 0) means non-null anchors exist without a null anchor OR new non-null anchors
+     *            have been added since the last-recorded apos in the null anchor.
+     ','line_number':517,'multiline':True]
+['text':'*
+     * Get the set of counts from ESC for a set of tags. Returns counts for these fields suitable
+     * either for query or insert based on the type parameter.
+     *
+     * Returns a vector of zeros if the collection does not exist.
+     ','line_number':546,'multiline':True]
+['text':'*
+ * ECC Collection
+ * - a record of deleted documents
+ *
+ * {
+ *    _id : HMAC(ECCTwiceDerivedTagToken, type || pos )
+ *    value : Encrypt(ECCTwiceDerivedValueToken,  (count || count) OR (start || end))
+ * }
+ *
+ * where
+ *  type = uint64_t
+ *  pos = uint64_t
+ *  value is either:
+ *       count, count = uint64_t  // Null records
+ *    OR
+ *       start = uint64_t  // Other records
+ *       end = uint64_t
+ *
+ * where type:
+ *   0 - null record
+ *   1 - regular record or compaction record
+ *
+ * where start and end:
+ *   [1..UINT_64_MAX) - regular start and end
+ *   UINT64_MAX - compaction placeholder
+ *
+ * Record types:
+ *
+ * Document Counts
+ * Null: 0 or 1
+ * Regular: 0 or more
+ * Compaction: 0 or 1
+ *
+ * Null record:
+ * {
+ *    _id : HMAC(ECCTwiceDerivedTagToken, null )
+ *    value : Encrypt(ECCTwiceDerivedValueToken,  count || count)
+ * }
+ *
+ * Regular record:
+ * {
+ *    _id : HMAC(ECCTwiceDerivedTagToken, pos )
+ *    value : Encrypt(ECCTwiceDerivedValueToken,  start || end)
+ * }
+ *
+ * Compaction placeholder record:
+ * {
+ *    _id : HMAC(ECCTwiceDerivedTagToken, pos )
+ *    value : Encrypt(ECCTwiceDerivedValueToken,  UINT64_MAX || UINT64_MAX)
+ * }
+ *
+ * PlainText of tag
+ * struct {
+ *    uint64_t type;
+ *    uint64_t pos;
+ * }
+ *
+ * PlainText of value for null records
+ * struct {
+ *    uint64_t count;
+ *    uint64_t ignored;
+ * }
+ *
+ * PlainText of value for non-null records
+ * struct {
+ *    uint64_t start;
+ *    uint64_t end;
+ * }
+ ','line_number':559,'multiline':True]
+['text':' Id is not included as it HMAC generated and cannot be reversed','line_number':635,'multiline':False]
+['text':' Id is not included as it HMAC generated and cannot be reversed','line_number':641,'multiline':False]
+['text':'*
+     * Generate the _id value
+     ','line_number':664,'multiline':True]
+['text':'*
+     * Generate a null document which will be the "first" document for a given field.
+     ','line_number':669,'multiline':True]
+['text':'*
+     * Generate a regular ECC document for (count).
+     *
+     * Note: it is stored as (count, count)
+     ','line_number':676,'multiline':True]
+['text':'*
+     * Generate a regular ECC document for (start, end)
+     ','line_number':686,'multiline':True]
+['text':'*
+     * Generate a compaction ECC document.
+     ','line_number':695,'multiline':True]
+['text':'*
+     * Decrypt the null document.
+     ','line_number':702,'multiline':True]
+['text':'*
+     * Decrypt a regular document.
+     ','line_number':708,'multiline':True]
+['text':'*
+     * Search for the highest document id for a given field/value pair based on the token.
+     ','line_number':714,'multiline':True]
+['text':'*
+ * Type safe abstraction over the key vault to support unit testing. Used by the various decryption
+ * routines to retrieve the correct keys.
+ *
+ * Keys are identified by UUID in the key vault.
+ ','line_number':722,'multiline':True]
+['text':'*
+     * Return raw, encrypted keys from the key store
+     ','line_number':740,'multiline':True]
+['text':'*
+     * Returns the local kms key that protects the raw keys
+     ','line_number':745,'multiline':True]
+['text':'*
+     * Generates a client-side payload that is sent to the server.
+     *
+     * Input is a document with FLE2EncryptionPlaceholder placeholders.
+     *
+     * For each field, transforms the field into BinData 6 with a prefix byte of 4
+     *
+     * {
+     *   d : EDCDerivedFromDataTokenAndContentionFactorToken
+     *   s : ESCDerivedFromDataTokenAndContentionFactorToken
+     *   c : ECCDerivedFromDataTokenAndContentionFactorToken
+     *   p : Encrypt(ECOCToken, ESCDerivedFromDataTokenAndContentionFactorToken ||
+     * ECCDerivedFromDataTokenAndContentionFactorToken) v : Encrypt(K_KeyId, value),
+     *   e : ServerDataEncryptionLevel1Token,
+     * }
+     ','line_number':778,'multiline':True]
+['text':'*
+     * Generates a client-side payload that is sent to the server. Contention factor is given
+     * explicitly as a lambda expression.
+     ','line_number':796,'multiline':True]
+['text':'*
+     * For every encrypted field path in the EncryptedFieldConfig, this generates
+     * a compaction token derived from the field's index key, which is retrieved from
+     * the supplied FLEKeyVault using the field's key ID.
+     *
+     * Returns a BSON object mapping the encrypted field path to its compaction token,
+     * which is a general BinData value.
+     ','line_number':805,'multiline':True]
+['text':'*
+     * Decrypts a document. Only supports FLE2.
+     ','line_number':815,'multiline':True]
+['text':'*
+     * Validate the tags array exists and is of the right type.
+     ','line_number':820,'multiline':True]
+['text':'*
+     * Validate document
+     *
+     * Checks performed
+     * 1. Fields, if present, are indexed the way specified
+     * 2. All fields can be decrypted successfully
+     * 3. There is a tag for each field and no extra tags
+     ','line_number':825,'multiline':True]
+['text':'
+ * Values of ECOC documents
+ *
+ * Encrypt(ECOCToken, ESCDerivedFromDataTokenAndContentionFactorToken ||
+ * ECCDerivedFromDataTokenAndContentionFactorToken)
+ *
+ * struct {
+ *    uint8_t[32] esc;
+ *    uint8_t[32] ecc;
+ * }
+ ','line_number':838,'multiline':True]
+['text':'
+ * Values of ECOC documents in Queryable Encryption protocol version 2
+ *
+ * Encrypt(ECOCToken, ESCDerivedFromDataTokenAndContentionFactorToken)
+ *
+ * struct {
+ *    uint8_t[32] esc;
+ * }
+ ','line_number':863,'multiline':True]
+['text':' Id is not included as it unimportant','line_number':892,'multiline':False]
+['text':'*
+ * ECOC Collection schema
+ * {
+ *    _id : ObjectId() -- omitted so MongoDB can auto choose it
+ *    fieldName : String,S
+ *    value : Encrypt(ECOCToken, ESCDerivedFromDataTokenAndContentionFactorToken)
+ * }
+ *
+ * where
+ *  value comes from client, see EncryptedStateCollectionTokens or
+ * FLE2InsertUpdatePayload.getEncryptedTokens()
+ *
+ * Note:
+ * - ECOC is a set of documents, they are unordered
+ ','line_number':897,'multiline':True]
+['text':'*
+ * Class to read/write the metadata block consisting of the encrypted counter
+ * and contention factor, the tag, and the encrypted 128-bit string of zeros.
+ *
+ * In QE protocol version 2, this block appears exactly once in the on-disk
+ * format of equality-indexed encrypted values, and at least once in the on-disk
+ * format of range-indexed encrypted values.
+ *
+ * The metadata block serialization consists of the following:
+ * struct {
+ *   uint8_t[32] encryptedCountersBlob;
+ *   uint8_t[32] tag;
+ *   uint8_t[32] encryptedZerosBlob;
+ * }
+ *
+ * Decryption of encryptedCountersBlob results in:
+ * struct {
+ *   uint64_t counter;
+ *   uint64_t contentionFactor;
+ * }
+ *
+ * Decryption of encryptedZerosBlob results in:
+ * struct {
+ *   uint8_t[16] zerosBlob;
+ * }
+ ','line_number':919,'multiline':True]
+['text':'
+     * Decrypts and returns only the zeros blob from the serialized
+     * FLE2TagAndEncryptedMetadataBlock in serializedBlock.
+     ','line_number':969,'multiline':True]
+['text':'*
+ * Class to read/write QE protocol version 2 of Equality Indexed
+ * Encrypted Values.
+ *
+ * Fields are encrypted with the following:
+ *
+ * struct {
+ *   uint8_t fle_blob_subtype = 14;
+ *   uint8_t key_uuid[16];
+ *   uint8_t original_bson_type;
+ *   ciphertext[ciphertext_length];
+ *   metadataBlock;
+ * }
+ * where ciphertext computed as:
+ *   Encrypt(ServerDataEncryptionLevel1Token, clientCiphertext)
+ * and metadataBlock is a serialized FLE2TagAndEncryptedMetadataBlock.
+ *
+ * The specification needs to be in sync with the validation in 'bson_validate.cpp'.
+ ','line_number':984,'multiline':True]
+['text':'*
+ * Class to read/write FLE2 Unindexed Encrypted Values (for protocol version 2)
+ *
+ * Fields are encrypted with the following:
+ *
+ * struct {
+ *   uint8_t fle_blob_subtype = 16;
+ *   uint8_t key_uuid[16];
+ *   uint8_t original_bson_type;
+ *   ciphertext[ciphertext_length];
+ * } blob;
+ *
+ * The specification needs to be in sync with the validation in 'bson_validate.cpp'.
+ ','line_number':1044,'multiline':True]
+['text':'
+     * The block cipher mode used with AES to encrypt/decrypt the value
+     ','line_number':1064,'multiline':True]
+['text':'
+     * The FLE type associated with this unindexed value
+     ','line_number':1069,'multiline':True]
+['text':'
+     * The size of the AAD used in AEAD encryption. The AAD consists of the fleType (1), the
+     * key UUID (16), and the BSON type of the value (1).
+     ','line_number':1075,'multiline':True]
+['text':'*
+ * Class to read/write QE protocol version 2 of Range Indexed
+ * Encrypted Values.
+ *
+ * Fields are encrypted with the following:
+ *
+ * struct {
+ *   uint8_t fle_blob_subtype = 15;
+ *   uint8_t key_uuid[16];
+ *   uint8_t original_bson_type;
+ *   uint8_t edge_count;
+ *   ciphertext[ciphertext_length];
+ *   vector of metadataBlocks;
+ * }
+ * where ciphertext computed as:
+ *   Encrypt(ServerDataEncryptionLevel1Token, clientCiphertext)
+ * and metadataBlock is a vector of serialized FLE2TagAndEncryptedMetadataBlock.
+ *
+ * The specification needs to be in sync with the validation in 'bson_validate.cpp'.
+ ','line_number':1088,'multiline':True]
+['text':'*
+ * Manipulates the EDC collection.
+ *
+ * To finalize a document for insertion
+ *
+ * 1. Get all the encrypted fields that need counters via getEncryptedFieldInfo()
+ * 2. Choose counters
+ * 3. Finalize the insertion with finalizeForInsert().
+ ','line_number':1190,'multiline':True]
+['text':'*
+     * Validate that payload is compatible with schema
+     ','line_number':1201,'multiline':True]
+['text':'*
+     * Validates that the on-disk encrypted values in the input document are
+     * compatible with the current QE protocol version.
+     * Used during updates to verify that the modified document's pre-image can be
+     * safely updated per the protocol compatibility rules.
+     ','line_number':1208,'multiline':True]
+['text':'*
+     * Get information about all FLE2InsertUpdatePayload payloads
+     ','line_number':1217,'multiline':True]
+['text':'*
+     * Generate a search tag
+     *
+     * HMAC(EDCTwiceDerivedToken, count)
+     ','line_number':1222,'multiline':True]
+['text':'*
+     * Generate all the EDC tokens
+     ','line_number':1232,'multiline':True]
+['text':'*
+     * Consumes a payload from a MongoDB client for insert.
+     *
+     * Converts FLE2InsertUpdatePayload to a final insert payload and updates __safeContent__ with
+     * new tags.
+     ','line_number':1240,'multiline':True]
+['text':'*
+     * Consumes a payload from a MongoDB client for update, modifier update style.
+     *
+     * Converts any FLE2InsertUpdatePayload found to the final insert payload. Adds or updates the
+     * the existing $push to add __safeContent__ tags.
+     ','line_number':1249,'multiline':True]
+['text':'*
+     * Generate an update modifier document with $pull to remove stale tags.
+     *
+     * Generates:
+     *
+     * { $pull : {__safeContent__ : {$in : [tag..] } } }
+     ','line_number':1258,'multiline':True]
+['text':'*
+     * Get a list of encrypted, indexed fields.
+     ','line_number':1267,'multiline':True]
+['text':'*
+     * Get a list of fields to remove.
+     *
+     * An update is performed in two steps:
+     * 1. Perform the update of the encrypted fields
+     *    - After step 1, the updated fields are correct, new tags have been added to
+     *    __safeContent__ but the __safeContent__ still contains stale tags.
+     * 2. Remove the old tags
+     *
+     * To do step 2, we need a list of removed tags. To do this we get a list of indexed encrypted
+     * fields in both and subtract the fields in the newDocument from originalDocument. The
+     * remaining fields are the ones we need to remove.
+     ','line_number':1272,'multiline':True]
+['text':'*
+     * Generates the list of stale tags that need to be removed on an update.
+     * This first calculates the set difference between the original document and
+     * the new document using getRemovedFields(), then acquires the tags for each of the
+     * fields left over. These are the tags that need to be removed from __safeContent__.
+     *
+     * This sorts the input vectors.
+     ','line_number':1289,'multiline':True]
+['text':'*
+     * Serialize EncryptedFieldConfig to a EncryptionInformation with
+     * EncryptionInformation.schema = { nss: EncryptedFieldConfig}
+     ','line_number':1304,'multiline':True]
+['text':'*
+     * Get a schema from EncryptionInformation and ensure the esc/ecc/ecoc are setup correctly.
+     ','line_number':1313,'multiline':True]
+['text':'*
+ * A parsed element in the compaction tokens BSON object from
+ * a compactStructuredEncryptionData command
+ ','line_number':1320,'multiline':True]
+['text':'*
+     * Converts the compaction tokens BSON object that contains encrypted
+     * field paths as the key, and ECOC tokens as the value, to a list of
+     * string and ECOCToken pairs.
+     ','line_number':1331,'multiline':True]
+['text':'*
+     * Validates the compaction tokens BSON contains an element for each field
+     * in the encrypted field config
+     ','line_number':1338,'multiline':True]
+['text':'*
+     * Validates the compaction tokens BSON contains an element for each field
+     * in the encrypted field config
+     ','line_number':1344,'multiline':True]
+['text':'*
+ * Split a ConstDataRange into a byte for EncryptedBinDataType and a ConstDataRange for the trailing
+ * bytes
+ *
+ * Verifies that EncryptedBinDataType is valid.
+ ','line_number':1354,'multiline':True]
+['text':' v2 fields','line_number':1367,'multiline':False]
+['text':'*
+ * FLE2 Range Utility functions
+ ','line_number':1376,'multiline':True]
+['text':'*
+ * Describe the encoding of an BSON int32
+ *
+ * NOTE: It is not a mistake that a int32 is encoded as uint32.
+ ','line_number':1380,'multiline':True]
+['text':'*
+ * Describe the encoding of an BSON int64
+ *
+ * NOTE: It is not a mistake that a int64 is encoded as uint64.
+ ','line_number':1397,'multiline':True]
+['text':'*
+ * Describe the encoding of an BSON double (i.e. IEEE 754 Binary64)
+ *
+ * NOTE: It is not a mistake that a double is encoded as uint64.
+ ','line_number':1415,'multiline':True]
+['text':'*
+ * Describe the encoding of an BSON Decimal (i.e. IEEE 754 Decimal128)
+ *
+ * NOTE: It is not a mistake that a decimal is encoded as uint128.
+ ','line_number':1432,'multiline':True]
+['text':'*
+ * Edges calculator
+ ','line_number':1483,'multiline':True]
+['text':'*
+ * Mincover calculator
+ ','line_number':1519,'multiline':True]
+['text':'*
+     * Compute HMAC-SHA-256
+     ','line_number':1562,'multiline':True]
+['text':'*
+     * Decrypt AES-256-CTR encrypted data. Exposed for benchmarking purposes.
+     ','line_number':1571,'multiline':True]
+['text':'*
+ * Utility functions manipulating buffers.
+ ','line_number':1578,'multiline':True]
+['text':'*
+ * Get the set of edges that minimally cover a range query specified by the given range spec and
+ * sparsity.jj
+ ','line_number':1606,'multiline':True]
+['text':' namespace mongo','line_number':1611,'multiline':False]

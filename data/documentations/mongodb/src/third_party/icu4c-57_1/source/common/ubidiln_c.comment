@@ -1,0 +1,342 @@
+['text':'
+******************************************************************************
+*
+*   Copyright (C) 1999-2015, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+******************************************************************************
+*   file name:  ubidiln.c
+*   encoding:   US-ASCII
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 1999aug06
+*   created by: Markus W. Scherer, updated by Matitiahu Allouche
+','line_number':1,'multiline':True]
+['text':'
+ * General remarks about the functions in this file:
+ *
+ * These functions deal with the aspects of potentially mixed-directional
+ * text in a single paragraph or in a line of a single paragraph
+ * which has already been processed according to
+ * the Unicode 6.3 BiDi algorithm as defined in
+ * http://www.unicode.org/unicode/reports/tr9/ , version 28,
+ * also described in The Unicode Standard, Version 6.3.0 .
+ *
+ * This means that there is a UBiDi object with a levels
+ * and a dirProps array.
+ * paraLevel and direction are also set.
+ * Only if the length of the text is zero, then levels==dirProps==NULL.
+ *
+ * The overall directionality of the paragraph
+ * or line is used to bypass the reordering steps if possible.
+ * Even purely RTL text does not need reordering there because
+ * the ubidi_getLogical/VisualIndex() functions can compute the
+ * index on the fly in such a case.
+ *
+ * The implementation of the access to same-level-runs and of the reordering
+ * do attempt to provide better performance and less memory usage compared to
+ * a direct implementation of especially rule (L2) with an array of
+ * one (32-bit) integer per text character.
+ *
+ * Here, the levels array is scanned as soon as necessary, and a vector of
+ * same-level-runs is created. Reordering then is done on this vector.
+ * For each run of text positions that were resolved to the same level,
+ * only 8 bytes are stored: the first text position of the run and the visual
+ * position behind the run after reordering.
+ * One sign bit is used to hold the directionality of the run.
+ * This is inefficient if there are many very short runs. If the average run
+ * length is <2, then this uses more memory.
+ *
+ * In a further attempt to save memory, the levels array is never changed
+ * after all the resolution rules (Xn, Wn, Nn, In).
+ * Many functions have to consider the field trailingWSStart:
+ * if it is less than length, then there is an implicit trailing run
+ * at the paraLevel,
+ * which is not reflected in the levels array.
+ * This allows a line UBiDi object to use the same levels array as
+ * its paragraph parent object.
+ *
+ * When a UBiDi object is created for a line of a paragraph, then the
+ * paragraph's levels and dirProps arrays are reused by way of setting
+ * a pointer into them, not by copying. This again saves memory and forbids to
+ * change the now shared levels for (L1).
+ ','line_number':25,'multiline':True]
+['text':' handle trailing WS (L1) -------------------------------------------------- ','line_number':75,'multiline':True]
+['text':'
+ * setTrailingWSStart() sets the start index for a trailing
+ * run of WS in the line. This is necessary because we do not modify
+ * the paragraph's levels array that we just point into.
+ * Using trailingWSStart is another form of performing (L1).
+ *
+ * To make subsequent operations easier, we also include the run
+ * before the WS if it is at the paraLevel - we merge the two here.
+ *
+ * This function is called only from ubidi_setLine(), so pBiDi->paraLevel is
+ * set correctly for the line even when contextual multiple paragraphs.
+ ','line_number':77,'multiline':True]
+['text':' pBiDi->direction!=UBIDI_MIXED ','line_number':91,'multiline':True]
+['text':' If the line is terminated by a block separator, all preceding WS etc...
+       are already set to paragraph level.
+       Setting trailingWSStart to pBidi->length will avoid changing the
+       level of B chars from 0 to paraLevel in ubidi_getLevels when
+       orderParagraphsLTR==TRUE.
+     ','line_number':98,'multiline':True]
+['text':' currently == pBiDi->length ','line_number':105,'multiline':True]
+['text':' go backwards across all WS, BN, explicit codes ','line_number':108,'multiline':True]
+['text':' if the WS run can be merged with the previous run then do so here ','line_number':113,'multiline':True]
+['text':' ubidi_setLine ------------------------------------------------------------ ','line_number':121,'multiline':True]
+['text':' check the argument values ','line_number':130,'multiline':True]
+['text':' the line crosses a paragraph boundary ','line_number':141,'multiline':True]
+['text':' set the values in pLineBiDi from its pParaBiDi parent ','line_number':146,'multiline':True]
+['text':' mark unfinished setLine ','line_number':147,'multiline':True]
+['text':' the parent is already trivial ','line_number':173,'multiline':True]
+['text':'
+         * The parent's levels are all either
+         * implicitly or explicitly ==paraLevel;
+         * do the same here.
+         ','line_number':176,'multiline':True]
+['text':' recalculate pLineBiDi->direction ','line_number':196,'multiline':True]
+['text':' all levels are at paraLevel ','line_number':198,'multiline':True]
+['text':' get the level of the first character ','line_number':201,'multiline':True]
+['text':' if there is anything of a different level, then the line is mixed ','line_number':204,'multiline':True]
+['text':' the trailing WS is at paraLevel, which differs from levels[0] ','line_number':206,'multiline':True]
+['text':' see if levels[1..trailingWSStart-1] have the same direction as levels[0] and paraLevel ','line_number':209,'multiline':True]
+['text':' the direction values match those in level ','line_number':213,'multiline':True]
+['text':' make sure paraLevel is even ','line_number':227,'multiline':True]
+['text':' all levels are implicitly at paraLevel (important for ubidi_getLevels()) ','line_number':230,'multiline':True]
+['text':' make sure paraLevel is odd ','line_number':234,'multiline':True]
+['text':' all levels are implicitly at paraLevel (important for ubidi_getLevels()) ','line_number':237,'multiline':True]
+['text':' mark successful setLine ','line_number':244,'multiline':True]
+['text':' return paraLevel if in the trailing WS run, otherwise the real level ','line_number':250,'multiline':True]
+['text':' the current levels array reflects the WS run ','line_number':271,'multiline':True]
+['text':'
+     * After the previous if(), we know that the levels array
+     * has an implicit trailing WS run and therefore does not fully
+     * reflect itself all the levels.
+     * This must be a UBiDi object for a line, and
+     * we need to create a new levels array.
+     ','line_number':275,'multiline':True]
+['text':' pBiDi->paraLevel is ok even if contextual multiple paragraphs,
+           since pBidi is a line object                                     ','line_number':288,'multiline':True]
+['text':' this new levels array is set for the line and reflects the WS run ','line_number':292,'multiline':True]
+['text':' out of memory ','line_number':296,'multiline':True]
+['text':' ubidi_countRuns will check VALID_PARA_OR_LINE ','line_number':311,'multiline':True]
+['text':' this is done based on runs rather than on levels since levels have
+       a special interpretation when UBIDI_REORDER_RUNS_ONLY
+     ','line_number':316,'multiline':True]
+['text':' runs API functions ------------------------------------------------------- ','line_number':347,'multiline':True]
+['text':' in trivial cases there is only one trivial run; called by ubidi_getRuns() ','line_number':388,'multiline':True]
+['text':' simple, single-run case ','line_number':391,'multiline':True]
+['text':' fill and reorder the single run ','line_number':395,'multiline':True]
+['text':' reorder the runs array (L2) ---------------------------------------------- ','line_number':401,'multiline':True]
+['text':'
+ * Reorder the same-level runs in the runs array.
+ * Here, runCount>1 and maxLevel>=minLevel>=paraLevel.
+ * All the visualStart fields=logical start before reordering.
+ * The "odd" bits are not set yet.
+ *
+ * Reordering with this data structure lends itself to some handy shortcuts:
+ *
+ * Since each run is moved but not modified, and since at the initial maxLevel
+ * each sequence of same-level runs consists of only one run each, we
+ * don't need to do anything there and can predecrement maxLevel.
+ * In many simple cases, the reordering is thus done entirely in the
+ * index mapping.
+ * Also, reordering occurs only down to the lowest odd level that occurs,
+ * which is minLevel|1. However, if the lowest level itself is odd, then
+ * in the last reordering the sequence of the runs at this level or higher
+ * will be all runs, and we don't need the elaborate loop to search for them.
+ * This is covered by ++minLevel instead of minLevel|=1 followed
+ * by an extra reorder-all after the reorder-some loop.
+ * About a trailing WS run:
+ * Such a run would need special treatment because its level is not
+ * reflected in levels[] if this is not a paragraph object.
+ * Instead, all characters from trailingWSStart on are implicitly at
+ * paraLevel.
+ * However, for all maxLevel>paraLevel, this run will never be reordered
+ * and does not need to be taken into account. maxLevel==paraLevel is only reordered
+ * if minLevel==paraLevel is odd, which is done in the extra segment.
+ * This means that for the main reordering loop we don't need to consider
+ * this run and can --runCount. If it is later part of the all-runs
+ * reordering, then runCount is adjusted accordingly.
+ ','line_number':403,'multiline':True]
+['text':' nothing to do? ','line_number':440,'multiline':True]
+['text':'
+     * Reorder only down to the lowest odd level
+     * and reorder at an odd minLevel in a separate, simpler loop.
+     * See comments above for why minLevel is always incremented.
+     ','line_number':445,'multiline':True]
+['text':' do not include the WS run at paraLevel<=old minLevel except in the simple loop ','line_number':456,'multiline':True]
+['text':' loop for all sequences of runs ','line_number':464,'multiline':True]
+['text':' look for a sequence of runs that are all at >=maxLevel ','line_number':466,'multiline':True]
+['text':' look for the first run of such a sequence ','line_number':467,'multiline':True]
+['text':' no more such runs ','line_number':472,'multiline':True]
+['text':' look for the limit run of such a sequence (the run behind it) ','line_number':475,'multiline':True]
+['text':' Swap the entire sequence of runs from firstRun to limitRun-1. ','line_number':478,'multiline':True]
+['text':' no more such runs ','line_number':489,'multiline':True]
+['text':' now do maxLevel==old minLevel (==odd!), see above ','line_number':496,'multiline':True]
+['text':' include the trailing WS run in this complete reordering ','line_number':500,'multiline':True]
+['text':' Swap the entire sequence of all runs. (endRun==runCount) ','line_number':505,'multiline':True]
+['text':' compute the runs array --------------------------------------------------- ','line_number':516,'multiline':True]
+['text':' we should never get here ','line_number':530,'multiline':True]
+['text':'
+ * Compute the runs array from the levels array.
+ * After ubidi_getRuns() returns TRUE, runCount is guaranteed to be >0
+ * and the runs are reordered.
+ * Odd-level runs have visualStart on their visual right edge and
+ * they progress visually to the left.
+ * If option UBIDI_OPTION_INSERT_MARKS is set, insertRemove will contain the
+ * sum of appropriate LRM/RLM_BEFORE/AFTER flags.
+ * If option UBIDI_OPTION_REMOVE_CONTROLS is set, insertRemove will contain the
+ * negative number of BiDi control characters within this run.
+ ','line_number':536,'multiline':True]
+['text':'
+     * This method returns immediately if the runs are already set. This
+     * includes the case of length==0 (handled in setPara)..
+     ','line_number':549,'multiline':True]
+['text':' simple, single-run case - this covers length==0 ','line_number':558,'multiline':True]
+['text':' pBiDi->paraLevel is ok even for contextual multiple paragraphs ','line_number':559,'multiline':True]
+['text':' UBIDI_MIXED, length>0 ','line_number':561,'multiline':True]
+['text':' mixed directionality ','line_number':562,'multiline':True]
+['text':' initialize with no valid level ','line_number':566,'multiline':True]
+['text':'
+         * If there are WS characters at the end of the line
+         * and the run preceding them has a level different from
+         * paraLevel, then they will form their own run at paraLevel (L1).
+         * Count them separately.
+         * We need some special treatment for this in order to not
+         * modify the levels array which a line UBiDi object shares
+         * with its paragraph parent and its other line siblings.
+         * In other words, for the trailing WS, it may be
+         * levels[]!=paraLevel but we have to treat it like it were so.
+         ','line_number':567,'multiline':True]
+['text':' count the runs, there is at least one non-WS run, and limit>0 ','line_number':579,'multiline':True]
+['text':' increment runCount at the start of each run ','line_number':582,'multiline':True]
+['text':'
+         * We don't need to see if the last run can be merged with a trailing
+         * WS run because setTrailingWSStart() would have done that.
+         ','line_number':589,'multiline':True]
+['text':' There is only one non-WS run and no trailing WS-run. ','line_number':594,'multiline':True]
+['text':' runCount>1 || limit<length ','line_number':596,'multiline':True]
+['text':' allocate and set the runs ','line_number':597,'multiline':True]
+['text':' now, count a (non-mergeable) WS run ','line_number':602,'multiline':True]
+['text':' runCount>1 ','line_number':607,'multiline':True]
+['text':' set the runs ','line_number':614,'multiline':True]
+['text':' FOOD FOR THOUGHT: this could be optimized, e.g.:
+             * 464->444, 484->444, 575->555, 595->555
+             * However, that would take longer. Check also how it would
+             * interact with BiDi control removal and inserting Marks.
+             ','line_number':615,'multiline':True]
+['text':' search for the run limits and initialize visualLimit values with the run lengths ','line_number':622,'multiline':True]
+['text':' prepare this run ','line_number':625,'multiline':True]
+['text':' look for the run limit ','line_number':635,'multiline':True]
+['text':' i is another run limit ','line_number':638,'multiline':True]
+['text':' there is a separate WS run ','line_number':646,'multiline':True]
+['text':' For the trailing WS run, pBiDi->paraLevel is ok even
+                   if contextual multiple paragraphs.                   ','line_number':649,'multiline':True]
+['text':' set the object fields ','line_number':656,'multiline':True]
+['text':' now add the direction flags and adjust the visualLimit's to be just that ','line_number':662,'multiline':True]
+['text':' this loop will also handle the trailing WS run ','line_number':663,'multiline':True]
+['text':' Set the "odd" bit for the trailing WS run. ','line_number':671,'multiline':True]
+['text':' For a RTL paragraph, it will be the *first* run in visual order. ','line_number':672,'multiline':True]
+['text':' For the trailing WS run, pBiDi->paraLevel is ok even if
+               contextual multiple paragraphs.                          ','line_number':673,'multiline':True]
+['text':' handle insert LRM/RLM BEFORE/AFTER run ','line_number':683,'multiline':True]
+['text':' handle remove BiDi control characters ','line_number':694,'multiline':True]
+['text':' determine minLevel and maxLevel ','line_number':720,'multiline':True]
+['text':' initialize the index map ','line_number':738,'multiline':True]
+['text':' reorder a line based on a levels array (L2) ------------------------------ ','line_number':747,'multiline':True]
+['text':' nothing to do? ','line_number':758,'multiline':True]
+['text':' reorder only down to the lowest odd level ','line_number':763,'multiline':True]
+['text':' loop maxLevel..minLevel ','line_number':766,'multiline':True]
+['text':' loop for all sequences of levels to reorder at the current maxLevel ','line_number':770,'multiline':True]
+['text':' look for a sequence of levels that are all at >=maxLevel ','line_number':772,'multiline':True]
+['text':' look for the first index of such a sequence ','line_number':773,'multiline':True]
+['text':' no more such sequences ','line_number':778,'multiline':True]
+['text':' look for the limit of such a sequence (the index behind it) ','line_number':781,'multiline':True]
+['text':'
+             * sos=start of sequence, eos=end of sequence
+             *
+             * The closed (inclusive) interval from sos to eos includes all the logical
+             * and visual indexes within this sequence. They are logically and
+             * visually contiguous and in the same range.
+             *
+             * For each run, the new visual index=sos+eos-old visual index;
+             * we pre-add sos+eos into sumOfSosEos ->
+             * new visual index=sumOfSosEos-old visual index;
+             ','line_number':784,'multiline':True]
+['text':' reorder each index in the sequence ','line_number':797,'multiline':True]
+['text':' start==limit ','line_number':802,'multiline':True]
+['text':' no more such sequences ','line_number':804,'multiline':True]
+['text':' nothing to do? ','line_number':821,'multiline':True]
+['text':' reorder only down to the lowest odd level ','line_number':826,'multiline':True]
+['text':' loop maxLevel..minLevel ','line_number':829,'multiline':True]
+['text':' loop for all sequences of levels to reorder at the current maxLevel ','line_number':833,'multiline':True]
+['text':' look for a sequence of levels that are all at >=maxLevel ','line_number':835,'multiline':True]
+['text':' look for the first index of such a sequence ','line_number':836,'multiline':True]
+['text':' no more such runs ','line_number':841,'multiline':True]
+['text':' look for the limit of such a sequence (the index behind it) ','line_number':844,'multiline':True]
+['text':'
+             * Swap the entire interval of indexes from start to limit-1.
+             * We don't need to swap the levels for the purpose of this
+             * algorithm: the sequence of levels that we look at does not
+             * move anyway.
+             ','line_number':847,'multiline':True]
+['text':' no more such sequences ','line_number':864,'multiline':True]
+['text':' API functions for logical<->visual mapping ------------------------------- ','line_number':872,'multiline':True]
+['text':' we can do the trivial cases without the runs array ','line_number':881,'multiline':True]
+['text':' linear search for the run, search on the visual runs ','line_number':897,'multiline':True]
+['text':' LTR ','line_number':903,'multiline':True]
+['text':' RTL ','line_number':906,'multiline':True]
+['text':' exit for loop ','line_number':909,'multiline':True]
+['text':' add the number of added marks until the calculated visual index ','line_number':920,'multiline':True]
+['text':' is it the run containing the visual index? ','line_number':930,'multiline':True]
+['text':' subtract the number of controls until the calculated visual index ','line_number':940,'multiline':True]
+['text':' is the logical index pointing to a control ? ','line_number':945,'multiline':True]
+['text':' loop on runs ','line_number':949,'multiline':True]
+['text':' calculated visual index is beyond this run? ','line_number':953,'multiline':True]
+['text':' calculated visual index must be within current run ','line_number':958,'multiline':True]
+['text':' LTR: check from run start to logical index ','line_number':963,'multiline':True]
+['text':' RTL: check from logical index to run end ','line_number':967,'multiline':True]
+['text':' we can do the trivial cases without the runs array ','line_number':991,'multiline':True]
+['text':' handle inserted LRM/RLM ','line_number':1008,'multiline':True]
+['text':' subtract number of marks until visual index ','line_number':1012,'multiline':True]
+['text':' is adjusted visual index within this run? ','line_number':1022,'multiline':True]
+['text':' handle removed BiDi control characters ','line_number':1036,'multiline':True]
+['text':' add number of controls until visual index ','line_number':1041,'multiline':True]
+['text':' is adjusted visual index beyond current run? ','line_number':1045,'multiline':True]
+['text':' adjusted visual index is within current run ','line_number':1050,'multiline':True]
+['text':' count non-control chars until visualIndex ','line_number':1055,'multiline':True]
+['text':' handle all cases ','line_number':1074,'multiline':True]
+['text':' linear search for the run ','line_number':1076,'multiline':True]
+['text':' binary search for the run ','line_number':1079,'multiline':True]
+['text':' the middle if() is guaranteed to find the run, we don't need a loop limit ','line_number':1082,'multiline':True]
+['text':' LTR ','line_number':1097,'multiline':True]
+['text':' the offset in runs[i] is visualIndex-runs[i-1].visualLimit ','line_number':1098,'multiline':True]
+['text':' RTL ','line_number':1104,'multiline':True]
+['text':' ubidi_countRuns() checks for VALID_PARA_OR_LINE ','line_number':1112,'multiline':True]
+['text':' no op ','line_number':1115,'multiline':True]
+['text':' fill a logical-to-visual index map using the runs[] ','line_number':1119,'multiline':True]
+['text':' LTR ','line_number':1135,'multiline':True]
+['text':' logicalLimit ','line_number':1139,'multiline':True]
+['text':' RTL ','line_number':1140,'multiline':True]
+['text':' visualStart==visualLimit; ','line_number':1144,'multiline':True]
+['text':' add number of marks found until each index ','line_number':1151,'multiline':True]
+['text':' subtract number of controls found until each index ','line_number':1176,'multiline':True]
+['text':' no control found within previous runs nor within this run ','line_number':1180,'multiline':True]
+['text':' if no control within this run ','line_number':1188,'multiline':True]
+['text':' ubidi_countRuns() checks for VALID_PARA_OR_LINE ','line_number':1217,'multiline':True]
+['text':' fill a visual-to-logical index map using the runs[] ','line_number':1220,'multiline':True]
+['text':' LTR ','line_number':1232,'multiline':True]
+['text':' logicalLimit ','line_number':1237,'multiline':True]
+['text':' RTL ','line_number':1238,'multiline':True]
+['text':' visualStart==visualLimit; ','line_number':1242,'multiline':True]
+['text':' count all inserted marks ','line_number':1249,'multiline':True]
+['text':' move back indexes by number of preceding marks ','line_number':1259,'multiline':True]
+['text':' move forward indexes by number of preceding controls ','line_number':1284,'multiline':True]
+['text':' if no control found yet, nothing to do in this run ','line_number':1289,'multiline':True]
+['text':' if no control in this run ','line_number':1294,'multiline':True]
+['text':' find highest value and count positive indexes in srcMap ','line_number':1323,'multiline':True]
+['text':' add 1 for origin 0 ','line_number':1333,'multiline':True]
+['text':' we must fill unmatched destMap entries with -1 ','line_number':1335,'multiline':True]

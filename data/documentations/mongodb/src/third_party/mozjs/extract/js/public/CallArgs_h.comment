@@ -1,0 +1,132 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':'
+ * [SMDOC] JS::CallArgs API
+ *
+ * Helper classes encapsulating access to the callee, |this| value, arguments,
+ * and argument count for a call/construct operation.
+ *
+ * JS::CallArgs encapsulates access to a JSNative's un-abstracted
+ * |unsigned argc, Value* vp| arguments.  The principal way to create a
+ * JS::CallArgs is using JS::CallArgsFromVp:
+ *
+ *   // If provided no arguments or a non-numeric first argument, return zero.
+ *   // Otherwise return |this| exactly as given, without boxing.
+ *   static bool
+ *   Func(JSContext* cx, unsigned argc, JS::Value* vp)
+ *   {
+ *       JS::CallArgs args = JS::CallArgsFromVp(argc, vp);
+ *
+ *       // Guard against no arguments or a non-numeric arg0.
+ *       if (args.length() == 0 || !args[0].isNumber()) {
+ *           args.rval().setInt32(0);
+ *           return true;
+ *       }
+ *
+ *       // Access to the callee must occur before accessing/setting
+ *       // the return value.
+ *       JSObject& callee = args.callee();
+ *       args.rval().setObject(callee);
+ *
+ *       // callee() and calleev() will now assert.
+ *
+ *       // It's always fine to access thisv().
+ *       HandleValue thisv = args.thisv();
+ *       args.rval().set(thisv);
+ *
+ *       // As the return value was last set to |this|, returns |this|.
+ *       return true;
+ *   }
+ *
+ * CallArgs is exposed publicly and used internally.  Not all parts of its
+ * public interface are meant to be used by embedders!  See inline comments to
+ * for details.
+ *
+ * It's possible (albeit deprecated) to manually index into |vp| to access the
+ * callee, |this|, and arguments of a function, and to set its return value.
+ * This does not have the error-handling or moving-GC correctness of CallArgs.
+ * New code should use CallArgs instead whenever possible.
+ *
+ * The eventual plan is to change JSNative to take |const CallArgs&| directly,
+ * for automatic assertion of correct use and to make calling functions more
+ * efficient.  Embedders should start internally switching away from using
+ * |argc| and |vp| directly, except to create a |CallArgs|.  Then, when an
+ * eventual release making that change occurs, porting efforts will require
+ * changing methods' signatures but won't require invasive changes to the
+ * methods' implementations, potentially under time pressure.
+ ','line_number':7,'multiline':True]
+['text':' Typedef for native functions called by the JS VM. ','line_number':76,'multiline':True]
+['text':'
+ * Compute |this| for the |vp| inside a JSNative, either boxing primitives or
+ * replacing with the global object as necessary.
+ ','line_number':85,'multiline':True]
+['text':' True if the caller does not use the return value.','line_number':125,'multiline':False]
+['text':' CALLEE ACCESS','line_number':142,'multiline':False]
+['text':'
+   * Returns the function being called, as a value.  Must not be called after
+   * rval() has been used!
+   ','line_number':144,'multiline':True]
+['text':'
+   * Returns the function being called, as an object.  Must not be called
+   * after rval() has been used!
+   ','line_number':153,'multiline':True]
+['text':' CALLING/CONSTRUCTING-DIFFERENTIATIONS','line_number':159,'multiline':False]
+['text':'
+   * Returns the |this| value passed to the function.  This method must not
+   * be called when the function is being called as a constructor via |new|.
+   * The value may or may not be an object: it is the individual function's
+   * responsibility to box the value if needed.
+   ','line_number':182,'multiline':True]
+['text':' Some internal code uses thisv() in constructing cases, so don't do','line_number':189,'multiline':False]
+['text':' this yet.','line_number':190,'multiline':False]
+['text':' MOZ_ASSERT(!argv_[-1].isMagic(JS_IS_CONSTRUCTING));','line_number':191,'multiline':False]
+['text':' ARGUMENTS','line_number':204,'multiline':False]
+['text':' Returns the number of arguments. ','line_number':206,'multiline':True]
+['text':' Returns the i-th zero-indexed argument. ','line_number':209,'multiline':True]
+['text':'
+   * Returns the i-th zero-indexed argument, or |undefined| if there's no
+   * such argument.
+   ','line_number':215,'multiline':True]
+['text':'
+   * Returns true if the i-th zero-indexed argument is present and is not
+   * |undefined|.
+   ','line_number':224,'multiline':True]
+['text':' RETURN VALUE','line_number':232,'multiline':False]
+['text':'
+   * Returns the currently-set return value.  The initial contents of this
+   * value are unspecified.  Once this method has been called, callee() and
+   * calleev() can no longer be used.  (If you're compiling against a debug
+   * build of SpiderMonkey, these methods will assert to aid debugging.)
+   *
+   * If the method you're implementing succeeds by returning true, you *must*
+   * set this.  (SpiderMonkey doesn't currently assert this, but it will do
+   * so eventually.)  You don't need to use or change this if your method
+   * fails.
+   ','line_number':234,'multiline':True]
+['text':'
+   * Returns true if there are at least |required| arguments passed in. If
+   * false, it reports an error message on the context.
+   ','line_number':250,'multiline':True]
+['text':' These methods are publicly exposed, but they are *not* to be used when','line_number':258,'multiline':False]
+['text':' implementing a JSNative method and encapsulating access to |vp| within','line_number':259,'multiline':False]
+['text':' it.  You probably don't want to use these!','line_number':260,'multiline':False]
+['text':' These methods are publicly exposed, but we're unsure of the interfaces','line_number':274,'multiline':False]
+['text':' (because they're hackish and drop assertions).  Avoid using these if you','line_number':275,'multiline':False]
+['text':' can.','line_number':276,'multiline':False]
+['text':' These methods are only intended for internal use.  Embedders shouldn't','line_number':282,'multiline':False]
+['text':' use them!','line_number':283,'multiline':False]
+['text':' namespace detail','line_number':293,'multiline':False]
+['text':'
+   * Helper for requireAtLeast to report the actual exception.  Public
+   * so we can call it from CallArgsBase and not need multiple
+   * per-template instantiations of it.
+   ','line_number':321,'multiline':True]
+['text':' namespace detail','line_number':343,'multiline':False]
+['text':' This method is only intended for internal use in SpiderMonkey.  We may','line_number':349,'multiline':False]
+['text':' eventually move it to an internal header.  Embedders should use','line_number':350,'multiline':False]
+['text':' JS::CallArgsFromVp!','line_number':351,'multiline':False]
+['text':' namespace JS','line_number':359,'multiline':False]
+['text':' js_CallArgs_h ','line_number':361,'multiline':True]

@@ -1,0 +1,288 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]
+['text':' 
+** The DPML supports two different varieties of the power function: one for
+** which 0^0 and (-x)^integer are exceptions (fortran semantics) and one for
+** which 0^0 is 1 and (-x)^integer is computed as if by successive
+** multiplications (C semantics).  Both of these routines call a common
+** interface routine which unpacks the unpacks the argument and performs any
+** necessary argument screening.  The common interface routine then calls an
+** evaluation routine to actually compute the function result.
+** 
+** 
+** BASIC ALGORITHM
+** ---------------
+** 
+** The power function x^y is computed as 2^[y*log2(x)].  The key point in the
+** algorithm is to insure a sufficient number of accurate bits in the product
+** y*log2(x) to guarantee the accuracy of the final result.  In particular,
+** if we write:
+** 
+** 		y*log2(x) = I + h	|h| < 1/2		(1)
+** 
+** Then
+** 
+** 		x^y = 2^[y*log2(x)]
+** 		    = 2^(I + h)
+** 		    = (2^I)*(2^h)
+** 
+** Since the multiplication by 2^I can be done by incrementing the exponent
+** field of 2^h, the basic design criteria is to insure a sufficient number
+** of bits in h.  For this design, we would like h to have 7 guard bits.  That
+** means we want the total number of good bits in h to be about 120.  Since I
+** can contain as many as 14 bits, this means that y*log(x) must contain at
+** least 134 good bits.  This of course is a problem, because the unpacked
+** format only has 128 fraction bits.  The approach we take is to represent
+** log2(x) in high and low pieces.
+','line_number':38,'multiline':True]
+['text':'
+** UX_POW is the common evaluation routine for the both the fortran and C
+** power functions.  It assumes that all exceptional arguments, except those
+** that might cause overflow or underflow, have been screened out.
+','line_number':76,'multiline':True]
+['text':' 
+    ** COMPUTING LOG IN HI AND LOW PIECES
+    ** -----------------------------------
+    ** 
+    ** Given x = 2^n*g, where 1/sqrt(2) <= g < sqrt(2), we can compute log2(x)
+    ** as:
+    ** 		     2(g - 1)		     2
+    ** 		z = ----------		w = z
+    ** 		    (g + 1)ln2
+    ** 		                                      2k
+    ** 		                    __Inf [z*ln2/2)^2]
+    ** 		log2(x) = n +   z   >     -------------
+    ** 		                   /__k=0    (2k+1)
+    ** 
+    ** 		                    
+    ** 		log2(x) ~ n +  z + z^3*p(z^2) 
+    ** 
+    ** 
+    ** Letting z = z_hi + z_lo, then we can write
+    ** 
+    ** 		log2(x) ~ n + (z_hi + z_lo) + z*w*p(w) 
+    ** 		        = (n + z_hi) + (z_lo + z*w*p(w))
+    ** 		        = L_hi + L_lo.				(3)
+    ** 
+    ** The trick here is to define z_hi, so that n + z_hi is exactly
+    ** representable in one digit.  This involves computing z to extended
+    ** precision which is a fairly complicated process.  We begin by 
+    ** putting x in th form x = 2^n*g where 1/sqrt(2) < g <= sqrt(2)
+    ','line_number':95,'multiline':True]
+['text':' 
+    ** In preporation for computing z_hi and z_lo, we compute z as
+    ** 
+    ** 		t0 <-- g + 1
+    ** 		t1 <-- g - 1
+    ** 		r <-- 2/(t0*ln2)
+    ** 		z <-- t1*r
+    **
+    ** At this point, we can also compute the polynomial, z^3*p(z^2)
+    ','line_number':131,'multiline':True]
+['text':'
+    ** If the binary exponent of z is i, the binary exponent of n is j, and k
+    ** is the number of bits in a fraction digit, then we want to take the high
+    ** k-(j-i) bits of z and combine them with n to create log2_hi.  If n is
+    ** zero, just take log2_hi to be the high k bits of z.  We denote the
+    ** high bits of z used to make log2_hi as integer, Z and let z_hi = 2^i*Z/K,
+    ** where K = 2^k.
+    **
+    ** Get the necessary bits of z and compute n + high bits of z as the
+    ** integer LOG2_HI
+    ','line_number':147,'multiline':True]
+['text':' n != 0, convert n to unpacked ','line_number':167,'multiline':True]
+['text':' Take high bits from z ','line_number':175,'multiline':True]
+['text':'
+    ** Compute log2_lo = z^3*p(z)
+    ','line_number':189,'multiline':True]
+['text':'
+    ** If we denote the k most significant digit of ln2/2 as L (i.e.
+    ** ln2/2 ~ L/(2*K)),
+    ** then we can define
+    ** 
+    ** 		LO(ln2/2) = ln2/2 - L/(2*K)
+    ** 
+    ** Then we can obtain an approximation to z_lo by:
+    ** 
+    ** 	z_lo = z - z_hi
+    ** 	     = t1/[t0*(ln2/2)] - z_hi 
+    ** 	     = (t1 - t0*(ln2/2)*z_hi)/[t0*(ln2/2)]
+    ** 	     = { t1 - t0*[L/(2*K) + LO(ln2/2)]*z_hi }/[t0*(ln2/2)]
+    ** 	     = { t1 - t0*[2^(i-1)*(L*Z)/K^2 + LO(ln2/2)*z_hi}/[t0*(ln2/2)]
+    ** 	     = { t1 - t0*[2^(i-1)*L*Z/K^2 + t0*z_hi*LO(ln2/2)] }/[t0*(ln2/2)]
+    **
+    ** We now define
+    **
+    ** 		u = 2^(i-1)*(L*Z)/K^2
+    ** 
+    ** So that z_lo can now be written as;
+    **
+    ** 	z_lo = { t1 - t0*[(2^i)*L*Z/K^2 + t0*z_hi*LO(ln2/2)] }/[t0*(ln2/2)]
+    ** 	     = [ t1 - t0*( u + t0*z_hi*LO(ln2/2)) ]/[t0*(ln2/2)]
+    ** 	     = [ (t1 - t0*u) - t0*z_hi*LO(ln2/2)]/[t0*(ln2/2)]
+    ** 	     = (t1 - t0*u)/[t0*(ln2/2)] - t0*z_hi*LO(ln2/2)/[t0*(ln2/2)]
+    ** 	     = (t1 - t0*u)*r - z_hi*LO(ln2/2)/(ln2/2) 
+    ** 	     = (t1 - t0*u)*r - z_hi*2*LO(ln2)/ln2
+    **
+    ** With some care taken to prevent a loss of significance when computing
+    ** t1 - t0*u.
+    ','line_number':203,'multiline':True]
+['text':'
+        ** We used some bits from Z so compute z_lo and add it to
+        ** log2_lo.  Start the computation by getting u equal to the
+        ** the high part of z*ln2 = 2^(i-1)*Z*L/K^2, also create z_hi
+        ** in unpacked format
+        ','line_number':238,'multiline':True]
+['text':'
+        ** Compute t1 - t0*u carefully by using the extended multiply 
+        **
+        ** The value of z_lo is actually computed into the location
+	** z so we can handle the Z = 0 (i.e. z_lo = z) case in the
+        ** main flow
+        ','line_number':251,'multiline':True]
+['text':'
+        ** Now compute = (t0 - t1*u)*r - z_hi*(ln2_lo/ln2) into the same
+        ** location as z.  This way the add for the Z == 0 and != 0 cases
+        ** join up for the last add.
+        ','line_number':263,'multiline':True]
+['text':'
+    ** Compute I = rint(y*log2(x)) and h = y*log2(x) - I.  Start
+    ** by obtaining I from y*log2_hi.
+    **
+    ** When x is very close to 1 and |y| is large, the current value
+    ** of log2_hi doesn't have a enough significant bits to compute
+    ** I.  So before we start, we take some of the high bits of log2_lo
+    ** and put them in log2_hi
+    ','line_number':276,'multiline':True]
+['text':'
+    ** Now that there are enough bits in log2_hi, compute I from the
+    ** product of y*log2_hi.  In the process, screen for outrageous overflow
+    ** or underflow and create an unpacked form of log2_hi for future use.
+    ','line_number':297,'multiline':True]
+['text':'
+    ** Get I by multiplying the high digit of y with LOG2_HI and rounding
+    ** to the nearest integer.  We compute y*log2_hi(x) here so it can be
+    ** shared with the code for I = 0 and I != 0 
+    ','line_number':308,'multiline':True]
+['text':' A carry out occurred on the increment ','line_number':328,'multiline':True]
+['text':'
+        ** Now we need to compute
+        **
+        **		h = y*log2(x) - I
+        **		  = y*[log2_hi(x) + log2_lo(x)] - I
+        **		  = [y*log2_hi(x) - I] + y*log2_lo(x)
+        **
+        ** for I != 0.
+        ','line_number':334,'multiline':True]
+['text':'
+    ** Evaluate 2^h and do scaling
+    ','line_number':352,'multiline':True]
+['text':'
+** C_UX_POW is the common interface routine is responsible for unpacking the
+** arguments and processing exceptional input.  A big part of the exceptional
+** input processing is the definition and accessing of the class-to-action
+** array. However, there are two sets of exceptional cases that are not handled
+** by the UNPACK routines.  They are:
+** 
+** 	(1) x is +/- Normal and y is +/- Infinity
+** 	(2) x is -Normal or -Denormal and y is +/- Normal.
+** 
+** In the first case, we need to determine is |x| is less than, equal or
+** greater than 1 and return 0, INVALID or Infinity respectively.  In the
+** second case, we need to determine if y is an integer.  If not, signal
+** invalid.  Otherwise, compute |x|^y and set the sign of the result according
+** to the parity of y.
+','line_number':377,'multiline':True]
+['text':'
+    ** Initialize unpacked result to underflow.  We will use
+    ** the underflow logic in the pack routine to report errors
+    ** detected here.  Also initialize error codes
+    ','line_number':412,'multiline':True]
+['text':' Unpack x and y ','line_number':423,'multiline':True]
+['text':'
+    ** OK, now we need to screen for the two sets of exceptional
+    ** cases not covered by the class to action mappings.
+    ','line_number':437,'multiline':True]
+['text':' y was not an integer ','line_number':471,'multiline':True]
+['text':'
+** UX_EXP2 is the internal routine that evaluates exp2 = 2^x.
+**
+** First, screen for certain overflow and underflow (expon > F_EXP_WIDTH + 3)
+** and for tiny x's where 2^x ~ 1 (exponent < -F_PRECISION).  Then, isolate
+** any integer part I of x (exponent will be > 0), convert it to UX and 
+** subtract from x.  Use the rational approx of 2^f from the pow code.
+** Finally, add (signed) I to the exponent of the result.
+** 
+','line_number':562,'multiline':True]
+['text':' exponent > 18 , definite overflow or underflow ','line_number':594,'multiline':True]
+['text':' x is close to 0, just return 1 ','line_number':600,'multiline':True]
+['text':' A carry out occurred on the increment ','line_number':621,'multiline':True]
+['text':'
+** F_EXP2_NAME is the user level packed x-float routine
+','line_number':650,'multiline':True]
+['text':'
+    ** As previously noted, not all of the error cases can be encoded in the
+    ** class to action mapping.  For these cases, we return unpacked results
+    ** and left C_UX_POW figure out what to do.
+    ','line_number':699,'multiline':True]
+['text':' Index 0: for x, just unpack and get fp_class  ','line_number':708,'multiline':True]
+['text':' Index 1: Class to index map ','line_number':712,'multiline':True]
+['text':' Index 2: mapping for y when x is SNaN  ','line_number':726,'multiline':True]
+['text':' Index 3: mapping for y when x is QNaN ','line_number':740,'multiline':True]
+['text':' Index 4: mapping for y when x is +Inf  ','line_number':754,'multiline':True]
+['text':' Index 5: mapping for y when x is -Inf  ','line_number':768,'multiline':True]
+['text':' Index 6: mapping for y when x is +Norm  ','line_number':781,'multiline':True]
+['text':' Index 7: mapping for y when x is -Norm  ','line_number':791,'multiline':True]
+['text':' Index 8: mapping for y when x is +Denorm  ','line_number':801,'multiline':True]
+['text':' Index 9: mapping for y when x is -Denorm  ','line_number':813,'multiline':True]
+['text':' Index 10: mapping for y when x is +Zero  ','line_number':825,'multiline':True]
+['text':' Index 11: mapping for y when x is -Zero  ','line_number':839,'multiline':True]
+['text':' data 1 ','line_number':853,'multiline':True]
+['text':' data 2 ','line_number':854,'multiline':True]
+['text':' data 3 ','line_number':855,'multiline':True]
+['text':' data 4 ','line_number':856,'multiline':True]
+['text':' data 5 ','line_number':857,'multiline':True]
+['text':' data 6 ','line_number':858,'multiline':True]
+['text':' Index 0: for x ','line_number':864,'multiline':True]
+['text':' Index 1: Index map for unpacking y ','line_number':870,'multiline':True]
+['text':' Index 2: mapping for y when x is negative and not zero  ','line_number':883,'multiline':True]
+['text':' Index 3: mapping for y when x is +Inf  ','line_number':897,'multiline':True]
+['text':' Index 4: mapping for y when x is +Norm  ','line_number':911,'multiline':True]
+['text':' Index 5: mapping for y when x is +Denorm  ','line_number':921,'multiline':True]
+['text':' Index 6: mapping for y when x is +Zero  ','line_number':933,'multiline':True]
+['text':' Index 7: mapping for y when x is -Zero  ','line_number':947,'multiline':True]
+['text':' Data  1 ','line_number':962,'multiline':True]
+['text':' Data  2 ','line_number':963,'multiline':True]
+['text':' Data  3 ','line_number':964,'multiline':True]
+['text':' Data  4 ','line_number':965,'multiline':True]
+['text':' Data  5 ','line_number':966,'multiline':True]
+['text':' Data  6 ','line_number':967,'multiline':True]
+['text':' data 1 ','line_number':985,'multiline':True]
+['text':' data 2 ','line_number':986,'multiline':True]
+['text':' data 3 ','line_number':987,'multiline':True]

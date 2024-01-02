@@ -1,0 +1,297 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *  All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':' This rounds down to the chunk boundary. ','line_number':19,'multiline':True]
+['text':'
+ * __chunkcache_bitmap_find_free --
+ *     Iterate through the bitmap to find a free chunk in the cache.
+ ','line_number':23,'multiline':True]
+['text':' The bitmap size accounts for full bytes only, remainder bits are iterated separately. ','line_number':36,'multiline':True]
+['text':' Iterate through the bytes and bits of the bitmap to find free chunks. ','line_number':39,'multiline':True]
+['text':' If the number of chunks isn't divisible by 8, iterate through the remaining bits. ','line_number':53,'multiline':True]
+['text':'
+ * __set_bit_index --
+ *     Allocate a specific bit from the chunk usage bitmap.
+ ','line_number':63,'multiline':True]
+['text':' Bit index should be less than the maximum number of chunks that can be allocated. ','line_number':75,'multiline':True]
+['text':'
+ * __chunkcache_bitmap_alloc --
+ *     Find a free slot in the allocation bitmap, reserve it, and hand it back to the caller.
+ ','line_number':88,'multiline':True]
+['text':'
+     * We don't need to bound the retry attempts - if we have to retry long enough, eventually we'll
+     * stop finding free slots in the bitmap and say we're out of space.
+     ','line_number':97,'multiline':True]
+['text':'
+ * __chunkcache_bitmap_free --
+ *     Free the bit index. This can get called while (e.g.) handling errors before we finish
+ *     completely setting up a chunk, so we can't be too picky about expecting the bit to already be
+ *     set when we're called. If it magically gets unset (or is unset when called), that's fine.
+ ','line_number':108,'multiline':True]
+['text':'
+ * __chunkcache_drop_queued_work --
+ *     Pop items off the head of the metadata read/write queue (i.e. oldest first). Intended for
+ *     cases where the queue is getting too long, indicating the consumer thread is behind.
+ ','line_number':130,'multiline':True]
+['text':'
+ * __chunkcache_metadata_queue_internal --
+ *     Allocate an entry, populate it, and insert it into the queue of chunks to write to chunk
+ *     cache metadata.
+ ','line_number':154,'multiline':True]
+['text':'
+ * __chunkcache_metadata_queue_insert --
+ *     Enqueue a metadata insertion, corresponding to when a chunk is added to the chunk cache.
+ ','line_number':200,'multiline':True]
+['text':'
+ * __chunkcache_metadata_queue_delete --
+ *     Enqueue a metadata deletion, corresponding to when a chunk is removed from the chunk cache.
+ ','line_number':216,'multiline':True]
+['text':'
+ * __name_in_pinned_list --
+ *     Return true if the chunk belongs to the object in pinned object array.
+ ','line_number':227,'multiline':True]
+['text':'
+ * __insert_update_stats --
+ *     Increment chunk's disk usage and update statistics.
+ ','line_number':248,'multiline':True]
+['text':'
+ * __delete_update_stats --
+ *     Decrement chunk's disk usage and update statistics.
+ ','line_number':269,'multiline':True]
+['text':'
+ * __chunkcache_memory_alloc --
+ *     Allocate memory for the chunk in the cache.
+ ','line_number':289,'multiline':True]
+['text':'
+         * It is possible to accidentally configure the chunk size to significantly exceed the size
+         * of some files. This can result in a "no space" (ENOSPC) error after attempting to write
+         * to the chunk cache file, even when the full chunk cache capacity has not been used.
+         *
+         * For instance, if we have a configured chunk size of 100MB, a file size of 1MB, and a
+         * capacity of 1GB, we can calculate that only 10 chunks (1GB/100MB) can fit within the
+         * available capacity, leaving us with 10 spaces in the bitmap. Since each chunk can
+         * accommodate content from only one file, this means that for 10 chunks (100MB each) only
+         * 10MB (1MB file per chunk) of data is utilized, while the remaining chunk cache capacity
+         * (990MB) remains unused.
+         ','line_number':307,'multiline':True]
+['text':' Allocate the free memory in the chunk cache. ','line_number':329,'multiline':True]
+['text':'
+ * __chunkcache_can_admit_new_chunk --
+ *     Decide if we can admit the chunk given the limit on cache capacity.
+ ','line_number':339,'multiline':True]
+['text':'
+ * __create_and_populate_chunk --
+ *     Allocate and populate the chunk.
+ ','line_number':362,'multiline':True]
+['text':'
+ * __chunkcache_alloc_chunk --
+ *     Allocate the chunk and its metadata for a block at a given offset.
+ ','line_number':388,'multiline':True]
+['text':'
+     * Convert the block offset to the offset of the enclosing chunk. The chunk storage area is
+     * broken into equally sized chunks of a configured size. We calculate the offset of the chunk
+     * into which the block's offset falls. This offset is crucial as chunks are equally sized and
+     * not necessarily a multiple of a block. A block may start in one chunk and end in another or
+     * even span multiple chunks if the chunk size is configured to be much smaller than the block
+     * size (we hope that never happens). In the allocation function we don't care about the block's
+     * size. If more than one chunk is needed to cover the entire block, another function will take
+     * care of allocating multiple chunks.
+     ','line_number':409,'multiline':True]
+['text':'
+     * Determine the size of the chunk, ensuring it does not exceed the file's size. We find the
+     * minimum size between the configured chunk size and the size remaining from the current
+     * chunk's offset to the end of the file. This step ensures we do not allocate a chunk beyond
+     * what the file can accommodate.
+     ','line_number':421,'multiline':True]
+['text':' Part of the hash ID was populated by the caller, but we must set the offset. ','line_number':429,'multiline':True]
+['text':'
+ * __chunkcache_free_chunk --
+ *     Free the memory occupied by the chunk and the metadata.
+ ','line_number':451,'multiline':True]
+['text':'
+         * Push the removal into the work queue so it can get removed from the chunk cache metadata.
+         ','line_number':466,'multiline':True]
+['text':' Update the bitmap, then free the chunk memory. ','line_number':471,'multiline':True]
+['text':'
+ * __chunkcache_tmp_hash --
+ *     Populate the hash data structure, which uniquely identifies the chunk. The hash ID we
+ *     populate will contain a pointer to the block name, thus the block name must outlive the hash
+ *     ID.
+ ','line_number':479,'multiline':True]
+['text':'
+     * The hashing situation is a little complex. We want to construct hashes as we iterate over the
+     * chunks we add/remove, and these hashes consist of an object name, object ID, and offset. But
+     * to hash these, the bytes need to be contiguous in memory. Having the object name as a
+     * fixed-size character array would work, but that needs to be large, and would waste a lot of
+     * space most of the time. Another alternative is to allocate a new structure just for hashing
+     * purposes, but then we're allocating/freeing on the hot path.
+     *
+     * Instead, we hash the object name separately, then bundle that hash into a temporary (stack
+     * allocated) structure with the object ID and offset. Then, we hash that intermediate
+     * structure.
+     ','line_number':497,'multiline':True]
+['text':' Return the bucket ID. ','line_number':516,'multiline':True]
+['text':'
+ * __hash_id_eq --
+ *     Compare two hash IDs and return whether they're equal.
+ ','line_number':520,'multiline':True]
+['text':'
+ * __chunkcache_should_evict --
+ *     Decide if we can evict this chunk.
+ *
+ * In the current algorithm we only evict the chunks with a zero access count. We always decrement
+ *     the access count on the chunk that is given to us. The thread accessing the chunk increments
+ *     the access count. As a result, we will only evict a chunk that has not been accessed for a
+ *     time proportional to the number of accesses made to it.
+ ','line_number':531,'multiline':True]
+['text':'
+     * Do not evict chunks that are in the process of being added to the cache. The ordered read,
+     * and matching publish, are required since populating the chunk itself isn't protected by the
+     * bucket lock. Ergo, we need to make sure that reads or writes to the valid field are not
+     * reordered relative to reads or writes of other fields.
+     ','line_number':545,'multiline':True]
+['text':'
+ * __chunkcache_eviction_thread --
+ *     Periodically sweep the cache and evict chunks with a zero access count.
+ *
+ * This strategy is a clock eviction algorithm, which is an approximation of LRU.
+ ','line_number':565,'multiline':True]
+['text':' Do not evict if we are not close to exceeding capacity. ','line_number':583,'multiline':True]
+['text':'
+ * __chunkcache_str_cmp --
+ *     Qsort function: sort string array.
+ ','line_number':612,'multiline':True]
+['text':'
+ * __chunkcache_arr_free --
+ *     Free the array of strings.
+ ','line_number':622,'multiline':True]
+['text':'
+ * __config_get_sorted_pinned_objects --
+ *     Get sorted array of pinned objects from the config.
+ ','line_number':638,'multiline':True]
+['text':'
+ * __chunkcache_insert --
+ *     Insert chunk into the chunk cache.
+ ','line_number':695,'multiline':True]
+['text':'
+     * !!! (Don't format the comment.)
+     * Caller function should take a bucket lock before inserting the chunk.
+     ','line_number':707,'multiline':True]
+['text':'
+     * Insert the invalid chunk into the bucket before releasing the lock and doing I/O. This way we
+     * avoid two threads trying to cache the same chunk.
+     ','line_number':713,'multiline':True]
+['text':'
+ * __chunkcache_read_into_chunk --
+ *     Read data into the chunk memory.
+ ','line_number':722,'multiline':True]
+['text':' Make sure the chunk is considered invalid when reading data into it. ','line_number':735,'multiline':True]
+['text':' Read the new chunk. Only one thread would be caching the new chunk. ','line_number':740,'multiline':True]
+['text':'
+     * Mark chunk as valid. The only thread that could be executing this code is the thread that won
+     * the race and inserted this (invalid) chunk into the hash table. This thread has now read the
+     * chunk, while any other threads that were looking for the same chunk would be spin-waiting for
+     * this chunk to become valid. The current thread will mark the chunk as valid, and any waiters
+     * will unblock and proceed reading it.
+     ','line_number':752,'multiline':True]
+['text':' Push the chunk into the work queue so it can get written to the chunk cache metadata. ','line_number':761,'multiline':True]
+['text':'
+ * __chunkcache_unpin_old_versions --
+ *     Unpin the old versions of newly added chunks so eviction can remove them.
+ ','line_number':768,'multiline':True]
+['text':' Optimization: check if the file contains objects in the pinned list, otherwise skip. ','line_number':781,'multiline':True]
+['text':'
+         * Loop through the entire chunk cache and search for matching objects from the file and
+         * clear the pinned flag.
+         ','line_number':783,'multiline':True]
+['text':'
+                         * Decrement the stat when a chunk that was initially pinned becomes
+                         * unpinned.
+                         ','line_number':793,'multiline':True]
+['text':'
+ * __wt_chunkcache_get --
+ *     Return the data to the caller if we have it. Otherwise read it from storage and cache it.
+ *
+ * During these operations we are holding one or more bucket locks. A bucket lock protects the
+ *     linked list (i.e., the chain) or chunks hashing into the same bucket. We hold the bucket lock
+ *     whenever we are looking for and are inserting a new chunk into that bucket. We must hold the
+ *     lock throughout the entire operation: realizing that the chunk is not present, deciding to
+ *     cache it, allocating the chunks metadata and inserting it into the chain. If we release the
+ *     lock during this process, another thread might cache the same chunk; we do not want that. We
+ *     insert the new chunk into the cache in the not valid state. Once we insert the chunk, we can
+ *     release the lock. As long as the chunk is marked as invalid, no other thread will try to
+ *     re-cache it or to read it. As a result, we can read data from the remote storage into this
+ *     chunk without holding the lock: this is what the current code does. We can even allocate the
+ *     space for that chunk outside the critical section: the current code does not do that. Once we
+ *     read the data into the chunk, we atomically set the valid flag, so other threads can use it.
+ ','line_number':809,'multiline':True]
+['text':' Only cache read-only tiered objects. ','line_number':850,'multiline':True]
+['text':' A block may span two (or more) chunks. Loop until we have read all the data. ','line_number':861,'multiline':True]
+['text':' Find the bucket for the chunk containing this offset. ','line_number':863,'multiline':True]
+['text':' If the chunk is there, but invalid, there is I/O in progress. Retry. ','line_number':871,'multiline':True]
+['text':' Found the needed chunk. ','line_number':881,'multiline':True]
+['text':' We can't read beyond the chunk's boundary. ','line_number':887,'multiline':True]
+['text':' Accessing this chunk's data is likely to cause a disk read - throttle. ','line_number':892,'multiline':True]
+['text':' Move the chunk's data to the user. ','line_number':898,'multiline':True]
+['text':'
+                 * Increment the access count for eviction. If we are accessing the new chunk, the
+                 * access count would have been incremented on it when it was newly inserted to
+                 * avoid eviction before the chunk is accessed. So we are giving two access counts
+                 * to newly inserted chunks. Additionally, cap the access count to optimize the
+                 * eviction process. This capping helps particularly in focusing on evicting older
+                 * and potentially obsolete chunks, while retaining the more recently accessed ones.
+                 ','line_number':903,'multiline':True]
+['text':' The chunk is not cached. Allocate space for it. Prepare for reading it from storage. ','line_number':924,'multiline':True]
+['text':'
+ * __wt_chunkcache_free_external --
+ *     Find chunks in the chunk cache using object id, and free the chunks.
+ ','line_number':945,'multiline':True]
+['text':' Only cache read-only tiered objects. ','line_number':967,'multiline':True]
+['text':' A block may span multiple chunks, loop until we have removed all the data. ','line_number':974,'multiline':True]
+['text':' If a chunk is matched, remove it from the bucket queue and free the chunk. ','line_number':979,'multiline':True]
+['text':'
+ * __wt_chunkcache_ingest --
+ *     Read all the contents from a file and insert it into the chunk cache.
+ ','line_number':997,'multiline':True]
+['text':' Check and unpin any old versions of newly added objects. ','line_number':1020,'multiline':True]
+['text':'
+         * Halt chunk ingestion when cache usage exceeds 90% of the eviction threshold to prevent a
+         * cycle of continuous chunk ingestion and eviction.
+         ','line_number':1027,'multiline':True]
+['text':'
+ * __wt_chunkcache_reconfig --
+ *     Re-configure the chunk cache.
+ ','line_number':1058,'multiline':True]
+['text':' When reconfiguring, check if there are any modifications that we care about. ','line_number':1077,'multiline':True]
+['text':'
+     * Acquire the pinned array lock to avoid racing with threads reading the pinned array, and then
+     * update the array.
+     ','line_number':1087,'multiline':True]
+['text':' Release the memory allocated to the old array. ','line_number':1096,'multiline':True]
+['text':' Iterate through all the chunks and mark them as pinned if necessary. ','line_number':1099,'multiline':True]
+['text':' Increment the stat when a chunk that was initially unpinned becomes pinned. ','line_number':1105,'multiline':True]
+['text':' Decrement the stat when a chunk that was initially pinned becomes unpinned. ','line_number':1112,'multiline':True]
+['text':'
+ * __wt_chunkcache_create_from_metadata --
+ *     Create a new chunk from some stored properties, and link it to the relevant chunk data (on
+ *     disk).
+ ','line_number':1126,'multiline':True]
+['text':' Sanity check the offset. ','line_number':1147,'multiline':True]
+['text':' Get the position of a specific bit index and link the chunk and its memory cached on disk. ','line_number':1158,'multiline':True]
+['text':'
+ * __wt_chunkcache_setup --
+ *     Set up the chunk cache.
+ ','line_number':1183,'multiline':True]
+['text':'
+ * __wt_chunkcache_teardown --
+ *     Tear down the chunk cache.
+ ','line_number':1297,'multiline':True]
+['text':'
+ * __wt_chunkcache_salvage --
+ *     Remove any knowledge of any extant chunk cache metadata. We can always rebuild the cache
+ *     later, so make no attempt at a "real" salvage.
+ ','line_number':1327,'multiline':True]

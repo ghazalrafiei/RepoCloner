@@ -1,0 +1,434 @@
+['text':'
+******************************************************************************
+*
+*   Copyright (C) 1999-2015, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+******************************************************************************
+*   file name:  udata.cpp
+*   encoding:   US-ASCII
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 1999oct25
+*   created by: Markus W. Scherer
+','line_number':1,'multiline':True]
+['text':' U_PLATFORM etc. ','line_number':17,'multiline':True]
+['text':' if gcc
+#define ATTRIBUTE_WEAK __attribute__ ((weak))
+might have to #include some other header
+','line_number':20,'multiline':True]
+['text':'**********************************************************************
+*
+*   Notes on the organization of the ICU data implementation
+*
+*      All of the public API is defined in udata.h
+*
+*      The implementation is split into several files...
+*
+*         - udata.c  (this file) contains higher level code that knows about
+*                     the search paths for locating data, caching opened data, etc.
+*
+*         - umapfile.c  contains the low level platform-specific code for actually loading
+*                     (memory mapping, file reading, whatever) data into memory.
+*
+*         - ucmndata.c  deals with the tables of contents of ICU data items within
+*                     an ICU common format data file.  The implementation includes
+*                     an abstract interface and support for multiple TOC formats.
+*                     All knowledge of any specific TOC format is encapsulated here.
+*
+*         - udatamem.c has code for managing UDataMemory structs.  These are little
+*                     descriptor objects for blocks of memory holding ICU data of
+*                     various types.
+','line_number':42,'multiline':True]
+['text':' configuration ---------------------------------------------------------- ','line_number':66,'multiline':True]
+['text':' If you are excruciatingly bored turn this on .. ','line_number':68,'multiline':True]
+['text':' #define UDATA_DEBUG 1 ','line_number':69,'multiline':True]
+['text':'
+ *  Forward declarations
+ ','line_number':77,'multiline':True]
+['text':'**********************************************************************
+*
+*    static (Global) data
+*
+***********************************************************************','line_number':82,'multiline':True]
+['text':'
+ * Pointers to the common ICU data.
+ *
+ * We store multiple pointers to ICU data packages and iterate through them
+ * when looking for a data item.
+ *
+ * It is possible to combine this with dependency inversion:
+ * One or more data package libraries may export
+ * functions that each return a pointer to their piece of the ICU data,
+ * and this file would import them as weak functions, without a
+ * strong linker dependency from the common library on the data library.
+ *
+ * Then we can have applications depend on only that part of ICU's data
+ * that they really need, reducing the size of binaries that take advantage
+ * of this.
+ ','line_number':88,'multiline':True]
+['text':' Access protected by icu global mutex.','line_number':104,'multiline':False]
+['text':'  See extendICUData().','line_number':106,'multiline':False]
+['text':' Global hash table of opened ICU data files.  ','line_number':108,'multiline':True]
+['text':' Access not synchronized.','line_number':111,'multiline':False]
+['text':' Modifying is documented as thread-unsafe.','line_number':112,'multiline':False]
+['text':' Delete the cache of user data mappings.  ','line_number':119,'multiline':True]
+['text':'   Table owns the contents, and will delete them. ','line_number':120,'multiline':True]
+['text':'   Cleanup is not thread safe.                ','line_number':121,'multiline':True]
+['text':' Everything was cleaned up ','line_number':131,'multiline':True]
+['text':' The data pointer is already in the array. ','line_number':148,'multiline':True]
+['text':'
+ * setCommonICUData.   Set a UDataMemory to be the global ICU Data
+ ','line_number':158,'multiline':True]
+['text':'  The new common data.  Belongs to caller, we copy it. ','line_number':162,'multiline':True]
+['text':'  If true, set USING_DEFAULT warning if ICUData was    ','line_number':163,'multiline':True]
+['text':'    changed by another thread before we got to it.     ','line_number':164,'multiline':True]
+['text':'  For the assignment, other threads must cleanly see either the old            ','line_number':174,'multiline':True]
+['text':'    or the new, not some partially initialized new.  The old can not be        ','line_number':175,'multiline':True]
+['text':'    deleted - someone may still have a pointer to it lying around in           ','line_number':176,'multiline':True]
+['text':'    their locals.                                                              ','line_number':177,'multiline':True]
+['text':' The same data pointer is already in the array. ','line_number':186,'multiline':True]
+['text':'warn','line_number':204,'multiline':True]
+['text':'----------------------------------------------------------------------*
+ *                                                                      *
+ *   Cache for common data                                              *
+ *      Functions for looking up or adding entries to a cache of        *
+ *      data that has been previously opened.  Avoids a potentially     *
+ *      expensive operation of re-opening the data for subsequent       *
+ *      uses.                                                           *
+ *                                                                      *
+ *      Data remains cached for the duration of the process.            *
+ *                                                                      *
+ *----------------------------------------------------------------------','line_number':240,'multiline':True]
+['text':'
+ * Deleter function for DataCacheElements.
+ *         udata cleanup function closes the hash table; hash table in turn calls back to
+ *         here for each entry.
+ ','line_number':259,'multiline':True]
+['text':' unmaps storage ','line_number':266,'multiline':True]
+['text':' delete the hash key string. ','line_number':267,'multiline':True]
+['text':' delete 'this'          ','line_number':268,'multiline':True]
+['text':' TODO: handle errors better.','line_number':276,'multiline':False]
+['text':'   udata_getCacheHashTable()
+  *     Get the hash table used to store the data cache entries.
+  *     Lazy create it if it doesn't yet exist.
+  ','line_number':285,'multiline':True]
+['text':' Cache remembers only the base name, not the full path. ','line_number':303,'multiline':True]
+['text':' Create a new DataCacheElement - the thingy we store in the hash table -
+     * and copy the supplied path and UDataMemoryItems into it.
+     ','line_number':330,'multiline':True]
+['text':' Stick the new DataCacheElement into the hash table.
+    ','line_number':356,'multiline':True]
+['text':' Key   ','line_number':367,'multiline':True]
+['text':' Value ','line_number':368,'multiline':True]
+['text':' copy sub err unto fillin ONLY if something happens. ','line_number':379,'multiline':True]
+['text':'----------------------------------------------------------------------*==============
+ *                                                                      *
+ *  Path management.  Could be shared with other tools/etc if need be   *
+ * later on.                                                            *
+ *                                                                      *
+ *----------------------------------------------------------------------','line_number':389,'multiline':True]
+['text':' Size of local buffer for paths         ','line_number':396,'multiline':True]
+['text':'   Overflow causes malloc of larger buf ','line_number':397,'multiline':True]
+['text':' working path (u_icudata_Dir) ','line_number':410,'multiline':True]
+['text':' path following this one ','line_number':411,'multiline':True]
+['text':' item's basename (icudt22e_mt.res)','line_number':412,'multiline':True]
+['text':' item suffix (can be null) ','line_number':413,'multiline':True]
+['text':' length of basename ','line_number':415,'multiline':True]
+['text':' path passed in with item name ','line_number':417,'multiline':True]
+['text':' output path for this it'ion ','line_number':418,'multiline':True]
+['text':' example:  "/icudt28b". Will ignore that leaf in set paths. ','line_number':419,'multiline':True]
+['text':' if TRUE then allow paths such as '/foo/myapp.dat'
+                                                    * to match, checks last 4 chars of suffix with
+                                                    * last 4 of path, then previous chars. ','line_number':421,'multiline':True]
+['text':'*
+ * @param iter  The iterator to be initialized. Its current state does not matter. 
+ * @param path  The full pathname to be iterated over.  If NULL, defaults to U_ICUDATA_NAME 
+ * @param pkg   Package which is being searched for, ex "icudt28l".  Will ignore leave directories such as /icudt28l 
+ * @param item  Item to be searched for.  Can include full path, such as /a/b/foo.dat 
+ * @param suffix  Optional item suffix, if not-null (ex. ".dat") then 'path' can contain 'item' explicitly.
+ *               Ex:   'stuff.dat' would be found in '/a/foo:/tmp/stuff.dat:/bar/baz' as item #2.   
+ *                     '/blarg/stuff.dat' would also be found.
+ ','line_number':426,'multiline':True]
+['text':'* Path *','line_number':442,'multiline':True]
+['text':'* Package *','line_number':449,'multiline':True]
+['text':'* Item *','line_number':457,'multiline':True]
+['text':'* Item path *','line_number':461,'multiline':True]
+['text':'* Suffix  *','line_number':472,'multiline':True]
+['text':' pathBuffer will hold the output path strings returned by this iterator ','line_number':481,'multiline':True]
+['text':'*
+ * Get the next path on the list.
+ *
+ * @param iter The Iter to be used 
+ * @param len  If set, pointer to the length of the returned path, for convenience. 
+ * @return Pointer to the next path segment, or NULL if there are no more.
+ ','line_number':496,'multiline':True]
+['text':' we were processing item's path. ','line_number':520,'multiline':True]
+['text':' start with regular path next tm. ','line_number':521,'multiline':True]
+['text':' fix up next for next time ','line_number':524,'multiline':True]
+['text':' segment: entire path ','line_number':527,'multiline':True]
+['text':' segment: until next segment ','line_number':530,'multiline':True]
+['text':' skip divider ','line_number':532,'multiline':True]
+['text':' check for .dat files ','line_number':556,'multiline':True]
+['text':' suffix matches ','line_number':561,'multiline':True]
+['text':' base matches ','line_number':562,'multiline':True]
+['text':' base+suffix = full len ','line_number':563,'multiline':True]
+['text':' do nothing ','line_number':568,'multiline':True]
+['text':' regular dir path ','line_number':571,'multiline':True]
+['text':' Check if it is a directory with the same name as our package ','line_number':582,'multiline':True]
+['text':' + basename ','line_number':594,'multiline':True]
+['text':' tack on suffix ','line_number':597,'multiline':True]
+['text':' fell way off the end ','line_number':611,'multiline':True]
+['text':' ==================================================================================','line_number':617,'multiline':True]
+['text':'----------------------------------------------------------------------*
+ *                                                                      *
+ *  Add a static reference to the common data  library                  *
+ *   Unless overridden by an explicit udata_setCommonData, this will be *
+ *      our common data.                                                *
+ *                                                                      *
+ *----------------------------------------------------------------------','line_number':620,'multiline':True]
+['text':'
+ * This would be a good place for weak-linkage declarations of
+ * partial-data-library access functions where each returns a pointer
+ * to its data package, if it is linked in.
+ ','line_number':629,'multiline':True]
+['text':'
+extern const void *uprv_getICUData_collation(void) ATTRIBUTE_WEAK;
+extern const void *uprv_getICUData_conversion(void) ATTRIBUTE_WEAK;
+','line_number':634,'multiline':True]
+['text':'----------------------------------------------------------------------*
+ *                                                                      *
+ *   openCommonData   Attempt to open a common format (.dat) file       *
+ *                    Map it into memory (if it's not there already)    *
+ *                    and return a UDataMemory object for it.           *
+ *                                                                      *
+ *                    If the requested data is already open and cached  *
+ *                       just return the cached UDataMem object.        *
+ *                                                                      *
+ *----------------------------------------------------------------------','line_number':639,'multiline':True]
+['text':'  Path from OpenChoice?          ','line_number':650,'multiline':True]
+['text':'  ICU Data (index >= 0) if path == NULL ','line_number':651,'multiline':True]
+['text':' ??????? TODO revisit this ','line_number':664,'multiline':True]
+['text':' "mini-cache" for common ICU data ','line_number':666,'multiline':True]
+['text':' The linked-in data is already in the list. ','line_number':678,'multiline':True]
+['text':' Add the linked-in data to the list. ','line_number':684,'multiline':True]
+['text':'
+         * This is where we would check and call weakly linked partial-data-library
+         * access functions.
+         ','line_number':685,'multiline':True]
+['text':'
+        if (uprv_getICUData_collation) {
+            setCommonICUDataPointer(uprv_getICUData_collation(), FALSE, pErrorCode);
+        }
+        if (uprv_getICUData_conversion) {
+            setCommonICUDataPointer(uprv_getICUData_conversion(), FALSE, pErrorCode);
+        }
+        ','line_number':689,'multiline':True]
+['text':' request is NOT for ICU Data.  ','line_number':705,'multiline':True]
+['text':' Find the base name portion of the supplied path.   ','line_number':707,'multiline':True]
+['text':'   inBasename will be left pointing somewhere within the original path string.      ','line_number':708,'multiline':True]
+['text':' no basename.     This will happen if the original path was a directory name,   ','line_number':715,'multiline':True]
+['text':'    like  "a/b/c/".   (Fallback to separate files will still work.)             ','line_number':716,'multiline':True]
+['text':' Is the requested common data file already open and cached?                     ','line_number':724,'multiline':True]
+['text':'   Note that the cache is keyed by the base name only.  The rest of the path,   ','line_number':725,'multiline':True]
+['text':'     if any, is not considered.                                                 ','line_number':726,'multiline':True]
+['text':' Requested item is not in the cache.
+     * Hunt it down, trying all the path locations
+     ','line_number':734,'multiline':True]
+['text':' One more chance, for extendCommonData() ','line_number':754,'multiline':True]
+['text':' no common data ','line_number':763,'multiline':True]
+['text':' we have mapped a file, check its header ','line_number':768,'multiline':True]
+['text':' Cache the UDataMemory struct for this .dat file,
+     *   so we won't need to hunt it down and map it again next time
+     *   something is needed from it.                ','line_number':772,'multiline':True]
+['text':'----------------------------------------------------------------------*
+ *                                                                      *
+ *   extendICUData   If the full set of ICU data was not loaded at      *
+ *                   program startup, load it now.  This function will  *
+ *                   be called when the lookup of an ICU data item in   *
+ *                   the common ICU data fails.                         *
+ *                                                                      *
+ *                   return true if new data is loaded, false otherwise.*
+ *                                                                      *
+ *----------------------------------------------------------------------','line_number':779,'multiline':True]
+['text':'
+     * There is a chance for a race condition here.
+     * Normally, ICU data is loaded from a DLL or via mmap() and
+     * setCommonICUData() will detect if the same address is set twice.
+     * If ICU is built with data loading via fread() then the address will
+     * be different each time the common data is loaded and we may add
+     * multiple copies of the data.
+     * In this case, use a mutex to prevent the race.
+     * Use a specific mutex to avoid nested locks of the global mutex.
+     ','line_number':795,'multiline':True]
+['text':' See if we can explicitly open a .dat file for the ICUData. ','line_number':810,'multiline':True]
+['text':'  "icudt20l" , for example.          ','line_number':812,'multiline':True]
+['text':'  Pretend we're not opening ICUData  ','line_number':813,'multiline':True]
+['text':' How about if there is no pData, eh... ','line_number':816,'multiline':True]
+['text':' The mapping for this data is owned by the hash table ','line_number':821,'multiline':True]
+['text':'   which will unmap it when ICU is shut down.         ','line_number':822,'multiline':True]
+['text':' CommonICUData is also unmapped when ICU is shut down.','line_number':823,'multiline':True]
+['text':' To avoid unmapping the data twice, zero out the map  ','line_number':824,'multiline':True]
+['text':'   fields in the UDataMemory that we're assigning     ','line_number':825,'multiline':True]
+['text':'   to CommonICUData.                                  ','line_number':826,'multiline':True]
+['text':' no longer using this result ','line_number':828,'multiline':True]
+['text':'  The new common data.                                ','line_number':829,'multiline':True]
+['text':'  No warnings if write didn't happen                  ','line_number':830,'multiline':True]
+['text':'  setCommonICUData honors errors; NOP if error set    ','line_number':831,'multiline':True]
+['text':' Return 'true' when a racing writes out the extended                        ','line_number':837,'multiline':True]
+['text':' data after another thread has failed to see it (in openCommonData), so     ','line_number':838,'multiline':True]
+['text':' extended data can be examined.                                             ','line_number':839,'multiline':True]
+['text':' Also handles a race through here before gHaveTriedToLoadCommonData is set. ','line_number':840,'multiline':True]
+['text':' Return true if ICUData pointer was updated.   ','line_number':845,'multiline':True]
+['text':'   (Could potentialy have been done by another thread racing ','line_number':846,'multiline':True]
+['text':'   us through here, but that's fine, we still return true    ','line_number':847,'multiline':True]
+['text':'   so that current thread will also examine extended data.   ','line_number':848,'multiline':True]
+['text':'----------------------------------------------------------------------*
+ *                                                                      *
+ *   udata_setCommonData                                                *
+ *                                                                      *
+ *----------------------------------------------------------------------','line_number':851,'multiline':True]
+['text':' set the data pointer and test for validity ','line_number':869,'multiline':True]
+['text':' we have good data ','line_number':875,'multiline':True]
+['text':' Set it up as the ICU Common Data.  ','line_number':876,'multiline':True]
+['text':'---------------------------------------------------------------------------
+ *
+ *  udata_setAppData
+ *
+ *---------------------------------------------------------------------------- ','line_number':880,'multiline':True]
+['text':'----------------------------------------------------------------------------*
+ *                                                                            *
+ *  checkDataItem     Given a freshly located/loaded data item, either        *
+ *                    an entry in a common file or a separately loaded file,  *
+ *                    sanity check its header, and see if the data is         *
+ *                    acceptable to the app.                                  *
+ *                    If the data is good, create and return a UDataMemory    *
+ *                    object that can be returned to the application.         *
+ *                    Return NULL on any sort of failure.                     *
+ *                                                                            *
+ *----------------------------------------------------------------------------','line_number':904,'multiline':True]
+['text':' The data item to be checked.                ','line_number':918,'multiline':True]
+['text':' App's call-back function                    ','line_number':919,'multiline':True]
+['text':'   pass-thru param for above.                ','line_number':920,'multiline':True]
+['text':'   pass-thru param for above.                ','line_number':921,'multiline':True]
+['text':'   pass-thru param for above.                ','line_number':922,'multiline':True]
+['text':' Error code if this data was not acceptable  ','line_number':923,'multiline':True]
+['text':'   but openChoice should continue with       ','line_number':924,'multiline':True]
+['text':'   trying to get data from fallback path.    ','line_number':925,'multiline':True]
+['text':' Bad error, caller should return immediately ','line_number':926,'multiline':True]
+['text':' the new UDataMemory, to be returned.        ','line_number':929,'multiline':True]
+['text':' the data is not acceptable, look further ','line_number':945,'multiline':True]
+['text':' If we eventually find something good, this errorcode will be ','line_number':946,'multiline':True]
+['text':'    cleared out.                                              ','line_number':947,'multiline':True]
+['text':'*
+ * @return 0 if not loaded, 1 if loaded or err 
+ ','line_number':953,'multiline':True]
+['text':' following arguments are the same as doOpenChoice itself ','line_number':958,'multiline':True]
+['text':' look in ind. files: package\nam.typ  ========================= ','line_number':968,'multiline':True]
+['text':' init path iterator for individual files ','line_number':969,'multiline':True]
+['text':' Data is good.
+                *  Hand off ownership of the backing memory to the user's UDataMemory.
+                *  and return it.   ','line_number':981,'multiline':True]
+['text':' the data is not acceptable, or some error occured.  Either way, unmap the memory ','line_number':993,'multiline':True]
+['text':' If we had a nasty error, bail out completely.  ','line_number':996,'multiline':True]
+['text':' Otherwise remember that we found data but didn't like it for some reason  ','line_number':1001,'multiline':True]
+['text':'*
+ * @return 0 if not loaded, 1 if loaded or err 
+ ','line_number':1011,'multiline':True]
+['text':'pkgName','line_number':1014,'multiline':True]
+['text':'dataPath','line_number':1015,'multiline':True]
+['text':'tocEntryPathSuffix','line_number':1015,'multiline':True]
+['text':' following arguments are the same as doOpenChoice itself ','line_number':1016,'multiline':True]
+['text':' try to get common data.  The loop is for platforms such as the 390 that do
+     *  not initially load the full set of ICU data.  If the lookup of an ICU data item
+     *  fails, the full (but slower to load) set is loaded, the and the loop repeats,
+     *  trying the lookup again.  Once the full set of ICU data is loaded, the loop wont
+     *  repeat because the full set will be checked the first time through.
+     *
+     *  The loop also handles the fallback to a .dat file if the application linked
+     *   to the stub data library rather than a real library.
+     ','line_number':1027,'multiline':True]
+['text':'* search for pkg *','line_number':1037,'multiline':True]
+['text':' look up the data piece in the common data ','line_number':1042,'multiline':True]
+['text':' Data wasn't found.  If we were looking for an ICUData item and there is
+         * more data available, load it and try again,
+         * otherwise break out of this loop. ','line_number':1062,'multiline':True]
+['text':' try the next data package ','line_number':1068,'multiline':True]
+['text':' try this data package slot again: it changed from NULL to non-NULL ','line_number':1071,'multiline':True]
+['text':'
+ * Identify the Time Zone resources that are subject to special override data loading.
+ ','line_number':1078,'multiline':True]
+['text':'
+ *  A note on the ownership of Mapped Memory
+ *
+ *  For common format files, ownership resides with the UDataMemory object
+ *    that lives in the cache of opened common data.  These UDataMemorys are private
+ *    to the udata implementation, and are never seen directly by users.
+ *
+ *    The UDataMemory objects returned to users will have the address of some desired
+ *    data within the mapped region, but they wont have the mapping info itself, and thus
+ *    won't cause anything to be removed from memory when they are closed.
+ *
+ *  For individual data files, the UDataMemory returned to the user holds the
+ *  information necessary to unmap the data on close.  If the user independently
+ *  opens the same data file twice, two completely independent mappings will be made.
+ *  (There is no cache of opened data items from individual files, only a cache of
+ *   opened Common Data files, that is, files containing a collection of data items.)
+ *
+ *  For common data passed in from the user via udata_setAppData() or
+ *  udata_setCommonData(), ownership remains with the user.
+ *
+ *  UDataMemory objects themselves, as opposed to the memory they describe,
+ *  can be anywhere - heap, stack/local or global.
+ *  They have a flag to indicate when they're heap allocated and thus
+ *  must be deleted when closed.
+ ','line_number':1089,'multiline':True]
+['text':'----------------------------------------------------------------------------*
+ *                                                                            *
+ * main data loading functions                                                *
+ *                                                                            *
+ *----------------------------------------------------------------------------','line_number':1116,'multiline':True]
+['text':' Is this path ICU data? ','line_number':1138,'multiline':True]
+['text':' "ICUDATA" ','line_number':1140,'multiline':True]
+['text':' "icudt26e-" ','line_number':1141,'multiline':True]
+['text':' "ICUDATA-" ','line_number':1143,'multiline':True]
+['text':' Windows:  try "foo\bar" and "foo/bar" ','line_number':1148,'multiline':True]
+['text':' remap from alternate path char to the main one ','line_number':1149,'multiline':True]
+['text':' entry name in tree format. ex:  'icudt28b/coll/ar.res' ','line_number':1166,'multiline':True]
+['text':' entry name in path format. ex:  'icudt28b\\coll\\ar.res' ','line_number':1167,'multiline':True]
+['text':' ======= Set up strings ','line_number':1172,'multiline':True]
+['text':' more than one slash in the path- not a tree name ','line_number':1180,'multiline':True]
+['text':' see if this is an /absolute/path/to/package  path ','line_number':1181,'multiline':True]
+['text':' following '-' ','line_number':1190,'multiline':True]
+['text':'
+                        This user data has no path, but there is a tree name.
+                        Look up the correct path from the data cache later.
+                        ','line_number':1196,'multiline':True]
+['text':' setting up the entry name and file name 
+     * Make up a full name by appending the type to the supplied
+     *  name, assuming that a type was supplied.
+     ','line_number':1217,'multiline':True]
+['text':' prepend the package ','line_number':1222,'multiline':True]
+['text':' suffix starts here ','line_number':1238,'multiline':True]
+['text':' "icudt26e" ','line_number':1246,'multiline':True]
+['text':'*********************** Begin loop looking for ind. files **************','line_number':1249,'multiline':True]
+['text':' End of dealing with a null basename ','line_number':1254,'multiline':True]
+['text':'***    Time zone individual files override  ','line_number':1257,'multiline':True]
+['text':' pkgName.data() ','line_number':1264,'multiline':True]
+['text':' path ','line_number':1265,'multiline':True]
+['text':'***    COMMON PACKAGE  - only if packages are first. ','line_number':1272,'multiline':True]
+['text':' #2 ','line_number':1277,'multiline':True]
+['text':'***    INDIVIDUAL FILES  ','line_number':1286,'multiline':True]
+['text':' Check to make sure that there is a dataPath to iterate over ','line_number':1292,'multiline':True]
+['text':'***    COMMON PACKAGE  ','line_number':1302,'multiline':True]
+['text':' Load from DLL.  If we haven't attempted package load, we also haven't had any chance to
+        try a DLL (static or setCommonData/etc)  load.
+         If we ever have a "UDATA_ONLY_FILES", add it to the or list here.  ','line_number':1316,'multiline':True]
+['text':' data not found ','line_number':1331,'multiline':True]
+['text':' file not found ','line_number':1334,'multiline':True]
+['text':' entry point not found or rejected ','line_number':1337,'multiline':True]
+['text':' API ---------------------------------------------------------------------- ','line_number':1346,'multiline':True]
+['text':' opposite endianness ','line_number':1399,'multiline':True]
+['text':'status','line_number':1410,'multiline':True]
+['text':' Note: this function is documented as not thread safe.','line_number':1412,'multiline':False]

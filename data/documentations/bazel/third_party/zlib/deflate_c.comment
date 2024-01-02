@@ -1,0 +1,642 @@
+['text':' deflate.c -- compress data using the deflation algorithm
+ * Copyright (C) 1995-2023 Jean-loup Gailly and Mark Adler
+ * For conditions of distribution and use, see copyright notice in zlib.h
+ ','line_number':1,'multiline':True]
+['text':'
+ *  ALGORITHM
+ *
+ *      The "deflation" process depends on being able to identify portions
+ *      of the input text which are identical to earlier input (within a
+ *      sliding window trailing behind the input currently being processed).
+ *
+ *      The most straightforward technique turns out to be the fastest for
+ *      most input files: try all possible matches and select the longest.
+ *      The key feature of this algorithm is that insertions into the string
+ *      dictionary are very simple and thus fast, and deletions are avoided
+ *      completely. Insertions are performed at each input character, whereas
+ *      string matches are performed only when the previous match ends. So it
+ *      is preferable to spend more time in matches to allow very fast string
+ *      insertions and avoid deletions. The matching algorithm for small
+ *      strings is inspired from that of Rabin & Karp. A brute force approach
+ *      is used to find longer strings when a small match has been found.
+ *      A similar algorithm is used in comic (by Jan-Mark Wams) and freeze
+ *      (by Leonid Broukhis).
+ *         A previous version of this file used a more sophisticated algorithm
+ *      (by Fiala and Greene) which is guaranteed to run in linear amortized
+ *      time, but has a larger average cost, uses more memory and is patented.
+ *      However the F&G algorithm may be faster for some highly redundant
+ *      files if the parameter max_chain_length (described below) is too large.
+ *
+ *  ACKNOWLEDGEMENTS
+ *
+ *      The idea of lazy evaluation of matches is due to Jan-Mark Wams, and
+ *      I found it in 'freeze' written by Leonid Broukhis.
+ *      Thanks to many people for bug reports and testing.
+ *
+ *  REFERENCES
+ *
+ *      Deutsch, L.P.,"DEFLATE Compressed Data Format Specification".
+ *      Available in http://tools.ietf.org/html/rfc1951
+ *
+ *      A description of the Rabin and Karp algorithm is given in the book
+ *         "Algorithms" by R. Sedgewick, Addison-Wesley, p252.
+ *
+ *      Fiala,E.R., and Greene,D.H.
+ *         Data Compression with Finite Windows, Comm.ACM, 32,4 (1989) 490-595
+ *
+ ','line_number':6,'multiline':True]
+['text':' @(#) $Id$ ','line_number':50,'multiline':True]
+['text':'
+  If you use the zlib library in a product, an acknowledgment is welcome
+  in the documentation of your product. If for some reason you cannot
+  include such an acknowledgment, I would appreciate that you keep this
+  copyright string in the executable of your product.
+ ','line_number':56,'multiline':True]
+['text':' block not completed, need more input or more output ','line_number':64,'multiline':True]
+['text':' block flush performed ','line_number':65,'multiline':True]
+['text':' finish started, need only more output at next deflate ','line_number':66,'multiline':True]
+['text':' finish done, accept no more input or output ','line_number':67,'multiline':True]
+['text':' Compression function. Returns the block state after the call. ','line_number':71,'multiline':True]
+['text':' ===========================================================================
+ * Local data
+ ','line_number':81,'multiline':True]
+['text':' Tail of hash chains ','line_number':86,'multiline':True]
+['text':' Matches of length 3 are discarded if their distance exceeds TOO_FAR ','line_number':91,'multiline':True]
+['text':' Values for max_lazy_match, good_match and max_chain_length, depending on
+ * the desired pack level (0..9). The values given below have been tuned to
+ * exclude worst case performance for pathological files. Better values may be
+ * found for specific files.
+ ','line_number':93,'multiline':True]
+['text':' reduce lazy search above this match length ','line_number':99,'multiline':True]
+['text':' do not perform lazy search above this match length ','line_number':100,'multiline':True]
+['text':' quit search above this match length ','line_number':101,'multiline':True]
+['text':'      good lazy nice chain ','line_number':108,'multiline':True]
+['text':' 0 ','line_number':109,'multiline':True]
+['text':' store only ','line_number':109,'multiline':True]
+['text':' 1 ','line_number':110,'multiline':True]
+['text':' max speed, no lazy matches ','line_number':110,'multiline':True]
+['text':'      good lazy nice chain ','line_number':113,'multiline':True]
+['text':' 0 ','line_number':114,'multiline':True]
+['text':' store only ','line_number':114,'multiline':True]
+['text':' 1 ','line_number':115,'multiline':True]
+['text':' max speed, no lazy matches ','line_number':115,'multiline':True]
+['text':' 2 ','line_number':116,'multiline':True]
+['text':' 3 ','line_number':117,'multiline':True]
+['text':' 4 ','line_number':119,'multiline':True]
+['text':' lazy matches ','line_number':119,'multiline':True]
+['text':' 5 ','line_number':120,'multiline':True]
+['text':' 6 ','line_number':121,'multiline':True]
+['text':' 7 ','line_number':122,'multiline':True]
+['text':' 8 ','line_number':123,'multiline':True]
+['text':' 9 ','line_number':124,'multiline':True]
+['text':' max compression ','line_number':124,'multiline':True]
+['text':' Note: the deflate() code requires max_lazy >= MIN_MATCH and max_chain >= 4
+ * For deflate_fast() (levels <= 3) good is ignored and lazy has a different
+ * meaning.
+ ','line_number':127,'multiline':True]
+['text':' rank Z_BLOCK between Z_NO_FLUSH and Z_PARTIAL_FLUSH ','line_number':132,'multiline':True]
+['text':' ===========================================================================
+ * Update a hash value with the given input byte
+ * IN  assertion: all calls to UPDATE_HASH are made with consecutive input
+ *    characters, so that a running hash key can be computed from the previous
+ *    key instead of complete recalculation each time.
+ ','line_number':135,'multiline':True]
+['text':' ===========================================================================
+ * Insert string str in the dictionary and set match_head to the previous head
+ * of the hash chain (the most recent string with same hash key). Return
+ * the previous length of the hash chain.
+ * If this file is compiled with -DFASTEST, the compression level is forced
+ * to 1, and no hash chains are maintained.
+ * IN  assertion: all calls to INSERT_STRING are made with consecutive input
+ *    characters and the first MIN_MATCH bytes of str are valid (except for
+ *    the last MIN_MATCH-1 bytes of the input file).
+ ','line_number':144,'multiline':True]
+['text':' ===========================================================================
+ * Initialize the hash table (avoiding 64K overflow for 16 bit systems).
+ * prev[] will be initialized on the fly.
+ ','line_number':166,'multiline':True]
+['text':' ===========================================================================
+ * Slide the hash table when sliding the window down (could be avoided with 32
+ * bit values at the expense of memory usage). We slide even when level == 0 to
+ * keep the hash table consistent if we switch back to level > 0 later.
+ ','line_number':177,'multiline':True]
+['text':' If n is not on any hash chain, prev[n] is garbage but
+         * its value will never be used.
+         ','line_number':204,'multiline':True]
+['text':' ===========================================================================
+ * Read a new buffer from the current input stream, update the adler32
+ * and total number of bytes read.  All deflate() input goes through
+ * this function so some applications may wish to modify it to avoid
+ * allocating a large strm->next_in buffer and copying from it.
+ * (See also flush_pending()).
+ ','line_number':211,'multiline':True]
+['text':' ===========================================================================
+ * Fill the window when the lookahead becomes insufficient.
+ * Updates strstart and lookahead.
+ *
+ * IN assertion: lookahead < MIN_LOOKAHEAD
+ * OUT assertions: strstart <= window_size-MIN_LOOKAHEAD
+ *    At least one byte has been read, or avail_in == 0; reads are
+ *    performed for at least two bytes (required for the zip translate_eol
+ *    option -- not supported here).
+ ','line_number':241,'multiline':True]
+['text':' Amount of free space at the end of the window. ','line_number':253,'multiline':True]
+['text':' Deal with !@#$% 64K limit: ','line_number':261,'multiline':True]
+['text':' Very unlikely, but possible on 16 bit machine if
+                 * strstart == 0 && lookahead == 1 (input done a byte at time)
+                 ','line_number':267,'multiline':True]
+['text':' If the window is almost full and there is insufficient lookahead,
+         * move the upper half to the lower one to make room in the upper half.
+         ','line_number':274,'multiline':True]
+['text':' we now have strstart >= MAX_DIST ','line_number':281,'multiline':True]
+['text':' If there was no sliding:
+         *    strstart <= WSIZE+MAX_DIST-1 && lookahead <= MIN_LOOKAHEAD - 1 &&
+         *    more == window_size - lookahead - strstart
+         * => more >= window_size - (MIN_LOOKAHEAD-1 + WSIZE + MAX_DIST-1)
+         * => more >= window_size - 2*WSIZE + 2
+         * In the BIG_MEM or MMAP case (not yet supported),
+         *   window_size == input_size + MIN_LOOKAHEAD  &&
+         *   strstart + s->lookahead <= input_size => more >= MIN_LOOKAHEAD.
+         * Otherwise, window_size == 2*WSIZE so more >= 2.
+         * If there was sliding, more >= WSIZE. So in all cases, more >= 2.
+         ','line_number':290,'multiline':True]
+['text':' Initialize the hash value now that we have some input: ','line_number':306,'multiline':True]
+['text':' If the whole input has less than MIN_MATCH bytes, ins_h is garbage,
+         * but this is not important since only literal bytes will be emitted.
+         ','line_number':326,'multiline':True]
+['text':' If the WIN_INIT bytes after the end of the current data have never been
+     * written, then zero those bytes in order to avoid memory check reports of
+     * the use of uninitialized (or uninitialised as Julian writes) bytes by
+     * the longest match routines.  Update the high water mark for the next
+     * time through here.  WIN_INIT is set to MAX_MATCH since the longest match
+     * routines allow scanning to strstart + MAX_MATCH, ignoring lookahead.
+     ','line_number':332,'multiline':True]
+['text':' Previous high water mark below current data -- zero WIN_INIT
+             * bytes or up to end of window, whichever is less.
+             ','line_number':344,'multiline':True]
+['text':' High water mark at or above current data, but below current data
+             * plus WIN_INIT -- zero out to current data plus WIN_INIT, or up
+             * to end of window, whichever is less.
+             ','line_number':354,'multiline':True]
+['text':' ========================================================================= ','line_number':370,'multiline':True]
+['text':' To do: ignore strm->next_in if we use it as window ','line_number':375,'multiline':True]
+['text':' ========================================================================= ','line_number':378,'multiline':True]
+['text':' suppress zlib wrapper ','line_number':414,'multiline':True]
+['text':' write gzip wrapper instead ','line_number':422,'multiline':True]
+['text':' until 256-byte window bug fixed ','line_number':431,'multiline':True]
+['text':' to pass state test in deflateReset() ','line_number':436,'multiline':True]
+['text':' nothing written to s->window yet ','line_number':453,'multiline':True]
+['text':' 16K elements by default ','line_number':455,'multiline':True]
+['text':' We overlay pending_buf and sym_buf. This works since the average size
+     * for length/distance pairs over any compressed block is assured to be 31
+     * bits or less.
+     *
+     * Analysis: The longest fixed codes are a length code of 8 bits plus 5
+     * extra bits, for lengths 131 to 257. The longest fixed distance codes are
+     * 5 bits plus 13 extra bits, for distances 16385 to 32768. The longest
+     * possible fixed-codes length/distance pair is then 31 bits total.
+     *
+     * sym_buf starts one-fourth of the way into pending_buf. So there are
+     * three bytes in sym_buf for every four bytes in pending_buf. Each symbol
+     * in sym_buf is three bytes -- two for the distance and one for the
+     * literal/length. As each symbol is consumed, the pointer to the next
+     * sym_buf value to read moves forward three bytes. From that symbol, up to
+     * 31 bits are written to pending_buf. The closest the written pending_buf
+     * bits gets to the next sym_buf symbol to read is just before the last
+     * code is written. At that time, 31*(n - 2) bits have been written, just
+     * after 24*(n - 2) bits have been consumed from sym_buf. sym_buf starts at
+     * 8*n bits into pending_buf. (Note that the symbol buffer fills when n - 1
+     * symbols are written.) The closest the writing gets to what is unread is
+     * then n + 14 bits. Here n is lit_bufsize, which is 16384 by default, and
+     * can range from 128 to 32768.
+     *
+     * Therefore, at a minimum, there are 142 bits of space between what is
+     * written and what is read in the overlain buffers, so the symbols cannot
+     * be overwritten by the compressed data. That space is actually 139 bits,
+     * due to the three-bit fixed-code block header.
+     *
+     * That covers the case where either Z_FIXED is specified, forcing fixed
+     * codes, or when the use of fixed codes is chosen, because that choice
+     * results in a smaller compressed block than dynamic codes. That latter
+     * condition then assures that the above analysis also covers all dynamic
+     * blocks. A dynamic-code block will only be chosen to be emitted if it has
+     * fewer bits than a fixed-code block would for the same set of symbols.
+     * Therefore its average symbol length is assured to be less than 31. So
+     * the compressed data for a dynamic block also cannot overwrite the
+     * symbols from which it is being constructed.
+     ','line_number':457,'multiline':True]
+['text':' We avoid equality with lit_bufsize*3 because of wraparound at 64K
+     * on 16 bit machines and because stored blocks are restricted to
+     * 64K-1 bytes.
+     ','line_number':508,'multiline':True]
+['text':' =========================================================================
+ * Check for a valid deflate stream state. Return 0 if ok, 1 if not.
+ ','line_number':520,'multiline':True]
+['text':' ========================================================================= ','line_number':543,'multiline':True]
+['text':' when using zlib wrappers, compute Adler-32 for provided dictionary ','line_number':559,'multiline':True]
+['text':' avoid computing Adler-32 in read_buf ','line_number':562,'multiline':True]
+['text':' if dictionary would fill window, just replace the history ','line_number':564,'multiline':True]
+['text':' already empty otherwise ','line_number':566,'multiline':True]
+['text':' use the tail ','line_number':572,'multiline':True]
+['text':' insert dictionary into window and hash ','line_number':576,'multiline':True]
+['text':' ========================================================================= ','line_number':609,'multiline':True]
+['text':' ========================================================================= ','line_number':628,'multiline':True]
+['text':' use zfree if we ever allocate msg dynamically ','line_number':637,'multiline':True]
+['text':' was made negative by deflate(..., Z_FINISH); ','line_number':645,'multiline':True]
+['text':' ===========================================================================
+ * Initialize the "longest match" routines for a new zlib stream
+ ','line_number':664,'multiline':True]
+['text':' Set the default configuration parameters:
+     ','line_number':672,'multiline':True]
+['text':' ========================================================================= ','line_number':688,'multiline':True]
+['text':' ========================================================================= ','line_number':698,'multiline':True]
+['text':' ========================================================================= ','line_number':706,'multiline':True]
+['text':' ========================================================================= ','line_number':716,'multiline':True]
+['text':' ========================================================================= ','line_number':739,'multiline':True]
+['text':' Flush the last buffer: ','line_number':759,'multiline':True]
+['text':' ========================================================================= ','line_number':784,'multiline':True]
+['text':' =========================================================================
+ * For the default windowBits of 15 and memLevel of 8, this function returns a
+ * close to exact, as well as small, upper bound on the compressed size. This
+ * is an expansion of ~0.03%, plus a small constant.
+ *
+ * For any setting other than those defaults for windowBits and memLevel, one
+ * of two worst case bounds is returned. This is at most an expansion of ~4% or
+ * ~13%, plus a small constant.
+ *
+ * Both the 0.03% and 4% derive from the overhead of stored blocks. The first
+ * one is for stored blocks of 16383 bytes (memLevel == 8), whereas the second
+ * is for stored blocks of 127 bytes (the worst case memLevel == 1). The
+ * expansion results from five bytes of header for each stored block.
+ *
+ * The larger expansion of 13% results from a window size less than or equal to
+ * the symbols buffer size (windowBits <= memLevel + 7). In that case some of
+ * the data being compressed may have slid out of the sliding window, impeding
+ * a stored block from being emitted. Then the only choice is a fixed or
+ * dynamic block, where a fixed block limits the maximum expansion to 9 bits
+ * per 8-bit byte, plus 10 bits for every block. The smallest block size for
+ * which this can occur is 255 (memLevel == 2).
+ *
+ * Shifts are used to approximate divisions, for speed.
+ ','line_number':798,'multiline':True]
+['text':' upper bound for fixed blocks with 9-bit literals and length 255
+       (memLevel == 2, which is the lowest that may not use stored blocks) --
+       ~13% overhead plus a small constant ','line_number':826,'multiline':True]
+['text':' upper bound for stored blocks with length 127 (memLevel == 1) --
+       ~4% overhead plus a small constant ','line_number':832,'multiline':True]
+['text':' if can't get parameters, return larger bound plus a zlib wrapper ','line_number':837,'multiline':True]
+['text':' compute wrapper length ','line_number':841,'multiline':True]
+['text':' raw deflate ','line_number':844,'multiline':True]
+['text':' zlib wrapper ','line_number':847,'multiline':True]
+['text':' gzip wrapper ','line_number':851,'multiline':True]
+['text':' user-supplied gzip header ','line_number':853,'multiline':True]
+['text':' for compiler happiness ','line_number':872,'multiline':True]
+['text':' if not default parameters, return one of the conservative bounds ','line_number':876,'multiline':True]
+['text':' default settings: return tight bound for that case -- ~0.03% overhead
+       plus a small constant ','line_number':881,'multiline':True]
+['text':' =========================================================================
+ * Put a short in the pending buffer. The 16-bit value is put in MSB order.
+ * IN assertion: the stream state is correct and there is enough room in
+ * pending_buf.
+ ','line_number':887,'multiline':True]
+['text':' =========================================================================
+ * Flush as much pending output as possible. All deflate() output, except for
+ * some deflate_stored() output, goes through this function so some
+ * applications may wish to modify it to avoid allocating a large
+ * strm->next_out buffer and copying into it. (See also read_buf()).
+ ','line_number':897,'multiline':True]
+['text':' ===========================================================================
+ * Update the header CRC with the bytes s->pending_buf[beg..s->pending - 1].
+ ','line_number':923,'multiline':True]
+['text':' ========================================================================= ','line_number':933,'multiline':True]
+['text':' value of flush param for previous deflate call ','line_number':935,'multiline':True]
+['text':' Flush as much pending output as possible ','line_number':953,'multiline':True]
+['text':' Since avail_out is 0, deflate will be called again with
+             * more output space, but possibly with both pending and
+             * avail_in equal to zero. There won't be anything to do,
+             * but this is not an error situation so make sure we
+             * return OK instead of BUF_ERROR at next call of deflate:
+             ','line_number':957,'multiline':True]
+['text':' Make sure there is something to do and avoid duplicate consecutive
+     * flushes. For repeated and useless calls with Z_FINISH, we keep
+     * returning Z_STREAM_END instead of Z_BUF_ERROR.
+     ','line_number':967,'multiline':True]
+['text':' User must not provide more input after the first FINISH: ','line_number':976,'multiline':True]
+['text':' Write the header ','line_number':981,'multiline':True]
+['text':' zlib header ','line_number':985,'multiline':True]
+['text':' Save the adler32 of the preset dictionary: ','line_number':1003,'multiline':True]
+['text':' Compression must start with an empty pending buffer ','line_number':1011,'multiline':True]
+['text':' gzip header ','line_number':1020,'multiline':True]
+['text':' Compression must start with an empty pending buffer ','line_number':1037,'multiline':True]
+['text':' start of bytes to update crc ','line_number':1072,'multiline':True]
+['text':' start of bytes to update crc ','line_number':1099,'multiline':True]
+['text':' start of bytes to update crc ','line_number':1121,'multiline':True]
+['text':' Compression must start with an empty pending buffer ','line_number':1155,'multiline':True]
+['text':' Start a new block or continue the current one.
+     ','line_number':1164,'multiline':True]
+['text':' avoid BUF_ERROR next call, see above ','line_number':1180,'multiline':True]
+['text':' If flush != Z_NO_FLUSH && avail_out == 0, the next call
+             * of deflate should use the same flush parameter to make sure
+             * that the flush is complete. So we don't have to output an
+             * empty block here, this will be done at next call. This also
+             * ensures that for a very small output buffer, we emit at most
+             * one empty block.
+             ','line_number':1183,'multiline':True]
+['text':' FULL_FLUSH or SYNC_FLUSH ','line_number':1194,'multiline':True]
+['text':' For a full flush, this empty block will be recognized
+                 * as a special marker by inflate_sync().
+                 ','line_number':1196,'multiline':True]
+['text':' forget history ','line_number':1200,'multiline':True]
+['text':' avoid BUF_ERROR at next call, see above ','line_number':1210,'multiline':True]
+['text':' Write the trailer ','line_number':1219,'multiline':True]
+['text':' If avail_out is zero, the application will call deflate again
+     * to flush the rest.
+     ','line_number':1238,'multiline':True]
+['text':' write the trailer only once! ','line_number':1241,'multiline':True]
+['text':' ========================================================================= ','line_number':1245,'multiline':True]
+['text':' Deallocate in reverse order of allocations: ','line_number':1253,'multiline':True]
+['text':' =========================================================================
+ * Copy the source state to the destination state.
+ * To simplify the source, this is not supported for 16-bit MSDOS (which
+ * doesn't have enough memory anyway to duplicate compression states).
+ ','line_number':1265,'multiline':True]
+['text':' following zmemcpy do not work for 16-bit MSDOS ','line_number':1304,'multiline':True]
+['text':' MAXSEG_64K ','line_number':1318,'multiline':True]
+['text':' ===========================================================================
+ * Set match_start to the longest match starting at the given string and
+ * return its length. Matches shorter or equal to prev_length are discarded,
+ * in which case the result is equal to prev_length and match_start is
+ * garbage.
+ * IN assertions: cur_match is the head of the hash chain for the current
+ *   string (strstart) and its distance is <= MAX_DIST, and prev_length >= 1
+ * OUT assertion: the match length is not greater than s->lookahead.
+ ','line_number':1322,'multiline':True]
+['text':' max hash chain length ','line_number':1332,'multiline':True]
+['text':' current string ','line_number':1333,'multiline':True]
+['text':' matched string ','line_number':1334,'multiline':True]
+['text':' length of current match ','line_number':1335,'multiline':True]
+['text':' best match length so far ','line_number':1336,'multiline':True]
+['text':' stop if match long enough ','line_number':1337,'multiline':True]
+['text':' Stop when cur_match becomes <= limit. To simplify the code,
+     * we prevent matches with the string of window index 0.
+     ','line_number':1340,'multiline':True]
+['text':' Compare two bytes at a time. Note: this is not always beneficial.
+     * Try with and without -DUNALIGNED_OK to check.
+     ','line_number':1347,'multiline':True]
+['text':' The code is optimized for HASH_BITS >= 8 and MAX_MATCH-2 multiple of 16.
+     * It is easy to get rid of this optimization if necessary.
+     ','line_number':1359,'multiline':True]
+['text':' Do not waste too much time if we already have a good match: ','line_number':1364,'multiline':True]
+['text':' Do not look for matches beyond the end of the input. This is necessary
+     * to make deflate deterministic.
+     ','line_number':1368,'multiline':True]
+['text':' Skip to next match if the match length cannot increase
+         * or if the match length is less than 2.  Note that the checks below
+         * for insufficient lookahead only occur occasionally for performance
+         * reasons.  Therefore uninitialized memory will be accessed, and
+         * conditional jumps will be made that depend on those values.
+         * However the length of the match is limited to the lookahead, so
+         * the output of deflate is not affected by the uninitialized values.
+         ','line_number':1380,'multiline':True]
+['text':' This code assumes sizeof(unsigned short) == 2. Do not use
+         * UNALIGNED_OK if your compiler uses a different size.
+         ','line_number':1389,'multiline':True]
+['text':' It is not necessary to compare scan[2] and match[2] since they are
+         * always equal when the other bytes match, given that the hash keys
+         * are equal and that HASH_BITS >= 8. Compare 2 bytes at a time at
+         * strstart + 3, + 5, up to strstart + 257. We check for insufficient
+         * lookahead only every 4th comparison; the 128th check will be made
+         * at strstart + 257. If MAX_MATCH-2 is not a multiple of 8, it is
+         * necessary to put more guard bytes at the end of the window, or
+         * to check more often for insufficient lookahead.
+         ','line_number':1395,'multiline':True]
+['text':' The funny "do {}" generates better code on most compilers ','line_number':1412,'multiline':True]
+['text':' Here, scan <= window + strstart + 257 ','line_number':1414,'multiline':True]
+['text':' UNALIGNED_OK ','line_number':1422,'multiline':True]
+['text':' The check at best_len - 1 can be removed because it will be made
+         * again later. (This heuristic is not always a win.)
+         * It is not necessary to compare scan[2] and match[2] since they
+         * are always equal when the other bytes match, given that
+         * the hash keys are equal and that HASH_BITS >= 8.
+         ','line_number':1429,'multiline':True]
+['text':' We check for insufficient lookahead only every 8th comparison;
+         * the 256th check will be made at strstart + 258.
+         ','line_number':1438,'multiline':True]
+['text':' UNALIGNED_OK ','line_number':1454,'multiline':True]
+['text':' FASTEST ','line_number':1474,'multiline':True]
+['text':' ---------------------------------------------------------------------------
+ * Optimized version for FASTEST only
+ ','line_number':1476,'multiline':True]
+['text':' current string ','line_number':1480,'multiline':True]
+['text':' matched string ','line_number':1481,'multiline':True]
+['text':' length of current match ','line_number':1482,'multiline':True]
+['text':' The code is optimized for HASH_BITS >= 8 and MAX_MATCH-2 multiple of 16.
+     * It is easy to get rid of this optimization if necessary.
+     ','line_number':1485,'multiline':True]
+['text':' Return failure if the match length is less than 2:
+     ','line_number':1497,'multiline':True]
+['text':' The check at best_len - 1 can be removed because it will be made
+     * again later. (This heuristic is not always a win.)
+     * It is not necessary to compare scan[2] and match[2] since they
+     * are always equal when the other bytes match, given that
+     * the hash keys are equal and that HASH_BITS >= 8.
+     ','line_number':1501,'multiline':True]
+['text':' We check for insufficient lookahead only every 8th comparison;
+     * the 256th check will be made at strstart + 258.
+     ','line_number':1510,'multiline':True]
+['text':' FASTEST ','line_number':1530,'multiline':True]
+['text':' result of memcmp for equal strings ','line_number':1535,'multiline':True]
+['text':' ===========================================================================
+ * Check that the match at match_start is indeed a match.
+ ','line_number':1537,'multiline':True]
+['text':' check that the match is indeed a match ','line_number':1541,'multiline':True]
+['text':' ZLIB_DEBUG ','line_number':1558,'multiline':True]
+['text':' ===========================================================================
+ * Flush the current block, with given end-of-file flag.
+ * IN assertion: strstart is set to the end of the current match.
+ ','line_number':1560,'multiline':True]
+['text':' Same but force premature exit if necessary. ','line_number':1575,'multiline':True]
+['text':' Maximum stored block length in deflate format (not including header). ','line_number':1581,'multiline':True]
+['text':' Minimum of a and b. ','line_number':1584,'multiline':True]
+['text':' ===========================================================================
+ * Copy without compression as much as possible from the input stream, return
+ * the current block state.
+ *
+ * In case deflateParams() is used to later switch to a non-zero compression
+ * level, s->matches (otherwise unused when storing) keeps track of the number
+ * of hash table slides to perform. If s->matches is 1, then one hash table
+ * slide will be done when switching. If s->matches is 2, the maximum value
+ * allowed here, then the hash table will be cleared, since two or more slides
+ * is the same as a clear.
+ *
+ * deflate_stored() is written to minimize the number of times an input byte is
+ * copied. It is most efficient with large input and output buffers, which
+ * maximizes the opportunities to have a single copy from next_in to next_out.
+ ','line_number':1587,'multiline':True]
+['text':' Smallest worthy block size when not flushing or finishing. By default
+     * this is 32K. This can be as small as 507 bytes for memLevel == 1. For
+     * large input and output buffers, the stored block size will be larger.
+     ','line_number':1603,'multiline':True]
+['text':' Copy as many min_block or larger stored blocks directly to next_out as
+     * possible. If flushing, copy the remaining available input to next_out as
+     * stored blocks, if there is enough space.
+     ','line_number':1609,'multiline':True]
+['text':' Set len to the maximum size block that we can copy directly with the
+         * available input data and output space. Set left to how much of that
+         * would be copied from what's left in the window.
+         ','line_number':1616,'multiline':True]
+['text':' maximum deflate stored block length ','line_number':1620,'multiline':True]
+['text':' number of header bytes ','line_number':1621,'multiline':True]
+['text':' need room for header ','line_number':1622,'multiline':True]
+['text':' maximum stored block length that will fit in avail_out: ','line_number':1624,'multiline':True]
+['text':' bytes left in window ','line_number':1626,'multiline':True]
+['text':' limit len to the input ','line_number':1628,'multiline':True]
+['text':' limit len to the output ','line_number':1630,'multiline':True]
+['text':' If the stored block would be less than min_block in length, or if
+         * unable to copy all of the available input when flushing, then try
+         * copying to the window and the pending buffer instead. Also don't
+         * write an empty block when flushing -- deflate() does that.
+         ','line_number':1632,'multiline':True]
+['text':' Make a dummy stored block in pending to get the header bytes,
+         * including any pending bits. This also updates the debugging counts.
+         ','line_number':1642,'multiline':True]
+['text':' Replace the lengths in the dummy stored block with len. ','line_number':1648,'multiline':True]
+['text':' Write the stored block header bytes. ','line_number':1654,'multiline':True]
+['text':' Update debugging counts for the data about to be copied. ','line_number':1658,'multiline':True]
+['text':' Copy uncompressed bytes from the window to next_out. ','line_number':1663,'multiline':True]
+['text':' Copy uncompressed bytes directly from next_in to next_out, updating
+         * the check value.
+         ','line_number':1675,'multiline':True]
+['text':' Update the sliding window with the last s->w_size bytes of the copied
+     * data, or append all of the copied data to the existing window if less
+     * than s->w_size bytes were copied. Also update the number of bytes to
+     * insert in the hash tables, in the event that deflateParams() switches to
+     * a non-zero compression level.
+     ','line_number':1686,'multiline':True]
+['text':' number of input bytes directly copied ','line_number':1692,'multiline':True]
+['text':' If any input was used, then no unused input remains in the window,
+         * therefore s->block_start == s->strstart.
+         ','line_number':1694,'multiline':True]
+['text':' supplant the previous history ','line_number':1697,'multiline':True]
+['text':' clear hash ','line_number':1698,'multiline':True]
+['text':' Slide the window down. ','line_number':1705,'multiline':True]
+['text':' add a pending slide_hash() ','line_number':1709,'multiline':True]
+['text':' If the last block was written to next_out, then done. ','line_number':1722,'multiline':True]
+['text':' If flushing and all input has been consumed, then done. ','line_number':1726,'multiline':True]
+['text':' Fill the window with any remaining input. ','line_number':1731,'multiline':True]
+['text':' Slide the window down. ','line_number':1734,'multiline':True]
+['text':' add a pending slide_hash() ','line_number':1739,'multiline':True]
+['text':' more space now ','line_number':1740,'multiline':True]
+['text':' There was not enough avail_out to write a complete worthy or flushed
+     * stored block to next_out. Write a stored block to pending instead, if we
+     * have enough input for a worthy block, or if flushing and there is enough
+     * room for the remaining input as a stored block in the pending buffer.
+     ','line_number':1754,'multiline':True]
+['text':' number of header bytes ','line_number':1759,'multiline':True]
+['text':' maximum stored block length that will fit in pending: ','line_number':1760,'multiline':True]
+['text':' We've done all we can with the available input and output. ','line_number':1775,'multiline':True]
+['text':' ===========================================================================
+ * Compress as much as possible from the input stream, return the current
+ * block state.
+ * This function does not perform lazy evaluation of matches and inserts
+ * new strings in the dictionary only for unmatched strings or for short
+ * matches. It is used only for the fast compression options.
+ ','line_number':1779,'multiline':True]
+['text':' head of the hash chain ','line_number':1787,'multiline':True]
+['text':' set if current block must be flushed ','line_number':1788,'multiline':True]
+['text':' Make sure that we always have enough lookahead, except
+         * at the end of the input file. We need MAX_MATCH bytes
+         * for the next match, plus MIN_MATCH bytes to insert the
+         * string following the next match.
+         ','line_number':1791,'multiline':True]
+['text':' flush the current block ','line_number':1801,'multiline':True]
+['text':' Insert the string window[strstart .. strstart + 2] in the
+         * dictionary, and set hash_head to the head of the hash chain:
+         ','line_number':1804,'multiline':True]
+['text':' Find the longest match, discarding those <= prev_length.
+         * At this point we have always match_length < MIN_MATCH
+         ','line_number':1812,'multiline':True]
+['text':' To simplify the code, we prevent matches with the string
+             * of window index 0 (in particular we have to avoid a match
+             * of the string with itself at the start of the input file).
+             ','line_number':1816,'multiline':True]
+['text':' longest_match() sets match_start ','line_number':1821,'multiline':True]
+['text':' Insert new strings in the hash table only if the match length
+             * is not too large. This saves time but degrades compression.
+             ','line_number':1831,'multiline':True]
+['text':' string at strstart already in table ','line_number':1837,'multiline':True]
+['text':' strstart never exceeds WSIZE-MAX_MATCH, so there are
+                     * always MIN_MATCH bytes ahead.
+                     ','line_number':1841,'multiline':True]
+['text':' If lookahead < MIN_MATCH, ins_h is garbage, but it does not
+                 * matter since it will be recomputed at next deflate call.
+                 ','line_number':1856,'multiline':True]
+['text':' No match, output a literal byte ','line_number':1861,'multiline':True]
+['text':' ===========================================================================
+ * Same as above, but achieves better compression. We use a lazy
+ * evaluation for matches: a match is finally adopted only if there is
+ * no better match at the next window position.
+ ','line_number':1880,'multiline':True]
+['text':' head of hash chain ','line_number':1886,'multiline':True]
+['text':' set if current block must be flushed ','line_number':1887,'multiline':True]
+['text':' Process the input block. ','line_number':1889,'multiline':True]
+['text':' Make sure that we always have enough lookahead, except
+         * at the end of the input file. We need MAX_MATCH bytes
+         * for the next match, plus MIN_MATCH bytes to insert the
+         * string following the next match.
+         ','line_number':1891,'multiline':True]
+['text':' flush the current block ','line_number':1901,'multiline':True]
+['text':' Insert the string window[strstart .. strstart + 2] in the
+         * dictionary, and set hash_head to the head of the hash chain:
+         ','line_number':1904,'multiline':True]
+['text':' Find the longest match, discarding those <= prev_length.
+         ','line_number':1912,'multiline':True]
+['text':' To simplify the code, we prevent matches with the string
+             * of window index 0 (in particular we have to avoid a match
+             * of the string with itself at the start of the input file).
+             ','line_number':1919,'multiline':True]
+['text':' longest_match() sets match_start ','line_number':1924,'multiline':True]
+['text':' If prev_match is also MIN_MATCH, match_start is garbage
+                 * but we will ignore the current match anyway.
+                 ','line_number':1933,'multiline':True]
+['text':' If there was a match at the previous step and the current
+         * match is not better, output the previous match:
+         ','line_number':1939,'multiline':True]
+['text':' Do not insert strings in hash table beyond this. ','line_number':1944,'multiline':True]
+['text':' Insert in hash table all strings up to the end of the match.
+             * strstart - 1 and strstart are already inserted. If there is not
+             * enough lookahead, the last two strings are not inserted in
+             * the hash table.
+             ','line_number':1951,'multiline':True]
+['text':' If there was no match at the previous position, output a
+             * single literal. If there was a match but the current match
+             * is longer, truncate the previous match to a single literal.
+             ','line_number':1970,'multiline':True]
+['text':' There is no previous match to compare with, wait for
+             * the next step to decide.
+             ','line_number':1983,'multiline':True]
+['text':' FASTEST ','line_number':2006,'multiline':True]
+['text':' ===========================================================================
+ * For Z_RLE, simply look for runs of bytes, generate matches only of distance
+ * one.  Do not maintain a hash table.  (It will be regenerated if this run of
+ * deflate switches away from Z_RLE.)
+ ','line_number':2008,'multiline':True]
+['text':' set if current block must be flushed ','line_number':2014,'multiline':True]
+['text':' byte at distance one to match ','line_number':2015,'multiline':True]
+['text':' scan goes up to strend for length of run ','line_number':2016,'multiline':True]
+['text':' Make sure that we always have enough lookahead, except
+         * at the end of the input file. We need MAX_MATCH bytes
+         * for the longest run, plus one for the unrolled loop.
+         ','line_number':2019,'multiline':True]
+['text':' flush the current block ','line_number':2028,'multiline':True]
+['text':' See how many times the previous byte repeats ','line_number':2031,'multiline':True]
+['text':' Emit match if have run of MIN_MATCH or longer, else emit literal ','line_number':2052,'multiline':True]
+['text':' No match, output a literal byte ','line_number':2062,'multiline':True]
+['text':' ===========================================================================
+ * For Z_HUFFMAN_ONLY, do not look for matches.  Do not maintain a hash table.
+ * (It will be regenerated if this run of deflate switches away from Huffman.)
+ ','line_number':2080,'multiline':True]
+['text':' set if current block must be flushed ','line_number':2085,'multiline':True]
+['text':' Make sure that we have a literal to write. ','line_number':2088,'multiline':True]
+['text':' flush the current block ','line_number':2094,'multiline':True]
+['text':' Output a literal byte ','line_number':2098,'multiline':True]

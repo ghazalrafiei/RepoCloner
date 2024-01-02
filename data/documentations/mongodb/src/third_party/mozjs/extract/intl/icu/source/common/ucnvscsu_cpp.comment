@@ -1,0 +1,484 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]
+['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]
+['text':'
+******************************************************************************
+*
+*   Copyright (C) 2000-2016, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+******************************************************************************
+*   file name:  ucnvscsu.c
+*   encoding:   UTF-8
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 2000nov18
+*   created by: Markus W. Scherer
+*
+*   This is an implementation of the Standard Compression Scheme for Unicode
+*   as defined in http://www.unicode.org/unicode/reports/tr6/ .
+*   Reserved commands and window settings are treated as illegal sequences and
+*   will result in callback calls.
+','line_number':3,'multiline':True]
+['text':' SCSU definitions --------------------------------------------------------- ','line_number':35,'multiline':True]
+['text':' SCSU command byte values ','line_number':37,'multiline':True]
+['text':' Quote from window pair 0 ','line_number':39,'multiline':True]
+['text':' Quote from window pair 7 ','line_number':40,'multiline':True]
+['text':' Define a window as extended ','line_number':41,'multiline':True]
+['text':' reserved ','line_number':42,'multiline':True]
+['text':' Quote a single Unicode character ','line_number':43,'multiline':True]
+['text':' Change to Unicode mode ','line_number':44,'multiline':True]
+['text':' Select window 0 ','line_number':45,'multiline':True]
+['text':' Select window 7 ','line_number':46,'multiline':True]
+['text':' Define and select window 0 ','line_number':47,'multiline':True]
+['text':' Define and select window 7 ','line_number':48,'multiline':True]
+['text':' Select window 0 ','line_number':50,'multiline':True]
+['text':' Select window 7 ','line_number':51,'multiline':True]
+['text':' Define and select window 0 ','line_number':52,'multiline':True]
+['text':' Define and select window 7 ','line_number':53,'multiline':True]
+['text':' Quote a single Unicode character ','line_number':54,'multiline':True]
+['text':' Define a Window as extended ','line_number':55,'multiline':True]
+['text':' reserved ','line_number':56,'multiline':True]
+['text':'
+     * Unicode code points from 3400 to E000 are not adressible by
+     * dynamic window, since in these areas no short run alphabets are
+     * found. Therefore add gapOffset to all values from gapThreshold.
+     ','line_number':60,'multiline':True]
+['text':' values between reservedStart and fixedThreshold are reserved ','line_number':68,'multiline':True]
+['text':' use table of predefined fixed offsets for values from fixedThreshold ','line_number':71,'multiline':True]
+['text':' constant offsets for the 8 static windows ','line_number':75,'multiline':True]
+['text':' ASCII for quoted tags ','line_number':77,'multiline':True]
+['text':' Latin - 1 Supplement (for access to punctuation) ','line_number':78,'multiline':True]
+['text':' Latin Extended-A ','line_number':79,'multiline':True]
+['text':' Combining Diacritical Marks ','line_number':80,'multiline':True]
+['text':' General Punctuation ','line_number':81,'multiline':True]
+['text':' Currency Symbols ','line_number':82,'multiline':True]
+['text':' Letterlike Symbols and Number Forms ','line_number':83,'multiline':True]
+['text':' CJK Symbols and punctuation ','line_number':84,'multiline':True]
+['text':' initial offsets for the 8 dynamic (sliding) windows ','line_number':87,'multiline':True]
+['text':' Latin-1 ','line_number':89,'multiline':True]
+['text':' Latin Extended A ','line_number':90,'multiline':True]
+['text':' Cyrillic ','line_number':91,'multiline':True]
+['text':' Arabic ','line_number':92,'multiline':True]
+['text':' Devanagari ','line_number':93,'multiline':True]
+['text':' Hiragana ','line_number':94,'multiline':True]
+['text':' Katakana ','line_number':95,'multiline':True]
+['text':' Fullwidth ASCII ','line_number':96,'multiline':True]
+['text':' Table of fixed predefined Offsets ','line_number':99,'multiline':True]
+['text':' 0xF9 ','line_number':101,'multiline':True]
+['text':' Latin-1 Letters + half of Latin Extended A ','line_number':101,'multiline':True]
+['text':' 0xFA ','line_number':102,'multiline':True]
+['text':' IPA extensions ','line_number':102,'multiline':True]
+['text':' 0xFB ','line_number':103,'multiline':True]
+['text':' Greek ','line_number':103,'multiline':True]
+['text':' 0xFC ','line_number':104,'multiline':True]
+['text':' Armenian ','line_number':104,'multiline':True]
+['text':' 0xFD ','line_number':105,'multiline':True]
+['text':' Hiragana ','line_number':105,'multiline':True]
+['text':' 0xFE ','line_number':106,'multiline':True]
+['text':' Katakana ','line_number':106,'multiline':True]
+['text':' 0xFF ','line_number':107,'multiline':True]
+['text':' Halfwidth Katakana ','line_number':107,'multiline':True]
+['text':' state values ','line_number':110,'multiline':True]
+['text':' dynamic window offsets, intitialize to default values from initialDynamicOffsets ','line_number':122,'multiline':True]
+['text':' state machine state - toUnicode ','line_number':126,'multiline':True]
+['text':' state machine state - fromUnicode ','line_number':133,'multiline':True]
+['text':'
+     * windowUse[] keeps track of the use of the dynamic windows:
+     * At nextWindowUseIndex there is the least recently used window,
+     * and the following windows (in a wrapping manner) are more and more
+     * recently used.
+     * At nextWindowUseIndex-1 there is the most recently used window.
+     ','line_number':137,'multiline':True]
+['text':' SCSU setup functions ----------------------------------------------------- ','line_number':156,'multiline':True]
+['text':' reset toUnicode ','line_number':163,'multiline':True]
+['text':' reset fromUnicode ','line_number':174,'multiline':True]
+['text':' Set the substitution character U+fffd as a Unicode string. ','line_number':214,'multiline':True]
+['text':' SCSU-to-Unicode conversion functions ------------------------------------- ','line_number':229,'multiline':True]
+['text':' set up the local pointers ','line_number':248,'multiline':True]
+['text':' get the state machine state ','line_number':258,'multiline':True]
+['text':' sourceIndex=-1 if the current character began in the previous buffer ','line_number':265,'multiline':True]
+['text':'
+     * conversion "loop"
+     *
+     * For performance, this is not a normal C loop.
+     * Instead, there are two code blocks for the two SCSU modes.
+     * The function branches to either one, and a change of the mode is done with a goto to
+     * the other branch.
+     *
+     * Each branch has two conventional loops:
+     * - a fast-path loop for the most common codes in the mode
+     * - a loop for all other codes in the mode
+     * When the fast-path runs into a code that it cannot handle, its loop ends and it
+     * runs into the following loop to handle the other codes.
+     * The end of the input or output buffer is also handled by the slower loop.
+     * The slow loop jumps (goto) to the fast-path loop again as soon as possible.
+     *
+     * The callback handling is done by returning with an error code.
+     * The conversion framework actually calls the callback function.
+     ','line_number':269,'multiline':True]
+['text':' fast path for single-byte mode ','line_number':289,'multiline':True]
+['text':' write US-ASCII graphic character or DEL ','line_number':296,'multiline':True]
+['text':' write from dynamic window ','line_number':302,'multiline':True]
+['text':' output surrogate pair ','line_number':310,'multiline':True]
+['text':' target overflow ','line_number':319,'multiline':True]
+['text':' normal state machine for single-byte mode, minus handling for what fastSingle covers ','line_number':334,'multiline':True]
+['text':' target is full ','line_number':338,'multiline':True]
+['text':' redundant conditions are commented out ','line_number':346,'multiline':True]
+['text':' here: b<0x20 because otherwise we would be in fastSingle ','line_number':347,'multiline':True]
+['text':' binary 0010 0110 0000 0001, check for b==0xd || b==0xa || b==9 || b==0 ','line_number':348,'multiline':True]
+['text':' CR/LF/TAB/NUL ','line_number':349,'multiline':True]
+['text':' if(SD0<=b && b<=SD7) ','line_number':361,'multiline':True]
+['text':' SQ0<=b && ','line_number':365,'multiline':True]
+['text':' Srs ','line_number':376,'multiline':True]
+['text':' callback(illegal) ','line_number':377,'multiline':True]
+['text':' store the first byte of a multibyte sequence in toUBytes[] ','line_number':384,'multiline':True]
+['text':' all static offsets are in the BMP ','line_number':404,'multiline':True]
+['text':' write from dynamic window ','line_number':410,'multiline':True]
+['text':' output surrogate pair ','line_number':418,'multiline':True]
+['text':' target overflow ','line_number':427,'multiline':True]
+['text':' callback(illegal): Reserved window offset value 0 ','line_number':455,'multiline':True]
+['text':' callback(illegal): Reserved window offset value 0xa8..0xf8 ','line_number':466,'multiline':True]
+['text':' fast path for Unicode mode ','line_number':477,'multiline':True]
+['text':' normal state machine for Unicode mode ','line_number':491,'multiline':True]
+['text':' unicodeByteMode: ','line_number':492,'multiline':True]
+['text':' target is full ','line_number':495,'multiline':True]
+['text':' UC0<=b && ','line_number':508,'multiline':True]
+['text':' UD0<=b && ','line_number':513,'multiline':True]
+['text':' Urs ','line_number':530,'multiline':True]
+['text':' callback(illegal) ','line_number':531,'multiline':True]
+['text':' set the converter state back into UConverter ','line_number':557,'multiline':True]
+['text':' reset to deal with the next character ','line_number':559,'multiline':True]
+['text':' not in a multi-byte sequence, reset toULength ','line_number':562,'multiline':True]
+['text':' write back the updated pointers ','line_number':571,'multiline':True]
+['text':'
+ * Identical to _SCSUToUnicodeWithOffsets but without offset handling.
+ * If a change is made in the original function, then either
+ * change this function the same way or
+ * re-copy the original function and remove the variables
+ * offsets, sourceIndex, and nextSourceIndex.
+ ','line_number':578,'multiline':True]
+['text':' set up the local pointers ','line_number':599,'multiline':True]
+['text':' get the state machine state ','line_number':608,'multiline':True]
+['text':'
+     * conversion "loop"
+     *
+     * For performance, this is not a normal C loop.
+     * Instead, there are two code blocks for the two SCSU modes.
+     * The function branches to either one, and a change of the mode is done with a goto to
+     * the other branch.
+     *
+     * Each branch has two conventional loops:
+     * - a fast-path loop for the most common codes in the mode
+     * - a loop for all other codes in the mode
+     * When the fast-path runs into a code that it cannot handle, its loop ends and it
+     * runs into the following loop to handle the other codes.
+     * The end of the input or output buffer is also handled by the slower loop.
+     * The slow loop jumps (goto) to the fast-path loop again as soon as possible.
+     *
+     * The callback handling is done by returning with an error code.
+     * The conversion framework actually calls the callback function.
+     ','line_number':615,'multiline':True]
+['text':' fast path for single-byte mode ','line_number':635,'multiline':True]
+['text':' write US-ASCII graphic character or DEL ','line_number':641,'multiline':True]
+['text':' write from dynamic window ','line_number':644,'multiline':True]
+['text':' output surrogate pair ','line_number':649,'multiline':True]
+['text':' target overflow ','line_number':654,'multiline':True]
+['text':' normal state machine for single-byte mode, minus handling for what fastSingle covers ','line_number':665,'multiline':True]
+['text':' target is full ','line_number':669,'multiline':True]
+['text':' redundant conditions are commented out ','line_number':676,'multiline':True]
+['text':' here: b<0x20 because otherwise we would be in fastSingle ','line_number':677,'multiline':True]
+['text':' binary 0010 0110 0000 0001, check for b==0xd || b==0xa || b==9 || b==0 ','line_number':678,'multiline':True]
+['text':' CR/LF/TAB/NUL ','line_number':679,'multiline':True]
+['text':' if(SD0<=b && b<=SD7) ','line_number':686,'multiline':True]
+['text':' SQ0<=b && ','line_number':690,'multiline':True]
+['text':' Srs ','line_number':700,'multiline':True]
+['text':' callback(illegal) ','line_number':701,'multiline':True]
+['text':' store the first byte of a multibyte sequence in toUBytes[] ','line_number':708,'multiline':True]
+['text':' all static offsets are in the BMP ','line_number':724,'multiline':True]
+['text':' write from dynamic window ','line_number':727,'multiline':True]
+['text':' output surrogate pair ','line_number':732,'multiline':True]
+['text':' target overflow ','line_number':737,'multiline':True]
+['text':' callback(illegal): Reserved window offset value 0 ','line_number':760,'multiline':True]
+['text':' callback(illegal): Reserved window offset value 0xa8..0xf8 ','line_number':771,'multiline':True]
+['text':' fast path for Unicode mode ','line_number':781,'multiline':True]
+['text':' normal state machine for Unicode mode ','line_number':790,'multiline':True]
+['text':' unicodeByteMode: ','line_number':791,'multiline':True]
+['text':' target is full ','line_number':794,'multiline':True]
+['text':' UC0<=b && ','line_number':806,'multiline':True]
+['text':' UD0<=b && ','line_number':810,'multiline':True]
+['text':' Urs ','line_number':827,'multiline':True]
+['text':' callback(illegal) ','line_number':828,'multiline':True]
+['text':' set the converter state back into UConverter ','line_number':850,'multiline':True]
+['text':' reset to deal with the next character ','line_number':852,'multiline':True]
+['text':' not in a multi-byte sequence, reset toULength ','line_number':855,'multiline':True]
+['text':' write back the updated pointers ','line_number':864,'multiline':True]
+['text':' SCSU-from-Unicode conversion functions ----------------------------------- ','line_number':870,'multiline':True]
+['text':'
+ * This SCSU Encoder is fairly simple but uses all SCSU commands to achieve
+ * reasonable results. The lookahead is minimal.
+ * Many cases are simple:
+ * A character fits directly into the current mode, a dynamic or static window,
+ * or is not compressible. These cases are tested first.
+ * Real compression heuristics are applied to the rest, in code branches for
+ * single/Unicode mode and BMP/supplementary code points.
+ * The heuristics used here are extremely simple.
+ ','line_number':872,'multiline':True]
+['text':' get the number of the window that this character is in, or -1 ','line_number':883,'multiline':True]
+['text':' is the character in the dynamic window starting at the offset, or in the direct-encoded range? ','line_number':895,'multiline':True]
+['text':' binary 0010 0110 0000 0001,
+                                   check for b==0xd || b==0xa || b==9 || b==0 ','line_number':901,'multiline':True]
+['text':'
+ * getNextDynamicWindow returns the next dynamic window to be redefined
+ ','line_number':905,'multiline':True]
+['text':'
+ * useDynamicWindow() adjusts
+ * windowUse[] and nextWindowUseIndex for the algorithm to choose
+ * the next dynamic window to be defined;
+ * a subclass may override it and provide its own algorithm.
+ ','line_number':917,'multiline':True]
+['text':'
+     * move the existing window, which just became the most recently used one,
+     * up in windowUse[] to nextWindowUseIndex-1
+     ','line_number':925,'multiline':True]
+['text':' first, find the index of the window - backwards to favor the more recently used windows ','line_number':930,'multiline':True]
+['text':' now copy each windowUse[i+1] to [i] ','line_number':940,'multiline':True]
+['text':' finally, set the window into the most recently used index ','line_number':951,'multiline':True]
+['text':'
+ * calculate the offset and the code for a dynamic window that contains the character
+ * takes fixed offsets into account
+ * the offset of the window is stored in the offset variable,
+ * the code is returned
+ *
+ * return offset code: -1 none  <=0xff code for SDn/UDn  else code for SDX/UDX, subtract 0x200 to get the true code
+ ','line_number':955,'multiline':True]
+['text':' No dynamic window for US-ASCII. ','line_number':975,'multiline':True]
+['text':' This character is in a code range for a "small", i.e., reasonably windowable, script. ','line_number':981,'multiline':True]
+['text':' For these characters we need to take the gapOffset into account. ','line_number':985,'multiline':True]
+['text':'
+ * Idea for compression:
+ *  - save SCSUData and other state before really starting work
+ *  - at endloop, see if compression could be better with just unicode mode
+ *  - don't do this if a callback has been called
+ *  - if unicode mode would be smaller, then override the results with it - may need SCU at the beginning
+ *  - different buffer handling!
+ *
+ * Drawback or need for corrective handling:
+ * it is desirable to encode U+feff as SQU fe ff for the SCSU signature, and
+ * it is desirable to start a document in US-ASCII/Latin-1 for as long as possible
+ * not only for compression but also for HTML/XML documents with following charset/encoding announcers.
+ *
+ * How to achieve both?
+ *  - Only replace the result after an SDX or SCU?
+ ','line_number':993,'multiline':True]
+['text':' variables for compression heuristics ','line_number':1030,'multiline':True]
+['text':' set up the local pointers ','line_number':1036,'multiline':True]
+['text':' set up the local pointers ','line_number':1040,'multiline':True]
+['text':' get the state machine state ','line_number':1047,'multiline':True]
+['text':' sourceIndex=-1 if the current character began in the previous buffer ','line_number':1054,'multiline':True]
+['text':' similar conversion "loop" as in toUnicode ','line_number':1058,'multiline':True]
+['text':' state machine for single-byte mode ','line_number':1065,'multiline':True]
+['text':' singleByteMode: ','line_number':1066,'multiline':True]
+['text':' target is full ','line_number':1069,'multiline':True]
+['text':' pass US-ASCII graphic character through ','line_number':1077,'multiline':True]
+['text':' binary 0010 0110 0000 0001, check for b==0xd || b==0xa || b==9 || b==0 ','line_number':1084,'multiline':True]
+['text':' CR/LF/TAB/NUL ','line_number':1085,'multiline':True]
+['text':' quote C0 control character ','line_number':1092,'multiline':True]
+['text':' use the current dynamic window ','line_number':1098,'multiline':True]
+['text':' test the following code unit ','line_number':1109,'multiline':True]
+['text':' convert this surrogate code point ','line_number':1115,'multiline':True]
+['text':' exit this condition tree ','line_number':1116,'multiline':True]
+['text':' this is an unmatched lead code unit (1st surrogate) ','line_number':1118,'multiline':True]
+['text':' callback(illegal) ','line_number':1119,'multiline':True]
+['text':' no more input ','line_number':1124,'multiline':True]
+['text':' this is an unmatched trail code unit (2nd surrogate) ','line_number':1128,'multiline':True]
+['text':' callback(illegal) ','line_number':1129,'multiline':True]
+['text':' compress supplementary character U+10000..U+10ffff ','line_number':1134,'multiline':True]
+['text':' use the current dynamic window ','line_number':1136,'multiline':True]
+['text':' there is a dynamic window that contains this character, change to it ','line_number':1143,'multiline':True]
+['text':' might check if there are more characters in this window to come ','line_number':1151,'multiline':True]
+['text':' define an extended window with this character ','line_number':1152,'multiline':True]
+['text':' change to Unicode mode and output this (lead, trail) pair ','line_number':1161,'multiline':True]
+['text':' quote C1 control character ','line_number':1173,'multiline':True]
+['text':' SQ0+1==SQ1 ','line_number':1174,'multiline':True]
+['text':' quote signature character=byte order mark and specials ','line_number':1178,'multiline':True]
+['text':' compress all other BMP characters ','line_number':1183,'multiline':True]
+['text':' there is a window defined that contains this character - switch to it or quote from it? ','line_number':1185,'multiline':True]
+['text':' change to dynamic window ','line_number':1187,'multiline':True]
+['text':' quote from dynamic window ','line_number':1195,'multiline':True]
+['text':' quote from static window ','line_number':1201,'multiline':True]
+['text':' define a dynamic window with this character ','line_number':1206,'multiline':True]
+['text':'
+                     * this character is not compressible (a BMP ideograph or similar);
+                     * switch to Unicode mode if this is the last character in the block
+                     * or there is at least one more ideograph following immediately
+                     ','line_number':1216,'multiline':True]
+['text':' quote Unicode ','line_number':1226,'multiline':True]
+['text':' normal end of conversion: prepare for a new character ','line_number':1233,'multiline':True]
+['text':' state machine for Unicode mode ','line_number':1242,'multiline':True]
+['text':' unicodeByteMode: ','line_number':1243,'multiline':True]
+['text':' target is full ','line_number':1246,'multiline':True]
+['text':' not compressible, write character directly ','line_number':1254,'multiline':True]
+['text':' c<0x3400 || c>=0xf300 ','line_number':1267,'multiline':True]
+['text':' compress BMP character if the following one is not an uncompressible ideograph ','line_number':1268,'multiline':True]
+['text':' ASCII digit or letter ','line_number':1271,'multiline':True]
+['text':' there is a dynamic window that contains this character, change to it ','line_number':1277,'multiline':True]
+['text':' define a dynamic window with this character ','line_number':1286,'multiline':True]
+['text':' don't know how to compress this character, just write it directly ','line_number':1297,'multiline':True]
+['text':' c is a surrogate ','line_number':1301,'multiline':True]
+['text':' test the following code unit ','line_number':1306,'multiline':True]
+['text':' convert this surrogate code point ','line_number':1312,'multiline':True]
+['text':' exit this condition tree ','line_number':1313,'multiline':True]
+['text':' this is an unmatched lead code unit (1st surrogate) ','line_number':1315,'multiline':True]
+['text':' callback(illegal) ','line_number':1316,'multiline':True]
+['text':' no more input ','line_number':1321,'multiline':True]
+['text':' this is an unmatched trail code unit (2nd surrogate) ','line_number':1325,'multiline':True]
+['text':' callback(illegal) ','line_number':1326,'multiline':True]
+['text':' compress supplementary character ','line_number':1331,'multiline':True]
+['text':'
+                     * there is a dynamic window that contains this character and
+                     * the following character is not uncompressible,
+                     * change to the window
+                     ','line_number':1335,'multiline':True]
+['text':' too lazy to check trail in same window as source[1] ','line_number':1347,'multiline':True]
+['text':' two supplementary characters in (probably) the same window - define an extended one ','line_number':1350,'multiline':True]
+['text':' don't know how to compress this character, just write it directly ','line_number':1360,'multiline':True]
+['text':' 0xe000<=c<0xf300 ','line_number':1365,'multiline':True]
+['text':' quote to avoid SCSU tags ','line_number':1366,'multiline':True]
+['text':' normal end of conversion: prepare for a new character ','line_number':1372,'multiline':True]
+['text':' set the converter state back into UConverter ','line_number':1379,'multiline':True]
+['text':' write back the updated pointers ','line_number':1385,'multiline':True]
+['text':' write the output character bytes from c and length [code copied from ucnvmbcs.c] ','line_number':1392,'multiline':True]
+['text':' from the first if in the loop we know that targetCapacity>0 ','line_number':1393,'multiline':True]
+['text':' each branch falls through to the next one ','line_number':1397,'multiline':True]
+['text':' will never occur ','line_number':1411,'multiline':True]
+['text':' each branch falls through to the next one ','line_number':1416,'multiline':True]
+['text':' will never occur ','line_number':1434,'multiline':True]
+['text':' normal end of conversion: prepare for a new character ','line_number':1440,'multiline':True]
+['text':'
+         * We actually do this backwards here:
+         * In order to save an intermediate variable, we output
+         * first to the overflow buffer what does not fit into the
+         * regular target.
+         ','line_number':1447,'multiline':True]
+['text':' we know that 0<=targetCapacity<length<=4 ','line_number':1453,'multiline':True]
+['text':' targetCapacity==0 when SCU+supplementary where SCU used up targetCapacity==1 ','line_number':1454,'multiline':True]
+['text':' each branch falls through to the next one ','line_number':1458,'multiline':True]
+['text':' will never occur ','line_number':1472,'multiline':True]
+['text':' now output what fits into the regular target ','line_number':1477,'multiline':True]
+['text':' length was reduced by targetCapacity ','line_number':1478,'multiline':True]
+['text':' each branch falls through to the next one ','line_number':1480,'multiline':True]
+['text':' target overflow ','line_number':1503,'multiline':True]
+['text':'
+ * Identical to _SCSUFromUnicodeWithOffsets but without offset handling.
+ * If a change is made in the original function, then either
+ * change this function the same way or
+ * re-copy the original function and remove the variables
+ * offsets, sourceIndex, and nextSourceIndex.
+ ','line_number':1511,'multiline':True]
+['text':' variables for compression heuristics ','line_number':1535,'multiline':True]
+['text':' set up the local pointers ','line_number':1541,'multiline':True]
+['text':' set up the local pointers ','line_number':1545,'multiline':True]
+['text':' get the state machine state ','line_number':1551,'multiline':True]
+['text':' similar conversion "loop" as in toUnicode ','line_number':1558,'multiline':True]
+['text':' state machine for single-byte mode ','line_number':1565,'multiline':True]
+['text':' singleByteMode: ','line_number':1566,'multiline':True]
+['text':' target is full ','line_number':1569,'multiline':True]
+['text':' pass US-ASCII graphic character through ','line_number':1576,'multiline':True]
+['text':' binary 0010 0110 0000 0001, check for b==0xd || b==0xa || b==9 || b==0 ','line_number':1580,'multiline':True]
+['text':' CR/LF/TAB/NUL ','line_number':1581,'multiline':True]
+['text':' quote C0 control character ','line_number':1585,'multiline':True]
+['text':' use the current dynamic window ','line_number':1591,'multiline':True]
+['text':' test the following code unit ','line_number':1599,'multiline':True]
+['text':' convert this surrogate code point ','line_number':1604,'multiline':True]
+['text':' exit this condition tree ','line_number':1605,'multiline':True]
+['text':' this is an unmatched lead code unit (1st surrogate) ','line_number':1607,'multiline':True]
+['text':' callback(illegal) ','line_number':1608,'multiline':True]
+['text':' no more input ','line_number':1613,'multiline':True]
+['text':' this is an unmatched trail code unit (2nd surrogate) ','line_number':1617,'multiline':True]
+['text':' callback(illegal) ','line_number':1618,'multiline':True]
+['text':' compress supplementary character U+10000..U+10ffff ','line_number':1623,'multiline':True]
+['text':' use the current dynamic window ','line_number':1625,'multiline':True]
+['text':' there is a dynamic window that contains this character, change to it ','line_number':1629,'multiline':True]
+['text':' might check if there are more characters in this window to come ','line_number':1637,'multiline':True]
+['text':' define an extended window with this character ','line_number':1638,'multiline':True]
+['text':' change to Unicode mode and output this (lead, trail) pair ','line_number':1647,'multiline':True]
+['text':' quote C1 control character ','line_number':1656,'multiline':True]
+['text':' SQ0+1==SQ1 ','line_number':1657,'multiline':True]
+['text':' quote signature character=byte order mark and specials ','line_number':1661,'multiline':True]
+['text':' compress all other BMP characters ','line_number':1666,'multiline':True]
+['text':' there is a window defined that contains this character - switch to it or quote from it? ','line_number':1668,'multiline':True]
+['text':' change to dynamic window ','line_number':1670,'multiline':True]
+['text':' quote from dynamic window ','line_number':1678,'multiline':True]
+['text':' quote from static window ','line_number':1684,'multiline':True]
+['text':' define a dynamic window with this character ','line_number':1689,'multiline':True]
+['text':'
+                     * this character is not compressible (a BMP ideograph or similar);
+                     * switch to Unicode mode if this is the last character in the block
+                     * or there is at least one more ideograph following immediately
+                     ','line_number':1699,'multiline':True]
+['text':' quote Unicode ','line_number':1709,'multiline':True]
+['text':' normal end of conversion: prepare for a new character ','line_number':1716,'multiline':True]
+['text':' state machine for Unicode mode ','line_number':1724,'multiline':True]
+['text':' unicodeByteMode: ','line_number':1725,'multiline':True]
+['text':' target is full ','line_number':1728,'multiline':True]
+['text':' not compressible, write character directly ','line_number':1735,'multiline':True]
+['text':' c<0x3400 || c>=0xf300 ','line_number':1744,'multiline':True]
+['text':' compress BMP character if the following one is not an uncompressible ideograph ','line_number':1745,'multiline':True]
+['text':' ASCII digit or letter ','line_number':1748,'multiline':True]
+['text':' there is a dynamic window that contains this character, change to it ','line_number':1754,'multiline':True]
+['text':' define a dynamic window with this character ','line_number':1763,'multiline':True]
+['text':' don't know how to compress this character, just write it directly ','line_number':1774,'multiline':True]
+['text':' c is a surrogate ','line_number':1778,'multiline':True]
+['text':' test the following code unit ','line_number':1783,'multiline':True]
+['text':' convert this surrogate code point ','line_number':1788,'multiline':True]
+['text':' exit this condition tree ','line_number':1789,'multiline':True]
+['text':' this is an unmatched lead code unit (1st surrogate) ','line_number':1791,'multiline':True]
+['text':' callback(illegal) ','line_number':1792,'multiline':True]
+['text':' no more input ','line_number':1797,'multiline':True]
+['text':' this is an unmatched trail code unit (2nd surrogate) ','line_number':1801,'multiline':True]
+['text':' callback(illegal) ','line_number':1802,'multiline':True]
+['text':' compress supplementary character ','line_number':1807,'multiline':True]
+['text':'
+                     * there is a dynamic window that contains this character and
+                     * the following character is not uncompressible,
+                     * change to the window
+                     ','line_number':1811,'multiline':True]
+['text':' too lazy to check trail in same window as source[1] ','line_number':1823,'multiline':True]
+['text':' two supplementary characters in (probably) the same window - define an extended one ','line_number':1826,'multiline':True]
+['text':' don't know how to compress this character, just write it directly ','line_number':1836,'multiline':True]
+['text':' 0xe000<=c<0xf300 ','line_number':1841,'multiline':True]
+['text':' quote to avoid SCSU tags ','line_number':1842,'multiline':True]
+['text':' normal end of conversion: prepare for a new character ','line_number':1848,'multiline':True]
+['text':' set the converter state back into UConverter ','line_number':1854,'multiline':True]
+['text':' write back the updated pointers ','line_number':1860,'multiline':True]
+['text':' write the output character bytes from c and length [code copied from ucnvmbcs.c] ','line_number':1866,'multiline':True]
+['text':' from the first if in the loop we know that targetCapacity>0 ','line_number':1867,'multiline':True]
+['text':' each branch falls through to the next one ','line_number':1870,'multiline':True]
+['text':' will never occur ','line_number':1884,'multiline':True]
+['text':' normal end of conversion: prepare for a new character ','line_number':1889,'multiline':True]
+['text':'
+         * We actually do this backwards here:
+         * In order to save an intermediate variable, we output
+         * first to the overflow buffer what does not fit into the
+         * regular target.
+         ','line_number':1895,'multiline':True]
+['text':' we know that 0<=targetCapacity<length<=4 ','line_number':1901,'multiline':True]
+['text':' targetCapacity==0 when SCU+supplementary where SCU used up targetCapacity==1 ','line_number':1902,'multiline':True]
+['text':' each branch falls through to the next one ','line_number':1906,'multiline':True]
+['text':' will never occur ','line_number':1920,'multiline':True]
+['text':' now output what fits into the regular target ','line_number':1925,'multiline':True]
+['text':' length was reduced by targetCapacity ','line_number':1926,'multiline':True]
+['text':' each branch falls through to the next one ','line_number':1928,'multiline':True]
+['text':' target overflow ','line_number':1942,'multiline':True]
+['text':' miscellaneous ------------------------------------------------------------ ','line_number':1950,'multiline':True]
+['text':' structure for SafeClone calculations ','line_number':1964,'multiline':True]
+['text':' 'preflighting' request - set needed size into *pBufferSize ','line_number':1984,'multiline':True]
+['text':' ucnv.c/ucnv_safeClone() copied the main UConverter already ','line_number':1990,'multiline':True]
+['text':' CCSID for SCSU ','line_number':2028,'multiline':True]
+['text':' one UChar generates at least 1 byte and at most 3 bytes ','line_number':2030,'multiline':True]
+['text':'
+     * The subchar here is ignored because _SCSUOpen() sets U+fffd as a Unicode
+     * substitution string.
+     ','line_number':2031,'multiline':True]
+['text':' reserved ','line_number':2039,'multiline':True]

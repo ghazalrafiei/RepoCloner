@@ -1,0 +1,80 @@
+['text':'
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree.
+ ','line_number':1,'multiline':True]
+['text':'
+     * Convert int32_t input to FP32 and multiply by FP32 scale.
+     * Both operations involve statistically unbiased roundings:
+     * - Large int32_t values can't be exactly represented as FP32. The
+     * conversion instruction in ARM NEON would round it to nearest FP32 value
+     * with ties to even.
+     * - Product of two FP32 values is generally not exactly representation as
+     * an FP32 value, and will be rounded to nearest FP32 value with ties to
+     * even.
+     ','line_number':49,'multiline':True]
+['text':'
+     * Leverage "Floating-point Convert to Signed integer, rounding to nearest
+     * with ties to even" instruction. This is an ARMv8 instruction (always
+     * available in AArch64), which saturates result on overflow. We don't need
+     * to specifically consider saturated results, they will be clamped at the
+     * last stage.
+     ','line_number':65,'multiline':True]
+['text':'
+     * Standard final sequence on ARM NEON:
+     * - Pack to int16_t and saturate
+     * - Add zero point
+     * - Pack to uint8_t and saturate
+     * - Clamp between qmin and qmax
+     ','line_number':77,'multiline':True]
+['text':'
+     * ARMv7 NEON offers only a floating-point to integer conversion instruction
+     * with rounding towards zero. In lieu of conversion instruction with
+     * rounding-to-nearest-even, we use a magic trick of adding a large number
+     * (1.5 * 2**23) to scaled value to cause rounding to integer, and then
+     * substracing this magic number as integer. This trick works only in a
+     * limited range (absolute value of input must be less than 2**22), so
+     * generally we have to clamp input to this range before using the magic.
+     * However, clamping to any smaller range works just as well, and thus we
+     * clamp to [qmin - zero point, qmax - zero point] range so that after we
+     * add zero point to the result, it gets into target [qmin, qmax] range.
+     ','line_number':96,'multiline':True]
+['text':'
+     * Conversion to integer using the "magic trick". Rounding is performed in
+     * the output of addition operation, and result is rounded to nearest even
+     * integer with ties to even.
+     ','line_number':113,'multiline':True]
+['text':'
+     * Select low 8 bits of each 32-bit integer in the vectors for the output.
+     * Since result is already clamped to [qmin, qmax] subrange of [0, 255],
+     * saturation is not needed.
+     ','line_number':127,'multiline':True]
+['text':'
+     * AArch32 version:
+     *   4x VCVT.F32.S32 Qd, Qm
+     *   4x VMUL.F32 Qd, Qm, Qn
+     *   4x VMIN.F32 Qd, Qm, Qn
+     *   4x VMAX.F32 Qd, Qm, Qn
+     *   4x VADD.F32 Qd, Qm, Qn
+     *   4x VSUB.S32 Qd, Qm, Qn
+     *   4x VMOVN.I32 Dd, Qm
+     *   2x VMOVN.I16 Dd, Qm
+     * ---------------------
+     * 30 instructions total
+     *
+     * AArch64 version:
+     *   4x SCVTF Vd.4S, Vn.4S
+     *   4x FMUL Vd.4S, Vn.4S, Vm.4S
+     *   4x FCVTNS Vd.4S, Vn.4S
+     *   2x SQXTN Vd.4H, Vn.4S
+     *   2x SQXTN2 Vd.8H, Vn.4S
+     *   2x ADD Vd.8H, Vn.8H, Vm.8H
+     *   1x SQXTUN Vd.8B, Vn.8H
+     *   1x SQXTUN2 Vd.16B, Vn.8H
+     *   1x UMIN Vd.16B, Vn.16B, Vm.16B
+     *   1x UMAX Vd.16B, Vn.16B, Vm.16B
+     * ---------------------
+     * 22 instructions total
+     ','line_number':139,'multiline':True]

@@ -1,0 +1,110 @@
+['text':'*
+ *    Copyright (C) 2022-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' The partitioning function for use with the 'Partitioned' utility.','line_number':65,'multiline':False]
+['text':'
+ * 'QueryStatsStore insertion and eviction listener implementation. This class adjusts the
+ * 'queryStatsStoreSize' serverStatus metric when entries are inserted or evicted.
+ ','line_number':77,'multiline':True]
+['text':'*
+ * A manager for the queryStats store allows a "pointer swap" on the queryStats store itself. The
+ * usage patterns are as follows:
+ *
+ * - Updating the queryStats store uses the `getQueryStatsStore()` method. The queryStats store
+ *   instance is obtained, entries are looked up and mutated, or created anew.
+ * - The queryStats store is "reset". This involves atomically allocating a new instance, once
+ * there are no more updaters (readers of the store "pointer"), and returning the existing
+ * instance.
+ ','line_number':100,'multiline':True]
+['text':'*
+     * Acquire the instance of the queryStats store.
+     ','line_number':117,'multiline':True]
+['text':'*
+     * Resize the queryStats store and return the number of evicted
+     * entries.
+     ','line_number':128,'multiline':True]
+['text':'*
+     * Max size of the queryStats store. Tracked here to avoid having to recompute after it's
+     * divided up into partitions.
+     ','line_number':140,'multiline':True]
+['text':'*
+ * Acquire a reference to the global queryStats store.
+ ','line_number':153,'multiline':True]
+['text':'*
+ * Registers a request for query stats collection. The function may decide not to collect anything,
+ * so this should be called for all requests. The decision is made based on the feature flag and
+ * query stats rate limiting.
+ *
+ * The originating command/query does not persist through the end of query execution due to
+ * optimizations made to the original query and the expiration of OpCtx across getMores. In order
+ * to pair the query stats metrics that are collected at the end of execution with the original
+ * query, it is necessary to store the original query during planning and persist it through
+ * getMores.
+ *
+ * During planning, registerRequest is called to serialize the query stats key and save it to
+ * OpDebug. If a query's execution is complete within the original operation,
+ * collectQueryStatsMongod/collectQueryStatsMongos will call writeQueryStats() and pass along the
+ * query stats key to be saved in the query stats store alongside metrics collected.
+ *
+ * However, OpDebug does not persist through cursor iteration, so if a query's execution will span
+ * more than one request/operation, it's necessary to save the query stats context to the cursor
+ * upon cursor registration. In these cases, collectQueryStatsMongod/collectQueryStatsMongos will
+ * aggregate each operation's metrics within the cursor. Once the request is eventually complete,
+ * the cursor calls writeQueryStats() on its destruction.
+ *
+ * Notes:
+ * - It's important to call registerRequest with the original request, before canonicalizing or
+ *   optimizing it, in order to preserve the user's input for the query shape.
+ * - Calling this affects internal state. It should be called exactly once for each request for
+ *   which query stats may be collected.
+ * - The std::function argument to construct an abstracted Key is provided to break
+ *   library cycles so this library does not need to know how to parse everything. It is done as a
+ *   deferred construction callback to ensure that this feature does not impact performance if
+ *   collecting stats is not needed due to the feature being disabled or the request being rate
+ *   limited.
+ ','line_number':158,'multiline':True]
+['text':'*
+ * Convert an optional Duration to a count of Microseconds uint64_t.
+ ','line_number':195,'multiline':True]
+['text':'*
+ * Snapshot of query stats from CurOp::OpDebug to store in query stats store.
+ ','line_number':202,'multiline':True]
+['text':'*
+ * Get a snapshot of the metrics to store in query stats from CurOp::OpDebug and others.
+ ','line_number':211,'multiline':True]
+['text':'*
+ * Writes query stats to the query stats store for the operation identified by `queryStatsKeyHash`.
+ *
+ * Direct calls to writeQueryStats in new code should be avoided in favor of calling existing
+ * functions:
+ *  - collectQueryStatsMongod/collectQueryStatsMongos in the case of requests that span one
+ *    operation
+ *  - ClientCursor::dispose/ClusterClientCursorImpl::kill in the case of requests that span
+ *    multiple operations (via getMore)
+ ','line_number':218,'multiline':True]
+['text':' namespace mongo::query_stats','line_number':234,'multiline':False]

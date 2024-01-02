@@ -1,0 +1,830 @@
+['text':'*
+ * Sets up a replica set. To make the set running, call {@link #startSet},
+ * followed by {@link #initiate} (and optionally,
+ * {@link #awaitSecondaryNodes} to block till the  set is fully operational).
+ * Note that some of the replica start up parameters are not passed here,
+ * but to the #startSet method.
+ *
+ * @param {Object|string} opts If this value is a string, it specifies the connection string for
+ *      a MongoD host to be used for recreating a ReplSetTest from. Otherwise, if it is an object,
+ *      it must have the following contents:
+ *
+ *   {
+ *     name {string}: name of this replica set. Default: 'testReplSet'
+ *     host {string}: name of the host machine. Hostname will be used
+ *        if not specified.
+ *     useHostName {boolean}: if true, use hostname of machine,
+ *        otherwise use localhost
+ *     nodes {number|Object|Array.<Object>}: number of replicas. Default: 0.
+ *        Can also be an Object (or Array).
+ *        Format for Object:
+ *          {
+ *            <any string>: replica member option Object. @see MongoRunner.runMongod
+ *            <any string2>: and so on...
+ *          }
+ *          If object has a special "rsConfig" field then those options will be used for each
+ *          replica set member config options when used to initialize the replica set, or
+ *          building the config with getReplSetConfig()
+ *
+ *        Format for Array:
+ *           An array of replica member option Object. @see MongoRunner.runMongod
+ *
+ *        Note: For both formats, a special boolean property 'arbiter' can be
+ *          specified to denote a member is an arbiter.
+ *
+ *        Note: A special "bridgeOptions" property can be specified in both the object and array
+ *           formats to configure the options for the mongobridge corresponding to that node. These
+ *           options are merged with the opts.bridgeOptions options, where the node-specific options
+ *           take precedence.
+ *
+ *     nodeOptions {Object}: Command-line options to apply to all nodes in the replica set.
+ *        Format for Object:
+ *          { cmdline-param-with-no-arg : "",
+ *            param-with-arg : arg }
+ *        This turns into "mongod --cmdline-param-with-no-arg --param-with-arg arg"
+ *
+ *     causallyConsistent {boolean}: Specifies whether the connections to the replica set nodes
+ *        should be created with the 'causal consistency' flag enabled, which means they will gossip
+ *        the cluster time and add readConcern afterClusterTime where applicable. Defaults to false.
+ *
+ *     oplogSize {number}: Default: 40
+ *     useSeedList {boolean}: Use the connection string format of this set
+ *        as the replica set name (overrides the name property). Default: false
+ *     keyFile {string}
+ *     protocolVersion {number}: protocol version of replset used by the replset initiation.
+ *
+ *     useBridge {boolean}: If true, then a mongobridge process is started for each node in the
+ *        replica set. Both the replica set configuration and the connections returned by startSet()
+ *        will be references to the proxied connections. Defaults to false.
+ *
+ *     bridgeOptions {Object}: Options to apply to all mongobridge processes. Defaults to {}.
+ *
+ *     settings {object}: Setting used in the replica set config document.
+ *        Example:
+ *              settings: { chainingAllowed: false, ... }
+ *
+ *     seedRandomNumberGenerator {boolean}: Indicates whether the random number generator should
+ *        be seeded when randomBinVersions is true. For ReplSetTests started by ShardingTest, the
+ *        seed is generated as part of ShardingTest.
+ *
+ *     useAutoBootstrapProcedure {boolean} If true, follow the procedure for auto-bootstrapped
+ *        replica sets.
+ *   }
+ *
+ * Member variables:
+ *  nodes {Array.<Mongo>} - connection to replica set members
+ ','line_number':1,'multiline':True]
+['text':' global retryOnRetryableError ','line_number':78,'multiline':True]
+['text':' Replica set health states','line_number':87,'multiline':False]
+['text':' Some code still references kDefaultTimeoutMS as a (non-static) member variable, so make sure','line_number':90,'multiline':False]
+['text':' it's still accessible that way.','line_number':91,'multiline':False]
+['text':' Publicly exposed variables','line_number':95,'multiline':False]
+['text':'*
+     * Tries to load the 'jstests/libs/legacyThreadSupport.js' dependency. Returns true if the file
+     * is loaded successfully, and false otherwise.
+     ','line_number':97,'multiline':True]
+['text':' eslint-disable-next-line no-restricted-syntax ','line_number':107,'multiline':True]
+['text':' For Thread.','line_number':108,'multiline':False]
+['text':'*
+     * Returns the config document reported from the specified connection.
+     ','line_number':115,'multiline':True]
+['text':'*
+     * Invokes the 'hello' command on each individual node and returns the current primary, or false
+     * if none is found. Populates the following cached values:
+     * '_primary': the current primary
+     * '_secondaries': all nodes other than '_primary' (note this includes arbiters)
+     * '_liveNodes': all currently reachable nodes
+     ','line_number':122,'multiline':True]
+['text':' Ensure that only one node is in primary state.','line_number':136,'multiline':False]
+['text':' We verify that the node has a valid config by checking if n.me exists. Then, we','line_number':142,'multiline':False]
+['text':' check to see if the node is in primary state.','line_number':143,'multiline':False]
+['text':'*
+     * Attempt to connect to all nodes and returns a list of secondaries in which the connection was
+     * successful.
+     ','line_number':167,'multiline':True]
+['text':'*
+     * For all unauthenticated connections passed in, authenticates them with the '__system' user.
+     * If a connection is already authenticated, we will skip authentication for that connection and
+     * assume that it already has the correct privileges. It is up to the caller of this function to
+     * ensure that the connection is appropriately authenticated.
+     ','line_number':178,'multiline':True]
+['text':' There are few cases where we do not auth','line_number':204,'multiline':False]
+['text':' 1. When transitioning to auth','line_number':205,'multiline':False]
+['text':' 2. When cluster is running in x509 but shell was not started with TLS (i.e. sslSpecial','line_number':206,'multiline':False]
+['text':' suite)','line_number':207,'multiline':False]
+['text':'*
+     * Returns 'true' if the "conn" has been configured to run without journaling enabled.
+     ','line_number':225,'multiline':True]
+['text':' Persistent storage engines (WT) can only run with journal enabled.','line_number':230,'multiline':False]
+['text':'*
+     * Wrap a function so it can accept a node id or connection as its first argument. The argument
+     * is converted to a connection.
+     ','line_number':242,'multiline':True]
+['text':'*
+     * Wrap a function so it can accept a node id or connection as its first argument. The argument
+     * is converted to a node id.
+     ','line_number':257,'multiline':True]
+['text':'*
+     * Wrap a function so it accepts a single node or list of them as its first argument. The
+     * function is called once per node provided.
+     ','line_number':272,'multiline':True]
+['text':'*
+     * Helper functions for setting/clearing a failpoint.
+     ','line_number':291,'multiline':True]
+['text':'*
+     * Wait for a rs indicator to go to a particular state or states.
+     *
+     * @param node is a single node or list of nodes, by id or conn
+     * @param states is a single state or list of states
+     * @param ind is the indicator specified
+     * @param timeout how long to wait for the state to be reached
+     * @param reconnectNode indicates that we should reconnect to a node that stepped down
+     ','line_number':305,'multiline':True]
+['text':' Try again to load connection','line_number':341,'multiline':False]
+['text':' Allow caller to perform tasks on reconnect.','line_number':346,'multiline':False]
+['text':' If we're not authorized already, then we never will be.','line_number':359,'multiline':False]
+['text':' throws','line_number':360,'multiline':False]
+['text':' If we were waiting for the node to step down, wait until we can connect to it again,','line_number':408,'multiline':False]
+['text':' since primaries close external connections upon stepdown. This ensures that the','line_number':409,'multiline':False]
+['text':' connection to the node is usable after the function returns.','line_number':410,'multiline':False]
+['text':'*
+     * Returns true if the OpTime is empty, else false.
+     *
+     * Empty OpTime Formats:
+     *   PV0: Timestamp(0,0)
+     *   PV1: {ts: Timestamp(0,0), t: NumberLong(-1)}
+     ','line_number':426,'multiline':True]
+['text':'*
+     * Returns the OpTime for the specified host by issuing replSetGetStatus.
+     ','line_number':440,'multiline':True]
+['text':'*
+     * Returns the {readConcern: majority} OpTime for the host.
+     * This is the OpTime of the host's "majority committed" snapshot.
+     * This function may return an OpTime with Timestamp(0,0) and Term(0) if read concern majority
+     * is not enabled, or if there has not been a committed snapshot yet.
+     ','line_number':456,'multiline':True]
+['text':'*
+     * Returns the {readConcern: majority} OpTime for the host. Throws if not available.
+     ','line_number':469,'multiline':True]
+['text':'*
+     * Returns the last durable OpTime for the host if running with journaling.
+     * Returns the last applied OpTime otherwise.
+     ','line_number':480,'multiline':True]
+['text':'
+     * Compares Timestamp objects. Returns true if ts1 is 'earlier' than ts2, else false.
+     ','line_number':501,'multiline':True]
+['text':'
+     * Returns true if the node can be elected primary of a replica set.
+     ','line_number':511,'multiline':True]
+['text':'*
+     * Returns list of nodes as host:port strings.
+     ','line_number':518,'multiline':True]
+['text':' Get a replica set node (check for use of bridge).','line_number':562,'multiline':False]
+['text':'*
+     * Starts each node in the replica set with the given options.
+     *
+     * @param options - The options passed to {@link MongoRunner.runMongod}
+     ','line_number':624,'multiline':True]
+['text':' If the caller has explicitly specified 'waitForConnect:false', then we will start up all','line_number':630,'multiline':False]
+['text':' replica set nodes and return without waiting to connect to any of them.','line_number':631,'multiline':False]
+['text':' Keep a copy of these options','line_number':634,'multiline':False]
+['text':' Start up without waiting for connections.','line_number':637,'multiline':False]
+['text':' Avoid waiting for connections to each node.','line_number':640,'multiline':False]
+['text':'*
+     * Starts each node in the replica set with the given options without waiting for a connection
+     * to any node. Call 'startSetAwait' subsequently to wait for startup of each node to complete.
+     *
+     * @param options - The options passed to {@link MongoRunner.runMongod}
+     ','line_number':650,'multiline':True]
+['text':' Measure the execution time of node startup.','line_number':658,'multiline':False]
+['text':' Set the random seed to the value passed in by TestData. The seed is undefined','line_number':670,'multiline':False]
+['text':' by default. For sharded clusters, the seed is already initialized as part of','line_number':671,'multiline':False]
+['text':' ShardingTest.','line_number':672,'multiline':False]
+['text':' If the caller has explicitly set 'waitForConnect', then we prefer that. Otherwise we','line_number':676,'multiline':False]
+['text':' default to not waiting for a connection. We merge the options object with a new field so','line_number':677,'multiline':False]
+['text':' as to not modify the original options object that was passed in.','line_number':678,'multiline':False]
+['text':' Start up each node without waiting to connect. This allows startup of replica set nodes','line_number':684,'multiline':False]
+['text':' to proceed in parallel.','line_number':685,'multiline':False]
+['text':' Must wait for connect in order to extract the auto-generated replica set name.','line_number':688,'multiline':False]
+['text':'*
+     * Waits for startup of each replica set node to complete by waiting until a connection can be
+     * made to each.
+     ','line_number':697,'multiline':True]
+['text':' Wait until we can establish a connection to each node before proceeding.','line_number':702,'multiline':False]
+['text':'*
+     * Blocks until the secondary nodes have completed recovery and their roles are known. Blocks on
+     * all secondary nodes or just 'secondaries', if specified. Does not wait for all 'newlyAdded'
+     * fields to be removed by default.
+     ','line_number':714,'multiline':True]
+['text':' Reload who the current secondaries are','line_number':725,'multiline':False]
+['text':' We can only wait for newlyAdded field removal if test commands are enabled.','line_number':741,'multiline':False]
+['text':'*
+     * A special version of awaitSecondaryNodes() used exclusively by rollback_test.js.
+     * Wraps around awaitSecondaryNodes() itself and checks for an unrecoverable rollback
+     * if it throws.
+     ','line_number':747,'multiline':True]
+['text':' There is a special case where we expect the (rare) possibility of unrecoverable','line_number':760,'multiline':False]
+['text':' rollbacks with EMRC:false in rollback suites with unclean shutdowns.','line_number':761,'multiline':False]
+['text':' Confirm that the node is unable to recover after rolling back.','line_number':779,'multiline':False]
+['text':' Add this info to the original exception.','line_number':788,'multiline':False]
+['text':' Re-throw the original exception in all cases.','line_number':792,'multiline':False]
+['text':'*
+     * Blocks until the specified node says it's syncing from the given upstream node.
+     ','line_number':798,'multiline':True]
+['text':'*
+     * Blocks until each node agrees that all other nodes have applied the most recent oplog entry.
+     ','line_number':818,'multiline':True]
+['text':' Older versions of mongod do not include an 'optimes' field in the','line_number':842,'multiline':False]
+['text':' replSetGetStatus response. We instead pull an optime from the first','line_number':843,'multiline':False]
+['text':' replica set member that includes one in its status. All we need here is','line_number':844,'multiline':False]
+['text':' any initial value that we can compare to all the other optimes.','line_number':845,'multiline':False]
+['text':' ARBITER nodes do not apply oplog entries and do not have an 'optime'','line_number':870,'multiline':False]
+['text':' field.','line_number':871,'multiline':False]
+['text':'*
+     * Blocks until the node with the highest priority is the primary.  If there are multiple
+     * nodes tied for highest priority, waits until one of them is the primary.
+     ','line_number':909,'multiline':True]
+['text':' First figure out the set of highest priority nodes.','line_number':916,'multiline':False]
+['text':' Now wait for the primary to be one of the highest priority nodes.','line_number':920,'multiline':False]
+['text':' Finally wait for all nodes to agree on the primary.','line_number':931,'multiline':False]
+['text':'*
+     * Blocks until all nodes agree on who the primary is.
+     * Unlike awaitNodesAgreeOnPrimary, this does not require that all nodes are authenticated.
+     ','line_number':939,'multiline':True]
+['text':' Node doesn't see a primary.','line_number':955,'multiline':False]
+['text':' If we haven't seen a primary yet, set it to this.','line_number':963,'multiline':False]
+['text':'*
+     * Blocks until all nodes agree on who the primary is.
+     * If 'expectedPrimaryNode' is provided, ensure that every node is seeing this node as the
+     * primary. Otherwise, ensure that all the nodes in the set agree with the first node on the
+     * identity of the primary.
+     ','line_number':977,'multiline':True]
+['text':' indexOf will return the index of the expected node. If expectedPrimaryNode is undefined,','line_number':987,'multiline':False]
+['text':' indexOf will return -1.','line_number':988,'multiline':False]
+['text':' Node sees two primaries.','line_number':1006,'multiline':False]
+['text':' Node doesn't see a primary.','line_number':1017,'multiline':False]
+['text':' If the nodes haven't seen a primary yet, set primary to nodes[i]'s primary.','line_number':1028,'multiline':False]
+['text':'interval','line_number':1040,'multiline':True]
+['text':'*
+     * Blocking call, which will wait for a primary to be elected and become writable for some
+     * pre-defined timeout. If a primary is available it will return a connection to it.
+     * Otherwise throws an exception.
+     ','line_number':1045,'multiline':True]
+['text':'*
+     * Adds a node to the replica set managed by this instance.
+     ','line_number':1124,'multiline':True]
+['text':'*
+     * Calls stop() on the node identifed by nodeId and removes it from the list of nodes managed by
+     * ReplSetTest.
+     ','line_number':1145,'multiline':True]
+['text':'
+     * If journaling is disabled or we are using an ephemeral storage engine, set
+     * 'writeConcernMajorityJournalDefault' to false for the given 'config' object. If the
+     * 'writeConcernMajorityJournalDefault' field is already set, it does not override it,
+     * and returns the 'config' object unchanged. Does not affect 'config' when running CSRS.
+     ','line_number':1161,'multiline':True]
+['text':' Get a replica set node (check for use of bridge).','line_number':1168,'multiline':False]
+['text':' Don't update replset config for sharding config servers since config servers always','line_number':1171,'multiline':False]
+['text':' require durable storage.','line_number':1172,'multiline':False]
+['text':' Don't override existing value.','line_number':1178,'multiline':False]
+['text':' Check journaling by sending commands through the bridge if it's used.','line_number':1184,'multiline':False]
+['text':' Update config for non journaling test variants','line_number':1193,'multiline':False]
+['text':' Add protocolVersion if missing','line_number':1195,'multiline':False]
+['text':'*
+     * Wait until the config on the primary becomes replicated. Callers specify the primary in case
+     * this must be called when two nodes are expected to be concurrently primary. This does not
+     * necessarily wait for the config to be committed.
+     ','line_number':1230,'multiline':True]
+['text':'*
+     * Waits for all 'newlyAdded' fields to be removed, for that config to be committed, and for
+     * the in-memory and on-disk configs to match.
+     ','line_number':1263,'multiline':True]
+['text':' Shadow 'db' so that we can call the function on the primary without a separate shell when','line_number':1272,'multiline':False]
+['text':' x509 auth is not needed.','line_number':1273,'multiline':False]
+['text':'*
+     * Runs replSetInitiate on the first node of the replica set.
+     * Ensures that a primary is elected (not necessarily node 0).
+     * initiate() should be preferred instead of this, but this is useful when the connections
+     * aren't authorized to run replSetGetStatus.
+     * TODO(SERVER-14017): remove this in favor of using initiate() everywhere.
+     ','line_number':1315,'multiline':True]
+['text':' Measure the execution time of this function.','line_number':1328,'multiline':False]
+['text':' Throw an exception if nodes[0] is unelectable in the given config.','line_number':1334,'multiline':False]
+['text':' Start up a single node replica set then reconfigure to the correct size (if the config','line_number':1339,'multiline':False]
+['text':' contains more than 1 node), so the primary is elected more quickly.','line_number':1340,'multiline':False]
+['text':' Clear settings to avoid tags referencing sliced nodes.','line_number':1346,'multiline':False]
+['text':' If this ReplSet is started using this.startSet and binVersions (ie:','line_number':1352,'multiline':False]
+['text':' rst.startSet({binVersion: [...]}) we need to make sure the binVersion combination is','line_number':1353,'multiline':False]
+['text':' valid.','line_number':1354,'multiline':False]
+['text':' Initiating a replica set with a single node will use "latest" FCV. This will','line_number':1374,'multiline':False]
+['text':' cause IncompatibleServerVersion errors if additional "last-lts"/"last-continuous" binary','line_number':1375,'multiline':False]
+['text':' version nodes are subsequently added to the set, since such nodes cannot set their FCV to','line_number':1376,'multiline':False]
+['text':' "latest". Therefore, we make sure the primary is "last-lts"/"last-continuous" FCV before','line_number':1377,'multiline':False]
+['text':' adding in nodes of different binary versions to the replica set.','line_number':1378,'multiline':False]
+['text':' If no binVersions have been explicitly set, then we should be using the latest binary','line_number':1404,'multiline':False]
+['text':' version, which allows us to use the failpoint below.','line_number':1405,'multiline':False]
+['text':' If a test has explicitly disabled test commands or if we may be running an older mongod','line_number':1411,'multiline':False]
+['text':' version then we cannot utilize failpoints below, since they may not be supported on older','line_number':1412,'multiline':False]
+['text':' versions.','line_number':1413,'multiline':False]
+['text':' Skip waiting for new data to appear in the oplog buffer when transitioning to primary.','line_number':1416,'multiline':False]
+['text':' This makes step up much faster for a node that doesn't need to drain any oplog','line_number':1417,'multiline':False]
+['text':' operations. This is only an optimization so it's OK if we bypass it in some suites.','line_number':1418,'multiline':False]
+['text':' replSetInitiate and replSetReconfig commands can fail with a NodeNotFound error if a','line_number':1423,'multiline':False]
+['text':' heartbeat times out during the quorum check. They may also fail with','line_number':1424,'multiline':False]
+['text':' NewReplicaSetConfigurationIncompatible on similar timeout during the config validation','line_number':1425,'multiline':False]
+['text':' stage while deducing isSelf(). This can fail with an InterruptedDueToReplStateChange','line_number':1426,'multiline':False]
+['text':' error when interrupted. We try several times, to reduce the chance of failing this way.','line_number':1427,'multiline':False]
+['text':' Measure the execution time of this section.','line_number':1428,'multiline':False]
+['text':' Auto-bootstrap already initiates automatically on the first node, but if the','line_number':1431,'multiline':False]
+['text':' requested initiate is not empty, we need to apply the requested settings using','line_number':1432,'multiline':False]
+['text':' reconfig.','line_number':1433,'multiline':False]
+['text':' We must increase the version of the new config for the reconfig','line_number':1438,'multiline':False]
+['text':' to succeed. The initial default config will always have a version of 1.','line_number':1439,'multiline':False]
+['text':' Blocks until there is a primary. We use a faster retry interval here since we expect the','line_number':1447,'multiline':False]
+['text':' primary to be ready very soon. We also turn the failpoint off once we have a primary.','line_number':1448,'multiline':False]
+['text':' retryIntervalMS ','line_number':1449,'multiline':True]
+['text':' Set the FCV to 'last-lts'/'last-continuous' if we are running a mixed version replica','line_number':1457,'multiline':False]
+['text':' set. If this is a config server, the FCV will be set as part of ShardingTest.','line_number':1458,'multiline':False]
+['text':' versions are supported with the useRandomBinVersionsWithinReplicaSet option.','line_number':1459,'multiline':False]
+['text':' Authenticate before running the command.','line_number':1478,'multiline':False]
+['text':' When latest is not equal to last-continuous, the transition to last-continuous is','line_number':1483,'multiline':False]
+['text':' not allowed. Setting fromConfigServer allows us to bypass this restriction and','line_number':1484,'multiline':False]
+['text':' test last-continuous.','line_number':1485,'multiline':False]
+['text':' The server has a practice of adding a reconfig as part of upgrade/downgrade logic','line_number':1490,'multiline':False]
+['text':' in the setFeatureCompatibilityVersion command.','line_number':1491,'multiline':False]
+['text':' Wait for 2 keys to appear before adding the other nodes. This is to prevent replica','line_number':1499,'multiline':False]
+['text':' set configurations from interfering with the primary to generate the keys. One example','line_number':1500,'multiline':False]
+['text':' of problematic configuration are delayed secondaries, which impedes the primary from','line_number':1501,'multiline':False]
+['text':' generating the second key due to timeout waiting for write concern.','line_number':1502,'multiline':False]
+['text':' Should not wait for keys if version is less than 3.6','line_number':1513,'multiline':False]
+['text':' Should not wait for keys if version is less than 3.6','line_number':1524,'multiline':False]
+['text':'*
+         * Blocks until the primary node generates cluster time sign keys.
+         ','line_number':1531,'multiline':True]
+['text':' Allow nodes to find sync sources more quickly. We also turn down the heartbeat interval','line_number':1547,'multiline':False]
+['text':' to speed up the initiation process. We use a failpoint so that we can easily turn this','line_number':1548,'multiline':False]
+['text':' behavior on/off without doing a reconfig. This is only an optimization so it's OK if we','line_number':1549,'multiline':False]
+['text':' bypass it in some suites.','line_number':1550,'multiline':False]
+['text':' Reconfigure the set to contain the correct number of nodes (if necessary).','line_number':1559,'multiline':False]
+['text':' Measure duration of reconfig and awaitSecondaryNodes.','line_number':1560,'multiline':False]
+['text':' Nodes started with the --configsvr flag must have configsvr = true in their config.','line_number':1568,'multiline':False]
+['text':' Add in nodes 1 at a time since non-force reconfig allows only single node','line_number':1574,'multiline':False]
+['text':' addition/removal.','line_number':1575,'multiline':False]
+['text':' Setup authentication if running test with authentication','line_number':1608,'multiline':False]
+['text':' The sslSpecial suite sets up cluster with x509 but the shell was not started with TLS','line_number':1612,'multiline':False]
+['text':' so we need to rely on the test to auth if needed.','line_number':1613,'multiline':False]
+['text':' Wait for initial sync to complete on all nodes. Use a faster polling interval so we can','line_number':1619,'multiline':False]
+['text':' detect initial sync completion more quickly.','line_number':1620,'multiline':False]
+['text':' secondaries ','line_number':1622,'multiline':True]
+['text':' retryIntervalMS ','line_number':1622,'multiline':True]
+['text':' If test commands are not enabled, we cannot wait for 'newlyAdded' removals. Tests that','line_number':1624,'multiline':False]
+['text':' disable test commands must ensure 'newlyAdded' removals mid-test are acceptable.','line_number':1625,'multiline':False]
+['text':' Due to SERVER-14017, the call to awaitHighestPriorityNodeIsPrimary() may fail','line_number':1637,'multiline':False]
+['text':' in certain configurations due to being unauthorized.  In that case we proceed','line_number':1638,'multiline':False]
+['text':' even though we aren't guaranteed that the highest priority node is the one that','line_number':1639,'multiline':False]
+['text':' became primary.','line_number':1640,'multiline':False]
+['text':' TODO(SERVER-14017): Unconditionally expect awaitHighestPriorityNodeIsPrimary to pass.','line_number':1641,'multiline':False]
+['text':' Set 'featureCompatibilityVersion' for the entire replica set, if specified.','line_number':1648,'multiline':False]
+['text':' Authenticate before running the command.','line_number':1650,'multiline':False]
+['text':' Wait for the new 'featureCompatibilityVersion' to propagate to all nodes in the','line_number':1657,'multiline':False]
+['text':' replica set. The 'setFeatureCompatibilityVersion' command only waits for','line_number':1658,'multiline':False]
+['text':' replication to a majority of nodes by default.','line_number':1659,'multiline':False]
+['text':' We need to disable the enableDefaultWriteConcernUpdatesForInitiate parameter','line_number':1664,'multiline':False]
+['text':' to disallow updating the default write concern after initiating is complete.','line_number':1665,'multiline':False]
+['text':' asCluster() currently does not validate connections with X509 authentication.','line_number':1668,'multiline':False]
+['text':' If the test is using X509, we skip disabling the server parameter as the','line_number':1669,'multiline':False]
+['text':' 'setParameter' command will fail.','line_number':1670,'multiline':False]
+['text':' TODO(SERVER-57924): cleanup asCluster() to avoid checking here.','line_number':1671,'multiline':False]
+['text':' The following params are available only on versions greater than or equal to','line_number':1680,'multiline':False]
+['text':' 5.0.','line_number':1681,'multiline':False]
+['text':' Re-enable the reconfig check to ensure that committed writes cannot be rolled','line_number':1691,'multiline':False]
+['text':' back. We disabled this check during initialization to ensure that replica','line_number':1692,'multiline':False]
+['text':' sets will not fail to start up.','line_number':1693,'multiline':False]
+['text':' Measure duration of awaitLastStableRecoveryTimestamp.','line_number':1702,'multiline':False]
+['text':' Speed up the polling interval so we can detect recovery timestamps more quickly.','line_number':1704,'multiline':False]
+['text':' retryIntervalMS ','line_number':1705,'multiline':True]
+['text':' Waits for the services which write on step-up to finish rebuilding to avoid background','line_number':1711,'multiline':False]
+['text':' writes after initiation is done. PrimaryOnlyServices wait for the stepup optime to be','line_number':1712,'multiline':False]
+['text':' majority committed before rebuilding services, so we skip waiting for PrimaryOnlyServices','line_number':1713,'multiline':False]
+['text':' if we do not wait for replication.','line_number':1714,'multiline':False]
+['text':' TODO(SERVER-57924): cleanup asCluster() to avoid checking here.','line_number':1717,'multiline':False]
+['text':' Make sure all nodes are up to date. Bypass this if the heartbeat interval wasn't turned','line_number':1723,'multiline':False]
+['text':' down or the test specifies that we should not wait for replication. This is only an','line_number':1724,'multiline':False]
+['text':' optimization so it's OK if we bypass it in some suites.','line_number':1725,'multiline':False]
+['text':' Turn off the failpoints now that initial sync and initial setup is complete.','line_number':1730,'multiline':False]
+['text':'*
+     * Runs replSetInitiate on the replica set and requests the first node to step up as primary.
+     * This version should be prefered where possible but requires all connections in the
+     * ReplSetTest to be authorized to run replSetGetStatus.
+     ','line_number':1743,'multiline':True]
+['text':' Measure the execution time of this function.','line_number':1751,'multiline':False]
+['text':' Most of the time node 0 will already be primary so we can skip the step-up.','line_number':1754,'multiline':False]
+['text':' stepUp() calls awaitReplication() which requires all nodes to be authorized to run','line_number':1765,'multiline':False]
+['text':' replSetGetStatus.','line_number':1766,'multiline':False]
+['text':'*
+     * Runs replSetInitiate on the replica set and requests the first node to step up as
+     * primary.
+     ','line_number':1781,'multiline':True]
+['text':'*
+     * Modifies the election timeout to be 24 hours so that no unplanned elections happen. Then
+     * runs replSetInitiate on the replica set with the new config.
+     ','line_number':1792,'multiline':True]
+['text':'*
+     * Steps up 'node' as primary and by default it waits for the stepped up node to become a
+     * writable primary and waits for all nodes to reach the same optime before sending the
+     * replSetStepUp command to 'node'.
+     *
+     * Calls awaitReplication() which requires all connections in 'nodes' to be authenticated.
+     * This stepUp() assumes that there is no network partition in the replica set.
+     ','line_number':1803,'multiline':True]
+['text':' This error is possible if we are running mongoDB binary < 3.4 as','line_number':1827,'multiline':False]
+['text':' part of multi-version upgrade test. So, for those older branches,','line_number':1828,'multiline':False]
+['text':' simply wait for the requested node to get elected as primary due','line_number':1829,'multiline':False]
+['text':' to election timeout.','line_number':1830,'multiline':False]
+['text':' Since assert.soon() timeout is 10 minutes (default), setting','line_number':1841,'multiline':False]
+['text':' awaitNodesAgreeOnPrimary() timeout as 1 minute to allow retry of replSetStepUp','line_number':1842,'multiline':False]
+['text':' command on failure of the replica set to agree on the primary.','line_number':1843,'multiline':False]
+['text':' We should not run hangAnalyzer when awaitNodesAgreeOnPrimary() timeout, otherwise the','line_number':1844,'multiline':False]
+['text':' mongo processes will be killed and we cannot retry.','line_number':1845,'multiline':False]
+['text':'runHangAnalyzerOnTimeout','line_number':1848,'multiline':True]
+['text':' getPrimary() guarantees that there will be only one writable primary for a replica','line_number':1854,'multiline':False]
+['text':' set.','line_number':1855,'multiline':False]
+['text':'*
+     * Wait for writes which may happen when nodes are stepped up.  This currently includes
+     * primary-only service writes and writes from the query analysis writer, the latter being
+     * a replica-set-aware service for which there is no generic way to wait.
+     ','line_number':1870,'multiline':True]
+['text':'*
+     * Waits for primary only services to finish the rebuilding stage after a primary is elected.
+     * This is useful for tests that are expecting particular write timestamps since some primary
+     * only services can do background writes (e.g. build indexes) during rebuilding stage that
+     * could advance the last write timestamp.
+     ','line_number':1881,'multiline':True]
+['text':' 'PrimaryOnlyServices' does not exist prior to v5.0, using empty','line_number':1893,'multiline':False]
+['text':' object to skip waiting in case of multiversion tests.','line_number':1894,'multiline':False]
+['text':'*
+     * If query sampling is supported, waits for the query analysis writer to finish setting up
+     * after a primary is elected. This is useful for tests that expect particular write timestamps
+     * since the query analysis writer setup involves building indexes for the config.sampledQueries
+     * and config.sampledQueriesDiff collections.
+     ','line_number':1902,'multiline':True]
+['text':' Query sampling is not supported on this replica set. That is, either it uses binaries','line_number':1913,'multiline':False]
+['text':' released before query sampling was introduced or it uses binaries where query','line_number':1914,'multiline':False]
+['text':' sampling is guarded by a feature flag and the feature flag is not enabled.','line_number':1915,'multiline':False]
+['text':' Query sampling is not supported on a multi-tenant replica set.','line_number':1921,'multiline':False]
+['text':' There should be two indexes: _id index and TTL index.','line_number':1932,'multiline':False]
+['text':'*
+     * Gets the current replica set config from the specified node index. If no nodeId is specified,
+     * uses the primary node.
+     ','line_number':1937,'multiline':True]
+['text':' Use 90 seconds timeout for finding a primary','line_number':1943,'multiline':False]
+['text':' Only reset members.','line_number':1957,'multiline':False]
+['text':' Set a maxTimeMS so reconfig fails if it times out.','line_number':1963,'multiline':False]
+['text':'*
+     * Blocks until all nodes in the replica set have the same config version as the primary.
+     *','line_number':1968,'multiline':True]
+['text':'*
+     * Waits for the last oplog entry on the primary to be visible in the committed snapshot view
+     * of the oplog on *all* secondaries. When majority read concern is disabled, there is no
+     * committed snapshot view, so this function waits for the knowledge of the majority commit
+     * point on each node to advance to the optime of the last oplog entry on the primary.
+     * Returns last oplog entry.
+     ','line_number':1990,'multiline':True]
+['text':' Continue if we're connected to an arbiter','line_number':2020,'multiline':False]
+['text':' TODO(SERVER-14017): Remove this extra sub-shell in favor of a cleaner authentication','line_number':2045,'multiline':False]
+['text':' solution.','line_number':2046,'multiline':False]
+['text':'*
+     * This function performs some writes and then waits for all nodes in this replica set to
+     * establish a stable recovery timestamp. The writes are necessary to prompt storage engines to
+     * quickly establish stable recovery timestamps.
+     *
+     * A stable recovery timestamp ensures recoverable rollback is possible, as well as startup
+     * recovery without re-initial syncing in the case of durable storage engines. By waiting for
+     * all nodes to report having a stable recovery timestamp, we ensure a degree of stability in
+     * our tests to run as expected.
+     ','line_number':2080,'multiline':True]
+['text':' All nodes must be in primary/secondary state prior to this point. Perform a majority','line_number':2096,'multiline':False]
+['text':' write to ensure there is a committed operation on the set. The commit point will','line_number':2097,'multiline':False]
+['text':' propagate to all members and trigger a stable checkpoint on all persisted storage engines','line_number':2098,'multiline':False]
+['text':' nodes.','line_number':2099,'multiline':False]
+['text':' Shadow 'db' so that we can call the function on the primary without a separate shell','line_number':2101,'multiline':False]
+['text':' when x509 auth is not needed.','line_number':2102,'multiline':False]
+['text':' Performing dummy replicated writes against a configsvr is hard, especially if auth','line_number':2119,'multiline':False]
+['text':' is also enabled.','line_number':2120,'multiline':False]
+['text':' The `lastStableRecoveryTimestamp` field contains a stable timestamp','line_number':2135,'multiline':False]
+['text':' guaranteed to exist on storage engine recovery to stable timestamp.','line_number':2136,'multiline':False]
+['text':' Continue if we're connected to an arbiter.','line_number':2139,'multiline':False]
+['text':' A missing `lastStableRecoveryTimestamp` field indicates that the storage','line_number':2144,'multiline':False]
+['text':' engine does not support `recover to a stable timestamp`.','line_number':2145,'multiline':False]
+['text':'','line_number':2146,'multiline':False]
+['text':' A null `lastStableRecoveryTimestamp` indicates that the storage engine','line_number':2147,'multiline':False]
+['text':' supports "recover to a stable timestamp", but does not have a stable recovery','line_number':2148,'multiline':False]
+['text':' timestamp yet.','line_number':2149,'multiline':False]
+['text':' Wait until the optime of the specified type reaches the primary's last applied optime. Blocks','line_number':2168,'multiline':False]
+['text':' on all secondary nodes or just 'secondaries', if specified. The timeout will reset if any of','line_number':2169,'multiline':False]
+['text':' the secondaries makes progress.','line_number':2170,'multiline':False]
+['text':' Blocking call, which will wait for the last optime written on the primary to be available','line_number':2185,'multiline':False]
+['text':' get the latest config version from primary (with a few retries in case of error)','line_number':2202,'multiline':False]
+['text':' Skip this node if we're connected to an arbiter','line_number':2266,'multiline':False]
+['text':' If the node doesn't have a valid opTime, it likely hasn't received any writes from','line_number':2287,'multiline':False]
+['text':' the primary yet.','line_number':2288,'multiline':False]
+['text':' See if the node made progress. We count it as progress even if the node's last optime','line_number':2296,'multiline':False]
+['text':' went backwards because that means the node is in rollback.','line_number':2297,'multiline':False]
+['text':' Reset the timeout if a node makes progress, but isn't caught up yet.','line_number':2318,'multiline':False]
+['text':' We will reset the timeout if a nodes makes progress, but still isn't caught up yet.','line_number':2333,'multiline':False]
+['text':' We only need to increment the secondaryCount if this node is','line_number':2346,'multiline':False]
+['text':' caught up.','line_number':2347,'multiline':False]
+['text':' Don't increment secondaryCount because this node is an arbiter.','line_number':2351,'multiline':False]
+['text':' We might have a new primary now','line_number':2370,'multiline':False]
+['text':' If eMRC=false, we use the old behavior using $_internalReadAtClusterTime.','line_number':2388,'multiline':False]
+['text':' Otherwise, we use snapshot read concern for dbhash.','line_number':2389,'multiline':False]
+['text':' Gets the dbhash for the current primary and for all secondaries (or the members of','line_number':2405,'multiline':False]
+['text':' 'secondaries', if specified).','line_number':2406,'multiline':False]
+['text':' _determineLiveSecondaries() repopulates both 'self._secondaries' and 'self._primary'. If','line_number':2410,'multiline':False]
+['text':' we're passed an explicit set of secondaries we don't want to do that.','line_number':2411,'multiline':False]
+['text':' Call the provided checkerFunction, after the replica set has been write locked.','line_number':2446,'multiline':False]
+['text':' Call getPrimary to populate rst with information about the nodes.','line_number':2455,'multiline':False]
+['text':' Prevent an election, which could start, then hang due to the fsyncLock.','line_number':2459,'multiline':False]
+['text':' Await primary in case freeze() had to step down a node that was unexpectedly primary.','line_number':2463,'multiline':False]
+['text':' Lock the primary to prevent writes in the background while we are getting the','line_number':2466,'multiline':False]
+['text':' dbhashes of the replica set members. It's not important if the storage engine fails','line_number':2467,'multiline':False]
+['text':' to perform its fsync operation. The only requirement is that writes are locked out.','line_number':2468,'multiline':False]
+['text':' Unfreeze secondaries and unlock primary.','line_number':2473,'multiline':False]
+['text':' Print the postApplyCheckerFunction error, propagate the original.','line_number':2501,'multiline':False]
+['text':' Check the replicated data hashes for all live nodes in the set.','line_number':2510,'multiline':False]
+['text':' Return items that are in either Array `a` or `b` but not both. Note that this will','line_number':2513,'multiline':False]
+['text':' not work with arrays containing NaN. Array.indexOf(NaN) will always return -1.','line_number':2514,'multiline':False]
+['text':' We don't expect the local database to match because some of its','line_number':2520,'multiline':False]
+['text':' collections are not replicated.','line_number':2521,'multiline':False]
+['text':' Use '_primary' instead of getPrimary() to avoid the detection of a new primary.','line_number':2528,'multiline':False]
+['text':' '_primary' must have been populated.','line_number':2529,'multiline':False]
+['text':' Arbiters have no replicated data.','line_number':2541,'multiline':False]
+['text':' Filter only collections that were retrieved by the dbhash. listCollections','line_number':2561,'multiline':False]
+['text':' may include non-replicated collections like system.profile.','line_number':2562,'multiline':False]
+['text':' Check that collection information is consistent on the primary and','line_number':2571,'multiline':False]
+['text':' secondaries.','line_number':2572,'multiline':False]
+['text':' Occasionally, the capped collection will get truncated while we are iterating','line_number':2637,'multiline':False]
+['text':' over it. Since we are iterating over the collection in reverse, getting a','line_number':2638,'multiline':False]
+['text':' truncated item means we've reached the end of the list, so return false.','line_number':2639,'multiline':False]
+['text':' Set the cursor to read backwards, from last to first. We also set the cursor not','line_number':2663,'multiline':False]
+['text':' to time out since it may take a while to process each batch and a test may have','line_number':2664,'multiline':False]
+['text':' changed "cursorTimeoutMillis" to a short time period.','line_number':2665,'multiline':False]
+['text':'*
+     * Check oplogs on all nodes, by reading from the last time. Since the oplog is a capped
+     * collection, each node may not contain the same number of entries and stop if the cursor
+     * is exhausted on any node being checked.
+     ','line_number':2680,'multiline':True]
+['text':' Arbiters have no documents in the oplog.','line_number':2715,'multiline':False]
+['text':' Find the reader which has the smallestTS. This reader should have the most','line_number':2725,'multiline':False]
+['text':' number of documents in the oplog.','line_number':2726,'multiline':False]
+['text':' Start all oplogReaders at their last document.','line_number':2731,'multiline':False]
+['text':' Read from the reader which has the most oplog entries.','line_number':2735,'multiline':False]
+['text':' Note, we read the oplog backwards from last to first.','line_number':2736,'multiline':False]
+['text':' Track the number of bytes we are reading as we check the oplog. We use this to avoid','line_number':2740,'multiline':False]
+['text':' out-of-memory issues by calling to garbage collect whenever the memory footprint is','line_number':2741,'multiline':False]
+['text':' large.','line_number':2742,'multiline':False]
+['text':' When using legacy OP_QUERY/OP_GET_MORE reads against mongos, it is','line_number':2748,'multiline':False]
+['text':' possible for hasNext() to return true but for next() to throw an exception.','line_number':2749,'multiline':False]
+['text':' Skip reading from this reader if the index is the same as firstReader or','line_number':2754,'multiline':False]
+['text':' the cursor is exhausted.','line_number':2755,'multiline':False]
+['text':' Garbage collect every 10MB.','line_number':2772,'multiline':False]
+['text':' content.','line_number':2796,'multiline':False]
+['text':' Start all reverseReaders at their last document for the collection.','line_number':2805,'multiline':False]
+['text':' We print up to half of the limit in the before part so that','line_number':2819,'multiline':False]
+['text':' the timestamp is centered.','line_number':2820,'multiline':False]
+['text':'*
+     * Check preimages on all nodes, by reading reading from the last time. Since the preimage may
+     * or may not be maintained independently, each node may not contain the same number of entries
+     * and stop if the cursor is exhausted on any node being checked.
+     ','line_number':2845,'multiline':True]
+['text':' Reset connection preferences in case the test has modified them. We'll restore','line_number':2877,'multiline':False]
+['text':' them back to what they were originally in the end.','line_number':2878,'multiline':False]
+['text':' Find all collections participating in pre-images.','line_number':2888,'multiline':False]
+['text':' TODO SERVER-55756: Investigate if we can remove this since','line_number':2909,'multiline':False]
+['text':' we'll have the data files present in case this fails with','line_number':2910,'multiline':False]
+['text':' PeriodicKillSecondaries.','line_number':2911,'multiline':False]
+['text':' Restore original read preferences used by the connection.','line_number':2944,'multiline':False]
+['text':' We print up to half of the limit in the before part so that','line_number':2966,'multiline':False]
+['text':' the timestamp is centered.','line_number':2967,'multiline':False]
+['text':' Prepare reverse read from the primary and specified secondaries.','line_number':2996,'multiline':False]
+['text':' Start all reverseReaders at their last document for the collection.','line_number':3001,'multiline':False]
+['text':'*
+     * Check change_collection for all tenants on all nodes, by doing a reverse scan. This check
+     * accounts for the fact that each node might independently truncate the change collection, and
+     * not contain the same number of entries.
+     ','line_number':3060,'multiline':True]
+['text':' Get all change_collections for all tenants.','line_number':3078,'multiline':False]
+['text':'*
+     * Waits for an initial connection to a given node. Should only be called after the node's
+     * process has already been started. Updates the corresponding entry in 'this.nodes' with the
+     * newly established connection object.
+     *
+     * @param {int} [n] the node id.
+     * @param {boolean} [waitForHealth] If true, wait for the health indicator of the replica set
+     *     node after waiting for a connection. Default: false.
+     * @returns a new Mongo connection object to the node.
+     ','line_number':3091,'multiline':True]
+['text':' If we are using a bridge, then we want to get at the underlying mongod node object.','line_number':3104,'multiline':False]
+['text':' Attach the original node properties to the connection object.','line_number':3113,'multiline':False]
+['text':' Delete the session since it's linked to the other mongo object.','line_number':3116,'multiline':False]
+['text':' Authenticate again since this is a new connection.','line_number':3119,'multiline':False]
+['text':' The sslSpecial suite sets up cluster with x509 but the shell was not started with TLS','line_number':3121,'multiline':False]
+['text':' so we need to rely on the test to auth if needed.','line_number':3122,'multiline':False]
+['text':' Save the new connection object. If we are using a bridge, then we need to connect to it.','line_number':3128,'multiline':False]
+['text':' Wait for node to start up.','line_number':3141,'multiline':False]
+['text':'*
+     * Starts up a server.  Options are saved by default for subsequent starts.
+     *
+     *
+     * Options { remember : true } re-applies the saved options from a prior start.
+     * Options { noRemember : true } ignores the current properties.
+     * Options { appendOptions : true } appends the current options to those remembered.
+     * Options { startClean : true } clears the data directory before starting.
+     *
+     * @param {int|conn|[int|conn]} n array or single server number (0, 1, 2, ...) or conn
+     * @param {object} [options]
+     * @param {boolean} [restart] If false, the data directory will be cleared
+     *   before the server starts.  Default: false.
+     * @param {boolean} [waitForHealth] If true, wait for the health indicator of the replica set
+     *     node after waiting for a connection. Default: false.
+     ','line_number':3151,'multiline':True]
+['text':' No --replSet for the first node.','line_number':3181,'multiline':False]
+['text':' Note : this replaces the binVersion of the shared startSet() options the first time','line_number':3199,'multiline':False]
+['text':' through, so the full set is guaranteed to have different versions if size > 1.  If using','line_number':3200,'multiline':False]
+['text':' start() independently, independent version choices will be made','line_number':3201,'multiline':False]
+['text':'','line_number':3202,'multiline':False]
+['text':' Always set log format','line_number':3207,'multiline':False]
+['text':' If restarting a node, use its existing options as the defaults unless remember is false.','line_number':3212,'multiline':False]
+['text':' Our documented upgrade/downgrade paths for a sharded cluster lets us assume that','line_number':3234,'multiline':False]
+['text':' config server nodes will always be fully upgraded before the shard nodes.','line_number':3235,'multiline':False]
+['text':' Turn off periodic noop writes for replica sets by default.','line_number':3250,'multiline':False]
+['text':' We raise the number of initial sync connect attempts for tests that disallow chaining.','line_number':3263,'multiline':False]
+['text':' Disabling chaining can cause sync source selection to take longer so we must increase','line_number':3264,'multiline':False]
+['text':' the number of connection attempts.','line_number':3265,'multiline':False]
+['text':' The default time for stepdown and quiesce mode in response to SIGTERM is 15 seconds.','line_number':3269,'multiline':False]
+['text':' Reduce this to 100ms for faster shutdown.','line_number':3270,'multiline':False]
+['text':' This parameter is enabled to allow the default write concern to change while','line_number':3274,'multiline':False]
+['text':' initiating a ReplSetTest. This is due to our testing optimization to initiate','line_number':3275,'multiline':False]
+['text':' with a single node, and reconfig the full membership set in.','line_number':3276,'multiline':False]
+['text':' We need to recalculate the DWC after each reconfig until the full set is included.','line_number':3277,'multiline':False]
+['text':' Disable a check in reconfig that will prevent certain configs with arbiters from','line_number':3280,'multiline':False]
+['text':' spinning up. We will re-enable this check after the replica set has finished initiating.','line_number':3281,'multiline':False]
+['text':' TODO (SERVER-74847): Remove this transition once we remove testing around','line_number':3285,'multiline':False]
+['text':' downgrading from latest to last continuous.','line_number':3286,'multiline':False]
+['text':' We leave the mongobridge process running when the mongod process is restarted so we','line_number':3301,'multiline':False]
+['text':' don't need to start a new one.','line_number':3302,'multiline':False]
+['text':' The mongod processes identify themselves to mongobridge as host:port, where the','line_number':3307,'multiline':False]
+['text':' host is the actual hostname of the machine and not localhost.','line_number':3308,'multiline':False]
+['text':' Save this property since it may be deleted inside 'runMongod'.','line_number':3320,'multiline':False]
+['text':' Never wait for a connection inside runMongod. We will do so below if needed.','line_number':3323,'multiline':False]
+['text':' Make sure to call _addPath, otherwise folders won't be cleaned.','line_number':3330,'multiline':False]
+['text':' We don't want to persist 'waitForConnect' across node restarts.','line_number':3333,'multiline':False]
+['text':' Save the node object in the appropriate location.','line_number':3336,'multiline':False]
+['text':' Clean up after noReplSet to ensure it doesn't effect future restarts.','line_number':3344,'multiline':False]
+['text':' Wait for a connection to the node if necessary.','line_number':3350,'multiline':False]
+['text':'*
+     * Restarts a db without clearing the data directory by default, and using the node(s)'s
+     * original startup options by default.
+     *
+     * When using this method with mongobridge, be aware that mongobridge may not do a good
+     * job of detecting that a node was restarted. For example, when mongobridge is being used
+     * between some Node A and Node B, on restarting Node B mongobridge will not aggressively
+     * close its connection with Node A, leading Node A to think the connection with Node B is
+     * still healthy.
+     *
+     * Option { startClean : true } forces clearing the data directory.
+     * Option { auth : Object } object that contains the auth details for admin credentials.
+     *   Should contain the fields 'user' and 'pwd'
+     *
+     * In order not to use the original startup options, use stop() (or stopSet()) followed by
+     * start() (or startSet()) without passing restart: true as part of the options.
+     *
+     * @param {int|conn|[int|conn]} n array or single server number (0, 1, 2, ...) or conn
+     ','line_number':3369,'multiline':True]
+['text':' Can specify wait as third parameter, if using default signal','line_number':3389,'multiline':False]
+['text':' We should not attempt to reauthenticate the connection if we did not wait for it','line_number':3399,'multiline':False]
+['text':' to be reestablished in the first place.','line_number':3400,'multiline':False]
+['text':' if n was an array of conns, start will return an array of connections','line_number':3404,'multiline':False]
+['text':'*
+     * Step down and freeze a particular node or nodes.
+     *
+     * @param node is a single node or list of nodes, by id or conn
+     ','line_number':3415,'multiline':True]
+['text':' Ensure node is authenticated.','line_number':3423,'multiline':False]
+['text':' Ensure node is not primary. Ignore errors, probably means it's already','line_number':3425,'multiline':False]
+['text':' secondary.','line_number':3426,'multiline':False]
+['text':' Prevent node from running election. Fails if it already started an election.','line_number':3428,'multiline':False]
+['text':'*
+     * Unfreeze a particular node or nodes.
+     *
+     * @param node is a single node or list of nodes, by id or conn
+     ','line_number':3445,'multiline':True]
+['text':' Ensure node is authenticated.','line_number':3451,'multiline':False]
+['text':'*
+     * Stops a particular node or nodes, specified by conn or id. If we expect the node to exit with
+     * a nonzero exit code, call this function and pass in allowedExitCode as a field of opts.
+     *
+     * If _useBridge=true, then the mongobridge process(es) corresponding to the node(s) are also
+     * terminated unless forRestart=true. The mongobridge process(es) are left running across
+     * restarts to ensure their configuration remains intact.
+     *
+     * @param {number|Mongo} n the index or connection object of the replica set member to stop.
+     * @param {number} signal the signal number to use for killing
+     * @param {Object} opts @see MongoRunner.stopMongod
+     * @param {Object} [extraOptions={}]
+     * @param {boolean} [extraOptions.forRestart=false] indicates whether stop() is being called
+     * with the intent to call start() with restart=true for the same node(s) n.
+     * @param {boolean} [extraOptions.waitPid=true] if true, we will wait for the process to
+     * terminate after stopping it.
+     ','line_number':3461,'multiline':True]
+['text':' Can specify wait as second parameter, if using default signal','line_number':3480,'multiline':False]
+['text':' We only expect the process to have terminated if we actually called 'waitpid'.','line_number':3493,'multiline':False]
+['text':' We leave the mongobridge process running when the mongod process is being restarted.','line_number':3500,'multiline':False]
+['text':' calls MongoBridge#stop()','line_number':3503,'multiline':False]
+['text':'*
+     * Performs collection validation on all nodes in the given 'ports' array in parallel.
+     *
+     * @param {int[]} ports the array of mongo ports to run validation on
+     ','line_number':3511,'multiline':True]
+['text':' Perform collection validation on each node in parallel.','line_number':3517,'multiline':False]
+['text':' Wait for all validators to finish.','line_number':3531,'multiline':False]
+['text':'*
+     * Kill all members of this replica set. When calling this function, we expect all live nodes to
+     * exit cleanly. If we expect a node to exit with a nonzero exit code, use the stop function to
+     * terminate that node before calling stopSet.
+     *
+     * @param {number} signal The signal number to use for killing the members
+     * @param {boolean} forRestart will not cleanup data directory
+     * @param {Object} opts @see MongoRunner.stopMongod
+     ','line_number':3537,'multiline':True]
+['text':' Check to make sure data is the same on all nodes.','line_number':3554,'multiline':False]
+['text':' Measure the execution time of consistency checks.','line_number':3557,'multiline':False]
+['text':' To skip this check add TestData.skipCheckDBHashes = true or pass in {opts:','line_number':3559,'multiline':False]
+['text':' skipCheckDBHashes} Reasons to skip this test include:','line_number':3560,'multiline':False]
+['text':' - the primary goes down and none can be elected (so fsync lock/unlock commands fail)','line_number':3561,'multiline':False]
+['text':' - the replica set is in an unrecoverable inconsistent state. E.g. the replica set','line_number':3562,'multiline':False]
+['text':'   is partitioned.','line_number':3563,'multiline':False]
+['text':' skip for sets with 1 live node','line_number':3565,'multiline':False]
+['text':' Auth only on live nodes because authutil.assertAuthenticate','line_number':3566,'multiline':False]
+['text':' refuses to log in live connections if some secondaries are down.','line_number':3567,'multiline':False]
+['text':' Measure the execution time of shutting down nodes.','line_number':3585,'multiline':False]
+['text':' Optionally validate collections on all nodes. Parallel validation depends on use of the','line_number':3587,'multiline':False]
+['text':' 'Thread' object, so we check for and load that dependency here. If the dependency is not','line_number':3588,'multiline':False]
+['text':' met, we validate each node serially on shutdown.','line_number':3589,'multiline':False]
+['text':' Stop all nodes without waiting for them to terminate. We can skip validation on shutdown','line_number':3598,'multiline':False]
+['text':' if we have already done it above.','line_number':3599,'multiline':False]
+['text':' Wait for all processes to terminate.','line_number':3605,'multiline':False]
+['text':'*
+     * Returns whether or not this ReplSetTest uses mongobridge.
+     ','line_number':3642,'multiline':True]
+['text':'*
+     * Wait for a state indicator to go to a particular state or states.
+     *
+     * Note that this waits for the state as indicated by the primary node.  If you want to wait for
+     * a node to actually reach SECONDARY state, as reported by itself, use awaitSecondaryNodes
+     * instead.
+     *
+     * @param node is a single node or list of nodes, by id or conn
+     * @param state is a single state or list of states
+     * @param timeout how long to wait for the state to be reached
+     * @param reconnectNode indicates that we should reconnect to a node that stepped down
+     *
+     ','line_number':3649,'multiline':True]
+['text':'*
+     * Waits until there is a primary node.
+     ','line_number':3666,'multiline':True]
+['text':'','line_number':3678,'multiline':False]
+['text':' ReplSetTest constructors','line_number':3679,'multiline':False]
+['text':'','line_number':3680,'multiline':False]
+['text':'*
+     * Constructor, which initializes the ReplSetTest object by starting new instances.
+     ','line_number':3682,'multiline':True]
+['text':' opts.nodeOptions and opts.nodes[i] may contain nested objects that have','line_number':3725,'multiline':False]
+['text':' the same key, e.g. setParameter. So we need to recursively merge them.','line_number':3726,'multiline':False]
+['text':' Object.assign and Object.merge do not merge nested objects of the same key.','line_number':3727,'multiline':False]
+['text':'*
+     * Constructor, which instantiates the ReplSetTest object from an existing set.
+     ','line_number':3796,'multiline':True]
+['text':' Note: the seed node is required to be operational in order for the Mongo','line_number':3810,'multiline':False]
+['text':' shell to connect to it. In this code there is no fallback to other nodes.','line_number':3811,'multiline':False]
+['text':'*
+     * Constructor, which instantiates the ReplSetTest object from existing nodes.
+     ','line_number':3821,'multiline':True]
+['text':' If opts is passed in as a string, let it pass unmodified since strings are pass-by-value.','line_number':3860,'multiline':False]
+['text':' if it is an object, though, pass in a deep copy.','line_number':3861,'multiline':False]
+['text':' The primary may unexpectedly step down during startup if under heavy load','line_number':3864,'multiline':False]
+['text':' and too slowly processing heartbeats. When it steps down, it closes all of','line_number':3865,'multiline':False]
+['text':' its connections.','line_number':3866,'multiline':False]
+['text':'*
+     * Recursively merge the target and source object.
+     ','line_number':3875,'multiline':True]
+['text':'*
+ *  Global default timeout (10 minutes).
+ ','line_number':3896,'multiline':True]
+['text':'*
+ *  Global default number that's effectively infinite.
+ ','line_number':3902,'multiline':True]
+['text':'*
+ * Set of states that the replica set can be in. Used for the wait functions.
+ ','line_number':3908,'multiline':True]
+['text':' Note there is no state 4','line_number':3915,'multiline':False]

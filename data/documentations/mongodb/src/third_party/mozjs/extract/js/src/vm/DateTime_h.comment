@@ -1,0 +1,185 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' JS_HAS_INTL_API && !MOZ_SYSTEM_ICU ','line_number':24,'multiline':True]
+['text':' Constants defined by ES5 15.9.1.10. ','line_number':28,'multiline':True]
+['text':' ES5 15.9.1.2. ','line_number':36,'multiline':True]
+['text':'
+ * Additional quantities not mentioned in the spec.  Be careful using these!
+ * They aren't doubles and aren't defined in terms of all the other constants.
+ * If you need constants that trigger floating point semantics, you'll have to
+ * manually cast to get it.
+ ','line_number':39,'multiline':True]
+['text':'*
+ * Engine-internal variant of JS::ResetTimeZone with an additional flag to
+ * control whether to forcibly reset all time zone data (this is the default
+ * behavior when calling JS::ResetTimeZone) or to try to reuse the previous
+ * time zone data.
+ ','line_number':60,'multiline':True]
+['text':'*
+ * ICU's default time zone, used for various date/time formatting operations
+ * that include the local time in the representation, is allowed to go stale
+ * for unfortunate performance reasons.  Call this function when an up-to-date
+ * default time zone is required, to resync ICU's default time zone with
+ * reality.
+ ','line_number':68,'multiline':True]
+['text':'*
+ * Stores date/time information, particularly concerning the current local
+ * time zone, and implements a small cache for daylight saving time offset
+ * computation.
+ *
+ * The basic idea is premised upon this fact: the DST offset never changes more
+ * than once in any thirty-day period.  If we know the offset at t_0 is o_0,
+ * the offset at [t_1, t_2] is also o_0, where t_1 + 3_0 days == t_2,
+ * t_1 <= t_0, and t0 <= t2.  (In other words, t_0 is always somewhere within a
+ * thirty-day range where the DST offset is constant: DST changes never occur
+ * more than once in any thirty-day period.)  Therefore, if we intelligently
+ * retain knowledge of the offset for a range of dates (which may vary over
+ * time), and if requests are usually for dates within that range, we can often
+ * provide a response without repeated offset calculation.
+ *
+ * Our caching strategy is as follows: on the first request at date t_0 compute
+ * the requested offset o_0.  Save { start: t_0, end: t_0, offset: o_0 } as the
+ * cache's state.  Subsequent requests within that range are straightforwardly
+ * handled.  If a request for t_i is far outside the range (more than thirty
+ * days), compute o_i = dstOffset(t_i) and save { start: t_i, end: t_i,
+ * offset: t_i }.  Otherwise attempt to *overextend* the range to either
+ * [start - 30d, end] or [start, end + 30d] as appropriate to encompass
+ * t_i.  If the offset o_i30 is the same as the cached offset, extend the
+ * range.  Otherwise the over-guess crossed a DST change -- compute
+ * o_i = dstOffset(t_i) and either extend the original range (if o_i == offset)
+ * or start a new one beneath/above the current one with o_i30 as the offset.
+ *
+ * This cache strategy results in 0 to 2 DST offset computations.  The naive
+ * always-compute strategy is 1 computation, and since cache maintenance is a
+ * handful of integer arithmetic instructions the speed difference between
+ * always-1 and 1-with-cache is negligible.  Caching loses if two computations
+ * happen: when the date is within 30 days of the cached range and when that
+ * 30-day range crosses a DST change.  This is relatively uncommon.  Further,
+ * instances of such are often dominated by in-range hits, so caching is an
+ * overall slight win.
+ *
+ * Why 30 days?  For correctness the duration must be smaller than any possible
+ * duration between DST changes.  Past that, note that 1) a large duration
+ * increases the likelihood of crossing a DST change while reducing the number
+ * of cache misses, and 2) a small duration decreases the size of the cached
+ * range while producing more misses.  Using a month as the interval change is
+ * a balance between these two that tries to optimize for the calendar month at
+ * a time that a site might display.  (One could imagine an adaptive duration
+ * that accommodates near-DST-change dates better; we don't believe the
+ * potential win from better caching offsets the loss from extra complexity.)
+ ','line_number':77,'multiline':True]
+['text':' The spec implicitly assumes DST and time zone adjustment information','line_number':142,'multiline':False]
+['text':' never change in the course of a function -- sometimes even across','line_number':143,'multiline':False]
+['text':' reentrancy.  So make critical sections as narrow as possible.','line_number':144,'multiline':False]
+['text':'*
+   * Get the DST offset in milliseconds at a UTC time.  This is usually
+   * either 0 or |msPerSecond * SecondsPerHour|, but at least one exotic time
+   * zone (Lord Howe Island, Australia) has a fractional-hour offset, just to
+   * keep things interesting.
+   ','line_number':146,'multiline':True]
+['text':'*
+   * The offset in seconds from the current UTC time to the current local
+   * standard time (i.e. not including any offset due to DST) as computed by the
+   * operating system.
+   ','line_number':157,'multiline':True]
+['text':'*
+   * Return the time zone offset, including DST, in milliseconds at the
+   * given time. The input time can be either at UTC or at local time.
+   ','line_number':170,'multiline':True]
+['text':'*
+   * Copy the display name for the current time zone at the given time,
+   * localized for the specified locale, into the supplied buffer. If the
+   * buffer is too small, an empty string is stored. The stored display name
+   * is null-terminated in any case.
+   ','line_number':180,'multiline':True]
+['text':'*
+   * Return the local time zone adjustment (ES2019 20.3.1.7) as computed by
+   * the operating system.
+   ','line_number':193,'multiline':True]
+['text':' JS_HAS_INTL_API && !MOZ_SYSTEM_ICU ','line_number':200,'multiline':True]
+['text':' The two methods below should only be called via js::ResetTimeZoneInternal()','line_number':203,'multiline':False]
+['text':' and js::ResyncICUDefaultTimeZone().','line_number':204,'multiline':False]
+['text':' Start and end offsets in seconds describing the current and the','line_number':219,'multiline':False]
+['text':' last cached range.','line_number':220,'multiline':False]
+['text':' The current and the last cached offset in milliseconds.','line_number':224,'multiline':False]
+['text':'*
+   * The offset in seconds from the current UTC time to the current local
+   * standard time (i.e. not including any offset due to DST) as computed by the
+   * operating system.
+   *
+   * Cached because retrieving this dynamically is Slow, and a certain venerable
+   * benchmark which shall not be named depends on it being fast.
+   *
+   * SpiderMonkey occasionally and arbitrarily updates this value from the
+   * system time zone to attempt to keep this reasonably up-to-date.  If
+   * temporary inaccuracy can't be tolerated, JSAPI clients may call
+   * JS::ResetTimeZone to forcibly sync this with the system time zone.
+   *
+   * In most cases this value is consistent with the raw time zone offset as
+   * returned by the ICU default time zone (`icu::TimeZone::getRawOffset()`),
+   * but it is possible to create cases where the operating system default time
+   * zone differs from the ICU default time zone. For example ICU doesn't
+   * support the full range of TZ environment variable settings, which can
+   * result in <ctime> returning a different time zone than what's returned by
+   * ICU. One example is "TZ=WGT3WGST,M3.5.0/-2,M10.5.0/-1", where <ctime>
+   * returns -3 hours as the local offset, but ICU flat out rejects the TZ value
+   * and instead infers the default time zone via "/etc/localtime" (on Unix).
+   * This offset can also differ from ICU when the operating system and ICU use
+   * different tzdata versions and the time zone rules of the current system
+   * time zone have changed. Or, on Windows, when the Windows default time zone
+   * can't be mapped to a IANA time zone, see for example
+   * <https://unicode-org.atlassian.net/browse/ICU-13845>.
+   *
+   * When ICU is exclusively used for time zone computations, that means when
+   * |JS_HAS_INTL_API && !MOZ_SYSTEM_ICU| is true, this field is only used to
+   * detect system default time zone changes. It must not be used to convert
+   * between local and UTC time, because, as outlined above, this could lead to
+   * different results when compared to ICU.
+   ','line_number':237,'multiline':True]
+['text':' UTC-based ranges','line_number':273,'multiline':False]
+['text':' ICU's TimeZone class is currently only available through the C++ API,','line_number':276,'multiline':False]
+['text':' see <https://unicode-org.atlassian.net/browse/ICU-13706>. Due to the','line_number':277,'multiline':False]
+['text':' lack of a stable ABI in C++, we therefore need to restrict this class','line_number':278,'multiline':False]
+['text':' to only use ICU when we use our in-tree ICU copy.','line_number':279,'multiline':False]
+['text':' Use the full date-time range when we can use ICU's TimeZone support.','line_number':281,'multiline':False]
+['text':' localtime-based ranges','line_number':287,'multiline':False]
+['text':' UTC-based ranges','line_number':288,'multiline':False]
+['text':'*
+   * The current ICU time zone. Lazily constructed to avoid potential I/O
+   * access when initializing this class.
+   ','line_number':290,'multiline':True]
+['text':'*
+   * Cached names of the standard and daylight savings display names of the
+   * current time zone for the default locale.
+   ','line_number':296,'multiline':True]
+['text':' Restrict the data-time range to the minimum required time_t range as','line_number':304,'multiline':False]
+['text':' specified in POSIX. Most operating systems support 64-bit time_t','line_number':305,'multiline':False]
+['text':' values, but we currently still have some configurations which use','line_number':306,'multiline':False]
+['text':' 32-bit time_t, e.g. the ARM simulator on 32-bit Linux (bug 1406993).','line_number':307,'multiline':False]
+['text':' Bug 1406992 explores to use 64-bit time_t when supported by the','line_number':308,'multiline':False]
+['text':' underlying operating system.','line_number':309,'multiline':False]
+['text':' time_t 01/01/1970 ','line_number':310,'multiline':True]
+['text':' time_t 12/31/2037 ','line_number':311,'multiline':True]
+['text':' JS_HAS_INTL_API && !MOZ_SYSTEM_ICU ','line_number':312,'multiline':True]
+['text':'*
+   * Get or compute an offset value for the requested seconds value.
+   ','line_number':326,'multiline':True]
+['text':'*
+   * Compute the DST offset at the given UTC time in seconds from the epoch.
+   * (getDSTOffsetMilliseconds attempts to return a cached value from the
+   * dstRange_ member, but in case of a cache miss it calls this method.)
+   ','line_number':332,'multiline':True]
+['text':'*
+   * Compute the UTC offset in milliseconds for the given local time. Called
+   * by internalGetOffsetMilliseconds on a cache miss.
+   ','line_number':342,'multiline':True]
+['text':'*
+   * Compute the local time offset in milliseconds for the given UTC time.
+   * Called by internalGetOffsetMilliseconds on a cache miss.
+   ','line_number':348,'multiline':True]
+['text':' JS_HAS_INTL_API && !MOZ_SYSTEM_ICU ','line_number':361,'multiline':True]
+['text':' namespace js ','line_number':364,'multiline':True]
+['text':' vm_DateTime_h ','line_number':366,'multiline':True]

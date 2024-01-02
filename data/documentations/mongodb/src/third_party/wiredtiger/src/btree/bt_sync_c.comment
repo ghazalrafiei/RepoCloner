@@ -1,0 +1,196 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __sync_checkpoint_can_skip --
+ *     There are limited conditions under which we can skip writing a dirty page during checkpoint.
+ ','line_number':11,'multiline':True]
+['text':'
+     * We can skip some dirty pages during a checkpoint. The requirements:
+     *
+     * 1. Not a history btree. As part of the checkpointing the data store, we will move the older
+     *    values into the history store without using any transactions. This led to representation
+     *    of all the modifications on the history store page with a transaction that is maximum than
+     *    the checkpoint snapshot. But these modifications are done by the checkpoint itself, so we
+     *    shouldn't ignore them for consistency.
+     * 2. they must be leaf pages,
+     * 3. there is a snapshot transaction active (which is the case in ordinary application
+     *    checkpoints but not all internal cases),
+     * 4. the first dirty update on the page is sufficiently recent the checkpoint transaction would
+     *     skip them,
+     * 5. there's already an address for every disk block involved.
+     ','line_number':28,'multiline':True]
+['text':'
+     * The problematic case is when a page was evicted but when there were unresolved updates and
+     * not every block associated with the page has a disk address. We can't skip such pages because
+     * we need a checkpoint write with valid addresses.
+     *
+     * The page's modification information can change underfoot if the page is being reconciled, so
+     * we'd normally serialize with reconciliation before reviewing page-modification information.
+     * However, checkpoint is the only valid writer of dirty leaf pages at this point, we skip the
+     * lock.
+     ','line_number':52,'multiline':True]
+['text':'
+ * __sync_dup_hazard_pointer --
+ *     Get a duplicate hazard pointer.
+ ','line_number':70,'multiline':True]
+['text':' Get a duplicate hazard pointer. ','line_number':79,'multiline':True]
+['text':'
+         * We already have a hazard pointer, we should generally be able to get another one. We can
+         * get spurious busy errors (e.g., if eviction is attempting to lock the page). Keep trying:
+         * we have one hazard pointer so we should be able to get another one.
+         ','line_number':81,'multiline':True]
+['text':'
+ * __sync_dup_walk --
+ *     Duplicate a tree walk point.
+ ','line_number':94,'multiline':True]
+['text':' It is okay to duplicate a walk before it starts. ','line_number':108,'multiline':True]
+['text':'
+ * __sync_page_skip --
+ *     Return if checkpoint requires we read this page.
+ ','line_number':119,'multiline':True]
+['text':' Default to reading ','line_number':132,'multiline':True]
+['text':'
+     * Skip deleted pages as they are no longer required for the checkpoint. The checkpoint never
+     * needs to review the content of those pages - if they should be included in the checkpoint the
+     * existing page on disk contains the right information and will be linked into the checkpoint
+     * as the internal tree structure is built.
+     ','line_number':134,'multiline':True]
+['text':' If the page is in-memory, we want to look at it. ','line_number':145,'multiline':True]
+['text':'
+     * Reading any page that is not in the cache will increase the cache size. Perform a set of
+     * checks to verify the cache can handle it.
+     ','line_number':149,'multiline':True]
+['text':' Don't read pages into cache during startup or shutdown phase. ','line_number':159,'multiline':True]
+['text':'
+     * Ignore the pages with no on-disk address. It is possible that a page with deleted state may
+     * not have an on-disk address.
+     ','line_number':165,'multiline':True]
+['text':'
+     * The checkpoint cleanup fast deletes the obsolete leaf page by marking it as deleted
+     * in the internal page. To achieve this,
+     *
+     * 1. Checkpoint has to read all the internal pages that have obsolete leaf pages.
+     *    To limit the reading of number of internal pages, the aggregated stop durable timestamp
+     *    is checked except when the table is logged. Logged tables do not use timestamps.
+     *
+     * 2. Obsolete leaf pages with overflow keys/values cannot be fast deleted to free
+     *    the overflow blocks. Read the page into cache and mark it dirty to remove the
+     *    overflow blocks during reconciliation.
+     *
+     * FIXME: Read internal pages from non-logged tables when the remove/truncate
+     * operation is performed using no timestamp.
+     ','line_number':172,'multiline':True]
+['text':'
+ * __wt_sync_file --
+ *     Flush pages for a specific file.
+ ','line_number':200,'multiline':True]
+['text':' Don't bump page read generations. ','line_number':225,'multiline':True]
+['text':'
+         * Write all immediately available, dirty in-cache leaf pages.
+         *
+         * Writing the leaf pages is done without acquiring a high-level lock, serialize so multiple
+         * threads don't walk the tree at the same time.
+         ','line_number':235,'multiline':True]
+['text':'
+         * Save the oldest transaction ID we need to keep around. Otherwise, in a busy system, we
+         * could be updating pages so fast that write leaves never catches up. We deliberately have
+         * no transaction running at this point that would keep the oldest ID from moving forwards
+         * as we walk the tree.
+         ','line_number':249,'multiline':True]
+['text':'
+             * Write dirty pages if nobody beat us to it. Don't try to write hot pages (defined as
+             * pages that have been updated since the write phase leaves started): checkpoint will
+             * have to visit them anyway.
+             ','line_number':266,'multiline':True]
+['text':'
+         * If we are flushing a file at read-committed isolation, which is of particular interest
+         * for flushing the metadata to make a schema-changing operation durable, get a
+         * transactional snapshot now.
+         *
+         * All changes committed up to this point should be included. We don't update the snapshot
+         * in between pages because the metadata shouldn't have many pages. Instead, read-committed
+         * isolation ensures that all metadata updates completed before the checkpoint are included.
+         ','line_number':282,'multiline':True]
+['text':'
+         * We cannot check the tree modified flag in the case of a checkpoint, the checkpoint code
+         * has already cleared it.
+         *
+         * Writing the leaf pages is done without acquiring a high-level lock, serialize so multiple
+         * threads don't walk the tree at the same time. We're holding the schema lock, but need the
+         * lower-level lock as well.
+         ','line_number':294,'multiline':True]
+['text':'
+         * In the final checkpoint pass, child pages cannot be evicted from underneath internal
+         * pages nor can underlying blocks be freed until the checkpoint's block lists are stable.
+         * Also, we cannot split child pages into parents unless we know the final pass will write a
+         * consistent view of that namespace. Set the checkpointing flag to block such actions and
+         * wait for any problematic eviction or page splits to complete.
+         ','line_number':304,'multiline':True]
+['text':' Add in history store reconciliation for standard files. ','line_number':319,'multiline':True]
+['text':' Write all dirty in-cache pages. ','line_number':324,'multiline':True]
+['text':' Read pages with history store entries and evict them asap. ','line_number':327,'multiline':True]
+['text':'
+         * Perform checkpoint cleanup when not in startup or shutdown phase by traversing internal
+         * pages looking for obsolete child pages. This is a form of fast-truncate and so it works
+         * only for row-store and VLCS pages. FLCS pages cannot be discarded and must be rewritten
+         * as implicitly filling in missing chunks of FLCS namespace is problematic. For the same
+         * reason, only read in-memory pages when doing FLCS checkpoints. (Otherwise we read all of
+         * the internal pages to improve cleanup.)
+         ','line_number':330,'multiline':True]
+['text':'
+             * Check if the page is dirty. Add a barrier between the check and taking a reference to
+             * any page modify structure. (It needs to be ordered else a page could be dirtied after
+             * taking the local reference.)
+             ','line_number':368,'multiline':True]
+['text':' Skip clean pages, but always update the maximum transaction ID. ','line_number':375,'multiline':True]
+['text':'
+             * Write dirty pages, if we can't skip them. If we skip a page, mark the tree dirty. The
+             * checkpoint marked it clean and we can't skip future checkpoints until this page is
+             * written.
+             ','line_number':386,'multiline':True]
+['text':' Slow down checkpoints. ','line_number':399,'multiline':True]
+['text':'
+             * If the page was pulled into cache by our read, try to evict it now.
+             *
+             * For eviction to have a chance, we first need to move the walk point to the next page
+             * checkpoint will visit. We want to avoid this code being too special purpose, so try
+             * to reuse the ordinary eviction path.
+             *
+             * Regardless of whether eviction succeeds or fails, the walk continues from the
+             * previous location. We remember whether we tried eviction, and don't try again. Even
+             * if eviction fails (the page may stay in cache clean but with history that cannot be
+             * discarded), that is not wasted effort because checkpoint doesn't need to write the
+             * page again.
+             *
+             * Once the transaction has given up it's snapshot it is no longer safe to reconcile
+             * pages. That happens prior to the final metadata checkpoint.
+             ','line_number':407,'multiline':True]
+['text':'
+             * Update checkpoint IO tracking data if configured to log verbose progress messages.
+             ','line_number':444,'multiline':True]
+['text':' Periodically log checkpoint progress. ','line_number':451,'multiline':True]
+['text':'
+         * During normal checkpoints, mark the tree dirty if the btree has modifications that are
+         * not visible to the checkpoint. There is a drawback in this approach as we compare the
+         * btree's maximum transaction id with the checkpoint snap_min and it is possible that this
+         * transaction may be visible to the checkpoint, but still, we mark the tree as dirty if
+         * there is a long-running transaction in the database.
+         *
+         * Do not mark the tree dirty if there is no change to stable timestamp compared to the last
+         * checkpoint.
+         ','line_number':457,'multiline':True]
+['text':' On error, clear any left-over tree walk. ','line_number':489,'multiline':True]
+['text':'
+     * If we got a snapshot in order to write pages, and there was no snapshot active when we
+     * started, release it.
+     ','line_number':493,'multiline':True]
+['text':' Clear the checkpoint flag. ','line_number':500,'multiline':True]
+['text':'
+     * Leaves are written before a checkpoint (or as part of a file close, before checkpointing the
+     * file). Start a flush to stable storage, but don't wait for it.
+     ','line_number':506,'multiline':True]

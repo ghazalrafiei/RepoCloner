@@ -1,0 +1,129 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * It wasn't possible to open standalone files in historic WiredTiger databases, you're done if you
+ * lose the file's associated metadata. That was a mistake and this code is the workaround. What we
+ * need to crack a file is database metadata plus a list of active checkpoints as of the file's
+ * clean shutdown (normally stored in the database metadata). The last write done in a block
+ * manager's checkpoint is the avail list. If current metadata and checkpoint information is
+ * included in that write, we're close. We can open the file, read the blocks, scan until we find
+ * the avail list, and read the metadata and checkpoint information from there.
+ *	Two problems remain: first, the checkpoint information isn't correct until we write the
+ * avail list and the checkpoint information has to include the avail list address plus the final
+ * file size after the write. Fortunately, when scanning the file for the avail lists, we're
+ * figuring out exactly the information needed to fix up the checkpoint information we wrote, that
+ * is, the avail list's offset, size and checksum triplet. As for the final file size, we allocate
+ * all space in the file before we calculate block checksums, so we can do that space allocation,
+ * then fill in the final file size before calculating the checksum and writing the actual block.
+ *  The second problem is we have to be able to find the avail lists that include checkpoint
+ * information (ignoring previous files created by previous releases, and, of course, making
+ * upgrade/downgrade work seamlessly). Extent lists are written to their own pages, and we could
+ * version this change using the page header version. Happily, historic WiredTiger releases have a
+ * bug. Extent lists consist of a set of offset/size pairs, with magic offset/size pairs at the
+ * beginning and end of the list. Historic releases only verified the offset of the special pair at
+ * the end of the list, ignoring the size. To detect avail lists that include appended metadata and
+ * checkpoint information, this change adds a version to the extent list: if size is
+ * WT_BLOCK_EXTLIST_VERSION_CKPT, then metadata/checkpoint information follows.
+ ','line_number':11,'multiline':True]
+['text':'
+ * __wt_block_checkpoint_final --
+ *     Append metadata and checkpoint information to a buffer.
+ ','line_number':37,'multiline':True]
+['text':'
+     * First, add in a counter to uniquely order checkpoints at our level.
+     * There's order and time information in the checkpoint itself, but the
+     * order isn't written and the time is only at second granularity.
+     *	I'm using the Btree write generation for this purpose. That's
+     * safe and guaranteed correct because everything is locked down for the
+     * checkpoint, we're the only writer. Plus, because we use the write
+     * generation as a database connection generation, it's guaranteed to
+     * move forward and never repeat.
+     *	It's a layering violation though, this is the only place the
+     * block manager uses the write generation. The alternative would be to
+     * add our own write-generation scheme in the block manager, storing a
+     * value and recovering it when we open the file. We could do that, as
+     * reading the final avail list when a file is opened is unavoidable,
+     * so we can retrieve the value written here when we open the file, but
+     * this approach is simpler.
+     ','line_number':54,'multiline':True]
+['text':'
+     * Second, add space for the final file size as a packed value. We don't know how large it will
+     * be so skip the maximum required space.
+     ','line_number':77,'multiline':True]
+['text':' 3a, copy the metadata length into the buffer. ','line_number':88,'multiline':True]
+['text':' 3b, copy the metadata into the buffer. ','line_number':96,'multiline':True]
+['text':' 4a, copy the checkpoint list length into the buffer. ','line_number':103,'multiline':True]
+['text':' 4b, copy the checkpoint list into the buffer. ','line_number':111,'multiline':True]
+['text':'
+     * 5a, copy the not-quite-right checkpoint information length into the
+     * buffer.
+     ','line_number':118,'multiline':True]
+['text':'
+     * 5b, copy the not-quite-right checkpoint information into the buffer.
+     ','line_number':129,'multiline':True]
+['text':'
+     * We might have grown the buffer beyond the original allocation size, make sure that we're
+     * still in compliance.
+     ','line_number':138,'multiline':True]
+['text':'
+ * __block_checkpoint_update --
+ *     Update the checkpoint information for the file.
+ ','line_number':164,'multiline':True]
+['text':'
+     * Convert the final checkpoint data blob to a WT_BLOCK_CKPT structure, update it with the avail
+     * list information, and convert it back to a data blob.
+     ','line_number':182,'multiline':True]
+['text':'
+ * __wt_block_checkpoint_last --
+ *     Scan a file for checkpoints, returning the last one we find.
+ ','line_number':209,'multiline':True]
+['text':' Tiered tables aren't supported yet. ','line_number':232,'multiline':True]
+['text':'
+     * Initialize a pair of structures that track the best and current checkpoints found so far.
+     * This is a little trickier than normal because we don't want to start saving a checkpoint only
+     * to find out it's not one we can use. I doubt that can happen and it suggests corruption, but
+     * half-a-checkpoint isn't a good place to be. Only swap to a new "best" checkpoint if we read
+     * the whole thing successfully.
+     *
+     * Don't re-order these lines: it's done this way so the WT_ITEMs are always initialized and
+     * error handling works.
+     ','line_number':235,'multiline':True]
+['text':' [-Werror=maybe-uninitialized] ','line_number':251,'multiline':True]
+['text':'
+     * Scan the file for pages, using the minimum possible WiredTiger allocation size.
+     ','line_number':259,'multiline':True]
+['text':' Report progress occasionally. ','line_number':264,'multiline':True]
+['text':'
+         * Read the start of a possible page and get a block length from it. Move to the next
+         * allocation sized boundary, we'll never consider this one again.
+         ','line_number':269,'multiline':True]
+['text':'
+         * Check the block size: if it's not insane, read the block. Reading the block validates any
+         * checksum. The file might reasonably have garbage at the end, and we're not here to detect
+         * that. Ignore problems, subsequent file verification can deal with any corruption. If the
+         * block isn't valid, skip to the next possible block.
+         ','line_number':280,'multiline':True]
+['text':'
+         * Note the less-than check of WT_BLOCK_EXTLIST_VERSION_CKPT, that way we can extend this
+         * with additional values in the future.
+         ','line_number':310,'multiline':True]
+['text':'
+         * Skip any entries that aren't the most recent we've seen so far.
+         ','line_number':317,'multiline':True]
+['text':'
+         * The file size is in a fixed-size chunk of data, although it's packed (for portability).
+         ','line_number':333,'multiline':True]
+['text':' Save a copy of the metadata. ','line_number':340,'multiline':True]
+['text':' Save a copy of the checkpoint list. ','line_number':346,'multiline':True]
+['text':' Save a copy of the checkpoint information. ','line_number':352,'multiline':True]
+['text':' A new winner, swap the "best" and "current" information. ','line_number':356,'multiline':True]
+['text':' Correct the checkpoint. ','line_number':366,'multiline':True]
+['text':'
+     * Copy the information out to our caller. Do the WT_ITEM first, it's the only thing left that
+     * can fail and simplifies error handling.
+     ','line_number':369,'multiline':True]

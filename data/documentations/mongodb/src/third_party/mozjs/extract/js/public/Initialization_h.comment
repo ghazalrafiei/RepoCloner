@@ -1,0 +1,106 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]
+['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':2,'multiline':True]
+['text':' SpiderMonkey initialization and shutdown APIs. ','line_number':6,'multiline':True]
+['text':'*
+ * SpiderMonkey's initialization status is tracked here, and it controls things
+ * that should happen only once across all runtimes.  It's an API requirement
+ * that JS_Init (and JS_ShutDown, if called) be called in a thread-aware
+ * manner, so this (internal -- embedders, don't use!) variable doesn't need to
+ * be atomic.
+ ','line_number':22,'multiline':True]
+['text':' namespace detail','line_number':33,'multiline':False]
+['text':' namespace JS','line_number':34,'multiline':False]
+['text':' These are equivalent to ICU's |UMemAllocFn|, |UMemReallocFn|, and','line_number':36,'multiline':False]
+['text':' |UMemFreeFn| types.  The first argument (called |context| in the ICU docs)','line_number':37,'multiline':False]
+['text':' will always be nullptr and should be ignored.','line_number':38,'multiline':False]
+['text':'*
+ * This function can be used to track memory used by ICU.  If it is called, it
+ * *must* be called before JS_Init.  Don't use it unless you know what you're
+ * doing!
+ ','line_number':43,'multiline':True]
+['text':'*
+ * Initialize SpiderMonkey, returning true only if initialization succeeded.
+ * Once this method has succeeded, it is safe to call JS_NewContext and other
+ * JSAPI methods.
+ *
+ * This method must be called before any other JSAPI method is used on any
+ * thread.  Once it has been used, it is safe to call any JSAPI method, and it
+ * remains safe to do so until JS_ShutDown is correctly called.
+ *
+ * It is currently not possible to initialize SpiderMonkey multiple times (that
+ * is, calling JS_Init/JSAPI methods/JS_ShutDown in that order, then doing so
+ * again).  This restriction may eventually be lifted.
+ ','line_number':52,'multiline':True]
+['text':'*
+ * A variant of JS_Init. On success it returns nullptr. On failure it returns a
+ * pointer to a string literal that describes how initialization failed, which
+ * can be useful for debugging purposes.
+ ','line_number':73,'multiline':True]
+['text':'
+ * Returns true if SpiderMonkey has been initialized successfully, even if it
+ * has possibly been shut down.
+ *
+ * Note that it is the responsibility of the embedder to call JS_Init() and
+ * JS_ShutDown() at the correct times, and therefore this API should ideally not
+ * be necessary to use.  This is only intended to be used in cases where the
+ * embedder isn't in full control of deciding whether to initialize SpiderMonkey
+ * or hand off the task to another consumer.
+ ','line_number':86,'multiline':True]
+['text':' Reference to a sequence of bytes.','line_number':102,'multiline':False]
+['text':' TODO: This type should be Span<cont uint8_t> (Bug 1709135)','line_number':103,'multiline':False]
+['text':' Callback function used to copy the SelfHosted content to memory or to disk.','line_number':106,'multiline':False]
+['text':'
+ * Initialize the runtime's self-hosted code. Embeddings should call this
+ * exactly once per runtime/context, before the first JS_NewGlobalObject
+ * call.
+ *
+ * This function parses the self-hosted code, except if the provided cache span
+ * is not empty, in which case the self-hosted content is decoded from the span.
+ *
+ * The cached content provided as argument, when non-empty, should come from the
+ * a previous execution of JS::InitSelfHostedCode where a writer was registered.
+ * The content should come from the same version of the binary, otherwise this
+ * would cause an error.
+ *
+ * The cached content provided with the Span should remain alive until
+ * JS_Shutdown is called.
+ *
+ * The writer callback given as argument would be called by when the result of
+ * the parser is ready to be cached. The writer is in charge of saving the
+ * content in memory or on disk. The span given as argument of the writer only
+ * last for the time of the call, and contains the content to be saved.
+ *
+ * The writer is not called if the cached content given as argument of
+ * InitSelfHostedCode is non-empty.
+ *
+ * Errors returned by the writer callback would bubble up through
+ * JS::InitSelfHostedCode.
+ *
+ * The cached content provided by the writer callback is safe to reuse across
+ * threads, and even across multiple executions as long as the executable is
+ * identical.
+ *
+ * NOTE: This may not set a pending exception in the case of OOM since this
+ *       runs very early in startup.
+ ','line_number':109,'multiline':True]
+['text':' namespace JS','line_number':147,'multiline':False]
+['text':'*
+ * Destroy free-standing resources allocated by SpiderMonkey, not associated
+ * with any runtime, context, or other structure.
+ *
+ * This method should be called after all other JSAPI data has been properly
+ * cleaned up: every new runtime must have been destroyed, every new context
+ * must have been destroyed, and so on.  Calling this method before all other
+ * resources have been destroyed has undefined behavior.
+ *
+ * Failure to call this method, at present, has no adverse effects other than
+ * leaking memory.  This may not always be the case; it's recommended that all
+ * embedders call this method when all other JSAPI operations have completed.
+ *
+ * It is currently not possible to initialize SpiderMonkey multiple times (that
+ * is, calling JS_Init/JSAPI methods/JS_ShutDown in that order, then doing so
+ * again).  This restriction may eventually be lifted.
+ ','line_number':149,'multiline':True]
+['text':' js_Initialization_h ','line_number':168,'multiline':True]

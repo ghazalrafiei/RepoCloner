@@ -1,0 +1,99 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]
+['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]
+['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]
+['text':' Initialize H with constants from FIPS180-1.','line_number':31,'multiline':False]
+['text':'
+ * Explanation of H array and index values:
+ *
+ * The context's H array is actually the concatenation of two arrays
+ * defined by SHA1, the H array of state variables (5 elements),
+ * and the W array of intermediate values, of which there are 16 elements.
+ * The W array starts at H[5], that is W[0] is H[5].
+ * Although these values are defined as 32-bit values, we use 64-bit
+ * variables to hold them because the AMD64 stores 64 bit values in
+ * memory MUCH faster than it stores any smaller values.
+ *
+ * Rather than passing the context structure to shaCompress, we pass
+ * this combined array of H and W values.  We do not pass the address
+ * of the first element of this array, but rather pass the address of an
+ * element in the middle of the array, element X.  Presently X[0] is H[11].
+ * So we pass the address of H[11] as the address of array X to shaCompress.
+ * Then shaCompress accesses the members of the array using positive AND
+ * negative indexes.
+ *
+ * Pictorially: (each element is 8 bytes)
+ * H | H0 H1 H2 H3 H4 W0 W1 W2 W3 W4 W5 W6 W7 W8 W9 Wa Wb Wc Wd We Wf |
+ * X |-11-10 -9 -8 -7 -6 -5 -4 -3 -2 -1 X0 X1 X2 X3 X4 X5 X6 X7 X8 X9 |
+ *
+ * The byte offset from X[0] to any member of H and W is always
+ * representable in a signed 8-bit value, which will be encoded
+ * as a single byte offset in the X86-64 instruction set.
+ * If we didn't pass the address of H[11], and instead passed the
+ * address of H[0], the offsets to elements H[16] and above would be
+ * greater than 127, not representable in a signed 8-bit value, and the
+ * x86-64 instruction set would encode every such offset as a 32-bit
+ * signed number in each instruction that accessed element H[16] or
+ * higher.  This results in much bigger and slower code.
+ ','line_number':39,'multiline':True]
+['text':' X[0] is H[11], and H[0] is X[-11] ','line_number':72,'multiline':True]
+['text':' X[0] is W[6],  and W[0] is X[-6]  ','line_number':73,'multiline':True]
+['text':'
+ *  SHA: Add data to context.
+ ','line_number':75,'multiline':True]
+['text':' Accumulate the byte count. ','line_number':87,'multiline':True]
+['text':' Read the data into W and process blocks as they get full. ','line_number':92,'multiline':True]
+['text':'
+ *  SHA: Generate hash value
+ ','line_number':119,'multiline':True]
+['text':' Pad with a binary 1 (e.g. 0x80), then zeroes, then length in bits. ','line_number':133,'multiline':True]
+['text':' Convert size from bytes to bits. ','line_number':137,'multiline':True]
+['text':' Output hash. ','line_number':143,'multiline':True]
+['text':'
+ *  SHA: Compression function, unrolled.
+ *
+ * Some operations in shaCompress are done as 5 groups of 16 operations.
+ * Others are done as 4 groups of 20 operations.
+ * The code below shows that structure.
+ *
+ * The functions that compute the new values of the 5 state variables
+ * A-E are done in 4 groups of 20 operations (or you may also think
+ * of them as being done in 16 groups of 5 operations).  They are
+ * done by the SHA_RNDx macros below, in the right column.
+ *
+ * The functions that set the 16 values of the W array are done in
+ * 5 groups of 16 operations.  The first group is done by the
+ * LOAD macros below, the latter 4 groups are done by SHA_MIX below,
+ * in the left column.
+ *
+ * gcc's optimizer observes that each member of the W array is assigned
+ * a value 5 times in this code.  It reduces the number of store
+ * operations done to the W array in the context (that is, in the X array)
+ * by creating a W array on the stack, and storing the W values there for
+ * the first 4 groups of operations on W, and storing the values in the
+ * context's W array only in the fifth group.  This is undesirable.
+ * It is MUCH bigger code than simply using the context's W array, because
+ * all the offsets to the W array in the stack are 32-bit signed offsets,
+ * and it is no faster than storing the values in the context's W array.
+ *
+ * The original code for sha_fast.c prevented this creation of a separate
+ * W array in the stack by creating a W array of 80 members, each of
+ * whose elements is assigned only once. It also separated the computations
+ * of the W array values and the computations of the values for the 5
+ * state variables into two separate passes, W's, then A-E's so that the
+ * second pass could be done all in registers (except for accessing the W
+ * array) on machines with fewer registers.  The method is suboptimal
+ * for machines with enough registers to do it all in one pass, and it
+ * necessitates using many instructions with 32-bit offsets.
+ *
+ * This code eliminates the separate W array on the stack by a completely
+ * different means: by declaring the X array volatile.  This prevents
+ * the optimizer from trying to reduce the use of the X array by the
+ * creation of a MORE expensive W array on the stack. The result is
+ * that all instructions use signed 8-bit offsets and not 32-bit offsets.
+ *
+ * The combination of this code and the -O3 optimizer flag on GCC 3.4.3
+ * results in code that is 3 times faster than the previous NSS sha_fast
+ * code on AMD64.
+ ','line_number':153,'multiline':True]

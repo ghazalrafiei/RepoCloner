@@ -1,0 +1,177 @@
+['text':'*
+ *    Copyright (C) 2021-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * This class provides an abstraction for accessing documents in a partition via an interator-type
+ * interface. There is always a "current" document; operator[] provides random access relative to
+ * the current document, so that iter[+2] is refers to the 2 positions ahead of the current one.
+ *
+ * The 'partionExpr' is used to determine partition boundaries, provide the illusion that only the
+ * current partition exists.
+ *
+ * The 'sortPattern' is used for resolving range-based and time-based bounds, in 'getEndpoints()'.
+ *
+ ','line_number':58,'multiline':True]
+['text':'*
+     * Returns the current document pointed to by the iterator.
+     ','line_number':88,'multiline':True]
+['text':'*
+     * Returns true if iterator execution is paused.
+     ','line_number':95,'multiline':True]
+['text':'*
+     * Advances the iterator to the next document in the partition. Returns a status indicating
+     * whether the new iterator state is in the same partition, the next partition, or EOF.
+     ','line_number':108,'multiline':True]
+['text':'*
+     * Returns the index of the iterator for the current partition. Note that the returned index
+     * refers to the global index in the partition and should not be used as an argument to the
+     * operator[] overload.
+     ','line_number':114,'multiline':True]
+['text':'*
+     * Sets the input DocumentSource for this iterator to 'source'.
+     ','line_number':123,'multiline':True]
+['text':'*
+     * Returns the value in bytes of the data being stored by this partition iterator. Does not
+     * include the size of the constant size objects being held or the overhead of the data
+     * structures.
+     ','line_number':130,'multiline':True]
+['text':'*
+     * Spill whatever's in the cache to disk. Caller is responsible for checking whether this is
+     * allowed.
+     ','line_number':139,'multiline':True]
+['text':'*
+     * Clean up all memory associated with the partition iterator. All calls requesting documents
+     * are invalid after calling this.
+     ','line_number':151,'multiline':True]
+['text':'*
+     * Request the document in the current partition that is 'index' positions from the current. For
+     * instance, index 0 refers to the current document pointed to by the iterator.
+     *
+     * Returns boost::none if the document is not in the partition or we've hit EOF.
+     ','line_number':162,'multiline':True]
+['text':'*
+     * Resolves any type of WindowBounds to a concrete pair of indices, '[lower, upper]'.
+     *
+     * Both 'lower' and 'upper' are valid offsets, such that '(*this)[lower]' and '(*this)[upper]'
+     * returns a document. If the window contains one document, then 'lower == upper'. If the
+     * window contains zero documents, then there are no valid offsets, so we return boost::none.
+     * (The window can be empty when it is shifted completely past one end of the partition, as in
+     *  [+999, +999] or [-999, -999].)
+     *
+     * The offsets can be different after every 'advance()'. Even for simple document-based
+     * windows, the returned offsets can be different than the user-specified bounds when we
+     * are close to a partition boundary.  For example, at the beginning of a partition,
+     * 'getEndpoints(DocumentBased{-10, +7})' would be '[0, +7]'.
+     *
+     * This method is non-const because it may pull documents into memory up to the end of the
+     * window.
+     *
+     * 'hint', if specified, should be the last result of getEndpoints() for the same 'bounds'.
+     ','line_number':170,'multiline':True]
+['text':'*
+     * Returns the smallest offset 'i' such that (*this)[i] is in '_cache'.
+     *
+     * This value is negative or zero, because the current document is always in '_cache'.
+     ','line_number':192,'multiline':True]
+['text':'*
+     * Returns the largest offset 'i' such that (*this)[i] is in '_cache'.
+     *
+     * Note that offsets greater than 'i' might still be in the partition, even though they
+     * haven't been loaded into '_cache' yet. If you want to know where the partition ends,
+     * call 'cacheWholePartition' first.
+     *
+     * This value is positive or zero, because the current document is always in '_cache'.
+     ','line_number':201,'multiline':True]
+['text':'*
+     * Performs the actual work of the 'advance()' call. This is wrapped by 'advance()' so that
+     * regardless of how it returns 'advance()' will also free documents that can be expired as a
+     * result.
+     ','line_number':214,'multiline':True]
+['text':'*
+     * Loads documents into '_cache' until we reach a partition boundary.
+     ','line_number':220,'multiline':True]
+['text':' Start from one past the end of _cache.','line_number':224,'multiline':False]
+['text':' If we have already loaded everything into '_cache' then this condition will be false','line_number':226,'multiline':False]
+['text':' immediately.','line_number':227,'multiline':False]
+['text':'*
+     * Marks the given index as expired for the slot 'id'. This does not necessarily mean that the
+     * document will be released, just that this slot no longer requires it.
+     ','line_number':233,'multiline':True]
+['text':' 'index' is relevant to the current document, adjust it to figure out what index it refers','line_number':238,'multiline':False]
+['text':' to in the cache.','line_number':239,'multiline':False]
+['text':'*
+     * Frees any documents from the cache which have been marked as "expired" by all slots.
+     ','line_number':243,'multiline':True]
+['text':'*
+     * Retrieves the next document from the prior stage and updates the state accordingly.
+     ','line_number':248,'multiline':True]
+['text':'*
+     * Resets the state of the iterator with the first document of the new partition.
+     ','line_number':261,'multiline':True]
+['text':' Internal helpers for 'getEndpoints()'.','line_number':266,'multiline':False]
+['text':' '_sortExpr' tells us which field is the "time" field. When the user writes','line_number':277,'multiline':False]
+['text':' 'sortBy: {ts: 1}', any time-based or range-based window bounds are defined using','line_number':278,'multiline':False]
+['text':' the value of the "$ts" field. This _sortExpr is used in getEndpoints().','line_number':279,'multiline':False]
+['text':' When encountering the first document of the next partition, we stash it away until the','line_number':285,'multiline':False]
+['text':' iterator has advanced to it. This document is not accessible until then.','line_number':286,'multiline':False]
+['text':' Default state, no documents have been pulled into the cache.','line_number':301,'multiline':False]
+['text':' Input sources do not have a result to be processed yet, but there may be more results in','line_number':303,'multiline':False]
+['text':' the future.','line_number':304,'multiline':False]
+['text':' Iterating the current partition. We don't know where the current partition ends, or','line_number':306,'multiline':False]
+['text':' whether it's the last partition.','line_number':307,'multiline':False]
+['text':' The first document of the next partition has been retrieved, but the iterator has not','line_number':309,'multiline':False]
+['text':' advanced to it yet.','line_number':310,'multiline':False]
+['text':' Similar to the next partition case, except for EOF: we know the current partition is the','line_number':312,'multiline':False]
+['text':' final one, because the underlying iterator has returned EOF.','line_number':313,'multiline':False]
+['text':' The iterator has exhausted the input documents. Any access should be disallowed.','line_number':315,'multiline':False]
+['text':' '_indexOfCurrentInPartition' is the current document, which '(*this)[0]' returns.','line_number':319,'multiline':False]
+['text':' The actual cache of the PartitionIterator. Holds documents and spills documents that exceed','line_number':322,'multiline':False]
+['text':' the memory limit given to PartitionIterator to disk. Behaves like a deque.','line_number':323,'multiline':False]
+['text':' Memory token, used to track memory consumption of PartitionIterator. Needed to avoid problems','line_number':326,'multiline':False]
+['text':' when getNextPartitionStateSize() changes value between invocations.','line_number':327,'multiline':False]
+['text':'*
+ * This class provides access to an underlying PartitionIterator and manages when documents in the
+ * partition are no longer needed.
+ ','line_number':331,'multiline':True]
+['text':' This policy assumes that when the caller accesses a certain index 'i', that it will no','line_number':338,'multiline':False]
+['text':' longer require all documents up to and including the document at index 'i'.','line_number':339,'multiline':False]
+['text':' This policy should be used if the caller requires the endpoints of a window. Documents','line_number':341,'multiline':False]
+['text':' to the left of the left endpoint may disappear on the next call to releaseExpired().','line_number':342,'multiline':False]
+['text':' This policy means the caller only looks at how the right endpoint changes.','line_number':344,'multiline':False]
+['text':' The caller may look at documents between the most recent two right endpoints.','line_number':345,'multiline':False]
+['text':' This policy allows the window function executor to manually release expired documents','line_number':347,'multiline':False]
+['text':' after evaluating values in the accessed documents.','line_number':348,'multiline':False]
+['text':' With this policy, all documents before the lower bound can be marked as expired.','line_number':382,'multiline':False]
+['text':' They will only be released on the next call to releaseExpired(), so when','line_number':383,'multiline':False]
+['text':' getEndpoints() returns, the caller may also look at documents from the previous','line_number':384,'multiline':False]
+['text':' result of getEndpoints(), until it returns control to the DocumentSource.','line_number':385,'multiline':False]
+['text':' With this policy, all documents before the upper bound can be marked as expired.','line_number':391,'multiline':False]
+['text':' They will only be released on the next call to releaseExpired(), so when','line_number':392,'multiline':False]
+['text':' getEndpoints() returns, the caller may also look at documents from the previous','line_number':393,'multiline':False]
+['text':' result of getEndpoints(), until it returns control to the DocumentSource.','line_number':394,'multiline':False]
+['text':' namespace mongo','line_number':419,'multiline':False]

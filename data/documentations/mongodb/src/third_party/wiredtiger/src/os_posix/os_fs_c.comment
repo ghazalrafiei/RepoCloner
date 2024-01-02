@@ -1,0 +1,320 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __posix_sync --
+ *     Underlying support function to flush a file descriptor. Fsync calls (or fsync-style calls,
+ *     for example, fdatasync) are not retried on failure, and failure halts the system. Excerpted
+ *     from the LWN.net article https://lwn.net/Articles/752063/: In short, PostgreSQL assumes that
+ *     a successful call to fsync() indicates that all data written since the last successful call
+ *     made it safely to persistent storage. But that is not what the kernel actually does. When a
+ *     buffered I/O write fails due to a hardware-level error, filesystems will respond differently,
+ *     but that behavior usually includes discarding the data in the affected pages and marking them
+ *     as being clean. So a read of the blocks that were just written will likely return something
+ *     other than the data that was written. Given the shared history of UNIX filesystems, and the
+ *     difficulty of knowing what specific error will be returned under specific circumstances, we
+ *     don't retry fsync-style calls and panic if a flush operation fails.
+ ','line_number':31,'multiline':True]
+['text':'
+     * OS X fsync documentation: "Note that while fsync() will flush all data from the host to the
+     * drive (i.e. the "permanent storage device"), the drive itself may not physically write the
+     * data to the platters for quite some time and it may be written in an out-of-order sequence.
+     * For applications that require tighter guarantees about the integrity of their data, Mac OS X
+     * provides the F_FULLFSYNC fcntl. The F_FULLFSYNC fcntl asks the drive to flush all buffered
+     * data to permanent storage."
+     *
+     * OS X F_FULLFSYNC fcntl documentation: "This is currently implemented on HFS, MS-DOS (FAT),
+     * and Universal Disk Format (UDF) file systems."
+     *
+     * See comment in __posix_sync(): sync cannot be retried or fail.
+     ','line_number':51,'multiline':True]
+['text':'
+         * If the first F_FULLFSYNC fails, assume the file system doesn't support it and fallback to
+         * fdatasync or fsync.
+         ','line_number':73,'multiline':True]
+['text':'
+ * Use fsync in case we run on BSD systems that don't flush file size changes as part of fdatasync.
+ * This is for extra safety and is not a guarantee that we are providing full support for these
+ * systems and/or other non POSIX 1003.1 Unix systems.
+ ','line_number':89,'multiline':True]
+['text':' See comment in __posix_sync(): sync cannot be retried or fail. ','line_number':95,'multiline':True]
+['text':' See comment in __posix_sync(): sync cannot be retried or fail. ','line_number':101,'multiline':True]
+['text':'
+ * __posix_directory_sync --
+ *     Flush a directory to ensure file creation, remove or rename is durable.
+ ','line_number':110,'multiline':True]
+['text':'
+     * This layer should never see a path that doesn't include a trailing path separator, this code
+     * asserts that fact.
+     ','line_number':125,'multiline':True]
+['text':' -Wconditional-uninitialized ','line_number':132,'multiline':True]
+['text':' See comment in __posix_sync(): sync cannot be retried or fail. ','line_number':150,'multiline':True]
+['text':'
+ * __posix_fs_exist --
+ *     Return if the file exists.
+ ','line_number':155,'multiline':True]
+['text':'
+ * __posix_fs_remove --
+ *     Remove a file.
+ ','line_number':183,'multiline':True]
+['text':'
+     * ISO C doesn't require remove return -1 on failure or set errno (note POSIX 1003.1 extends C
+     * with those requirements). Regardless, use the unlink system call, instead of remove, to
+     * simplify error handling; where we're not doing any special checking for standards compliance,
+     * using unlink may be marginally safer.
+     ','line_number':198,'multiline':True]
+['text':' Flush the backing directory to guarantee the remove. ','line_number':212,'multiline':True]
+['text':'
+ * __posix_fs_rename --
+ *     Rename a file.
+ ','line_number':220,'multiline':True]
+['text':'
+     * ISO C doesn't require rename return -1 on failure or set errno (note POSIX 1003.1 extends C
+     * with those requirements). Be cautious, force any non-zero return to -1 so we'll check errno.
+     * We can still end up with the wrong errno (if errno is garbage), or the generic WT_ERROR
+     * return (if errno is 0), but we've done the best we can.
+     ','line_number':235,'multiline':True]
+['text':'
+     * Flush the backing directory to guarantee the rename. My reading of POSIX 1003.1 is there's no
+     * guarantee flushing only one of the from or to directories, or flushing a common parent, is
+     * sufficient, and even if POSIX were to make that guarantee, existing filesystems are known to
+     * not provide the guarantee or only provide the guarantee with specific mount options. Flush
+     * both of the from/to directories until it's a performance problem.
+     ','line_number':248,'multiline':True]
+['text':'
+     * In almost all cases, we're going to be renaming files in the same directory, we can at least
+     * fast-path that.
+     ','line_number':259,'multiline':True]
+['text':'
+ * __posix_fs_size --
+ *     Get the size of a file in bytes, by file name.
+ ','line_number':280,'multiline':True]
+['text':'
+ * __posix_file_advise --
+ *     POSIX fadvise.
+ ','line_number':305,'multiline':True]
+['text':'
+     * Treat EINVAL as not-supported, some systems don't support some flags. Quietly fail, callers
+     * expect not-supported failures, and reset the handle method to prevent future calls.
+     ','line_number':324,'multiline':True]
+['text':'
+ * __posix_file_close --
+ *     ANSI C close.
+ ','line_number':337,'multiline':True]
+['text':' Close the file handle. ','line_number':356,'multiline':True]
+['text':'
+ * __posix_file_lock --
+ *     Lock/unlock a file.
+ ','line_number':368,'multiline':True]
+['text':'
+     * WiredTiger requires this function be able to acquire locks past the end of file.
+     *
+     * Note we're using fcntl(2) locking: all fcntl locks associated with a file for a given process
+     * are removed when any file descriptor for the file is closed by the process, even if a lock
+     * was never requested for that file descriptor.
+     ','line_number':383,'multiline':True]
+['text':'
+ * __posix_file_read --
+ *     POSIX pread.
+ ','line_number':401,'multiline':True]
+['text':' Assert direct I/O is aligned and a multiple of the alignment. ','line_number':423,'multiline':True]
+['text':' Break reads larger than 1GB into 1GB chunks. ','line_number':429,'multiline':True]
+['text':'
+         * The WT_SYSCALL_RETRY macro expects 0 for success. pread returns > 0 when it successfully
+         * reads bytes, adjust the return value. pread returns 0 when its EOF and if that is reached
+         * it is unexpected as we know how much we are reading.
+         ','line_number':433,'multiline':True]
+['text':'
+ * __posix_file_read_mmap --
+ *     Get the buffer from the mapped region.
+ ','line_number':448,'multiline':True]
+['text':' Indicate that we might be using the mapped area ','line_number':471,'multiline':True]
+['text':'
+     * If the I/O falls inside the mapped buffer, and the buffer is not being re-sized, we will use
+     * the mapped buffer.
+     ','line_number':474,'multiline':True]
+['text':' Signal that we are done using the mapped buffer. ','line_number':485,'multiline':True]
+['text':' We couldn't use mmap for some reason, so use the system call. ','line_number':491,'multiline':True]
+['text':'
+ * __posix_file_size --
+ *     Get the size of a file in bytes, by file handle.
+ ','line_number':495,'multiline':True]
+['text':'
+ * __posix_file_sync --
+ *     POSIX fsync.
+ ','line_number':518,'multiline':True]
+['text':'
+ * __posix_file_sync_nowait --
+ *     POSIX fsync.
+ ','line_number':535,'multiline':True]
+['text':' See comment in __posix_sync(): sync cannot be retried or fail. ','line_number':549,'multiline':True]
+['text':'
+ * __posix_file_truncate --
+ *     POSIX ftruncate.
+ ','line_number':558,'multiline':True]
+['text':'
+ * __posix_file_write --
+ *     POSIX pwrite.
+ ','line_number':593,'multiline':True]
+['text':' Assert direct I/O is aligned and a multiple of the alignment. ','line_number':614,'multiline':True]
+['text':' Break writes larger than 1GB into 1GB chunks. ','line_number':620,'multiline':True]
+['text':'
+ * __posix_file_write_mmap --
+ *     Write the buffer into the mapped region.
+ ','line_number':633,'multiline':True]
+['text':' Indicate that we might be using the mapped area ','line_number':657,'multiline':True]
+['text':'
+     * If the I/O falls inside the mapped buffer, and the buffer is not being re-sized, we will use
+     * the mapped buffer.
+     ','line_number':660,'multiline':True]
+['text':' Signal that we are done using the mapped buffer. ','line_number':671,'multiline':True]
+['text':' We couldn't use mmap for some reason, so use the system call. ','line_number':677,'multiline':True]
+['text':'
+ * If we wrote the file via a system call, we might have extended its size. If the file is mapped,
+ * remap it with the new size. If we are actively extending the file, don't remap it on every write
+ * to avoid overhead.
+ ','line_number':680,'multiline':True]
+['text':' If we are actively extending the file, don't remap it on every write. ','line_number':687,'multiline':True]
+['text':'
+ * __posix_open_file_cloexec --
+ *     Prevent child access to file handles.
+ ','line_number':696,'multiline':True]
+['text':'
+     * Security: The application may spawn a new process, and we don't want another process to have
+     * access to our file handles. There's an obvious race between the open and this call, prefer
+     * the flag to open if available.
+     ','line_number':706,'multiline':True]
+['text':'
+ * __posix_open_file --
+ *     Open a file handle.
+ ','line_number':722,'multiline':True]
+['text':' Set up error handling. ','line_number':748,'multiline':True]
+['text':'
+         * Security: The application may spawn a new process, and we don't want another process to
+         * have access to our file handles.
+         ','line_number':754,'multiline':True]
+['text':' Windows clones: we always want to treat the file as a binary. ','line_number':777,'multiline':True]
+['text':'
+     * Security: The application may spawn a new process, and we don't want another process to have
+     * access to our file handles.
+     ','line_number':781,'multiline':True]
+['text':' Direct I/O. ','line_number':788,'multiline':True]
+['text':' Avoid updating metadata for read-only workloads. ','line_number':796,'multiline':True]
+['text':' Create/Open the file. ','line_number':811,'multiline':True]
+['text':'
+     * Durability: some filesystems require a directory sync to be confident the file will appear.
+     ','line_number':821,'multiline':True]
+['text':'
+     * If the user set an access pattern hint, call fadvise now. Ignore fadvise when doing direct
+     * I/O, the kernel cache isn't interesting.
+     ','line_number':834,'multiline':True]
+['text':' Initialize public information. ','line_number':854,'multiline':True]
+['text':'
+         * We are going to use mmap for I/O. So let's mmap the file on opening. If mmap fails, we
+         * will just mark the file as not mappable (inside the mapping function) and will use system
+         * calls for I/O on this file. We will not crash the database if mmap fails.
+         ','line_number':863,'multiline':True]
+['text':'
+     * Ignore fadvise when doing direct I/O, the kernel cache isn't interesting.
+     ','line_number':876,'multiline':True]
+['text':'
+ * The underlying objects are little-endian, mapping objects isn't currently supported on big-endian
+ * systems.
+ ','line_number':885,'multiline':True]
+['text':'
+ * __posix_terminate --
+ *     Terminate a POSIX configuration.
+ ','line_number':924,'multiline':True]
+['text':'
+ * __wt_os_posix --
+ *     Initialize a POSIX configuration.
+ ','line_number':939,'multiline':True]
+['text':' Initialize the POSIX jump table. ','line_number':953,'multiline':True]
+['text':' Switch it into place. ','line_number':964,'multiline':True]
+['text':'
+ * This LWN article (https://lwn.net/Articles/731706/) describes a potential problem when mmap is
+ * used over a direct-access (DAX) file system. If a new block is created and then the file is
+ * memory-mapped and the client writes to that block via mmap directly into storage (via DAX),
+ * the file system may not know that the data was written, so it may not flush the metadata
+ * prior to data being written. Therefore, the block may be reallocated or lost upon crash.
+ *
+ * WiredTiger currently disallows using the mmap option with the direct I/O option. We are relying
+ * on the user correctly specifying the direct I/O option if they mount a file system as DAX. If
+ * we did not wish to rely on the user supplying the correct flags, we have two options:
+ *
+ * (1) Use MAP_SYNC flag available on some versions of Linux. The downside is being Linux-specific
+ *     and not extensively tested (this is a recent flag).
+ *
+ * (2) Always fsync when we unmap the file. In our implementation, if a session extends the file by
+ *     writing a new block beyond the current file size, we always unmap the file and then re-map it
+ *     before allowing any reads or writes via mmap into the new block. If we sync the file upon
+ *     unmapping, we will be certain that the metadata is persistent.
+ ','line_number':970,'multiline':True]
+['text':'
+ * __wt_map_file --
+ *     Map the virtual address region backed by a file into our address space. This is a "best
+ *     effort" attempt. If mmap fails for any reason, we silently mark the file as not mappable and
+ *     use system calls for it from then on. We do not report the error to the caller: the failure
+ *     to mmap is not a show stopper, it is simply a lost performance-enhancement opportunity.
+ ','line_number':990,'multiline':True]
+['text':' If the buffer was previously mapped, try to remap it to the same address ','line_number':1022,'multiline':True]
+['text':'
+ * Here is the synchronization protocol to prevent race conditions when a session is remapping the
+ * file while others might be reading or writing it:
+ *
+ * Every time someone reads or writes from the mapped region, they increment the "use" count via
+ * cas. If someone wants to change the file size, they set the "stop" flag. If a session sees the
+ * stop flag, it does not read via mmap, but resorts to the regular syscall. The session that set
+ * the stop flag spin-waits until the "use" count goes to zero. Then it changes the file size and
+ * remaps the region without synchronization. Once all that is done, it resets the "stop" flag.
+ ','line_number':1041,'multiline':True]
+['text':'
+ * __wt_prepare_remap_resize_file --
+ *     Wait until all sessions using the mapped region for I/O are done, so it is safe to remap the
+ *     file when it changes size.
+ ','line_number':1052,'multiline':True]
+['text':' Wait until it looks like no one is resizing the region ','line_number':1077,'multiline':True]
+['text':'
+     * Wait for any sessions using the region for I/O to finish. Now that we have set the resizing
+     * flag, new sessions will not use the region, defaulting to system calls instead.
+     ','line_number':1084,'multiline':True]
+['text':'
+ * __wt_release_without_remap --
+ *     Signal that we are releasing the mapped buffer we wanted to resize, but do not actually remap
+ *     the file. If we set the resizing flag earlier, but the operation that tried to resize the
+ *     file did not succeed, we will simply reset the flag without resizing.
+ ','line_number':1092,'multiline':True]
+['text':' Signal that we are done resizing the buffer ','line_number':1108,'multiline':True]
+['text':'
+ * __wt_remap_resize_file --
+ *     After the file size has changed, unmap the file. Then remap it with the new size.
+ ','line_number':1112,'multiline':True]
+['text':' Signal that we are done resizing the buffer ','line_number':1137,'multiline':True]
+['text':'
+ * __wt_unmap_file --
+ *     Unmap the file.
+ ','line_number':1141,'multiline':True]

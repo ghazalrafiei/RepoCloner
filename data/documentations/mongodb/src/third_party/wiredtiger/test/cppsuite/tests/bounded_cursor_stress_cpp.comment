@@ -1,0 +1,221 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]
+['text':'
+ * In this test, we want to verify the usage of the cursor bound API and check that the cursor
+ * returns the correct key when bounds are set.
+ * During the test duration:
+ *  - M threads will keep inserting new random keys.
+ *  - N threads will execute search_near calls with random bounds set. Each search_near
+ * call with bounds set is verified using the standard cursor's search and next/prev calls.
+ *  - O threads will continuously remove random keys.
+ *  - P threads will continuously update random keys.
+ *  - Q threads will utilize the custom operation and will execute next() and prev() calls with
+ * random bounds set. Both next() and prev() calls with bounds set is verified against the
+ * default cursor next() and prev() calls.
+ ','line_number':37,'multiline':True]
+['text':' Class helper to represent the lower and uppers bounds for the range cursor. ','line_number':51,'multiline':True]
+['text':' Track reverse_collator value as it is required for the custom comparator. ','line_number':60,'multiline':True]
+['text':'
+     * Use the random generator either set no bounds, only lower bounds, only upper bounds or both
+     * bounds on the range cursor. The lower and upper bounds are randomly generated strings and the
+     * inclusive configuration is also randomly set as well.
+     ','line_number':80,'multiline':True]
+['text':' Ensure that the lower and upper bounds are never overlapping. ','line_number':101,'multiline':True]
+['text':'
+     * Validate the bound search call. If the key is within range, the range cursor should return
+     * back the search key.
+     *
+     * Prior to this function call, it's asserted that bounded cursor returns with either a valid
+     * key or with WT_NOTFOUND.
+     ','line_number':120,'multiline':True]
+['text':'
+         * Assert that if bounded cursor returned with a key, the search key has to be within range.
+         ','line_number':144,'multiline':True]
+['text':'
+         * If bounded cursor returns a valid key, search key must have been in bounds. If normal
+         * cursor returns a valid key, but bounded cursor returns WT_NOTFOUND, the search key must
+         * have been out of bounds.
+         ','line_number':152,'multiline':True]
+['text':' Check that the returned key should be equal to the search key. ','line_number':159,'multiline':True]
+['text':'
+     * Validate the bound search_near call. There are three scenarios that needs to be validated
+     * differently.
+     *  Scenario 1: Range cursor has returned WT_NOTFOUND, this indicates that no records exist in
+     * the bounded range. Validate this through traversing all records within the range on a normal
+     * cursor.
+     *  Scenario 2: Range cursor has returned a key and the search key is outside the range bounds.
+     * Validate that the returned key is either the first or last record in the bounds.
+     *  Scenario 3: Range cursor has returned a key and the search key is inside the range bounds.
+     * Validate that the returned key is visible and that it is indeed the closest key that range
+     * cursor could find.
+     *
+     * Prior to this function call, it's asserted that bounded cursor returns with either a
+     * valid key or with WT_NOTFOUND.
+     ','line_number':165,'multiline':True]
+['text':' Range cursor has successfully returned with a key. ','line_number':186,'multiline':True]
+['text':' Assert that the range cursor has returned a key inside the bounded range. ','line_number':199,'multiline':True]
+['text':' Decide whether the search key is inside or outside the bounded range. ','line_number':206,'multiline':True]
+['text':' Position the normal cursor on the found key from range cursor. ','line_number':214,'multiline':True]
+['text':'
+             * Call different validation methods depending on whether the search key is inside or
+             * outside the range.
+             ','line_number':217,'multiline':True]
+['text':' Range cursor has not found anything within the set bounds. ','line_number':229,'multiline':True]
+['text':'
+     * Validate that if the search key is inside the bounded range, that the range cursor has
+     * returned a record that is visible and is a viable record that is closest to the search key.
+     * We can use exact to perform this validation.
+     ','line_number':234,'multiline':True]
+['text':' Retrieve the key the normal cursor is pointing at. ','line_number':244,'multiline':True]
+['text':' When exact = 0, the returned key should be equal to the search key. ','line_number':250,'multiline':True]
+['text':'
+             * When exact > 0, the returned key should be greater than the search key and performing
+             * a prev() should be less than the search key.
+             ','line_number':254,'multiline':True]
+['text':' Check that the previous key is less than the search key. ','line_number':260,'multiline':True]
+['text':'
+             * When exact < 0, the returned key should be less than the search key and performing a
+             * next() should be greater than the search key.
+             ','line_number':267,'multiline':True]
+['text':' Check that the next key is greater than the search key. ','line_number':274,'multiline':True]
+['text':'
+     * Validate that if the search key is outside the bounded range, that the range cursor has
+     * returned a record that is either the first or last entry within the range. Do this through
+     * checking if the position of the search key is greater than the range or smaller than the
+     * range. Further perform a next or prev call on the normal cursor and we expect that the key is
+     * outside of the range.
+     ','line_number':284,'multiline':True]
+['text':'
+         * Assert that the next() or prev() call has placed the normal cursor outside of the bounded
+         * range.
+         ','line_number':305,'multiline':True]
+['text':'
+     * Validate that the normal cursor is positioned at a key that is outside of the bounded range,
+     * and that no visible keys exist in the bounded range.
+     ','line_number':316,'multiline':True]
+['text':'
+         * If search near has positioned the cursor before the lower key, perform a next() to to
+         * place the cursor in the first record in the range.
+         ','line_number':340,'multiline':True]
+['text':'
+         * Validate that there are no keys in the bounded range that the range cursor could have
+         * returned.
+         ','line_number':347,'multiline':True]
+['text':' Asserted that the traversed key is not within the range bound. ','line_number':356,'multiline':True]
+['text':'
+             * Optimization to early exit, if we have traversed past all possible records in the
+             * range bound.
+             ','line_number':363,'multiline':True]
+['text':' Each insert operation will insert new keys in the collections. ','line_number':377,'multiline':True]
+['text':' Generate a random key. ','line_number':390,'multiline':True]
+['text':' Insert a key/value pair. ','line_number':394,'multiline':True]
+['text':' We are not checking the result of commit as it is not necessary. ','line_number':397,'multiline':True]
+['text':' Sleep the duration defined by the configuration. ','line_number':409,'multiline':True]
+['text':' Reset our cursor to avoid pinning content. ','line_number':413,'multiline':True]
+['text':' Rollback any transaction that could not commit before the end of the test. ','line_number':416,'multiline':True]
+['text':' Each update operation will update existing keys in the collections. ','line_number':423,'multiline':True]
+['text':' It is possible not to find anything if the collection is empty. ','line_number':439,'multiline':True]
+['text':'
+                     * If we cannot find any record, finish the current transaction as we might be
+                     * able to see new records after starting a new one.
+                     ','line_number':442,'multiline':True]
+['text':' Update the found key with a randomized value. ','line_number':454,'multiline':True]
+['text':' We are not checking the result of commit as it is not necessary. ','line_number':459,'multiline':True]
+['text':' Sleep the duration defined by the configuration. ','line_number':471,'multiline':True]
+['text':' Reset our cursors to avoid pinning content. ','line_number':475,'multiline':True]
+['text':' Rollback any transaction that could not commit before the end of the test. ','line_number':480,'multiline':True]
+['text':'
+         * Each read operation will perform search nears with a range bounded cursor and a normal
+         * cursor without any bounds set. The normal cursor will be used to validate the results
+         * from the range cursor.
+         ','line_number':487,'multiline':True]
+['text':' Get a random collection to work on. ','line_number':497,'multiline':True]
+['text':' Find a cached cursor or create one if none exists. ','line_number':500,'multiline':True]
+['text':' Set random bounds on cached range cursor. ','line_number':504,'multiline':True]
+['text':'
+             * The oldest timestamp might move ahead and the reading timestamp might become invalid.
+             * To tackle this issue, we round the timestamp to the oldest timestamp value.
+             ','line_number':510,'multiline':True]
+['text':' Generate a random string. ','line_number':517,'multiline':True]
+['text':' Verify the bound search_near result using the normal cursor. ','line_number':530,'multiline':True]
+['text':'
+                 * If search near was successful, use the key it's currently positioned on as the
+                 * search key to validate bound search.
+                 ','line_number':534,'multiline':True]
+['text':'
+                     * Take a copy of the range search key as it the buffer returned by WiredTiger
+                     * won't be valid after the call to set_key.
+                     ','line_number':541,'multiline':True]
+['text':' Roll back the last transaction if still active now the work is finished. ','line_number':563,'multiline':True]
+['text':'
+     * Helper function which traverses the tree, given the range cursor and normal cursor. The next
+     * variable decides where we traverse forwards or backwards in the tree. Also perform lower
+     * bound and upper bound checks while walking the tree.
+     ','line_number':567,'multiline':True]
+['text':'
+             * If the key exists, position the cursor to the lower key using search near otherwise
+             * use prev().
+             ','line_number':582,'multiline':True]
+['text':'
+             * If the key exists, position the cursor to the upper key using search near otherwise
+             * use next().
+             ','line_number':595,'multiline':True]
+['text':'
+         * It is possible that there are no keys within the range. Therefore make sure that normal
+         * cursor returns a key that is outside of the range.
+         ','line_number':619,'multiline':True]
+['text':' Retrieve the key the cursor is pointing at. ','line_number':636,'multiline':True]
+['text':'
+     * Walk both the normal cursor and the bounded cursor to the end of their ranges.
+     ','line_number':645,'multiline':True]
+['text':' Early exit if we have reached the end of the table. ','line_number':672,'multiline':True]
+['text':' The normal cursor shouldn't have returned WT_NOTFOUND if the range cursor hasn't. ','line_number':676,'multiline':True]
+['text':' It is possible that we have reached the end of the bounded range. ','line_number':680,'multiline':True]
+['text':'  Make sure that normal cursor returns a key that is outside of the range. ','line_number':683,'multiline':True]
+['text':' Make sure that records match between both cursors. ','line_number':693,'multiline':True]
+['text':'
+         * Each custom operation will use the range bounded cursor to traverse through existing keys
+         * in the collection. The records will be validated against with the normal cursor to check
+         * for any potential missing records.
+         ','line_number':710,'multiline':True]
+['text':' Get a random collection to work on. ','line_number':721,'multiline':True]
+['text':' Find a cached cursor or create one if none exists. ','line_number':724,'multiline':True]
+['text':' Set random bounds on cached range cursor. ','line_number':729,'multiline':True]
+['text':'
+             * The oldest timestamp might move ahead and the reading timestamp might become invalid.
+             * To tackle this issue, we round the timestamp to the oldest timestamp value.
+             ','line_number':740,'multiline':True]
+['text':'
+                     * The only error we expect to handle is WT_ROLLBACK. Crash for any other error.
+                     ','line_number':750,'multiline':True]
+['text':'
+                     * Reset the position of the normal cursor here, we don't reset the bounded
+                     * cursor as we expect it to have walked off the end of the range. Additionally
+                     * if we do reset the bounded cursor we will clear its bounds.
+                     ','line_number':755,'multiline':True]
+['text':' Roll back the last transaction if still active now the work is finished. ','line_number':772,'multiline':True]

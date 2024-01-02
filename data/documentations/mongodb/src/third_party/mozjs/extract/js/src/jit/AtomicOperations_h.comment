@@ -1,0 +1,150 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':'
+ * [SMDOC] Atomic Operations
+ *
+ * The atomic operations layer defines types and functions for
+ * JIT-compatible atomic operation.
+ *
+ * The fundamental constraints on the functions are:
+ *
+ * - That their realization here MUST be compatible with code the JIT
+ *   generates for its Atomics operations, so that an atomic access
+ *   from the interpreter or runtime - from any C++ code - really is
+ *   atomic relative to a concurrent, compatible atomic access from
+ *   jitted code.  That is, these primitives expose JIT-compatible
+ *   atomicity functionality to C++.
+ *
+ * - That accesses may race without creating C++ undefined behavior:
+ *   atomic accesses (marked "SeqCst") may race with non-atomic
+ *   accesses (marked "SafeWhenRacy"); overlapping but non-matching,
+ *   and hence incompatible, atomic accesses may race; and non-atomic
+ *   accesses may race.  The effects of races need not be predictable,
+ *   so garbage can be produced by a read or written by a write, but
+ *   the effects must be benign: the program must continue to run, and
+ *   only the memory in the union of addresses named in the racing
+ *   accesses may be affected.
+ *
+ * The compatibility constraint means that if the JIT makes dynamic
+ * decisions about how to implement atomic operations then
+ * corresponding dynamic decisions MUST be made in the implementations
+ * of the functions below.
+ *
+ * The safe-for-races constraint means that by and large, it is hard
+ * to implement these primitives in C++.  See "Implementation notes"
+ * below.
+ *
+ * The "SeqCst" suffix on operations means "sequentially consistent"
+ * and means such a function's operation must have "sequentially
+ * consistent" memory ordering.  See mfbt/Atomics.h for an explanation
+ * of this memory ordering.
+ *
+ * Note that a "SafeWhenRacy" access does not provide the atomicity of
+ * a "relaxed atomic" access: it can read or write garbage if there's
+ * a race.
+ *
+ *
+ * Implementation notes.
+ *
+ * It's not a requirement that these functions be inlined; performance
+ * is not a great concern.  On some platforms these functions may call
+ * out to code that's generated at run time.
+ *
+ * In principle these functions will not be written in C++, thus
+ * making races defined behavior if all racy accesses from C++ go via
+ * these functions.  (Jitted code will always be safe for races and
+ * provides the same guarantees as these functions.)
+ *
+ * The appropriate implementations will be platform-specific and
+ * there are some obvious implementation strategies to choose
+ * from, sometimes a combination is appropriate:
+ *
+ *  - generating the code at run-time with the JIT;
+ *  - hand-written assembler (maybe inline); or
+ *  - using special compiler intrinsics or directives.
+ *
+ * Trusting the compiler not to generate code that blows up on a
+ * race definitely won't work in the presence of TSan, or even of
+ * optimizing compilers in seemingly-"innocuous" conditions.  (See
+ * https://www.usenix.org/legacy/event/hotpar11/tech/final_files/Boehm.pdf
+ * for details.)
+ ','line_number':19,'multiline':True]
+['text':' The following functions are defined for T = int8_t, uint8_t,','line_number':89,'multiline':False]
+['text':' int16_t, uint16_t, int32_t, uint32_t, int64_t, and uint64_t.','line_number':90,'multiline':False]
+['text':' Atomically read *addr.','line_number':92,'multiline':False]
+['text':' Atomically store val in *addr.','line_number':96,'multiline':False]
+['text':' Atomically store val in *addr and return the old value of *addr.','line_number':100,'multiline':False]
+['text':' Atomically check that *addr contains oldval and if so replace it','line_number':104,'multiline':False]
+['text':' with newval, in any case returning the old contents of *addr.','line_number':105,'multiline':False]
+['text':' Atomically add, subtract, bitwise-AND, bitwise-OR, or bitwise-XOR','line_number':109,'multiline':False]
+['text':' val into *addr and return the old value of *addr.','line_number':110,'multiline':False]
+['text':' The SafeWhenRacy functions are to be used when C++ code has to access','line_number':126,'multiline':False]
+['text':' memory without synchronization and can't guarantee that there won't be a','line_number':127,'multiline':False]
+['text':' race on the access.  But they are access-atomic for integer data so long','line_number':128,'multiline':False]
+['text':' as any racing writes are of the same size and to the same address.','line_number':129,'multiline':False]
+['text':' Defined for all the integral types as well as for float32 and float64,','line_number':131,'multiline':False]
+['text':' but not access-atomic for floats, nor for int64 and uint64 on 32-bit','line_number':132,'multiline':False]
+['text':' platforms.','line_number':133,'multiline':False]
+['text':' Defined for all the integral types as well as for float32 and float64,','line_number':137,'multiline':False]
+['text':' but not access-atomic for floats, nor for int64 and uint64 on 32-bit','line_number':138,'multiline':False]
+['text':' platforms.','line_number':139,'multiline':False]
+['text':' Replacement for memcpy().  No access-atomicity guarantees.','line_number':143,'multiline':False]
+['text':' Replacement for memmove().  No access-atomicity guarantees.','line_number':147,'multiline':False]
+['text':' On some platforms we generate code for the atomics at run-time; that','line_number':152,'multiline':False]
+['text':' happens here.','line_number':153,'multiline':False]
+['text':' Deallocate the code segment for generated atomics functions.','line_number':156,'multiline':False]
+['text':' Test lock-freedom for any int32 value.  This implements the','line_number':159,'multiline':False]
+['text':' Atomics::isLockFree() operation in the ECMAScript Shared Memory and','line_number':160,'multiline':False]
+['text':' Atomics specification, as follows:','line_number':161,'multiline':False]
+['text':'','line_number':162,'multiline':False]
+['text':' 4-byte accesses are always lock free (in the spec).','line_number':163,'multiline':False]
+['text':' 1-, 2-, and 8-byte accesses are always lock free (in SpiderMonkey).','line_number':164,'multiline':False]
+['text':'','line_number':165,'multiline':False]
+['text':' There is no lock-freedom for JS for any other values on any platform.','line_number':166,'multiline':False]
+['text':' If the return value is true then the templated functions below are','line_number':169,'multiline':False]
+['text':' supported for int64_t and uint64_t.  If the return value is false then','line_number':170,'multiline':False]
+['text':' those functions will MOZ_CRASH.  The value of this call does not change','line_number':171,'multiline':False]
+['text':' during execution.','line_number':172,'multiline':False]
+['text':' If the return value is true then hasAtomic8() is true and the atomic','line_number':175,'multiline':False]
+['text':' operations are indeed lock-free.  The value of this call does not change','line_number':176,'multiline':False]
+['text':' during execution.','line_number':177,'multiline':False]
+['text':' Execute a full memory barrier (LoadLoad+LoadStore+StoreLoad+StoreStore).','line_number':180,'multiline':False]
+['text':' All clients should use the APIs that take SharedMem pointers.','line_number':183,'multiline':False]
+['text':' See above for semantics and acceptable types.','line_number':184,'multiline':False]
+['text':' Keep this in sync with atomicIsLockFreeJS() in jit/MacroAssembler.cpp.','line_number':300,'multiline':False]
+['text':' The spec requires Atomics.isLockFree(4) to return true.','line_number':308,'multiline':False]
+['text':' namespace jit','line_number':317,'multiline':False]
+['text':' namespace js','line_number':318,'multiline':False]
+['text':' As explained above, our atomic operations are not portable even in principle,','line_number':320,'multiline':False]
+['text':' so we must include platform+compiler specific definitions here.','line_number':321,'multiline':False]
+['text':'','line_number':322,'multiline':False]
+['text':' x86, x64, arm, and arm64 are maintained by Mozilla.  All other platform','line_number':323,'multiline':False]
+['text':' setups are by platform maintainers' request and are not maintained by','line_number':324,'multiline':False]
+['text':' Mozilla.','line_number':325,'multiline':False]
+['text':'','line_number':326,'multiline':False]
+['text':' If you are using a platform+compiler combination that causes an error below','line_number':327,'multiline':False]
+['text':' (and if the problem isn't just that the compiler uses a different name for a','line_number':328,'multiline':False]
+['text':' known architecture), you have basically three options:','line_number':329,'multiline':False]
+['text':'','line_number':330,'multiline':False]
+['text':'  - find an already-supported compiler for the platform and use that instead','line_number':331,'multiline':False]
+['text':'','line_number':332,'multiline':False]
+['text':'  - write your own support code for the platform+compiler and create a new','line_number':333,'multiline':False]
+['text':'    case below','line_number':334,'multiline':False]
+['text':'','line_number':335,'multiline':False]
+['text':'  - include jit/shared/AtomicOperations-feeling-lucky.h in a case for the','line_number':336,'multiline':False]
+['text':'    platform below, if you have a gcc-compatible compiler and truly feel','line_number':337,'multiline':False]
+['text':'    lucky.  You may have to add a little code to that file, too.','line_number':338,'multiline':False]
+['text':'','line_number':339,'multiline':False]
+['text':' Simulators are confusing.  These atomic primitives must be compatible with','line_number':340,'multiline':False]
+['text':' the code that the JIT emits, but of course for an ARM simulator running on','line_number':341,'multiline':False]
+['text':' x86 the primitives here will be for x86, not for ARM, while the JIT emits ARM','line_number':342,'multiline':False]
+['text':' code.  Our ARM simulator solves that the easy way: by using these primitives','line_number':343,'multiline':False]
+['text':' to implement its atomic operations.  For other simulators there may need to','line_number':344,'multiline':False]
+['text':' be special cases below to provide simulator-compatible primitives, for','line_number':345,'multiline':False]
+['text':' example, for our ARM64 simulator the primitives could in principle','line_number':346,'multiline':False]
+['text':' participate in the memory exclusivity monitors implemented by the simulator.','line_number':347,'multiline':False]
+['text':' Such a solution is likely to be difficult.','line_number':348,'multiline':False]
+['text':' jit_AtomicOperations_h','line_number':391,'multiline':False]

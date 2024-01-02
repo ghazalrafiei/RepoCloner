@@ -1,0 +1,1311 @@
+['text':' Copyright (c) Microsoft Corporation. All rights reserved.','line_number':1,'multiline':False]
+['text':' Licensed under the MIT License.','line_number':2,'multiline':False]
+['text':'-----------------------------------------------------------------------------------------------------------
+SafeInt.hpp
+Version 3.0.26p
+
+This header implements an integer handling class designed to catch
+unsafe integer operations
+
+This header compiles properly at Wall on Visual Studio, -Wall on gcc, and -Weverything on clang.
+Tested most recently on clang 3.8.0, gcc 7.3.1, and both Visual Studio 2015 and 2017.
+
+Please read the leading comments before using the class.
+---------------------------------------------------------------','line_number':4,'multiline':True]
+['text':' It is a bit tricky to sort out what compiler we are actually using,','line_number':19,'multiline':False]
+['text':' do this once here, and avoid cluttering the code','line_number':20,'multiline':False]
+['text':' Clang will sometimes pretend to be Visual Studio','line_number':26,'multiline':False]
+['text':' and does pretend to be gcc. Check it first, as nothing else pretends to be clang','line_number':27,'multiline':False]
+['text':' Future use','line_number':41,'multiline':False]
+['text':' Determine C++ support level','line_number':43,'multiline':False]
+['text':' This needs additional testing to get more versions of _MSCVER','line_number':56,'multiline':False]
+['text':' Prior to VS 2015, need more testing to determine support','line_number':57,'multiline':False]
+['text':' VS 2015','line_number':60,'multiline':False]
+['text':' VS 2017 or later','line_number':63,'multiline':False]
+['text':' Note - there is a __cpp_constexpr test now, but everything prior to VS 2017 reports incorrect values','line_number':64,'multiline':False]
+['text':' and this version always supports at least the CPLUSPLUS_14 approach','line_number':65,'multiline':False]
+['text':' Unknown compiler, assume C++ 98','line_number':71,'multiline':False]
+['text':' Determine C++ support level','line_number':73,'multiline':False]
+['text':' Let's try to use the new standard to determine feature compliance','line_number':83,'multiline':False]
+['text':' If the user has an unknown compiler, or just for testing, allow forcing this setting','line_number':84,'multiline':False]
+['text':' If it is gcc or clang, at least recent versions, then we have -std=c++11 or -std=c++14','line_number':88,'multiline':False]
+['text':' This won't be set otherwise, but the headers won't compile, either','line_number':89,'multiline':False]
+['text':' Clang, gcc, Visual Studio 2017 or later','line_number':91,'multiline':False]
+['text':' Clang, gcc with -std=c++11, Visual Studio 2015','line_number':93,'multiline':False]
+['text':' !defined __cpp_constexpr','line_number':98,'multiline':False]
+['text':' Visual Studio is somehow not playing nice. shows __cpp_constexpr visually as defined, but won't compile','line_number':99,'multiline':False]
+['text':' defined __cpp_constexpr','line_number':112,'multiline':False]
+['text':' !defined CONSTEXPR_SUPPORT','line_number':114,'multiline':False]
+['text':' Determine whether exceptions are enabled by the compiler','line_number':130,'multiline':False]
+['text':' Also, allow the user to force this, in case the compiler','line_number':131,'multiline':False]
+['text':' doesn't support the __cpp_exceptions feature','line_number':132,'multiline':False]
+['text':' Enable compiling with /Wall under VC','line_number':141,'multiline':False]
+['text':' Off by default - unreferenced inline function has been removed','line_number':143,'multiline':False]
+['text':' Note - this intentionally leaks from the header, doesn't quench the warnings otherwise','line_number':144,'multiline':False]
+['text':' Also disable Spectre mitigation warning','line_number':145,'multiline':False]
+['text':' Disable warnings coming from headers','line_number':149,'multiline':False]
+['text':' More defines to accomodate compiler differences','line_number':153,'multiline':False]
+['text':' On the Microsoft compiler, violating a throw() annotation is a silent error.','line_number':166,'multiline':False]
+['text':' Other compilers might turn these into exceptions, and some users may want to not have throw() enabled.','line_number':167,'multiline':False]
+['text':' In addition, some error handlers may not throw C++ exceptions, which makes everything no throw.','line_number':168,'multiline':False]
+['text':' This is now required','line_number':177,'multiline':False]
+['text':' Need this for ptrdiff_t on some compilers','line_number':178,'multiline':False]
+['text':' Needed for floating point implementation','line_number':180,'multiline':False]
+['text':' Figure out if we should use intrinsics','line_number':182,'multiline':False]
+['text':' If the user has already decided, let that override','line_number':183,'multiline':False]
+['text':' Note - intrinsics and constexpr are mutually exclusive','line_number':184,'multiline':False]
+['text':' If it is important to get constexpr for multiplication, then define SAFEINT_USE_INTRINSICS 0','line_number':185,'multiline':False]
+['text':' However, intrinsics will result in much smaller code, and should have better perf','line_number':186,'multiline':False]
+['text':' We might have 128-bit int support, check for that, as it should work best','line_number':188,'multiline':False]
+['text':' If it is the Visual Studio compiler, then it has to be 64-bit, and not ARM64EC','line_number':204,'multiline':False]
+['text':' Else for gcc and clang, we can use builtin functions','line_number':213,'multiline':False]
+['text':' The gcc and clang builtin functions are constexpr, but not the Microsoft intrinsics','line_number':223,'multiline':False]
+['text':' If you would like to use your own custom assert','line_number':230,'multiline':False]
+['text':' Define SAFEINT_ASSERT','line_number':231,'multiline':False]
+['text':' Calling fail fast is somewhat more robust than calling abort, ','line_number':242,'multiline':False]
+['text':' but abort is the closest we can manage without Visual Studio support','line_number':243,'multiline':False]
+['text':' Need the header for abort()','line_number':244,'multiline':False]
+['text':' Let's test some assumptions','line_number':249,'multiline':False]
+['text':' We're assuming two's complement negative numbers','line_number':250,'multiline':False]
+['text':'************ Compiler Options *****************************************************************************************************
+
+SafeInt supports several compile-time options that can change the behavior of the class.
+
+Compiler options:
+SAFEINT_ASSERT_ON_EXCEPTION        - it is often easier to stop on an assert and figure out a problem than to try and figure out
+                                     how you landed in the catch block.
+
+SafeIntDefaultExceptionHandler     - if you'd like to replace the exception handlers SafeInt provides, define your replacement and
+                                     define this. There are three current options:
+
+                                     SAFEINT_RAISE_EXCEPTION - Windows specific, throws a structured exception. This is legacy.
+                                     SAFEINT_FAILFAST        - On Windows, calls __failfast, else calls abort()
+                                     Default                 - Uses the SafeIntExceptionHandler class, throws a SafeIntException.
+
+                                     If you do replace the exception handler, then make sure you define:
+                                     
+                                     SafeIntOnOverflow
+                                     SafeIntOnDivZero
+
+SAFEINT_DISALLOW_UNSIGNED_NEGATION - Invoking the unary negation operator may create warnings, but if you'd like it to completely fail
+                                     to compile, define this.
+
+SAFEINT_DISABLE_BINARY_ASSERT      - binary AND, OR or XOR operations on mixed size types can produce unexpected results. If you do
+                                     this, the default is to assert. Set this if you prefer not to assert under these conditions.
+
+SIZE_T_CAST_NEEDED                 - some compilers complain if there is not a cast to size_t, others complain if there is one.
+                                     This lets you not have your compiler complain. Default is not to have an overload, and it 
+                                     appears that no recent compilers need this.
+
+SAFEINT_DISABLE_ADDRESS_OPERATOR   - Disables the overload of the & operator, which results in a raw pointer to the underlying type. This has
+                                     been a debated feature for the entire life of the project - the benefit is that it makes it easier to just
+                                     change a declaration from uint32_t to SafeInt<uint32_t>, and the downstream code is less likely to need
+                                     modification, which is especially handy in legacy code bases. The drawback is that it breaks good C++
+                                     practice, and breaks some libraries that auto-generate code. In the future, I expect to make disabling this the 
+                                     default.
+
+***********************************************************************************************************************************','line_number':253,'multiline':True]
+['text':'
+*  The SafeInt class is designed to have as low an overhead as possible
+*  while still ensuring that all integer operations are conducted safely.
+*  Nearly every operator has been overloaded, with a very few exceptions.
+*
+*  A usability-safety trade-off has been made to help ensure safety. This
+*  requires that every operation return either a SafeInt or a bool. If we
+*  allowed an operator to return a base integer type T, then the following
+*  can happen:
+*
+*  char i = SafeInt<char>(32) * 2 + SafeInt<char>(16) * 4;
+*
+*  The * operators take precedence, get overloaded, return a char, and then
+*  you have:
+*
+*  char i = (char)64 + (char)64; //overflow!
+*
+*  This situation would mean that safety would depend on usage, which isn't
+*  acceptable.
+*
+*  One key operator that is missing is an implicit cast to type T. The reason for
+*  this is that if there is an implicit cast operator, then we end up with
+*  an ambiguous compile-time precedence. Because of this amiguity, there
+*  are two methods that are provided:
+*
+*  Casting operators for every native integer type
+*  Version 3 note - it now compiles correctly for size_t without warnings
+*
+*  SafeInt::Ptr()   - returns the address of the internal integer
+*  Note - the '&' (address of) operator has been overloaded and returns
+*         the address of the internal integer.
+*
+*  The SafeInt class should be used in any circumstances where ensuring
+*  integrity of the calculations is more important than performance. See Performance
+*  Notes below for additional information.
+*
+*  Many of the conditionals will optimize out or be inlined for a release
+*  build (especially with /Ox), but it does have significantly more overhead,
+*  especially for signed numbers. If you do not _require_ negative numbers, use
+*  unsigned integer types - certain types of problems cannot occur, and this class
+*  performs most efficiently.
+*
+*  Here's an example of when the class should ideally be used -
+*
+*  void* AllocateMemForStructs(int StructSize, int HowMany)
+*  {
+*     SafeInt<unsigned long> s(StructSize);
+*
+*     s *= HowMany;
+*
+*     return malloc(s);
+*
+*  }
+*
+*  Here's when it should NOT be used:
+*
+*  void foo()
+*  {
+*    int i;
+*
+*    for(i = 0; i < 0xffff; i++)
+*      ....
+*  }
+*
+*  Error handling - a SafeInt class will throw exceptions if something
+*  objectionable happens. The exceptions are SafeIntException classes,
+*  which contain an enum as a code.
+*
+*  Typical usage might be:
+*
+*  bool foo()
+*  {
+*    SafeInt<unsigned long> s; //note that s == 0 unless set
+*
+*    try{
+*      s *= 23;
+*      ....
+*    }
+*    catch(SafeIntException err)
+*    {
+*       //handle errors here
+*    }
+*  }
+*
+*  Update for 3.0 - the exception class is now a template parameter.
+*  You can replace the exception class with any exception class you like. This is accomplished by:
+*  1) Create a class that has the following interface:
+*
+    template <> class YourSafeIntExceptionHandler < YourException >
+    {
+    public:
+        static __declspec(noreturn) void __stdcall SafeIntOnOverflow()
+        {
+            throw YourException( YourSafeIntArithmeticOverflowError );
+        }
+
+        static __declspec(noreturn) void __stdcall SafeIntOnDivZero()
+        {
+            throw YourException( YourSafeIntDivideByZeroError );
+        }
+    };
+*
+*  Note that you don't have to throw C++ exceptions, you can throw Win32 exceptions, or do
+*  anything you like, just don't return from the call back into the code.
+*
+*  2) Either explicitly declare SafeInts like so:
+*     SafeInt< int, YourSafeIntExceptionHandler > si;
+*  or
+*     #define SafeIntDefaultExceptionHandler YourSafeIntExceptionHandler
+*
+*  Performance:
+*
+*  Due to the highly nested nature of this class, you can expect relatively poor
+*  performance in unoptimized code. In tests of optimized code vs. correct inline checks
+*  in native code, this class has been found to take approximately 8% more CPU time (this varies),
+*  most of which is due to exception handling. Solutions:
+*
+*  1) Compile optimized code - /Ox is best, /O2 also performs well. Interestingly, /O1
+*     (optimize for size) does not work as well.
+*  2) If that 8% hit is really a serious problem, walk through the code and inline the
+*     exact same checks as the class uses.
+*  3) Some operations are more difficult than others - avoid using signed integers, and if
+*     possible keep them all the same size. 64-bit integers are also expensive. Mixing
+*     different integer sizes and types may prove expensive. Be aware that literals are
+*     actually ints. For best performance, cast literals to the type desired.
+*
+*
+*  Performance update
+*  The current version of SafeInt uses template specialization to force the compiler to invoke only the
+*  operator implementation needed for any given pair of types. This will dramatically improve the perf
+*  of debug builds.
+*
+*  3.0 update - not only have we maintained the specialization, there were some cases that were overly complex,
+*  and using some additional cases (e.g. std::int64_t and std::uint64_t) resulted in some simplification.
+*  Additionally, there was a lot of work done to better optimize the 64-bit multiplication.
+*
+*  Binary Operators
+*
+*  All of the binary operators have certain assumptions built into the class design.
+*  This is to ensure correctness. Notes on each class of operator follow:
+*
+*  Arithmetic Operators (*,/,+,-,%)
+*  There are three possible variants:
+*  SafeInt< T, E > op SafeInt< T, E >
+*  SafeInt< T, E > op U
+*  U op SafeInt< T, E >
+*
+*  The SafeInt< T, E > op SafeInt< U, E > variant is explicitly not supported, and if you try to do
+*  this the compiler with throw the following error:
+*
+*  error C2593: 'operator *' is ambiguous
+*
+*  This is because the arithmetic operators are required to return a SafeInt of some type.
+*  The compiler cannot know whether you'd prefer to get a type T or a type U returned. If
+*  you need to do this, you need to extract the value contained within one of the two using
+*  the casting operator. For example:
+*
+*  SafeInt< T, E > t, result;
+*  SafeInt< U, E > u;
+*
+*  result = t * (U)u;
+*
+*  Comparison Operators
+*  Because each of these operators return type bool, mixing SafeInts of differing types is
+*  allowed.
+*
+*  Shift Operators
+*  Shift operators always return the type on the left hand side of the operator. Mixed type
+*  operations are allowed because the return type is always known.
+*
+*  Boolean Operators
+*  Like comparison operators, these overloads always return type bool, and mixed-type SafeInts
+*  are allowed. Additionally, specific overloads exist for type bool on both sides of the
+*  operator.
+*
+*  Binary Operators
+*  Mixed-type operations are discouraged, however some provision has been made in order to
+*  enable things like:
+*
+*  SafeInt<char> c = 2;
+*
+*  if(c & 0x02)
+*    ...
+*
+*  The "0x02" is actually an int, and it needs to work.
+*  In the case of binary operations on integers smaller than 32-bit, or of mixed type, corner
+*  cases do exist where you could get unexpected results. In any case where SafeInt returns a different
+*  result than the underlying operator, it will call assert(). You should examine your code and cast things
+*  properly so that you are not programming with side effects.
+*
+*  Documented issues:
+*
+*  This header compiles correctly at /W4 using VC++ 8 (Version 14.00.50727.42) and later.
+*  As of this writing, I believe it will also work for VC 7.1, but not for VC 7.0 or below.
+*  If you need a version that will work with lower level compilers, try version 1.0.7. None
+*  of them work with Visual C++ 6, and gcc didn't work very well, either, though this hasn't
+*  been tried recently.
+*
+*  It is strongly recommended that any code doing integer manipulation be compiled at /W4
+*  - there are a number of warnings which pertain to integer manipulation enabled that are
+*  not enabled at /W3 (default for VC++)
+*
+*  Perf note - postfix operators are slightly more costly than prefix operators.
+*  Unless you're actually assigning it to something, ++SafeInt is less expensive than SafeInt++
+*
+*  The comparison operator behavior in this class varies from the ANSI definition, which is
+*  arguably broken. As an example, consider the following:
+*
+*  unsigned int l = 0xffffffff;
+*  char c = -1;
+*
+*  if(c == l)
+*    printf("Why is -1 equal to 4 billion???\n");
+*
+*  The problem here is that c gets cast to an int, now has a value of 0xffffffff, and then gets
+*  cast again to an unsigned int, losing the true value. This behavior is despite the fact that
+*  an std::int64_t exists, and the following code will yield a different (and intuitively correct)
+*  answer:
+*
+*  if((std::int64_t)c == (std::int64_t)l))
+*    printf("Why is -1 equal to 4 billion???\n");
+*  else
+*    printf("Why doesn't the compiler upcast to 64-bits when needed?\n");
+*
+*  Note that combinations with smaller integers won't display the problem - if you
+*  changed "unsigned int" above to "unsigned short", you'd get the right answer.
+*
+*  Revision history:
+*
+*  Oct 12, 2003 - Created
+*  Author - David LeBlanc - dleblanc@microsoft.com
+*
+*  Oct 27, 2003 - fixed numerous items pointed out by michmarc and bdawson
+*  Dec 28, 2003 - 1.0
+*                 added support for mixed-type operations
+*                 thanks to vikramh
+*                 also fixed broken std::int64_t multiplication section
+*                 added extended support for mixed-type operations where possible
+*  Jan 28, 2004 - 1.0.1
+*                 changed WCHAR to wchar_t
+*                 fixed a construct in two mixed-type assignment overloads that was
+*                 not compiling on some compilers
+*                 Also changed name of private method to comply with standards on
+*                 reserved names
+*                 Thanks to Niels Dekker for the input
+*  Feb 12, 2004 - 1.0.2
+*                 Minor changes to remove dependency on Windows headers
+*                 Consistently used std::int16_t, std::int32_t and std::int64_t to ensure
+*                 portability
+*  May 10, 2004 - 1.0.3
+*                 Corrected bug in one case of GreaterThan
+*  July 22, 2004 - 1.0.4
+*                 Tightened logic in addition check (saving 2 instructions)
+*                 Pulled error handler out into function to enable user-defined replacement
+*                 Made internal type of SafeIntException an enum (as per Niels' suggestion)
+*                 Added casts for base integer types (as per Scott Meyers' suggestion)
+*                 Updated usage information - see important new perf notes.
+*                 Cleaned up several const issues (more thanks to Niels)
+*
+*  Oct 1, 2004 - 1.0.5
+*                 Added support for SEH exceptions instead of C++ exceptions - Win32 only
+*                 Made handlers for DIV0 and overflows individually overridable
+*                 Commented out the destructor - major perf gains here
+*                 Added cast operator for type long, since long != std::int32_t
+*                  Corrected a couple of missing const modifiers
+*                 Fixed broken >= and <= operators for type U op SafeInt< T, E >
+*  Nov 5, 2004 - 1.0.6
+*                 Implemented new logic in binary operators to resolve issues with
+*                 implicit casts
+*                 Fixed casting operator because char != signed char
+*                 Defined std::int32_t as int instead of long
+*                 Removed unsafe SafeInt::Value method
+*                 Re-implemented casting operator as a result of removing Value method
+*  Dec 1, 2004 - 1.0.7
+*                 Implemented specialized operators for pointer arithmetic
+*                 Created overloads for cases of U op= SafeInt. What you do with U
+*                 after that may be dangerous.
+*                 Fixed bug in corner case of MixedSizeModulus
+*                 Fixed bug in MixedSizeMultiply and MixedSizeDivision with input of 0
+*                 Added throw() decorations
+*
+*  Apr 12, 2005 - 2.0
+*                 Extensive revisions to leverage template specialization.
+*  April, 2007    Extensive revisions for version 3.0
+*  Nov 22, 2009   Forked from MS internal code
+*                 Changes needed to support gcc compiler - many thanks to Niels Dekker
+*                 for determining not just the issues, but also suggesting fixes.
+*                 Also updating some of the header internals to be the same as the upcoming Visual Studio version.
+*
+*  Jan 16, 2010   64-bit gcc has long == std::int64_t, which means that many of the existing 64-bit
+*                 templates are over-specialized. This forces a redefinition of all the 64-bit
+*                 multiplication routines to use pointers instead of references for return
+*                 values. Also, let's use some intrinsics for x64 Microsoft compiler to
+*                 reduce code size, and hopefully improve efficiency.
+*
+*  June 21, 2014  Better support for clang, higher warning levels supported for all 3 primary supported
+                  compilers (Visual Studio, clang, gcc).
+                  Also started to converge the code base such that the public CodePlex version will
+                  be a drop-in replacement for the Visual Studio version.
+
+* Feb 12, 2018    Fixed floating point bug
+*                 Fix to allow initialization by an enum
+*                 Add support for static_assert, make it default to fix compiler warnings from C_ASSERT on gcc, clang
+*                 Changed throw() to noexcept
+
+* March, 2018     Introduced support for constexpr, both the C++11 and C++14 flavors work. The C++14 standard
+                  allows for much more thorough usage, and should be preferred.
+
+*  Note about code style - throughout this class, casts will be written using C-style (T),
+*  not C++ style static_cast< T >. This is because the class is nearly always dealing with integer
+*  types, and in this case static_cast and a C cast are equivalent. Given the large number of casts,
+*  the code is a little more readable this way. In the event a cast is needed where static_cast couldn't
+*  be substituted, we'll use the new templatized cast to make it explicit what the operation is doing.
+*
+************************************************************************************************************
+* Version 3.0 changes:
+*
+* 1) The exception type thrown is now replacable, and you can throw your own exception types. This should help
+*    those using well-developed exception classes.
+* 2) The 64-bit multiplication code has had a lot of perf work done, and should be faster than 2.0.
+* 3) There is now limited floating point support. You can initialize a SafeInt with a floating point type,
+*    and you can cast it out (or assign) to a float as well.
+* 4) There is now an Align method. I noticed people use this a lot, and rarely check errors, so now you have one.
+*
+* Another major improvement is the addition of external functions - if you just want to check an operation, this can now happen:
+* All of the following can be invoked without dealing with creating a class, or managing exceptions. This is especially handy
+* for 64-bit porting, since SafeCast compiles away for a 32-bit cast from size_t to unsigned long, but checks it for 64-bit.
+*
+* inline bool SafeCast( const T From, U& To ) throw()
+* inline bool SafeEquals( const T t, const U u ) throw()
+* inline bool SafeNotEquals( const T t, const U u ) throw()
+* inline bool SafeGreaterThan( const T t, const U u ) throw()
+* inline bool SafeGreaterThanEquals( const T t, const U u ) throw()
+* inline bool SafeLessThan( const T t, const U u ) throw()
+* inline bool SafeLessThanEquals( const T t, const U u ) throw()
+* inline bool SafeModulus( const T& t, const U& u, T& result ) throw()
+* inline bool SafeMultiply( T t, U u, T& result ) throw()
+* inline bool SafeDivide( T t, U u, T& result ) throw()
+* inline bool SafeAdd( T t, U u, T& result ) throw()
+* inline bool SafeSubtract( T t, U u, T& result ) throw()
+*
+','line_number':292,'multiline':True]
+['text':' Warning - this very old work-around will be deprecated in future releases. ','line_number':635,'multiline':False]
+['text':' catch these to handle errors','line_number':644,'multiline':False]
+['text':' Currently implemented code values:','line_number':645,'multiline':False]
+['text':' ERROR_ARITHMETIC_OVERFLOW','line_number':646,'multiline':False]
+['text':' EXCEPTION_INT_DIVIDE_BY_ZERO','line_number':647,'multiline':False]
+['text':' utilities','line_number':656,'multiline':False]
+['text':' msl','line_number':657,'multiline':False]
+['text':'
+* Error handler classes
+* Using classes to deal with exceptions is going to allow the most
+* flexibility, and we can mix different error handlers in the same project
+* or even the same file. It isn't advisable to do this in the same function
+* because a SafeInt< int, MyExceptionHandler > isn't the same thing as
+* SafeInt< int, YourExceptionHander >.
+* If for some reason you have to translate between the two, cast one of them back to its
+* native type.
+*
+* To use your own exception class with SafeInt, first create your exception class,
+* which may look something like the SafeIntException class below. The second step is to
+* create a template specialization that implements SafeIntOnOverflow and SafeIntOnDivZero.
+* For example:
+*
+* template <> class SafeIntExceptionHandler < YourExceptionClass >
+* {
+*     static __declspec(noreturn) void __stdcall SafeIntOnOverflow()
+*     {
+*         throw YourExceptionClass( EXCEPTION_INT_OVERFLOW );
+*     }
+*
+*     static __declspec(noreturn) void __stdcall SafeIntOnDivZero()
+*     {
+*         throw YourExceptionClass( EXCEPTION_INT_DIVIDE_BY_ZERO );
+*     }
+* };
+*
+* typedef SafeIntExceptionHandler < YourExceptionClass > YourSafeIntExceptionHandler
+* You'd then declare your SafeInt objects like this:
+* SafeInt< int, YourSafeIntExceptionHandler >
+*
+* Unfortunately, there is no such thing as partial template specialization in typedef
+* statements, so you have three options if you find this cumbersome:
+*
+* 1) Create a holder class:
+*
+* template < typename T >
+* class MySafeInt
+* {
+*   public:
+*   SafeInt< T, MyExceptionClass> si;
+* };
+*
+* You'd then declare an instance like so:
+* MySafeInt< int > i;
+*
+* You'd lose handy things like initialization - it would have to be initialized as:
+*
+* i.si = 0;
+*
+* 2) You could create a typedef for every int type you deal with:
+*
+* typedef SafeInt< int, MyExceptionClass > MySafeInt;
+* typedef SafeInt< char, MyExceptionClass > MySafeChar;
+*
+* and so on. The second approach is probably more usable, and will just drop into code
+* better, which is the original intent of the SafeInt class.
+*
+* 3) If you're going to consistently use a different class to handle your exceptions,
+*    you can override the default typedef like so:
+*
+*    #define SafeIntDefaultExceptionHandler YourSafeIntExceptionHandler
+*
+*    Overall, this is probably the best approach.
+* ','line_number':661,'multiline':True]
+['text':' Note - removed weak annotation on class due to gcc complaints','line_number':742,'multiline':False]
+['text':' This was the only place in the file that used it, need to better understand ','line_number':743,'multiline':False]
+['text':' whether it was put there correctly in the first place','line_number':744,'multiline':False]
+['text':' Visual Studio version of SafeInt provides for two possible error','line_number':757,'multiline':False]
+['text':' handlers:','line_number':758,'multiline':False]
+['text':' SafeIntErrorPolicy_SafeIntException - C++ exception, default if not otherwise defined','line_number':759,'multiline':False]
+['text':' SafeIntErrorPolicy_InvalidParameter - Calls fail fast (Windows-specific), bypasses any exception handlers, ','line_number':760,'multiline':False]
+['text':'                                       exits the app with a crash','line_number':761,'multiline':False]
+['text':' Some users may have applications that do not use C++ exceptions','line_number':766,'multiline':False]
+['text':' and cannot compile the following class. If that is the case,','line_number':767,'multiline':False]
+['text':' either SafeInt_InvalidParameter must be defined as the default,','line_number':768,'multiline':False]
+['text':' or a custom, user-supplied exception handler must be provided.','line_number':769,'multiline':False]
+['text':' namespace SafeIntInternal','line_number':826,'multiline':False]
+['text':' both of these have cross-platform support','line_number':828,'multiline':False]
+['text':' This exception handler is no longer recommended, but is left here in order not to break existing users','line_number':835,'multiline':False]
+['text':' For Visual Studio compatibility','line_number':840,'multiline':False]
+['text':' If the user hasn't defined a default exception handler,','line_number':846,'multiline':False]
+['text':' define one now, depending on whether they would like Win32 or C++ exceptions','line_number':847,'multiline':False]
+['text':' This library will use conditional noexcept soon, but not in this release','line_number':849,'multiline':False]
+['text':' Some users might mix exception handlers, which is not advised, but is supported','line_number':850,'multiline':False]
+['text':' If an error handler is chosen other than C++ exceptions, such as Win32 exceptions, fail fast, ','line_number':877,'multiline':False]
+['text':' or abort, then all methods become no throw. Some teams track throw() annotations closely,','line_number':878,'multiline':False]
+['text':' and the following option provides for this.','line_number':879,'multiline':False]
+['text':' If we have support for std<typetraits>, then we can do this easily, and detect enums as well','line_number':888,'multiline':False]
+['text':' Continue to special case bool','line_number':891,'multiline':False]
+['text':' We specialized out a bool  ','line_number':898,'multiline':False]
+['text':' If it is an enum, then consider it an int type','line_number':899,'multiline':False]
+['text':' This does allow someone to make a SafeInt from an enum type, which is not recommended,','line_number':900,'multiline':False]
+['text':' but it also allows someone to add an enum value to a SafeInt, which is handy.','line_number':901,'multiline':False]
+['text':'all of the arithmetic operators can be solved by the same code within','line_number':949,'multiline':False]
+['text':'each of these regions without resorting to compile-time constant conditionals','line_number':950,'multiline':False]
+['text':'most operators collapse the problem into less than the 22 zones, but this is used','line_number':951,'multiline':False]
+['text':'as the first cut','line_number':952,'multiline':False]
+['text':'using this also helps ensure that we handle all of the possible cases correctly','line_number':953,'multiline':False]
+['text':'unsigned-unsigned zone','line_number':960,'multiline':False]
+['text':'unsigned-signed','line_number':966,'multiline':False]
+['text':'signed-signed','line_number':973,'multiline':False]
+['text':'signed-unsigned','line_number':980,'multiline':False]
+['text':' In all of the following functions, we have two versions','line_number':990,'multiline':False]
+['text':' One for SafeInt, which throws C++ (or possibly SEH) exceptions','line_number':991,'multiline':False]
+['text':' The non-throwing versions are for use by the helper functions that return success and failure.','line_number':992,'multiline':False]
+['text':' Some of the non-throwing functions are not used, but are maintained for completeness.','line_number':993,'multiline':False]
+['text':' There's no real alternative to duplicating logic, but keeping the two versions','line_number':995,'multiline':False]
+['text':' immediately next to one another will help reduce problems','line_number':996,'multiline':False]
+['text':' useful function to help with getting the magnitude of a negative number','line_number':998,'multiline':False]
+['text':' let's go ahead and hard-code a dependency on the','line_number':1017,'multiline':False]
+['text':' representation of negative numbers to keep compilers from getting overly','line_number':1018,'multiline':False]
+['text':' happy with optimizing away things like -MIN_INT.','line_number':1019,'multiline':False]
+['text':' Why are you calling Abs on an unsigned number ???','line_number':1047,'multiline':False]
+['text':' Helper classes to work keep compilers from','line_number':1053,'multiline':False]
+['text':' optimizing away negation','line_number':1054,'multiline':False]
+['text':' Previous versions had an assert that the type being negated was 32-bit or higher','line_number':1083,'multiline':False]
+['text':' In retrospect, this seems like something to just document','line_number':1084,'multiline':False]
+['text':' Negation will normally upcast to int','line_number':1085,'multiline':False]
+['text':' For example -(unsigned short)0xffff == (int)0xffff0001','line_number':1086,'multiline':False]
+['text':' This class will retain the type, and will truncate, which may not be what','line_number':1087,'multiline':False]
+['text':' you wanted','line_number':1088,'multiline':False]
+['text':' If you want normal operator casting behavior, do this:','line_number':1089,'multiline':False]
+['text':' SafeInt<unsigned short> ss = 0xffff;','line_number':1090,'multiline':False]
+['text':' then:','line_number':1091,'multiline':False]
+['text':' -(SafeInt<int>(ss))','line_number':1092,'multiline':False]
+['text':' will then emit a signed int with the correct value and bitfield','line_number':1093,'multiline':False]
+['text':' Note, unlike all of the other helper classes, the non-throwing negation','line_number':1095,'multiline':False]
+['text':' doesn't make sense, isn't exposed or tested, so omit it','line_number':1096,'multiline':False]
+['text':' Signed','line_number':1098,'multiline':False]
+['text':' corner case','line_number':1104,'multiline':False]
+['text':' cast prevents unneeded checks in the case of small ints','line_number':1107,'multiline':False]
+['text':' corner case','line_number':1115,'multiline':False]
+['text':' unsigned','line_number':1125,'multiline':False]
+['text':' This may not be the most efficient approach, but you shouldn't be doing this','line_number':1134,'multiline':False]
+['text':'out','line_number':1138,'multiline':True]
+['text':' This will only be used by the SafeNegation function','line_number':1140,'multiline':False]
+['text':'core logic to determine casting behavior','line_number':1145,'multiline':False]
+['text':' Unsigned case','line_number':1247,'multiline':False]
+['text':' Anything larger than this either is larger than 2^64-1, or cannot be represented by a double','line_number':1254,'multiline':False]
+['text':' There is the possibility of both negative and positive zero,','line_number':1257,'multiline':False]
+['text':' but we'll allow either, since (-0.0 < 0) == false','line_number':1258,'multiline':False]
+['text':' if we wanted to change that, then use the signbit() macro','line_number':1259,'multiline':False]
+['text':' The input can now safely be cast to an unsigned long long','line_number':1263,'multiline':False]
+['text':' Signed case','line_number':1271,'multiline':False]
+['text':' This has to fit in 2^63-1','line_number':1277,'multiline':False]
+['text':' The smallest signed long long is easier','line_number':1279,'multiline':False]
+['text':' And now cast to long long, and check against min and max for this type','line_number':1285,'multiline':False]
+['text':' special case floats and doubles','line_number':1294,'multiline':False]
+['text':' A double can hold at most 53 bits of the value','line_number':1301,'multiline':False]
+['text':' 53 bits is:','line_number':1302,'multiline':False]
+['text':' A positive or negative normalized non - zero value','line_number':1307,'multiline':False]
+['text':' A positive or negative denormalized value','line_number':1308,'multiline':False]
+['text':' A positive or negative zero value','line_number':1309,'multiline':False]
+['text':' A quiet, signaling, or indeterminate NaN','line_number':1313,'multiline':False]
+['text':' A positive or negative infinity','line_number':1314,'multiline':False]
+['text':' Match on any method where a bool is cast to type T','line_number':1363,'multiline':False]
+['text':' U is signed - T could be either signed or unsigned','line_number':1445,'multiline':False]
+['text':' U is signed - T could be either signed or unsigned','line_number':1456,'multiline':False]
+['text':' T, U are signed','line_number':1469,'multiline':False]
+['text':'T, U are signed','line_number':1480,'multiline':False]
+['text':'core logic to determine whether a comparison is valid, or needs special treatment','line_number':1488,'multiline':False]
+['text':' Note - the standard is arguably broken in the case of some integer','line_number':1498,'multiline':False]
+['text':' conversion operations','line_number':1499,'multiline':False]
+['text':' For example, signed char a = -1 = 0xff','line_number':1500,'multiline':False]
+['text':'              unsigned int b = 0xffffffff','line_number':1501,'multiline':False]
+['text':' If you then test if a < b, a value-preserving cast','line_number':1502,'multiline':False]
+['text':' is made, and you're essentially testing','line_number':1503,'multiline':False]
+['text':' (unsigned int)a < b == false','line_number':1504,'multiline':False]
+['text':'','line_number':1505,'multiline':False]
+['text':' I do not think this makes sense - if you perform','line_number':1506,'multiline':False]
+['text':' a cast to an std::int64_t, which can clearly preserve both value and signedness','line_number':1507,'multiline':False]
+['text':' then you get a different and intuitively correct answer','line_number':1508,'multiline':False]
+['text':' IMHO, -1 should be less than 4 billion','line_number':1509,'multiline':False]
+['text':' If you prefer to retain the ANSI standard behavior','line_number':1510,'multiline':False]
+['text':' insert #define ANSI_CONVERSIONS into your source','line_number':1511,'multiline':False]
+['text':' Behavior differences occur in the following cases:','line_number':1512,'multiline':False]
+['text':' 8, 16, and 32-bit signed int, unsigned 32-bit int','line_number':1513,'multiline':False]
+['text':' any signed int, unsigned 64-bit int','line_number':1514,'multiline':False]
+['text':' Note - the signed int must be negative to show the problem','line_number':1515,'multiline':False]
+['text':'one operand is 32 or 64-bit unsigned, and the other is signed and the same size or smaller','line_number':1558,'multiline':False]
+['text':'else safe to cast to type T','line_number':1562,'multiline':False]
+['text':'one operand is 32 or 64-bit unsigned, and the other is signed and the same size or smaller','line_number':1572,'multiline':False]
+['text':'else safe to cast to type U','line_number':1576,'multiline':False]
+['text':' one operand is 32 or 64-bit unsigned, and the other is signed and the same size or smaller','line_number':1606,'multiline':False]
+['text':' else safe to cast to type T','line_number':1610,'multiline':False]
+['text':' one operand is 32 or 64-bit unsigned, and the other is signed and the same size or smaller','line_number':1620,'multiline':False]
+['text':' else safe to cast to type U','line_number':1624,'multiline':False]
+['text':' Modulus is simpler than comparison, but follows much the same logic','line_number':1629,'multiline':False]
+['text':' using this set of functions, it can't fail except in a div 0 situation','line_number':1630,'multiline':False]
+['text':' signed','line_number':1635,'multiline':False]
+['text':' unsigned','line_number':1644,'multiline':False]
+['text':'trap corner case','line_number':1661,'multiline':False]
+['text':'trap corner case','line_number':1678,'multiline':False]
+['text':'trap corner case','line_number':1697,'multiline':False]
+['text':'trap corner case','line_number':1714,'multiline':False]
+['text':'trap corner case','line_number':1733,'multiline':False]
+['text':' T is std::uint64_t, U is any signed int','line_number':1760,'multiline':False]
+['text':' u could be negative - if so, need to convert to positive','line_number':1769,'multiline':False]
+['text':' casts below are always safe due to the way modulus works','line_number':1770,'multiline':False]
+['text':' u could be negative - if so, need to convert to positive','line_number':1785,'multiline':False]
+['text':' U is std::uint64_t, T any signed int','line_number':1793,'multiline':False]
+['text':'t could be negative - if so, need to convert to positive','line_number':1802,'multiline':False]
+['text':'t could be negative - if so, need to convert to positive','line_number':1817,'multiline':False]
+['text':'core logic to determine method to check multiplication','line_number':1825,'multiline':False]
+['text':' One or both signed, smaller than 32-bit','line_number':1828,'multiline':False]
+['text':' One or both signed, smaller than 64-bit','line_number':1829,'multiline':False]
+['text':' Both are unsigned, smaller than 32-bit','line_number':1830,'multiline':False]
+['text':' Both are unsigned, both 32-bit or smaller','line_number':1831,'multiline':False]
+['text':' Both are unsigned, lhs 64-bit, rhs 32-bit or smaller','line_number':1832,'multiline':False]
+['text':' Both are unsigned int64','line_number':1833,'multiline':False]
+['text':' lhs is unsigned int64, rhs int32','line_number':1834,'multiline':False]
+['text':' lhs is unsigned int64, rhs signed int64','line_number':1835,'multiline':False]
+['text':' Both are unsigned, lhs 32-bit or smaller, rhs 64-bit','line_number':1836,'multiline':False]
+['text':' lhs unsigned 32-bit or less, rhs int64','line_number':1837,'multiline':False]
+['text':' lhs int64, rhs unsigned int32','line_number':1838,'multiline':False]
+['text':' lhs int64, rhs int64','line_number':1839,'multiline':False]
+['text':' lhs int64, rhs int32','line_number':1840,'multiline':False]
+['text':' lhs int, rhs unsigned int64','line_number':1841,'multiline':False]
+['text':' lhs int, rhs int64','line_number':1842,'multiline':False]
+['text':' lhs int64, rhs uint64','line_number':1843,'multiline':False]
+['text':' unsigned-unsigned','line_number':1853,'multiline':False]
+['text':' unsigned-signed','line_number':1861,'multiline':False]
+['text':' signed-signed','line_number':1868,'multiline':False]
+['text':' signed-unsigned','line_number':1875,'multiline':False]
+['text':'accepts signed, both less than 32-bit','line_number':1891,'multiline':False]
+['text':'accepts unsigned, both less than 32-bit','line_number':1918,'multiline':False]
+['text':'mixed signed or both signed where at least one argument is 32-bit, and both a 32-bit or less','line_number':1945,'multiline':False]
+['text':'both unsigned where at least one argument is 32-bit, and both are 32-bit or less','line_number':1972,'multiline':False]
+['text':' T = left arg and return type','line_number':1996,'multiline':False]
+['text':' U = right arg','line_number':1997,'multiline':False]
+['text':' If only one input is negative, result must be negative, or zero','line_number':2021,'multiline':False]
+['text':' As usual, unsigned is easy','line_number':2046,'multiline':False]
+['text':' Signed, is not so easy','line_number':2054,'multiline':False]
+['text':' Now we need to figure out what we expect','line_number':2060,'multiline':False]
+['text':' If llHigh is 0, then treat *pRet as unsigned','line_number':2061,'multiline':False]
+['text':' If llHigh is < 0, then treat *pRet as signed','line_number':2062,'multiline':False]
+['text':' Negative result expected','line_number':2066,'multiline':False]
+['text':' Everything is within range','line_number':2070,'multiline':False]
+['text':' Result should be positive','line_number':2076,'multiline':False]
+['text':' Check for overflow','line_number':2077,'multiline':False]
+['text':' If you are aware of intrinsics for some other platform, please file an issue','line_number':2096,'multiline':False]
+['text':' Consider that a*b can be broken up into:','line_number':2112,'multiline':False]
+['text':' (aHigh * 2^32 + aLow) * (bHigh * 2^32 + bLow)','line_number':2113,'multiline':False]
+['text':' => (aHigh * bHigh * 2^64) + (aLow * bHigh * 2^32) + (aHigh * bLow * 2^32) + (aLow * bLow)','line_number':2114,'multiline':False]
+['text':' Note - same approach applies for 128 bit math on a 64-bit system','line_number':2115,'multiline':False]
+['text':' Consider that a*b can be broken up into:','line_number':2174,'multiline':False]
+['text':' (aHigh * 2^32 + aLow) * (bHigh * 2^32 + bLow)','line_number':2175,'multiline':False]
+['text':' => (aHigh * bHigh * 2^64) + (aLow * bHigh * 2^32) + (aHigh * bLow * 2^32) + (aLow * bLow)','line_number':2176,'multiline':False]
+['text':' Note - same approach applies for 128 bit math on a 64-bit system','line_number':2177,'multiline':False]
+['text':' Consider that a*b can be broken up into:','line_number':2237,'multiline':False]
+['text':' (aHigh * 2^32 + aLow) * b','line_number':2238,'multiline':False]
+['text':' => (aHigh * b * 2^32) + (aLow * b)','line_number':2239,'multiline':False]
+['text':' Consider that a*b can be broken up into:','line_number':2279,'multiline':False]
+['text':' (aHigh * 2^32 + aLow) * b','line_number':2280,'multiline':False]
+['text':' => (aHigh * b * 2^32) + (aLow * b)','line_number':2281,'multiline':False]
+['text':' Intrinsic not needed','line_number':2316,'multiline':False]
+['text':' Devolves into ordinary 64-bit calculation','line_number':2377,'multiline':False]
+['text':' Consider that a*b can be broken up into:','line_number':2383,'multiline':False]
+['text':' (aHigh * 2^32 + aLow) * (bHigh * 2^32 + bLow)','line_number':2384,'multiline':False]
+['text':' => (aHigh * bHigh * 2^64) + (aLow * bHigh * 2^32) + (aHigh * bLow * 2^32) + (aLow * bLow)','line_number':2385,'multiline':False]
+['text':' aHigh == 0 implies:','line_number':2386,'multiline':False]
+['text':' ( aLow * bHigh * 2^32 ) + ( aLow + bLow )','line_number':2387,'multiline':False]
+['text':' If the first part is != 0, fail','line_number':2388,'multiline':False]
+['text':' Consider that a*b can be broken up into:','line_number':2433,'multiline':False]
+['text':' (aHigh * 2^32 + aLow) * (bHigh * 2^32 + bLow)','line_number':2434,'multiline':False]
+['text':' => (aHigh * bHigh * 2^64) + (aLow * bHigh * 2^32) + (aHigh * bLow * 2^32) + (aLow * bLow)','line_number':2435,'multiline':False]
+['text':' Becomes ordinary 64-bit multiplication, intrinsic not needed','line_number':2477,'multiline':False]
+['text':' Consider that a*b can be broken up into:','line_number':2480,'multiline':False]
+['text':' (bHigh * 2^32 + bLow) * a','line_number':2481,'multiline':False]
+['text':' => (bHigh * a * 2^32) + (bLow * a)','line_number':2482,'multiline':False]
+['text':' In this case, the result must fit into 32-bits','line_number':2483,'multiline':False]
+['text':' If bHigh != 0 && a != 0, immediate error.','line_number':2484,'multiline':False]
+['text':' overflow','line_number':2491,'multiline':False]
+['text':' overflow','line_number':2506,'multiline':False]
+['text':' The unsigned multiplication didn't overflow','line_number':2562,'multiline':False]
+['text':' Result must be negative','line_number':2565,'multiline':False]
+['text':' Result must be positive','line_number':2574,'multiline':False]
+['text':' The unsigned multiplication didn't overflow or we'd be in the exception handler','line_number':2615,'multiline':False]
+['text':' Result must be negative','line_number':2618,'multiline':False]
+['text':' Result must be positive','line_number':2627,'multiline':False]
+['text':' The unsigned multiplication didn't overflow','line_number':2660,'multiline':False]
+['text':' Result must be negative','line_number':2663,'multiline':False]
+['text':' Result must be positive','line_number':2672,'multiline':False]
+['text':' The unsigned multiplication didn't overflow','line_number':2704,'multiline':False]
+['text':' Result must be negative','line_number':2707,'multiline':False]
+['text':' Result must be positive','line_number':2716,'multiline':False]
+['text':' The unsigned multiplication didn't overflow','line_number':2758,'multiline':False]
+['text':' Result must be negative','line_number':2761,'multiline':False]
+['text':' Result must be positive','line_number':2770,'multiline':False]
+['text':' The unsigned multiplication didn't overflow','line_number':2809,'multiline':False]
+['text':' Result must be negative','line_number':2812,'multiline':False]
+['text':' Result must be positive','line_number':2821,'multiline':False]
+['text':' The unsigned multiplication didn't overflow','line_number':2875,'multiline':False]
+['text':' Result must be negative','line_number':2878,'multiline':False]
+['text':' Result must be positive','line_number':2887,'multiline':False]
+['text':' The unsigned multiplication didn't overflow','line_number':2939,'multiline':False]
+['text':' Result must be negative','line_number':2942,'multiline':False]
+['text':' Result must be positive','line_number':2951,'multiline':False]
+['text':' Leave this one as-is - will call unsigned intrinsic internally','line_number':2967,'multiline':False]
+['text':' The unsigned multiplication didn't overflow','line_number':2983,'multiline':False]
+['text':' Result must be negative','line_number':2986,'multiline':False]
+['text':' Result must be positive','line_number':2995,'multiline':False]
+['text':' The unsigned multiplication didn't overflow','line_number':3022,'multiline':False]
+['text':' Result must be negative','line_number':3025,'multiline':False]
+['text':' Result must be positive','line_number':3034,'multiline':False]
+['text':' In all of the following functions where LargeIntRegMultiply methods are called,','line_number':3047,'multiline':False]
+['text':' we need to properly transition types. The methods need std::int64_t, std::int32_t, etc.','line_number':3048,'multiline':False]
+['text':' but the variables being passed to us could be long long, long int, or long, depending on','line_number':3049,'multiline':False]
+['text':' the compiler. Microsoft compiler knows that long long is the same type as std::int64_t, but gcc doesn't','line_number':3050,'multiline':False]
+['text':' T, U are std::uint64_t','line_number':3055,'multiline':False]
+['text':' T is std::uint64_t','line_number':3082,'multiline':False]
+['text':' U is any unsigned int 32-bit or less','line_number':3083,'multiline':False]
+['text':' converse of the previous function','line_number':3105,'multiline':False]
+['text':' T is any unsigned int up to 32-bit','line_number':3109,'multiline':False]
+['text':' U is std::uint64_t','line_number':3110,'multiline':False]
+['text':' T is std::uint64_t','line_number':3141,'multiline':False]
+['text':' U is any signed int, up to 64-bit','line_number':3142,'multiline':False]
+['text':' T is std::uint64_t','line_number':3167,'multiline':False]
+['text':' U is std::int64_t','line_number':3168,'multiline':False]
+['text':' T is unsigned up to 32-bit','line_number':3195,'multiline':False]
+['text':' U is std::int64_t','line_number':3196,'multiline':False]
+['text':' T is std::int64_t','line_number':3227,'multiline':False]
+['text':' U is unsigned up to 32-bit','line_number':3228,'multiline':False]
+['text':' T, U are std::int64_t','line_number':3253,'multiline':False]
+['text':' T is std::int64_t','line_number':3280,'multiline':False]
+['text':' U is signed up to 32-bit','line_number':3281,'multiline':False]
+['text':' T is signed up to 32-bit','line_number':3306,'multiline':False]
+['text':' U is std::uint64_t','line_number':3307,'multiline':False]
+['text':' T is std::int64_t','line_number':3338,'multiline':False]
+['text':' U is std::uint64_t','line_number':3339,'multiline':False]
+['text':' T is signed, up to 32-bit','line_number':3366,'multiline':False]
+['text':' U is std::int64_t','line_number':3367,'multiline':False]
+['text':' it is always an error to try and divide an unsigned number by a negative signed number','line_number':3478,'multiline':False]
+['text':' unless u is bigger than t','line_number':3479,'multiline':False]
+['text':' it is always an error to try and divide an unsigned number by a negative signed number','line_number':3508,'multiline':False]
+['text':' unless u is bigger than t','line_number':3509,'multiline':False]
+['text':' Test for t > 0','line_number':3534,'multiline':False]
+['text':' If t < 0, must explicitly upcast, or implicit upcast to ulong will cause errors','line_number':3535,'multiline':False]
+['text':' As it turns out, 32-bit division is about twice as fast, which justifies the extra conditional','line_number':3536,'multiline':False]
+['text':' Test for t > 0','line_number':3560,'multiline':False]
+['text':' If t < 0, must explicitly upcast, or implicit upcast to ulong will cause errors','line_number':3561,'multiline':False]
+['text':' As it turns out, 32-bit division is about twice as fast, which justifies the extra conditional','line_number':3562,'multiline':False]
+['text':' Value of u fits into an int32','line_number':3572,'multiline':False]
+['text':' Corner case','line_number':3606,'multiline':False]
+['text':' Min int divided by it's own magnitude is -1','line_number':3609,'multiline':False]
+['text':' Corner case','line_number':3639,'multiline':False]
+['text':' Min int divided by it's own magnitude is -1','line_number':3642,'multiline':False]
+['text':' T is any signed, U is unsigned and smaller than 32-bit','line_number':3655,'multiline':False]
+['text':' In this case, standard operator casting is correct','line_number':3656,'multiline':False]
+['text':' Must test for corner case','line_number':3708,'multiline':False]
+['text':' Must test for corner case','line_number':3730,'multiline':False]
+['text':'unsigned-unsigned','line_number':3764,'multiline':False]
+['text':'unsigned-signed','line_number':3770,'multiline':False]
+['text':'signed-signed','line_number':3777,'multiline':False]
+['text':'signed-unsigned','line_number':3784,'multiline':False]
+['text':'16-bit or less unsigned addition','line_number':3802,'multiline':False]
+['text':'16-bit or less unsigned addition','line_number':3817,'multiline':False]
+['text':' 32-bit or less - both are unsigned','line_number':3835,'multiline':False]
+['text':'we added didn't get smaller','line_number':3838,'multiline':False]
+['text':' 32-bit or less - both are unsigned','line_number':3850,'multiline':False]
+['text':'we added didn't get smaller','line_number':3853,'multiline':False]
+['text':' 32-bit or less - both are unsigned','line_number':3868,'multiline':False]
+['text':' We added and it didn't get smaller or exceed maxInt','line_number':3871,'multiline':False]
+['text':'32-bit or less - both are unsigned','line_number':3883,'multiline':False]
+['text':' We added and it didn't get smaller or exceed maxInt','line_number':3886,'multiline':False]
+['text':' lhs std::uint64_t, rhs unsigned','line_number':3901,'multiline':False]
+['text':' We added and it didn't get smaller','line_number':3904,'multiline':False]
+['text':' lhs std::uint64_t, rhs unsigned','line_number':3917,'multiline':False]
+['text':' We added and it didn't get smaller','line_number':3920,'multiline':False]
+['text':'lhs std::uint64_t, rhs unsigned','line_number':3936,'multiline':False]
+['text':' We added and it didn't get smaller','line_number':3939,'multiline':False]
+['text':'lhs std::uint64_t, rhs unsigned','line_number':3952,'multiline':False]
+['text':' We added and it didn't get smaller','line_number':3955,'multiline':False]
+['text':' 16-bit or less - one or both are signed','line_number':3971,'multiline':False]
+['text':' 16-bit or less - one or both are signed','line_number':3986,'multiline':False]
+['text':' 32-bit or less - one or both are signed','line_number':4004,'multiline':False]
+['text':' 32-bit or less - one or both are signed','line_number':4019,'multiline':False]
+['text':' 32-bit or less - lhs signed, rhs unsigned','line_number':4037,'multiline':False]
+['text':' 32-bit or less - lhs signed, rhs unsigned','line_number':4052,'multiline':False]
+['text':' lhs is std::uint64_t, rhs signed','line_number':4070,'multiline':False]
+['text':' So we're effectively subtracting','line_number':4075,'multiline':False]
+['text':' now we know that rhs can be safely cast into an std::uint64_t','line_number':4086,'multiline':False]
+['text':' We added and it did not become smaller','line_number':4089,'multiline':False]
+['text':' lhs is std::uint64_t, rhs signed','line_number':4103,'multiline':False]
+['text':' So we're effectively subtracting','line_number':4108,'multiline':False]
+['text':' now we know that rhs can be safely cast into an std::uint64_t','line_number':4119,'multiline':False]
+['text':' We added and it did not become smaller','line_number':4122,'multiline':False]
+['text':' lhs is unsigned and < 64-bit, rhs std::int64_t','line_number':4139,'multiline':False]
+['text':'negation is safe, since rhs is 64-bit','line_number':4142,'multiline':False]
+['text':' now we know that rhs can be safely cast into an std::uint64_t','line_number':4150,'multiline':False]
+['text':' special case - rhs cannot be larger than 0x7fffffffffffffff, lhs cannot be larger than 0xffffffff','line_number':4153,'multiline':False]
+['text':' it is not possible for the operation above to overflow, so just check max','line_number':4154,'multiline':False]
+['text':' lhs is unsigned and < 64-bit, rhs std::int64_t','line_number':4167,'multiline':False]
+['text':'negation is safe, since rhs is 64-bit','line_number':4170,'multiline':False]
+['text':' now we know that rhs can be safely cast into an std::uint64_t','line_number':4178,'multiline':False]
+['text':' special case - rhs cannot be larger than 0x7fffffffffffffff, lhs cannot be larger than 0xffffffff','line_number':4181,'multiline':False]
+['text':' it is not possible for the operation above to overflow, so just check max','line_number':4182,'multiline':False]
+['text':' lhs is std::int64_t, rhs signed','line_number':4198,'multiline':False]
+['text':' mixed sign cannot overflow','line_number':4203,'multiline':False]
+['text':' lhs negative','line_number':4209,'multiline':False]
+['text':' lhs is std::int64_t, rhs signed','line_number':4221,'multiline':False]
+['text':' mixed sign cannot overflow','line_number':4226,'multiline':False]
+['text':' lhs negative','line_number':4232,'multiline':False]
+['text':'rhs is std::int64_t, lhs signed','line_number':4246,'multiline':False]
+['text':'rhs is std::int64_t, lhs signed','line_number':4263,'multiline':False]
+['text':'lhs is std::int64_t, rhs unsigned < 64-bit','line_number':4284,'multiline':False]
+['text':' lhs is std::int64_t, rhs unsigned < 64-bit','line_number':4299,'multiline':False]
+['text':' Some compilers get optimization-happy, let's thwart them','line_number':4300,'multiline':False]
+['text':' rhs is std::uint64_t, lhs std::int64_t','line_number':4320,'multiline':False]
+['text':' cast everything to unsigned, perform addition, then','line_number':4321,'multiline':False]
+['text':' cast back for check - this is done to stop optimizers from removing the code','line_number':4322,'multiline':False]
+['text':' rhs is std::uint64_t, lhs std::int64_t','line_number':4339,'multiline':False]
+['text':' rhs is std::uint64_t, lhs signed, 32-bit or less','line_number':4357,'multiline':False]
+['text':' Now it just happens to work out that the standard behavior does what we want','line_number':4360,'multiline':False]
+['text':' Adding explicit casts to show exactly what's happening here','line_number':4361,'multiline':False]
+['text':' Note - this is tweaked to keep optimizers from tossing out the code.','line_number':4362,'multiline':False]
+['text':' rhs is std::uint64_t, lhs signed, 32-bit or less','line_number':4375,'multiline':False]
+['text':' Now it just happens to work out that the standard behavior does what we want','line_number':4379,'multiline':False]
+['text':' Adding explicit casts to show exactly what's happening here','line_number':4380,'multiline':False]
+['text':' states for SubtractionMethod2','line_number':4407,'multiline':False]
+['text':' unsigned-unsigned','line_number':4426,'multiline':False]
+['text':' unsigned-signed','line_number':4432,'multiline':False]
+['text':' signed-signed','line_number':4439,'multiline':False]
+['text':' signed-unsigned','line_number':4446,'multiline':False]
+['text':' this is for the case of U - SafeInt< T, E >','line_number':4457,'multiline':False]
+['text':' unsigned-unsigned','line_number':4463,'multiline':False]
+['text':' unsigned-signed','line_number':4469,'multiline':False]
+['text':' signed-signed','line_number':4476,'multiline':False]
+['text':' signed-unsigned','line_number':4483,'multiline':False]
+['text':' both are unsigned - easy case','line_number':4501,'multiline':False]
+['text':' both are unsigned - easy case','line_number':4514,'multiline':False]
+['text':' both are unsigned - easy case','line_number':4530,'multiline':False]
+['text':' Except we do have to check for overflow - lhs could be larger than result can hold','line_number':4531,'multiline':False]
+['text':' both are unsigned - easy case','line_number':4544,'multiline':False]
+['text':' both values are 16-bit or less','line_number':4561,'multiline':False]
+['text':' rhs is signed, so could end up increasing or decreasing','line_number':4562,'multiline':False]
+['text':' both values are 16-bit or less','line_number':4577,'multiline':False]
+['text':' rhs is signed, so could end up increasing or decreasing','line_number':4578,'multiline':False]
+['text':' both values are 16-bit or less','line_number':4590,'multiline':False]
+['text':' rhs is signed, so could end up increasing or decreasing','line_number':4591,'multiline':False]
+['text':' both values are 16-bit or less','line_number':4600,'multiline':False]
+['text':' rhs is signed, so could end up increasing or decreasing','line_number':4601,'multiline':False]
+['text':' both values are 16-bit or less','line_number':4613,'multiline':False]
+['text':' rhs is unsigned - check only minimum','line_number':4614,'multiline':False]
+['text':' both values are 16-bit or less','line_number':4629,'multiline':False]
+['text':' rhs is unsigned - check only minimum','line_number':4630,'multiline':False]
+['text':' both values are 32-bit or less','line_number':4648,'multiline':False]
+['text':' rhs is signed, so could end up increasing or decreasing','line_number':4649,'multiline':False]
+['text':' both values are 32-bit or less','line_number':4658,'multiline':False]
+['text':' rhs is signed, so could end up increasing or decreasing','line_number':4659,'multiline':False]
+['text':' both values are 32-bit or less','line_number':4671,'multiline':False]
+['text':' rhs is signed, so could end up increasing or decreasing','line_number':4672,'multiline':False]
+['text':' both values are 32-bit or less','line_number':4681,'multiline':False]
+['text':' rhs is signed, so could end up increasing or decreasing','line_number':4682,'multiline':False]
+['text':' both values are 32-bit or less','line_number':4694,'multiline':False]
+['text':' rhs is unsigned - check only minimum','line_number':4695,'multiline':False]
+['text':' both values are 32-bit or less','line_number':4710,'multiline':False]
+['text':' rhs is unsigned - check only minimum','line_number':4711,'multiline':False]
+['text':' lhs is an std::uint64_t, rhs signed','line_number':4729,'multiline':False]
+['text':' must first see if rhs is positive or negative','line_number':4730,'multiline':False]
+['text':' we're now effectively adding','line_number':4742,'multiline':False]
+['text':' lhs is an std::uint64_t, rhs signed','line_number':4755,'multiline':False]
+['text':' must first see if rhs is positive or negative','line_number':4756,'multiline':False]
+['text':' we're now effectively adding','line_number':4768,'multiline':False]
+['text':' U is std::uint64_t, T is signed','line_number':4784,'multiline':False]
+['text':' treat this as addition','line_number':4787,'multiline':False]
+['text':' must check for addition overflow and max','line_number':4792,'multiline':False]
+['text':' now both are positive, so comparison always works','line_number':4799,'multiline':False]
+['text':' result is negative','line_number':4801,'multiline':False]
+['text':' implies that lhs must fit into T, and result cannot overflow','line_number':4802,'multiline':False]
+['text':' Also allows us to drop to 32-bit math, which is faster on a 32-bit system','line_number':4803,'multiline':False]
+['text':' result is positive','line_number':4809,'multiline':False]
+['text':' U is std::uint64_t, T is signed','line_number':4825,'multiline':False]
+['text':' treat this as addition','line_number':4828,'multiline':False]
+['text':' must check for addition overflow and max','line_number':4833,'multiline':False]
+['text':' now both are positive, so comparison always works','line_number':4840,'multiline':False]
+['text':' result is negative','line_number':4842,'multiline':False]
+['text':' implies that lhs must fit into T, and result cannot overflow','line_number':4843,'multiline':False]
+['text':' Also allows us to drop to 32-bit math, which is faster on a 32-bit system','line_number':4844,'multiline':False]
+['text':' result is positive','line_number':4850,'multiline':False]
+['text':' lhs is an unsigned int32 or smaller, rhs std::int64_t','line_number':4869,'multiline':False]
+['text':' must first see if rhs is positive or negative','line_number':4870,'multiline':False]
+['text':' we're now effectively adding','line_number':4881,'multiline':False]
+['text':' since lhs is 32-bit, and rhs cannot exceed 2^63','line_number':4882,'multiline':False]
+['text':' this addition cannot overflow','line_number':4883,'multiline':False]
+['text':' negation safe','line_number':4884,'multiline':False]
+['text':' but we could exceed MaxInt','line_number':4886,'multiline':False]
+['text':' lhs is an unsigned int32 or smaller, rhs std::int64_t','line_number':4900,'multiline':False]
+['text':' must first see if rhs is positive or negative','line_number':4901,'multiline':False]
+['text':' we're now effectively adding','line_number':4912,'multiline':False]
+['text':' since lhs is 32-bit, and rhs cannot exceed 2^63','line_number':4913,'multiline':False]
+['text':' this addition cannot overflow','line_number':4914,'multiline':False]
+['text':' negation safe','line_number':4915,'multiline':False]
+['text':' but we could exceed MaxInt','line_number':4917,'multiline':False]
+['text':' U unsigned 32-bit or less, T std::int64_t','line_number':4934,'multiline':False]
+['text':' overflow not possible','line_number':4937,'multiline':False]
+['text':' we effectively have an addition','line_number':4943,'multiline':False]
+['text':' which cannot overflow internally','line_number':4944,'multiline':False]
+['text':' U unsigned 32-bit or less, T std::int64_t','line_number':4960,'multiline':False]
+['text':' overflow not possible','line_number':4963,'multiline':False]
+['text':' we effectively have an addition','line_number':4969,'multiline':False]
+['text':' which cannot overflow internally','line_number':4970,'multiline':False]
+['text':' lhs is an std::int64_t, rhs signed (up to 64-bit)','line_number':4989,'multiline':False]
+['text':' we have essentially 4 cases:','line_number':4990,'multiline':False]
+['text':'','line_number':4991,'multiline':False]
+['text':' 1) lhs positive, rhs positive - overflow not possible','line_number':4992,'multiline':False]
+['text':' 2) lhs positive, rhs negative - equivalent to addition - result >= lhs or error','line_number':4993,'multiline':False]
+['text':' 3) lhs negative, rhs positive - check result <= lhs','line_number':4994,'multiline':False]
+['text':' 4) lhs negative, rhs negative - overflow not possible','line_number':4995,'multiline':False]
+['text':' Note - ideally, we can order these so that true conditionals','line_number':4999,'multiline':False]
+['text':' lead to success, which enables better pipelining','line_number':5000,'multiline':False]
+['text':' It isn't practical here','line_number':5001,'multiline':False]
+['text':' condition 2','line_number':5002,'multiline':False]
+['text':' condition 3','line_number':5003,'multiline':False]
+['text':' lhs is an std::int64_t, rhs signed (up to 64-bit)','line_number':5015,'multiline':False]
+['text':' we have essentially 4 cases:','line_number':5016,'multiline':False]
+['text':'','line_number':5017,'multiline':False]
+['text':' 1) lhs positive, rhs positive - overflow not possible','line_number':5018,'multiline':False]
+['text':' 2) lhs positive, rhs negative - equivalent to addition - result >= lhs or error','line_number':5019,'multiline':False]
+['text':' 3) lhs negative, rhs positive - check result <= lhs','line_number':5020,'multiline':False]
+['text':' 4) lhs negative, rhs negative - overflow not possible','line_number':5021,'multiline':False]
+['text':' Note - ideally, we can order these so that true conditionals','line_number':5025,'multiline':False]
+['text':' lead to success, which enables better pipelining','line_number':5026,'multiline':False]
+['text':' It isn't practical here','line_number':5027,'multiline':False]
+['text':' condition 2','line_number':5028,'multiline':False]
+['text':' condition 3','line_number':5029,'multiline':False]
+['text':' lhs std::int64_t, rhs any signed int (including std::int64_t)','line_number':5073,'multiline':False]
+['text':' we have essentially 4 cases:','line_number':5076,'multiline':False]
+['text':'','line_number':5077,'multiline':False]
+['text':' 1) lhs positive, rhs positive - overflow not possible in tmp','line_number':5078,'multiline':False]
+['text':' 2) lhs positive, rhs negative - equivalent to addition - result >= lhs or error','line_number':5079,'multiline':False]
+['text':' 3) lhs negative, rhs positive - check result <= lhs','line_number':5080,'multiline':False]
+['text':' 4) lhs negative, rhs negative - overflow not possible in tmp','line_number':5081,'multiline':False]
+['text':' if both positive, overflow to negative not possible','line_number':5085,'multiline':False]
+['text':' which is why we'll explicitly check maxInt, and not call SafeCast','line_number':5086,'multiline':False]
+['text':' lhs negative','line_number':5094,'multiline':False]
+['text':' lhs std::int64_t, rhs any signed int (including std::int64_t)','line_number':5108,'multiline':False]
+['text':' we have essentially 4 cases:','line_number':5111,'multiline':False]
+['text':'','line_number':5112,'multiline':False]
+['text':' 1) lhs positive, rhs positive - overflow not possible in tmp','line_number':5113,'multiline':False]
+['text':' 2) lhs positive, rhs negative - equivalent to addition - result >= lhs or error','line_number':5114,'multiline':False]
+['text':' 3) lhs negative, rhs positive - check result <= lhs','line_number':5115,'multiline':False]
+['text':' 4) lhs negative, rhs negative - overflow not possible in tmp','line_number':5116,'multiline':False]
+['text':' if both positive, overflow to negative not possible','line_number':5120,'multiline':False]
+['text':' which is why we'll explicitly check maxInt, and not call SafeCast','line_number':5121,'multiline':False]
+['text':' lhs negative','line_number':5129,'multiline':False]
+['text':' lhs is a 32-bit int or less, rhs std::int64_t','line_number':5145,'multiline':False]
+['text':' we have essentially 4 cases:','line_number':5146,'multiline':False]
+['text':'','line_number':5147,'multiline':False]
+['text':' lhs positive, rhs positive - rhs could be larger than lhs can represent','line_number':5148,'multiline':False]
+['text':' lhs positive, rhs negative - additive case - check tmp >= lhs and tmp > max int','line_number':5149,'multiline':False]
+['text':' lhs negative, rhs positive - check tmp <= lhs and tmp < min int','line_number':5150,'multiline':False]
+['text':' lhs negative, rhs negative - addition cannot internally overflow, check against max','line_number':5151,'multiline':False]
+['text':' first case','line_number':5157,'multiline':False]
+['text':' second case','line_number':5168,'multiline':False]
+['text':' lhs < 0','line_number':5178,'multiline':False]
+['text':' third case','line_number':5179,'multiline':False]
+['text':' fourth case','line_number':5190,'multiline':False]
+['text':' lhs is a 32-bit int or less, rhs std::int64_t','line_number':5205,'multiline':False]
+['text':' we have essentially 4 cases:','line_number':5206,'multiline':False]
+['text':'','line_number':5207,'multiline':False]
+['text':' lhs positive, rhs positive - rhs could be larger than lhs can represent','line_number':5208,'multiline':False]
+['text':' lhs positive, rhs negative - additive case - check tmp >= lhs and tmp > max int','line_number':5209,'multiline':False]
+['text':' lhs negative, rhs positive - check tmp <= lhs and tmp < min int','line_number':5210,'multiline':False]
+['text':' lhs negative, rhs negative - addition cannot internally overflow, check against max','line_number':5211,'multiline':False]
+['text':' first case','line_number':5217,'multiline':False]
+['text':' second case','line_number':5228,'multiline':False]
+['text':' lhs < 0','line_number':5238,'multiline':False]
+['text':' third case','line_number':5239,'multiline':False]
+['text':' fourth case','line_number':5250,'multiline':False]
+['text':' lhs is any signed int32 or smaller, rhs is int64','line_number':5268,'multiline':False]
+['text':'else OK','line_number':5275,'multiline':False]
+['text':' lhs is any signed int32 or smaller, rhs is int64','line_number':5285,'multiline':False]
+['text':'else OK','line_number':5292,'multiline':False]
+['text':' lhs is a 64-bit int, rhs unsigned int32 or smaller','line_number':5304,'multiline':False]
+['text':' perform test as unsigned to prevent unwanted optimizations','line_number':5305,'multiline':False]
+['text':' lhs is a 64-bit int, rhs unsigned int32 or smaller','line_number':5320,'multiline':False]
+['text':' perform test as unsigned to prevent unwanted optimizations','line_number':5321,'multiline':False]
+['text':' lhs is std::int64_t, rhs is unsigned 32-bit or smaller','line_number':5337,'multiline':False]
+['text':' Do this as unsigned to prevent unwanted optimizations','line_number':5340,'multiline':False]
+['text':' Do this as unsigned to prevent unwanted optimizations','line_number':5355,'multiline':False]
+['text':' lhs is any signed int, rhs unsigned int64','line_number':5373,'multiline':False]
+['text':' check against available range','line_number':5374,'multiline':False]
+['text':' We need the absolute value of std::numeric_limits<T>::min()','line_number':5376,'multiline':False]
+['text':' This will give it to us without extraneous compiler warnings','line_number':5377,'multiline':False]
+['text':' lhs is any signed int, rhs unsigned int64','line_number':5403,'multiline':False]
+['text':' check against available range','line_number':5404,'multiline':False]
+['text':' We need the absolute value of std::numeric_limits<T>::min()','line_number':5406,'multiline':False]
+['text':' This will give it to us without extraneous compiler warnings','line_number':5407,'multiline':False]
+['text':' We run into upcasting problems on comparison - needs 2 checks','line_number':5436,'multiline':False]
+['text':' We run into upcasting problems on comparison - needs 2 checks','line_number':5449,'multiline':False]
+['text':' if we subtract, and it gets larger, there's a problem','line_number':5467,'multiline':False]
+['text':' Perform test as unsigned to prevent unwanted optimizations','line_number':5468,'multiline':False]
+['text':' if we subtract, and it gets larger, there's a problem','line_number':5483,'multiline':False]
+['text':' Perform test as unsigned to prevent unwanted optimizations','line_number':5484,'multiline':False]
+['text':' If lhs is negative, immediate problem - return must be positive, and subtracting only makes it','line_number':5501,'multiline':False]
+['text':' get smaller. If rhs > lhs, then it would also go negative, which is the other case','line_number':5502,'multiline':False]
+['text':' If both operands are unsigned OR','line_number':5543,'multiline':False]
+['text':'    return type is smaller than rhs OR','line_number':5544,'multiline':False]
+['text':'    return type is larger and rhs is unsigned','line_number':5545,'multiline':False]
+['text':' Then binary operations won't produce unexpected results','line_number':5546,'multiline':False]
+['text':' cast forces sign extension to be zeros','line_number':5575,'multiline':False]
+['text':'cast forces sign extension to be zeros','line_number':5586,'multiline':False]
+['text':'cast forces sign extension to be zeros','line_number':5597,'multiline':False]
+['text':'cast forces sign extension to be zeros','line_number':5616,'multiline':False]
+['text':'cast forces sign extension to be zeros','line_number':5627,'multiline':False]
+['text':'cast forces sign extension to be zeros','line_number':5638,'multiline':False]
+['text':' cast forces sign extension to be zeros','line_number':5657,'multiline':False]
+['text':' cast forces sign extension to be zeros','line_number':5668,'multiline':False]
+['text':' cast forces sign extension to be zeros','line_number':5679,'multiline':False]
+['text':'****************  External functions ***************************************','line_number':5685,'multiline':True]
+['text':' External functions that can be used where you only need to check one operation','line_number':5687,'multiline':False]
+['text':' non-class helper function so that you can check for a cast's validity','line_number':5688,'multiline':False]
+['text':' and handle errors how you like','line_number':5689,'multiline':False]
+['text':'****************  end external functions ***********************************','line_number':5768,'multiline':True]
+['text':' Main SafeInt class','line_number':5770,'multiline':False]
+['text':' Assumes exceptions can be thrown','line_number':5771,'multiline':False]
+['text':' Having a constructor for every type of int','line_number':5780,'multiline':False]
+['text':' avoids having the compiler evade our checks when doing implicit casts -','line_number':5781,'multiline':False]
+['text':' e.g., SafeInt<char> s = 0x7fffffff;','line_number':5782,'multiline':False]
+['text':'always safe','line_number':5786,'multiline':False]
+['text':' provide explicit boolean converter','line_number':5789,'multiline':False]
+['text':' m_int must be initialized to something to work with constexpr, because if it throws, then m_int is unknown','line_number':5805,'multiline':False]
+['text':' SafeCast will throw exceptions if i won't fit in type T','line_number':5807,'multiline':False]
+['text':' The destructor is intentionally commented out - no destructor','line_number':5812,'multiline':False]
+['text':' vs. a do-nothing destructor makes a huge difference in','line_number':5813,'multiline':False]
+['text':' inlining characteristics. It wasn't doing anything anyway.','line_number':5814,'multiline':False]
+['text':' ~SafeInt(){};','line_number':5815,'multiline':False]
+['text':' now start overloading operators','line_number':5818,'multiline':False]
+['text':' assignment operator','line_number':5819,'multiline':False]
+['text':' constructors exist for all int types and will ensure safety','line_number':5820,'multiline':False]
+['text':' use constructor to test size','line_number':5825,'multiline':False]
+['text':' constructor is optimized to do minimal checking based','line_number':5826,'multiline':False]
+['text':' on whether T can contain U','line_number':5827,'multiline':False]
+['text':' note - do not change this','line_number':5828,'multiline':False]
+['text':' Casting operators','line_number':5852,'multiline':False]
+['text':' The compiler knows that int == std::int32_t','line_number':5908,'multiline':False]
+['text':' but not that long == std::int32_t, because on some systems, long == std::int64_t','line_number':5909,'multiline':False]
+['text':' We also need an explicit cast to size_t, or the compiler will complain','line_number':5946,'multiline':False]
+['text':' Apparently, only SOME compilers complain, and cl 14.00.50727.42 isn't one of them','line_number':5947,'multiline':False]
+['text':' Leave here in case we decide to backport this to an earlier compiler','line_number':5948,'multiline':False]
+['text':' Also provide a cast operator for floating point types','line_number':5957,'multiline':False]
+['text':' If you need a pointer to the data','line_number':5978,'multiline':False]
+['text':' this could be dangerous, but allows you to correctly pass','line_number':5979,'multiline':False]
+['text':' instances of this class to APIs that take a pointer to an integer','line_number':5980,'multiline':False]
+['text':' also see overloaded address-of operator below','line_number':5981,'multiline':False]
+['text':' The above are not modern naming conventions, introducing these','line_number':5985,'multiline':False]
+['text':' to move forward with:','line_number':5986,'multiline':False]
+['text':' This method is antiquated, and really only makes sense with ','line_number':5990,'multiline':False]
+['text':' 64-bit values on a 32-bit processor. Leaving it for now, in case','line_number':5991,'multiline':False]
+['text':' someone is using it. A better approach is to just unbox it by casting','line_number':5992,'multiline':False]
+['text':' it back to the base type as static_cast<T>( my_safeint )','line_number':5993,'multiline':False]
+['text':' Note - in the future, this is slated for deprecation','line_number':5997,'multiline':False]
+['text':' Or if SafeInt< T, E >::Ptr() is inconvenient, use the overload','line_number':5999,'multiline':False]
+['text':' operator &','line_number':6000,'multiline':False]
+['text':' This allows you to do unsafe things!','line_number':6001,'multiline':False]
+['text':' It is meant to allow you to more easily','line_number':6002,'multiline':False]
+['text':' pass a SafeInt into things like ReadFile','line_number':6003,'multiline':False]
+['text':' Unary operators','line_number':6008,'multiline':False]
+['text':' operator + (unary)','line_number':6011,'multiline':False]
+['text':' note - normally, the '+' and '-' operators will upcast to a signed int','line_number':6012,'multiline':False]
+['text':' for T < 32 bits. This class changes behavior to preserve type','line_number':6013,'multiline':False]
+['text':'unary  -','line_number':6016,'multiline':False]
+['text':' Note - unsigned still performs the bitwise manipulation','line_number':6020,'multiline':False]
+['text':' will warn at level 2 or higher if the value is 32-bit or larger','line_number':6021,'multiline':False]
+['text':' prefix increment operator','line_number':6025,'multiline':False]
+['text':' prefix decrement operator','line_number':6036,'multiline':False]
+['text':' note that postfix operators have inherently worse perf','line_number':6047,'multiline':False]
+['text':' characteristics','line_number':6048,'multiline':False]
+['text':' postfix increment operator','line_number':6050,'multiline':False]
+['text':' dummy arg to comply with spec','line_number':6051,'multiline':False]
+['text':' postfix decrement operator','line_number':6063,'multiline':False]
+['text':' dummy arg to comply with spec','line_number':6064,'multiline':False]
+['text':' One's complement','line_number':6075,'multiline':False]
+['text':' Note - this operator will normally change size to an int','line_number':6076,'multiline':False]
+['text':' cast in return improves perf and maintains type','line_number':6077,'multiline':False]
+['text':' Binary operators','line_number':6080,'multiline':False]
+['text':'','line_number':6081,'multiline':False]
+['text':' arithmetic binary operators','line_number':6082,'multiline':False]
+['text':' % modulus','line_number':6083,'multiline':False]
+['text':' * multiplication','line_number':6084,'multiline':False]
+['text':' / division','line_number':6085,'multiline':False]
+['text':' + addition','line_number':6086,'multiline':False]
+['text':' - subtraction','line_number':6087,'multiline':False]
+['text':'','line_number':6088,'multiline':False]
+['text':' For each of the arithmetic operators, you will need to','line_number':6089,'multiline':False]
+['text':' use them as follows:','line_number':6090,'multiline':False]
+['text':'','line_number':6091,'multiline':False]
+['text':' SafeInt<char> c = 2;','line_number':6092,'multiline':False]
+['text':' SafeInt<int>  i = 3;','line_number':6093,'multiline':False]
+['text':'','line_number':6094,'multiline':False]
+['text':' SafeInt<int> i2 = i op (char)c;','line_number':6095,'multiline':False]
+['text':' OR','line_number':6096,'multiline':False]
+['text':' SafeInt<char> i2 = (int)i op c;','line_number':6097,'multiline':False]
+['text':'','line_number':6098,'multiline':False]
+['text':' The base problem is that if the lhs and rhs inputs are different SafeInt types','line_number':6099,'multiline':False]
+['text':' it is not possible in this implementation to determine what type of SafeInt','line_number':6100,'multiline':False]
+['text':' should be returned. You have to let the class know which of the two inputs','line_number':6101,'multiline':False]
+['text':' need to be the return type by forcing the other value to the base integer type.','line_number':6102,'multiline':False]
+['text':'','line_number':6103,'multiline':False]
+['text':' Note - as per feedback from Scott Meyers, I'm exploring how to get around this.','line_number':6104,'multiline':False]
+['text':' 3.0 update - I'm still thinking about this. It can be done with template metaprogramming,','line_number':6105,'multiline':False]
+['text':' but it is tricky, and there's a perf vs. correctness tradeoff where the right answer','line_number':6106,'multiline':False]
+['text':' is situational.','line_number':6107,'multiline':False]
+['text':'','line_number':6108,'multiline':False]
+['text':' The case of:','line_number':6109,'multiline':False]
+['text':'','line_number':6110,'multiline':False]
+['text':' SafeInt< T, E > i, j, k;','line_number':6111,'multiline':False]
+['text':' i = j op k;','line_number':6112,'multiline':False]
+['text':'','line_number':6113,'multiline':False]
+['text':' works just fine and no unboxing is needed because the return type is not ambiguous.','line_number':6114,'multiline':False]
+['text':' Modulus','line_number':6116,'multiline':False]
+['text':' Modulus has some convenient properties -','line_number':6117,'multiline':False]
+['text':' first, the magnitude of the return can never be','line_number':6118,'multiline':False]
+['text':' larger than the lhs operand, and it must be the same sign','line_number':6119,'multiline':False]
+['text':' as well. It does, however, suffer from the same promotion','line_number':6120,'multiline':False]
+['text':' problems as comparisons, division and other operations','line_number':6121,'multiline':False]
+['text':' Modulus assignment','line_number':6137,'multiline':False]
+['text':' Multiplication','line_number':6152,'multiline':False]
+['text':' Multiplication assignment','line_number':6168,'multiline':False]
+['text':' Division','line_number':6189,'multiline':False]
+['text':' Division assignment','line_number':6205,'multiline':False]
+['text':' For addition and subtraction','line_number':6226,'multiline':False]
+['text':' Addition','line_number':6228,'multiline':False]
+['text':'addition assignment','line_number':6244,'multiline':False]
+['text':' Subtraction','line_number':6265,'multiline':False]
+['text':' Subtraction assignment','line_number':6281,'multiline':False]
+['text':' Shift operators','line_number':6302,'multiline':False]
+['text':' Note - shift operators ALWAYS return the same type as the lhs','line_number':6303,'multiline':False]
+['text':' specific version for SafeInt< T, E > not needed -','line_number':6304,'multiline':False]
+['text':' code path is exactly the same as for SafeInt< U, E > as rhs','line_number':6305,'multiline':False]
+['text':' Left shift','line_number':6307,'multiline':False]
+['text':' Also, shifting > bitcount is undefined - trap in debug','line_number':6308,'multiline':False]
+['text':' Left shift assignment','line_number':6329,'multiline':False]
+['text':' Right shift','line_number':6351,'multiline':False]
+['text':' Right shift assignment','line_number':6370,'multiline':False]
+['text':' Bitwise operators','line_number':6391,'multiline':False]
+['text':' This only makes sense if we're dealing with the same type and size','line_number':6392,'multiline':False]
+['text':' demand a type T, or something that fits into a type T','line_number':6393,'multiline':False]
+['text':' Bitwise &','line_number':6395,'multiline':False]
+['text':' we want to avoid setting bits by surprise','line_number':6404,'multiline':False]
+['text':' consider the case of lhs = int, value = 0xffffffff','line_number':6405,'multiline':False]
+['text':'                      rhs = char, value = 0xff','line_number':6406,'multiline':False]
+['text':'','line_number':6407,'multiline':False]
+['text':' programmer intent is to get only the lower 8 bits','line_number':6408,'multiline':False]
+['text':' normal behavior is to upcast both sides to an int','line_number':6409,'multiline':False]
+['text':' which then sign extends rhs, setting all the bits','line_number':6410,'multiline':False]
+['text':' If you land in the assert, this is because the bitwise operator','line_number':6412,'multiline':False]
+['text':' was causing unexpected behavior. Fix is to properly cast your inputs','line_number':6413,'multiline':False]
+['text':' so that it works like you meant, not unexpectedly','line_number':6414,'multiline':False]
+['text':' Bitwise & assignment','line_number':6419,'multiline':False]
+['text':' XOR','line_number':6440,'multiline':False]
+['text':' If you land in the assert, this is because the bitwise operator','line_number':6449,'multiline':False]
+['text':' was causing unexpected behavior. Fix is to properly cast your inputs','line_number':6450,'multiline':False]
+['text':' so that it works like you meant, not unexpectedly','line_number':6451,'multiline':False]
+['text':' XOR assignment','line_number':6456,'multiline':False]
+['text':' bitwise OR','line_number':6477,'multiline':False]
+['text':' bitwise OR assignment','line_number':6489,'multiline':False]
+['text':' Miscellaneous helper functions','line_number':6510,'multiline':False]
+['text':' Zero is always aligned','line_number':6555,'multiline':False]
+['text':' We don't support aligning negative numbers at this time','line_number':6559,'multiline':False]
+['text':' Can't align unsigned numbers on bitCount (e.g., 8 bits = 256, unsigned char max = 255)','line_number':6560,'multiline':False]
+['text':' or signed numbers on bitCount-1 (e.g., 7 bits = 128, signed char max = 127).','line_number':6561,'multiline':False]
+['text':' Also makes no sense to try to align on negative or no bits.','line_number':6562,'multiline':False]
+['text':' Commonly needed alignments:','line_number':6578,'multiline':False]
+['text':' This is almost certainly not the best optimized version of atoi,','line_number':6587,'multiline':False]
+['text':' but it does not display a typical bug where it isn't possible to set MinInt','line_number':6588,'multiline':False]
+['text':' and it won't allow you to overflow your integer.','line_number':6589,'multiline':False]
+['text':' This is here because it is useful, and it is an example of what','line_number':6590,'multiline':False]
+['text':' can be done easily with SafeInt.','line_number':6591,'multiline':False]
+['text':' Bad input, or empty string','line_number':6599,'multiline':False]
+['text':' Helper function used to subtract pointers.','line_number':6636,'multiline':False]
+['text':' Used to squelch warnings','line_number':6637,'multiline':False]
+['text':' Comparison operators','line_number':6644,'multiline':False]
+['text':'Less than','line_number':6646,'multiline':False]
+['text':' Greater than','line_number':6665,'multiline':False]
+['text':' Greater than or equal','line_number':6684,'multiline':False]
+['text':' Less than or equal','line_number':6703,'multiline':False]
+['text':' equality','line_number':6722,'multiline':False]
+['text':' explicit overload for bool','line_number':6723,'multiline':False]
+['text':'not equals','line_number':6754,'multiline':False]
+['text':'rhs','line_number':6808,'multiline':True]
+['text':'result','line_number':6808,'multiline':True]
+['text':'lhs','line_number':6837,'multiline':True]
+['text':'rhs','line_number':6837,'multiline':True]
+['text':'result','line_number':6837,'multiline':True]
+['text':' Modulus','line_number':6843,'multiline':False]
+['text':' Value of return depends on sign of lhs','line_number':6847,'multiline':False]
+['text':' This one may not be safe - bounds check in constructor','line_number':6848,'multiline':False]
+['text':' if lhs is negative and rhs is unsigned, this will throw an exception.','line_number':6849,'multiline':False]
+['text':' Fast-track the simple case','line_number':6851,'multiline':False]
+['text':' same size and same sign','line_number':6852,'multiline':False]
+['text':' Multiplication','line_number':6862,'multiline':False]
+['text':' sizeof(T) == 4','line_number':6878,'multiline':False]
+['text':' Problem case - normal casting behavior changes meaning','line_number':6893,'multiline':False]
+['text':' flip rhs to positive','line_number':6894,'multiline':False]
+['text':' any operator casts now do the right thing','line_number':6895,'multiline':False]
+['text':' Corner case','line_number':6904,'multiline':False]
+['text':'lhs','line_number':6920,'multiline':True]
+['text':'rhs','line_number':6920,'multiline':True]
+['text':'result','line_number':6920,'multiline':True]
+['text':' Now rhs is either negative, or zero','line_number':6939,'multiline':False]
+['text':'lhs','line_number':6956,'multiline':True]
+['text':'rhs','line_number':6956,'multiline':True]
+['text':'result','line_number':6956,'multiline':True]
+['text':' corner case of a corner case - lhs = min int, rhs = -1,','line_number':6992,'multiline':False]
+['text':' but rhs is the return type, so in essence, we can return -lhs','line_number':6993,'multiline':False]
+['text':' if rhs is a larger type than lhs','line_number':6994,'multiline':False]
+['text':' If types are wrong, throws','line_number':6995,'multiline':False]
+['text':'lhs','line_number':7013,'multiline':True]
+['text':'rhs','line_number':7013,'multiline':True]
+['text':'result','line_number':7013,'multiline':True]
+['text':' Division','line_number':7019,'multiline':False]
+['text':' Corner case - has to be handled seperately','line_number':7023,'multiline':False]
+['text':' Otherwise normal logic works with addition of bounds check when casting from U->T','line_number':7031,'multiline':False]
+['text':' Addition','line_number':7037,'multiline':False]
+['text':' Subtraction','line_number':7046,'multiline':False]
+['text':' Overrides designed to deal with cases where a SafeInt is assigned out','line_number':7056,'multiline':False]
+['text':' to a normal int - this at least makes the last operation safe','line_number':7057,'multiline':False]
+['text':' +=','line_number':7058,'multiline':False]
+['text':' Specific pointer overrides','line_number':7139,'multiline':False]
+['text':' Note - this function makes no attempt to ensure','line_number':7140,'multiline':False]
+['text':' that the resulting pointer is still in the buffer, only','line_number':7141,'multiline':False]
+['text':' that no int overflows happened on the way to getting the new pointer','line_number':7142,'multiline':False]
+['text':' Cast the pointer to a number so we can do arithmetic','line_number':7146,'multiline':False]
+['text':' Note: this doesn't really make sense as a constexpr, but cannot be because of the reinterpret_cast','line_number':7147,'multiline':False]
+['text':' Check first that rhs is valid for the type of ptrdiff_t','line_number':7149,'multiline':False]
+['text':' and that multiplying by sizeof( T ) doesn't overflow a ptrdiff_t','line_number':7150,'multiline':False]
+['text':' Next, we need to add 2 SafeInts of different types, so unbox the ptr_diff','line_number':7151,'multiline':False]
+['text':' Finally, cast the number back to a pointer of the correct type','line_number':7152,'multiline':False]
+['text':' Cast the pointer to a number so we can do arithmetic','line_number':7160,'multiline':False]
+['text':' See above for comments','line_number':7162,'multiline':False]
+['text':' This operator explicitly not supported','line_number':7170,'multiline':False]
+['text':' This operator explicitly not supported','line_number':7178,'multiline':False]
+['text':' This operator explicitly not supported','line_number':7186,'multiline':False]
+['text':' This operator explicitly not supported','line_number':7194,'multiline':False]
+['text':' This operator explicitly not supported','line_number':7202,'multiline':False]
+['text':' This operator explicitly not supported','line_number':7210,'multiline':False]
+['text':' This operator explicitly not supported','line_number':7218,'multiline':False]
+['text':' This operator explicitly not supported','line_number':7226,'multiline':False]
+['text':' Shift operators','line_number':7231,'multiline':False]
+['text':' NOTE - shift operators always return the type of the lhs argument','line_number':7232,'multiline':False]
+['text':' Left shift','line_number':7234,'multiline':False]
+['text':' Right shift','line_number':7244,'multiline':False]
+['text':' Bitwise operators','line_number':7254,'multiline':False]
+['text':' This only makes sense if we're dealing with the same type and size','line_number':7255,'multiline':False]
+['text':' demand a type T, or something that fits into a type T.','line_number':7256,'multiline':False]
+['text':' Bitwise &','line_number':7258,'multiline':False]
+['text':' Bitwise XOR','line_number':7265,'multiline':False]
+['text':' Bitwise OR','line_number':7272,'multiline':False]
+['text':' utilities','line_number':7280,'multiline':False]
+['text':' msl','line_number':7281,'multiline':False]
+['text':'SAFEINT_HPP','line_number':7284,'multiline':False]

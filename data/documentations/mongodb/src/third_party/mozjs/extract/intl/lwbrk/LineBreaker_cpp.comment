@@ -1,0 +1,456 @@
+['text':' -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]
+['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':2,'multiline':True]
+['text':'static','line_number':17,'multiline':True]
+['text':'
+
+   Simplification of Pair Table in JIS X 4051
+
+   1. The Origion Table - in 4.1.3
+
+   In JIS x 4051. The pair table is defined as below
+
+   Class of
+   Leading    Class of Trailing Char Class
+   Char
+
+              1  2  3  4  5  6  7  8  9 10 11 12 13 13 14 14 15 16 17 18 19 20
+                                                 *  #  *  #
+        1     X  X  X  X  X  X  X  X  X  X  X  X  X  X  X  X  X  X  X  X  X  E
+        2        X  X  X  X  X                                               X
+        3        X  X  X  X  X                                               X
+        4        X  X  X  X  X                                               X
+        5        X  X  X  X  X                                               X
+        6        X  X  X  X  X                                               X
+        7        X  X  X  X  X  X                                            X
+        8        X  X  X  X  X                                X              E
+        9        X  X  X  X  X                                               X
+       10        X  X  X  X  X                                               X
+       11        X  X  X  X  X                                               X
+       12        X  X  X  X  X                                               X
+       13        X  X  X  X  X                    X                          X
+       14        X  X  X  X  X                          X                    X
+       15        X  X  X  X  X        X                       X        X     X
+       16        X  X  X  X  X                                   X     X     X
+       17        X  X  X  X  X                                               E
+       18        X  X  X  X  X                                X  X     X     X
+       19     X  E  E  E  E  E  X  X  X  X  X  X  X  X  X  X  X  X  E  X  E  E
+       20        X  X  X  X  X                                               E
+
+   * Same Char
+   # Other Char
+
+   X Cannot Break
+
+   The classes mean:
+      1: Open parenthesis
+      2: Close parenthesis
+      3: Prohibit a line break before
+      4: Punctuation for sentence end (except Full stop, e.g., "!" and "?")
+      5: Middle dot (e.g., U+30FB KATAKANA MIDDLE DOT)
+      6: Full stop
+      7: Non-breakable between same characters
+      8: Prefix (e.g., "$", "NO.")
+      9: Postfix (e.g., "%")
+     10: Ideographic space
+     11: Hiragana
+     12: Japanese characters (except class 11)
+     13: Subscript
+     14: Ruby
+     15: Numeric
+     16: Alphabet
+     17: Space for Western language
+     18: Western characters (except class 17)
+     19: Split line note (Warichu) begin quote
+     20: Split line note (Warichu) end quote
+
+   2. Simplified by remove the class which we do not care
+
+   However, since we do not care about class 13(Subscript), 14(Ruby),
+   16 (Aphabet), 19(split line note begin quote), and 20(split line note end
+   quote) we can simplify this par table into the following
+
+   Class of
+   Leading    Class of Trailing Char Class
+   Char
+
+              1  2  3  4  5  6  7  8  9 10 11 12 15 17 18
+
+        1     X  X  X  X  X  X  X  X  X  X  X  X  X  X  X
+        2        X  X  X  X  X
+        3        X  X  X  X  X
+        4        X  X  X  X  X
+        5        X  X  X  X  X
+        6        X  X  X  X  X
+        7        X  X  X  X  X  X
+        8        X  X  X  X  X                    X
+        9        X  X  X  X  X
+       10        X  X  X  X  X
+       11        X  X  X  X  X
+       12        X  X  X  X  X
+       15        X  X  X  X  X        X           X     X
+       17        X  X  X  X  X
+       18        X  X  X  X  X                    X     X
+
+   3. Simplified by merged classes
+
+   After the 2 simplification, the pair table have some duplication
+   a. class 2, 3, 4, 5, 6,  are the same- we can merged them
+   b. class 10, 11, 12, 17  are the same- we can merged them
+
+   We introduce an extra non-breaking pair at [b]/7 to better match
+   the expectations of CSS line-breaking as tested by WPT tests.
+   This added entry is marked as * in the tables below.
+
+   Class of
+   Leading    Class of Trailing Char Class
+   Char
+
+              1 [a] 7  8  9 [b]15 18
+
+        1     X  X  X  X  X  X  X  X
+      [a]        X
+        7        X  X
+        8        X              X
+        9        X
+      [b]        X  *
+       15        X        X     X  X
+       18        X              X  X
+
+
+   4. We add COMPLEX characters and make it breakable w/ all ther class
+      except after class 1 and before class [a]
+
+   Class of
+   Leading    Class of Trailing Char Class
+   Char
+
+              1 [a] 7  8  9 [b]15 18 COMPLEX
+
+        1     X  X  X  X  X  X  X  X  X
+      [a]        X
+        7        X  X
+        8        X              X
+        9        X
+      [b]        X  *
+       15        X        X     X  X
+       18        X              X  X
+  COMPLEX        X                    T
+
+     T : need special handling
+
+
+   5. However, we need two special class for some punctuations/parentheses,
+      theirs breaking rules like character class (18), see bug 389056.
+      And also we need character like punctuation that is same behavior with 18,
+      but the characters are not letters of all languages. (e.g., '_')
+      [c]. Based on open parenthesis class (1), but it is not breakable after
+           character class (18) or numeric class (15).
+      [d]. Based on close parenthesis (or punctuation) class (2), but it is not
+           breakable before character class (18) or numeric class (15).
+
+   Class of
+   Leading    Class of Trailing Char Class
+   Char
+
+              1 [a] 7  8  9 [b]15 18 COMPLEX [c] [d]
+
+        1     X  X  X  X  X  X  X  X  X       X    X
+      [a]        X                            X    X
+        7        X  X
+        8        X              X
+        9        X
+      [b]        X  *                              X
+       15        X        X     X  X          X    X
+       18        X              X  X          X    X
+  COMPLEX        X                    T
+      [c]     X  X  X  X  X  X  X  X  X       X    X
+      [d]        X              X  X               X
+
+
+   6. And Unicode has "NON-BREAK" characters. The lines should be broken around
+      them. But in JIS X 4051, such class is not, therefore, we create [e].
+
+   Class of
+   Leading    Class of Trailing Char Class
+   Char
+
+              1 [a] 7  8  9 [b]15 18 COMPLEX [c] [d] [e]
+
+        1     X  X  X  X  X  X  X  X  X       X    X   X
+      [a]        X                                 X   X
+        7        X  X                                  X
+        8        X              X                      X
+        9        X                                     X
+      [b]        X  *                              X   X
+       15        X        X     X  X          X    X   X
+       18        X              X  X          X    X   X
+  COMPLEX        X                    T                X
+      [c]     X  X  X  X  X  X  X  X  X       X    X   X
+      [d]        X              X  X               X   X
+      [e]     X  X  X  X  X  X  X  X  X       X    X   X
+
+
+   7. Now we use one bit to encode whether it is breakable, and use 2 bytes
+      for one row, then the bit table will look like:
+
+                 18    <-   1
+
+       1  0000 1111 1111 1111  = 0x0FFF
+      [a] 0000 1100 0000 0010  = 0x0C02
+       7  0000 1000 0000 0110  = 0x0806
+       8  0000 1000 0100 0010  = 0x0842
+       9  0000 1000 0000 0010  = 0x0802
+      [b] 0000 1100 0000 0110  = 0x0C06
+      15  0000 1110 1101 0010  = 0x0ED2
+      18  0000 1110 1100 0010  = 0x0EC2
+ COMPLEX  0000 1001 0000 0010  = 0x0902
+      [c] 0000 1111 1111 1111  = 0x0FFF
+      [d] 0000 1100 1100 0010  = 0x0CC2
+      [e] 0000 1111 1111 1111  = 0x0FFF
+','line_number':22,'multiline':True]
+['text':'
+
+   8. And if the character is not enough far from word start, word end and
+      another break point, we should not break in non-CJK languages.
+      I.e., Don't break around 15, 18, [c] and [d], but don't change
+      that if they are related to [b].
+
+   Class of
+   Leading    Class of Trailing Char Class
+   Char
+
+              1 [a] 7  8  9 [b]15 18 COMPLEX [c] [d] [e]
+
+        1     X  X  X  X  X  X  X  X  X       X    X   X
+      [a]        X              X  X          X    X   X
+        7        X  X           X  X          X    X   X
+        8        X              X  X          X    X   X
+        9        X              X  X          X    X   X
+      [b]        X  *                              X   X
+       15     X  X  X  X  X     X  X  X       X    X   X
+       18     X  X  X  X  X     X  X  X       X    X   X
+  COMPLEX        X              X  X  T       X    X   X
+      [c]     X  X  X  X  X  X  X  X  X       X    X   X
+      [d]     X  X  X  X  X     X  X  X       X    X   X
+      [e]     X  X  X  X  X  X  X  X  X       X    X   X
+
+                 18    <-   1
+
+       1  0000 1111 1111 1111  = 0x0FFF
+      [a] 0000 1110 1100 0010  = 0x0EC2
+       7  0000 1110 1100 0110  = 0x0EC6
+       8  0000 1110 1100 0010  = 0x0EC2
+       9  0000 1110 1100 0010  = 0x0EC2
+      [b] 0000 1100 0000 0110  = 0x0C06
+      15  0000 1111 1101 1111  = 0x0FDF
+      18  0000 1111 1101 1111  = 0x0FDF
+ COMPLEX  0000 1111 1100 0010  = 0x0FC2
+      [c] 0000 1111 1111 1111  = 0x0FFF
+      [d] 0000 1111 1101 1111  = 0x0FDF
+      [e] 0000 1111 1111 1111  = 0x0FFF
+','line_number':236,'multiline':True]
+['text':'
+
+   9. Now we map the class to number
+
+      0: 1
+      1: [a]- 2, 3, 4, 5, 6
+      2: 7
+      3: 8
+      4: 9
+      5: [b]- 10, 11, 12, 17
+      6: 15
+      7: 18
+      8: COMPLEX
+      9: [c]
+      A: [d]
+      B: [e]
+
+    and they mean:
+      0: Open parenthesis
+      1: Punctuation that prohibits break before
+      2: Non-breakable between same classes
+      3: Prefix
+      4: Postfix
+      5: Breakable character (Spaces and Most Japanese characters)
+      6: Numeric
+      7: Characters
+      8: Need special handling characters (E.g., Thai)
+      9: Open parentheses like Character (See bug 389056)
+      A: Close parenthese (or punctuations) like Character (See bug 389056)
+      B: Non breakable (See bug 390920)
+
+','line_number':282,'multiline':True]
+['text':' NO-BREAK SPACE, FIGURE SPACE','line_number':366,'multiline':False]
+['text':' HYPHEN','line_number':370,'multiline':False]
+['text':' FIGURE DASH','line_number':371,'multiline':False]
+['text':' EN DASH','line_number':372,'multiline':False]
+['text':' Bug 1647377: On Android, we don't have a "platform" backend
+           * that supports Tibetan (nsRuleBreaker.cpp only knows about
+           * Thai), so instead we just treat the TSHEG like a hyphen to
+           * provide basic line-breaking possibilities.
+           ','line_number':374,'multiline':True]
+['text':' TIBETAN MARK INTERSYLLABIC TSHEG','line_number':379,'multiline':False]
+['text':' ARMENIAN HYPHEN','line_number':381,'multiline':False]
+['text':' Mapping for Unicode LineBreak.txt classes to the (simplified) set of','line_number':386,'multiline':False]
+['text':' character classes used here.','line_number':387,'multiline':False]
+['text':' XXX The mappings here were derived by comparing the Unicode LineBreak','line_number':388,'multiline':False]
+['text':'     values of BMP characters to the classes our existing GetClass returns','line_number':389,'multiline':False]
+['text':'     for the same codepoints; in cases where characters with the same','line_number':390,'multiline':False]
+['text':'     LineBreak class mapped to various classes here, I picked what seemed','line_number':391,'multiline':False]
+['text':'     the most prevalent equivalence.','line_number':392,'multiline':False]
+['text':'     Some of these are unclear to me, but currently they are ONLY used','line_number':393,'multiline':False]
+['text':'     for characters not handled by the old code below, so all the JISx405','line_number':394,'multiline':False]
+['text':'     special cases should already be accounted for.','line_number':395,'multiline':False]
+['text':' UNKNOWN = 0,                       [XX] ','line_number':397,'multiline':True]
+['text':' AMBIGUOUS = 1,                     [AI] ','line_number':398,'multiline':True]
+['text':' ALPHABETIC = 2,                    [AL] ','line_number':399,'multiline':True]
+['text':' BREAK_BOTH = 3,                    [B2] ','line_number':400,'multiline':True]
+['text':' BREAK_AFTER = 4,                   [BA] ','line_number':401,'multiline':True]
+['text':' BREAK_BEFORE = 5,                  [BB] ','line_number':402,'multiline':True]
+['text':' MANDATORY_BREAK = 6,               [BK] ','line_number':403,'multiline':True]
+['text':' CONTINGENT_BREAK = 7,              [CB] ','line_number':404,'multiline':True]
+['text':' CLOSE_PUNCTUATION = 8,             [CL] ','line_number':405,'multiline':True]
+['text':' COMBINING_MARK = 9,                [CM] ','line_number':406,'multiline':True]
+['text':' CARRIAGE_RETURN = 10,              [CR] ','line_number':407,'multiline':True]
+['text':' EXCLAMATION = 11,                  [EX] ','line_number':408,'multiline':True]
+['text':' GLUE = 12,                         [GL] ','line_number':409,'multiline':True]
+['text':' HYPHEN = 13,                       [HY] ','line_number':410,'multiline':True]
+['text':' IDEOGRAPHIC = 14,                  [ID] ','line_number':411,'multiline':True]
+['text':' INSEPARABLE = 15,                  [IN] ','line_number':412,'multiline':True]
+['text':' INFIX_NUMERIC = 16,                [IS] ','line_number':413,'multiline':True]
+['text':' LINE_FEED = 17,                    [LF] ','line_number':414,'multiline':True]
+['text':' NONSTARTER = 18,                   [NS] ','line_number':415,'multiline':True]
+['text':' NUMERIC = 19,                      [NU] ','line_number':416,'multiline':True]
+['text':' OPEN_PUNCTUATION = 20,             [OP] ','line_number':417,'multiline':True]
+['text':' POSTFIX_NUMERIC = 21,              [PO] ','line_number':418,'multiline':True]
+['text':' PREFIX_NUMERIC = 22,               [PR] ','line_number':419,'multiline':True]
+['text':' QUOTATION = 23,                    [QU] ','line_number':420,'multiline':True]
+['text':' COMPLEX_CONTEXT = 24,              [SA] ','line_number':421,'multiline':True]
+['text':' SURROGATE = 25,                    [SG] ','line_number':422,'multiline':True]
+['text':' SPACE = 26,                        [SP] ','line_number':423,'multiline':True]
+['text':' BREAK_SYMBOLS = 27,                [SY] ','line_number':424,'multiline':True]
+['text':' ZWSPACE = 28,                      [ZW] ','line_number':425,'multiline':True]
+['text':' NEXT_LINE = 29,                    [NL] ','line_number':426,'multiline':True]
+['text':' WORD_JOINER = 30,                  [WJ] ','line_number':427,'multiline':True]
+['text':' H2 = 31,                           [H2] ','line_number':428,'multiline':True]
+['text':' H3 = 32,                           [H3] ','line_number':429,'multiline':True]
+['text':' JL = 33,                           [JL] ','line_number':430,'multiline':True]
+['text':' JT = 34,                           [JT] ','line_number':431,'multiline':True]
+['text':' JV = 35,                           [JV] ','line_number':432,'multiline':True]
+['text':' CLOSE_PARENTHESIS = 36,            [CP] ','line_number':433,'multiline':True]
+['text':' CONDITIONAL_JAPANESE_STARTER = 37, [CJ] ','line_number':434,'multiline':True]
+['text':' HEBREW_LETTER = 38,                [HL] ','line_number':435,'multiline':True]
+['text':' REGIONAL_INDICATOR = 39,           [RI] ','line_number':436,'multiline':True]
+['text':' E_BASE = 40,                       [EB] ','line_number':437,'multiline':True]
+['text':' E_MODIFIER = 41,                   [EM] ','line_number':438,'multiline':True]
+['text':' ZWJ = 42,                          [ZWJ]','line_number':439,'multiline':True]
+['text':' Overrides based on rules for the different line-break values given in','line_number':447,'multiline':False]
+['text':' https://drafts.csswg.org/css-text-3/#line-break-property','line_number':448,'multiline':False]
+['text':' For now, just use legacy Gecko behavior.','line_number':451,'multiline':False]
+['text':' XXX Possible enhancement - vary strictness according to line width','line_number':452,'multiline':False]
+['text':' or other criteria.','line_number':453,'multiline':False]
+['text':' Handle 3 range table first','line_number':539,'multiline':False]
+['text':' Fullwidth ASCII variant','line_number':562,'multiline':False]
+['text':' Fullwidth comma and period are exceptions to our map-to-ASCII','line_number':563,'multiline':False]
+['text':' behavior: https://bugzilla.mozilla.org/show_bug.cgi?id=1595428','line_number':564,'multiline':False]
+['text':' Also special-case fullwidth left/right white parenthesis,','line_number':568,'multiline':False]
+['text':' which do not fit the pattern of mapping to the ASCII block','line_number':569,'multiline':False]
+['text':' Halfwidth Katakana variants','line_number':578,'multiline':False]
+['text':' jis x4051 class 3','line_number':596,'multiline':False]
+['text':' jis x4051 class 11','line_number':598,'multiline':False]
+['text':' Halfwidth Hangul variants','line_number':602,'multiline':False]
+['text':' Hangul Compatibility Jamo, Bopomofo, Kanbun','line_number':611,'multiline':False]
+['text':' XXX: This is per UAX #14, but UAX #14 may change','line_number':612,'multiline':False]
+['text':' the line breaking rules about Kanbun and Bopomofo.','line_number':613,'multiline':False]
+['text':' Katakana small letters for Ainu','line_number':616,'multiline':False]
+['text':' ARMENIAN HYPHEN (for "Breaking Hyphens" of UAX#14)','line_number':624,'multiline':False]
+['text':' Tibetan chars with class = BA','line_number':629,'multiline':False]
+['text':' U+1680 OGHAM SPACE MARK','line_number':639,'multiline':False]
+['text':' This gets a single code unit of the text, without checking for surrogates','line_number':679,'multiline':False]
+['text':' (in the case of a 16-bit text buffer). That's OK if we're only checking for','line_number':680,'multiline':False]
+['text':' specific characters that are known to be BMP values.','line_number':681,'multiline':False]
+['text':' This gets a 32-bit Unicode character (codepoint), handling surrogate pairs','line_number':687,'multiline':False]
+['text':' as necessary. It must ONLY be called for 16-bit text, not 8-bit.','line_number':688,'multiline':False]
+['text':' A word of western language should not be broken. But even if the word has','line_number':703,'multiline':False]
+['text':' only ASCII characters, non-natural context words should be broken, e.g.,','line_number':704,'multiline':False]
+['text':' URL and file path. For protecting the natural words, we should use','line_number':705,'multiline':False]
+['text':' conservative breaking rules at following conditions:','line_number':706,'multiline':False]
+['text':'   1. at near the start of word','line_number':707,'multiline':False]
+['text':'   2. at near the end of word','line_number':708,'multiline':False]
+['text':'   3. at near the latest broken point','line_number':709,'multiline':False]
+['text':' CONSERVATIVE_RANGE_{LETTER,OTHER} define the 'near' in characters,','line_number':710,'multiline':False]
+['text':' which varies depending whether we are looking at a letter or a non-letter','line_number':711,'multiline':False]
+['text':' character: for non-letters, we use an extended "conservative" range.','line_number':712,'multiline':False]
+['text':' If the character at index is a letter (rather than various punctuation','line_number':721,'multiline':False]
+['text':' characters, etc) then we want a shorter "conservative" range','line_number':722,'multiline':False]
+['text':' Primarily for hyphenated word prefixes/suffixes; we add 1 to Start','line_number':728,'multiline':False]
+['text':' to get more balanced behavior (if we break off a 2-letter prefix,','line_number':729,'multiline':False]
+['text':' that means the break will actually be three letters from start of','line_number':730,'multiline':False]
+['text':' word, to include the hyphen; whereas a 2-letter suffix will be','line_number':731,'multiline':False]
+['text':' broken only two letters from end of word).','line_number':732,'multiline':False]
+['text':' This text has no-breakable space, we need to check whether the index','line_number':744,'multiline':False]
+['text':' is near it.','line_number':745,'multiline':False]
+['text':' Note that index is always larger than conservativeRange here.','line_number':747,'multiline':False]
+['text':' Note that index is always less than mLength - conservativeRange.','line_number':751,'multiline':False]
+['text':' 8-bit text: we only need to check for &nbsp;','line_number':786,'multiline':False]
+['text':' 16-bit text: handle surrogates and check for CJK as well as &nbsp;','line_number':794,'multiline':False]
+['text':' step over trailing low surrogate','line_number':809,'multiline':False]
+['text':' length of text','line_number':819,'multiline':False]
+['text':' The last character we have seen','line_number':821,'multiline':False]
+['text':' which is not U_HYPHEN','line_number':822,'multiline':False]
+['text':' if the text has CJK character, this is true.','line_number':823,'multiline':False]
+['text':' if the text has no-breakable space,','line_number':824,'multiline':False]
+['text':' this is true.','line_number':825,'multiline':False]
+['text':' True if we have seen a U_EQUAL','line_number':826,'multiline':False]
+['text':' True if we have seen a U_SLASH','line_number':827,'multiline':False]
+['text':' True if we have seen a U_BACKSLASH','line_number':828,'multiline':False]
+['text':' Don't return CLASS_OPEN/CLASS_CLOSE if aState.UseJISX4051 is FALSE.','line_number':835,'multiline':False]
+['text':' If next character is hyphen, we don't need to break between them.','line_number':838,'multiline':False]
+['text':' If prev and next characters are numeric, it may be in Math context.','line_number':840,'multiline':False]
+['text':' So, we should not break here.','line_number':841,'multiline':False]
+['text':' If one side is numeric and the other is a character, or if both sides are','line_number':845,'multiline':False]
+['text':' characters, the hyphen should be breakable.','line_number':846,'multiline':False]
+['text':' If this is immediately after same char, we should not break here.','line_number':871,'multiline':False]
+['text':' If this text has two or more (BACK)SLASHs, this may be file path or','line_number':873,'multiline':False]
+['text':' URL. Make sure to compute shouldReturn before we notify on this slash.','line_number':874,'multiline':False]
+['text':' If this is a part of the param of URL, we should break before.','line_number':887,'multiline':False]
+['text':' If this may be a separator of params of URL, we should break after.','line_number':897,'multiline':False]
+['text':' for CJK usage, we treat these as openers to allow a break before them,','line_number':902,'multiline':False]
+['text':' but otherwise treat them as normal characters because quote mark usage','line_number':903,'multiline':False]
+['text':' in various Western languages varies too much; see bug #450088','line_number':904,'multiline':False]
+['text':' discussion.','line_number':905,'multiline':False]
+['text':' No complex text character, do not try to do complex line break.','line_number':935,'multiline':False]
+['text':' (This is required for serializers. See Bug #344816.)','line_number':936,'multiline':False]
+['text':' XXX(Bug 1631371) Check if this should use a fallible operation as it','line_number':943,'multiline':False]
+['text':' pretended earlier.','line_number':944,'multiline':False]
+['text':' Per https://drafts.csswg.org/css-text-3/#valdef-word-break-keep-all:','line_number':979,'multiline':False]
+['text':' "implicit soft wrap opportunities between typographic letter units','line_number':980,'multiline':False]
+['text':' (or other typographic character units belonging to the NU, AL, AI,','line_number':981,'multiline':False]
+['text':' or ID Unicode line breaking classes [UAX14]) are suppressed..."','line_number':982,'multiline':False]
+['text':' Additional classes that should be treated similarly, but have been','line_number':987,'multiline':False]
+['text':' broken out as separate classes in newer Unicode versions:','line_number':988,'multiline':False]
+['text':' To implement word-break:break-all, we overwrite the line-break class of','line_number':1043,'multiline':False]
+['text':' alphanumeric characters so they are treated the same as ideographic.','line_number':1044,'multiline':False]
+['text':' The relevant characters will have been assigned CLASS_CHARACTER, _CLOSE,','line_number':1045,'multiline':False]
+['text':' _CLOSE_LIKE_CHARACTER, or _NUMERIC by GetClass(), but those classes also','line_number':1046,'multiline':False]
+['text':' include others that we don't want to touch here, so we re-check the','line_number':1047,'multiline':False]
+['text':' Unicode line-break class to determine which ones to modify.','line_number':1048,'multiline':False]
+['text':' Additional Japanese and Korean LB classes; CSS Text spec doesn't
+             explicitly mention these, but this appears to give expected
+             behavior (spec issue?) ','line_number':1055,'multiline':True]
+['text':' Special cases where a normally-allowed break is suppressed:','line_number':1071,'multiline':False]
+['text':' word-break:keep-all suppresses breaks between certain line-break','line_number':1073,'multiline':False]
+['text':' classes.','line_number':1074,'multiline':False]
+['text':' We also don't allow a break within a run of U+3000 chars unless','line_number':1079,'multiline':False]
+['text':' word-break:break-all is in effect.','line_number':1080,'multiline':False]
+['text':' it was a surrogate pair','line_number':1099,'multiline':False]
+['text':' For break-all, we don't need to run a dictionary-based breaking','line_number':1105,'multiline':False]
+['text':' algorithm, we just allow breaks between all grapheme clusters.','line_number':1106,'multiline':False]
+['text':' restore breakability at chunk begin, which was always set to false','line_number':1114,'multiline':False]
+['text':' by the complex line breaker','line_number':1115,'multiline':False]
+['text':' Supplementary-plane character: mark that we cannot break before the','line_number':1123,'multiline':False]
+['text':' trailing low surrogate, and advance past it.','line_number':1124,'multiline':False]
+['text':' Don't need to check additional Japanese/Korean classes in 8-bit','line_number':1157,'multiline':False]

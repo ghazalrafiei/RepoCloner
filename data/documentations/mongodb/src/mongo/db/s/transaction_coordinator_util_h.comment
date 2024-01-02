@@ -1,0 +1,143 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Upserts a document of the form:
+ *
+ * {
+ *    _id: {lsid: <lsid>, txnNumber: <txnNumber>, txnRetryCounter: <txnRetryCounter>}
+ *    participants: ["shard0000", "shard0001"]
+ * }
+ *
+ * into config.transaction_coordinators and returns the opTime of the upsert.
+ *
+ * Throws if the upsert fails or waiting for writeConcern fails.
+ *
+ * If the upsert returns a DuplicateKey error, converts it to an anonymous error, because it means a
+ * document for the (lsid, txnNumber, txnRetryCounter) exists with a different participant list.
+ ','line_number':60,'multiline':True]
+['text':'*
+     * May only be called when all of `numShards` have called `registerVote` above. Contains the
+     * commit decision of the vote, which would only be kCommit if all shards have responded with a
+     * 'commit'.
+     ','line_number':88,'multiline':True]
+['text':'*
+ * Sends prepare to all participants and keeps retrying the prepare call infinitely until a vote or
+ * one of the errors below is encountered. The future will be resolved as follows:
+ *  a) kCommit if all participants voted commit
+ *  b) kAbort if at least one participant voted abort
+ *  c) kAbort if the scheduler was interrupted with a TransactionCoordinatorReachedAbortDecision
+ *      error code
+ *  d) kAbort if one of the shards received a ShardNotFound error
+ *  e) Exception TransactionCoordinatorSteppingDown if the scheduler is interrupted with that code
+ ','line_number':111,'multiline':True]
+['text':'*
+ * If 'commitTimestamp' is boost::none, updates the document in config.transaction_coordinators
+ * for
+ *
+ * (lsid, txnNumber, txnRetryCounter) to be:
+ *
+ * {
+ *    _id: {lsid: <lsid>, txnNumber: <txnNumber>, txnRetryCounter: <txnRetryCounter>}
+ *    participants: ["shard0000", "shard0001"]
+ *    decision: "abort"
+ * }
+ *
+ * else updates the document to be:
+ *
+ * {
+ *    _id: {lsid: <lsid>, txnNumber: <txnNumber>, txnRetryCounter: <txnRetryCounter>}
+ *    participants: ["shard0000", "shard0001"]
+ *    decision: "commit"
+ *    commitTimestamp: Timestamp(xxxxxxxx, x),
+ * }
+ *
+ * Returns the opTime of the write.
+ *
+ * Throws if the update fails or waiting for writeConcern fails.
+ *
+ * If the update succeeds but did not update any document, throws an anonymous error, because it
+ * means either no document for (lsid, txnNumber, txnRetryCounter) exists, or a document exists but
+ * has a different participant list, different decision, or different commit Timestamp.
+ ','line_number':128,'multiline':True]
+['text':'*
+ * Sends commit to all shards and returns a future that will be resolved when all participants have
+ * responded with success.
+ ','line_number':164,'multiline':True]
+['text':'*
+ * Sends abort to all shards and returns a future that will be resolved when all participants have
+ * responded with success.
+ ','line_number':176,'multiline':True]
+['text':'*
+ * Deletes the document in config.transaction_coordinators for (lsid, txnNumber).
+ *
+ * Does *not* wait for the delete to be majority-committed.
+ *
+ * Throws if the update fails.
+ *
+ * If the delete succeeds but did not delete any document, throws an anonymous error, because it
+ * means either no document for (lsid, txnNumber, txnRetryCounter) exists, or a document exists but
+ * without a decision.
+ ','line_number':187,'multiline':True]
+['text':'*
+ * Reads and returns all documents in config.transaction_coordinators.
+ ','line_number':202,'multiline':True]
+['text':'','line_number':207,'multiline':False]
+['text':' These methods are used internally and are exposed for unit-testing purposes only','line_number':208,'multiline':False]
+['text':'','line_number':209,'multiline':False]
+['text':'*
+ * Sends prepare to the given shard and returns a future, which will be set with the vote.
+ *
+ * This method will retry until it receives a non-retryable response from the remote node or until
+ * the scheduler under which it is running is shut down. Because of this it can return only the
+ * following error code(s):
+ *   - TransactionCoordinatorSteppingDown
+ *   - ShardNotFound
+ ','line_number':211,'multiline':True]
+['text':' Shard id from which the response was received','line_number':221,'multiline':False]
+['text':' If set to none, this means the shard did not produce a vote','line_number':224,'multiline':False]
+['text':' Will only be set if the vote was kCommit','line_number':227,'multiline':False]
+['text':' Will only be set if the vote was kCommit','line_number':230,'multiline':False]
+['text':' Will only be set if the vote was kAbort or no value','line_number':233,'multiline':False]
+['text':'*
+ * Sends a command corresponding to a commit decision (i.e. commitTransaction or*
+ * abortTransaction) to the given shard and returns a future, which will be set with the result.
+ *
+ * Used for sendCommit and sendAbort.
+ *
+ * This method will retry until it receives a response from the remote node which can be
+ * interpreted as vote abort (e.g. NoSuchTransaction), or until the scheduler under which it is
+ * running is shut down. Because of this it can return only the following error code(s):
+ *   - TransactionCoordinatorSteppingDown
+ ','line_number':245,'multiline':True]
+['text':'*
+ * Returns a string representation of the transaction id represented by the given session id and
+ * transaction number.
+ ','line_number':270,'multiline':True]
+['text':' namespace txn','line_number':277,'multiline':False]
+['text':' namespace mongo','line_number':278,'multiline':False]

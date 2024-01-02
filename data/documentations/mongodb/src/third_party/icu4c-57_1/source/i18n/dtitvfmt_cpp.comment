@@ -1,0 +1,340 @@
+['text':'******************************************************************************
+* Copyright (C) 2008-2016, International Business Machines Corporation and
+* others. All Rights Reserved.
+*******************************************************************************
+*
+* File DTITVFMT.CPP 
+*
+*******************************************************************************
+','line_number':1,'multiline':True]
+['text':' for 'typeid' to work','line_number':11,'multiline':False]
+['text':'TODO: put in compilation','line_number':17,'multiline':False]
+['text':'#define DTITVFMT_DEBUG 1','line_number':18,'multiline':False]
+['text':'yMMMMEEEEd','line_number':44,'multiline':False]
+['text':'yMMMMd','line_number':46,'multiline':False]
+['text':'yMMMd','line_number':48,'multiline':False]
+['text':'yMd','line_number':50,'multiline':False]
+['text':' latestFirst:','line_number':57,'multiline':False]
+['text':' earliestFirst:','line_number':60,'multiline':False]
+['text':' Mutex, protects access to fDateFormat, fFromCalendar and fToCalendar. ','line_number':66,'multiline':False]
+['text':'        Needed because these data members are modified by const methods of DateIntervalFormat.','line_number':67,'multiline':False]
+['text':' TODO: should operator == ignore the From and ToCalendar? They hold transient values during','line_number':221,'multiline':False]
+['text':'       formatting of a DateInterval.','line_number':222,'multiline':False]
+['text':' not support different calendar types and time zones','line_number':309,'multiline':False]
+['text':'if ( fromCalendar.getType() != toCalendar.getType() ) {','line_number':310,'multiline':False]
+['text':' First, find the largest different calendar field.','line_number':316,'multiline':False]
+['text':' ignore the millisecond etc. small fields' difference.
+         * use single date when all the above are the same.
+         ','line_number':348,'multiline':True]
+['text':' following call should not set wrong status,','line_number':355,'multiline':False]
+['text':' all the pass-in fields are valid till here','line_number':356,'multiline':False]
+['text':' the largest different calendar field is small than
+             * the smallest calendar field in pattern,
+             * return single date format.
+             ','line_number':364,'multiline':True]
+['text':' If the first part in interval pattern is empty, ','line_number':372,'multiline':False]
+['text':' the 2nd part of it saves the full-pattern used in fall-back.','line_number':373,'multiline':False]
+['text':' For a 'real' interval pattern, the first part will never be empty.','line_number':374,'multiline':False]
+['text':' fall back','line_number':376,'multiline':False]
+['text':' break the interval pattern into 2 parts,','line_number':393,'multiline':False]
+['text':' first part should not be empty, ','line_number':394,'multiline':False]
+['text':' source ','line_number':415,'multiline':True]
+['text':' result ','line_number':416,'multiline':True]
+['text':' parse_pos ','line_number':417,'multiline':True]
+['text':' parseObject(const UnicodeString&, Formattable&, UErrorCode&) const','line_number':418,'multiline':False]
+['text':' will set status as U_INVALID_FORMAT_ERROR if ','line_number':419,'multiline':False]
+['text':' parse_pos is still 0','line_number':420,'multiline':False]
+['text':' Delete patterns that get reset by initializePattern','line_number':438,'multiline':False]
+['text':' The fDateFormat has the master calendar for the DateIntervalFormat and has','line_number':465,'multiline':False]
+['text':' ownership of any adopted TimeZone; fFromCalendar and fToCalendar are internal','line_number':466,'multiline':False]
+['text':' work clones of that calendar (and should not also be given ownership of the','line_number':467,'multiline':False]
+['text':' adopted TimeZone).','line_number':468,'multiline':False]
+['text':' The fDateFormat has the master calendar for the DateIntervalFormat;','line_number':483,'multiline':False]
+['text':' fFromCalendar and fToCalendar are internal work clones of that calendar.','line_number':484,'multiline':False]
+['text':' If fDateFormat is NULL (unexpected), create default timezone.','line_number':500,'multiline':False]
+['text':' safe to delete f, although nothing acutally is saved','line_number':547,'multiline':False]
+['text':'* 
+ * Initialize interval patterns locale to this formatter
+ * 
+ * This code is a bit complicated since 
+ * 1. the interval patterns saved in resource bundle files are interval
+ *    patterns based on date or time only.
+ *    It does not have interval patterns based on both date and time.
+ *    Interval patterns on both date and time are algorithm generated.
+ *
+ *    For example, it has interval patterns on skeleton "dMy" and "hm",
+ *    but it does not have interval patterns on skeleton "dMyhm".
+ *    
+ *    The rule to genearte interval patterns for both date and time skeleton are
+ *    1) when the year, month, or day differs, concatenate the two original 
+ *    expressions with a separator between, 
+ *    For example, interval pattern from "Jan 10, 2007 10:10 am" 
+ *    to "Jan 11, 2007 10:10am" is 
+ *    "Jan 10, 2007 10:10 am - Jan 11, 2007 10:10am" 
+ *
+ *    2) otherwise, present the date followed by the range expression 
+ *    for the time.
+ *    For example, interval pattern from "Jan 10, 2007 10:10 am" 
+ *    to "Jan 10, 2007 11:10am" is 
+ *    "Jan 10, 2007 10:10 am - 11:10am" 
+ *
+ * 2. even a pattern does not request a certion calendar field,
+ *    the interval pattern needs to include such field if such fields are
+ *    different between 2 dates.
+ *    For example, a pattern/skeleton is "hm", but the interval pattern 
+ *    includes year, month, and date when year, month, and date differs.
+ * 
+ * @param status          output param set to success/failure code on exit
+ * @stable ICU 4.0 
+ ','line_number':556,'multiline':True]
+['text':' fSkeleton is already set by createDateIntervalInstance()','line_number':607,'multiline':False]
+['text':' or by createInstance(UnicodeString skeleton, .... )','line_number':608,'multiline':False]
+['text':' initialize the fIntervalPattern ordering','line_number':616,'multiline':False]
+['text':' Check whether the skeleton is a combination of date and time.
+     * For the complication reason 1 explained above.
+     ','line_number':622,'multiline':True]
+['text':' the difference between time skeleton and normalizedTimeSkeleton are:
+     * 1. (Formerly, normalized time skeleton folded 'H' to 'h'; no longer true)
+     * 2. 'a' is omitted in normalized time skeleton.
+     * 3. there is only one appearance for 'h' or 'H', 'm','v', 'z' in normalized 
+     *    time skeleton
+     *
+     * The difference between date skeleton and normalizedDateSkeleton are:
+     * 1. both 'y' and 'd' appear only once in normalizeDateSkeleton
+     * 2. 'E' and 'EE' are normalized into 'EEE'
+     * 3. 'MM' is normalized into 'M'
+     ','line_number':631,'multiline':True]
+['text':' move this up here since we need it for fallbacks','line_number':654,'multiline':False]
+['text':' Need the Date/Time pattern for concatenation of the date','line_number':656,'multiline':False]
+['text':' with the time interval.','line_number':657,'multiline':False]
+['text':' The date/time pattern ( such as {0} {1} ) is saved in','line_number':658,'multiline':False]
+['text':' calendar, that is why need to get the CalendarData here.','line_number':659,'multiline':False]
+['text':' for skeletons with seconds, found is false and we enter this block','line_number':686,'multiline':False]
+['text':' use fallback','line_number':688,'multiline':False]
+['text':' TODO: if user asks "m"(minute), but "d"(day) differ','line_number':689,'multiline':False]
+['text':' prefix with yMd','line_number':692,'multiline':False]
+['text':' for fall back interval patterns,','line_number':699,'multiline':False]
+['text':' the first part of the pattern is empty,','line_number':700,'multiline':False]
+['text':' the second part of the pattern is the full-pattern','line_number':701,'multiline':False]
+['text':' should be used in fall-back.','line_number':702,'multiline':False]
+['text':' TODO: fall back','line_number':707,'multiline':False]
+['text':' TODO: fall back','line_number':710,'multiline':False]
+['text':' end of skeleton not found','line_number':713,'multiline':False]
+['text':' interval patterns for skeleton are found in resource ','line_number':714,'multiline':False]
+['text':' done','line_number':716,'multiline':False]
+['text':' prefix with yMd','line_number':718,'multiline':False]
+['text':' for fall back interval patterns,','line_number':725,'multiline':False]
+['text':' the first part of the pattern is empty,','line_number':726,'multiline':False]
+['text':' the second part of the pattern is the full-pattern','line_number':727,'multiline':False]
+['text':' should be used in fall-back.','line_number':728,'multiline':False]
+['text':' if both present,
+         * 1) when the year, month, or day differs, 
+         * concatenate the two original expressions with a separator between, 
+         * 2) otherwise, present the date followed by the 
+         * range expression for the time. 
+         ','line_number':733,'multiline':True]
+['text':'
+         * 1) when the year, month, or day differs, 
+         * concatenate the two original expressions with a separator between, 
+         ','line_number':739,'multiline':True]
+['text':' if field exists, use fall back','line_number':743,'multiline':False]
+['text':' prefix skeleton with 'd'','line_number':746,'multiline':False]
+['text':' then prefix skeleton with 'M'','line_number':751,'multiline':False]
+['text':' then prefix skeleton with 'y'','line_number':756,'multiline':False]
+['text':'
+         * 2) otherwise, present the date followed by the 
+         * range expression for the time. 
+         ','line_number':761,'multiline':True]
+['text':' earlier failure getting dateTimeFormat','line_number':767,'multiline':False]
+['text':' dateSkeleton follows the sequence of y*M*E*d*','line_number':788,'multiline':False]
+['text':' timeSkeleton follows the sequence of hm*[v|z]?','line_number':789,'multiline':False]
+['text':' 'a' is implicitly handled ','line_number':840,'multiline':False]
+['text':' generate normalized form for date','line_number':877,'multiline':True]
+['text':' generate normalized form for time ','line_number':907,'multiline':True]
+['text':'*
+ * Generate date or time interval pattern from resource,
+ * and set them into the interval pattern locale to this formatter.
+ *
+ * It needs to handle the following: 
+ * 1. need to adjust field width.
+ *    For example, the interval patterns saved in DateIntervalInfo
+ *    includes "dMMMy", but not "dMMMMy".
+ *    Need to get interval patterns for dMMMMy from dMMMy.
+ *    Another example, the interval patterns saved in DateIntervalInfo
+ *    includes "hmv", but not "hmz".
+ *    Need to get interval patterns for "hmz' from 'hmv'
+ *
+ * 2. there might be no pattern for 'y' differ for skeleton "Md",
+ *    in order to get interval patterns for 'y' differ,
+ *    need to look for it from skeleton 'yMd'
+ *
+ * @param dateSkeleton   normalized date skeleton
+ * @param timeSkeleton   normalized time skeleton
+ * @return               whether the resource is found for the skeleton.
+ *                       TRUE if interval pattern found for the skeleton,
+ *                       FALSE otherwise.
+ * @stable ICU 4.0
+ ','line_number':926,'multiline':True]
+['text':' if both date and time skeleton present,','line_number':955,'multiline':False]
+['text':' the final interval pattern might include time interval patterns','line_number':956,'multiline':False]
+['text':' ( when, am_pm, hour, minute differ ),','line_number':957,'multiline':False]
+['text':' but not date interval patterns ( when year, month, day differ ).','line_number':958,'multiline':False]
+['text':' For year/month/day differ, it falls back to fall-back pattern.','line_number':959,'multiline':False]
+['text':' interval patterns for skeleton "dMMMy" (but not "dMMMMy") 
+     * are defined in resource,
+     * interval patterns for skeleton "dMMMMy" are calculated by
+     * 1. get the best match skeleton for "dMMMMy", which is "dMMMy"
+     * 2. get the interval patterns for "dMMMy",
+     * 3. extend "MMM" to "MMMM" in above interval patterns for "dMMMMy" 
+     * getBestSkeleton() is step 1.
+     ','line_number':966,'multiline':True]
+['text':' best skeleton, and the difference information','line_number':974,'multiline':False]
+['text':' best skeleton could be NULL.
+       For example: in "ca" resource file,
+       interval format is defined as following
+           intervalFormats{
+                fallback{"{0} - {1}"}
+            }
+       there is no skeletons/interval patterns defined,
+       and the best skeleton match could be NULL
+     ','line_number':978,'multiline':True]
+['text':' Set patterns for fallback use, need to do this','line_number':991,'multiline':False]
+['text':' before returning if differenceInfo == -1','line_number':992,'multiline':False]
+['text':' difference:','line_number':1005,'multiline':False]
+['text':' 0 means the best matched skeleton is the same as input skeleton','line_number':1006,'multiline':False]
+['text':' 1 means the fields are the same, but field width are different','line_number':1007,'multiline':False]
+['text':' 2 means the only difference between fields are v/z,','line_number':1008,'multiline':False]
+['text':' -1 means there are other fields difference ','line_number':1009,'multiline':False]
+['text':' (this will happen, for instance, if the supplied skeleton has seconds,','line_number':1010,'multiline':False]
+['text':'  but no skeletons in the intervalFormats data do)','line_number':1011,'multiline':False]
+['text':' skeleton has different fields, not only  v/z difference','line_number':1013,'multiline':False]
+['text':' only has date skeleton','line_number':1020,'multiline':False]
+['text':' for fall back interval patterns,','line_number':1067,'multiline':False]
+['text':' the first part of the pattern is empty,','line_number':1068,'multiline':False]
+['text':' the second part of the pattern is the full-pattern','line_number':1069,'multiline':False]
+['text':' should be used in fall-back.','line_number':1070,'multiline':False]
+['text':' following should not set any wrong status.','line_number':1072,'multiline':False]
+['text':' check for "latestFirst:" or "earliestFirst:" prefix','line_number':1102,'multiline':False]
+['text':'*
+ * Generate interval pattern from existing resource
+ *
+ * It not only save the interval patterns,
+ * but also return the extended skeleton and its best match skeleton.
+ *
+ * @param field           largest different calendar field
+ * @param skeleton        skeleton
+ * @param bestSkeleton    the best match skeleton which has interval pattern
+ *                        defined in resource
+ * @param differenceInfo  the difference between skeleton and best skeleton
+ *         0 means the best matched skeleton is the same as input skeleton
+ *         1 means the fields are the same, but field width are different
+ *         2 means the only difference between fields are v/z,
+ *        -1 means there are other fields difference 
+ *
+ * @param extendedSkeleton      extended skeleton
+ * @param extendedBestSkeleton  extended best match skeleton
+ * @return                      whether the interval pattern is found 
+ *                              through extending skeleton or not.
+ *                              TRUE if interval pattern is found by
+ *                              extending skeleton, FALSE otherwise.
+ * @stable ICU 4.0
+ ','line_number':1135,'multiline':True]
+['text':' following getIntervalPattern() should not generate error status','line_number':1167,'multiline':False]
+['text':' single date','line_number':1171,'multiline':False]
+['text':' do nothing, format will handle it','line_number':1173,'multiline':False]
+['text':' for 24 hour system, interval patterns in resource file','line_number':1177,'multiline':False]
+['text':' might not include pattern when am_pm differ, ','line_number':1178,'multiline':False]
+['text':' which should be the same as hour differ.','line_number':1179,'multiline':False]
+['text':' add it here for simplicity','line_number':1180,'multiline':False]
+['text':' else, looking for pattern when 'y' differ for 'dMMMM' skeleton,','line_number':1188,'multiline':False]
+['text':' first, get best match pattern "MMMd",','line_number':1189,'multiline':False]
+['text':' since there is no pattern for 'y' differs for skeleton 'MMMd',','line_number':1190,'multiline':False]
+['text':' need to look for it from skeleton 'yMMMd',','line_number':1191,'multiline':False]
+['text':' if found, adjust field width in interval pattern from','line_number':1192,'multiline':False]
+['text':' "MMM" to "MMMM".','line_number':1193,'multiline':False]
+['text':' for example, looking for patterns when 'y' differ for','line_number':1200,'multiline':False]
+['text':' skeleton "MMMM". ','line_number':1201,'multiline':False]
+['text':' if there is no skeleton "yMMMM" defined,','line_number':1204,'multiline':False]
+['text':' look for the best match skeleton, for example: "yMMM" ','line_number':1205,'multiline':False]
+['text':' repeatedPattern used to record whether a pattern has already seen.
+       It is a pattern applies to first calendar if it is first time seen,
+       otherwise, it is a pattern applies to the second calendar
+     ','line_number':1239,'multiline':True]
+['text':'       A   B   C   D   E   F   G   H   I   J   K   L   M   N   O','line_number':1245,'multiline':False]
+['text':'   P   Q   R   S   T   U   V   W   X   Y   Z','line_number':1247,'multiline':False]
+['text':'       a   b   c   d   e   f   g   h   i   j   k   l   m   n   o','line_number':1249,'multiline':False]
+['text':'   p   q   r   s   t   u   v   w   x   y   z','line_number':1251,'multiline':False]
+['text':' loop through the pattern string character by character looking for
+     * the first repeated pattern letter, which breaks the interval pattern
+     * into 2 parts. 
+     ','line_number':1257,'multiline':True]
+['text':' check the repeativeness of pattern letter','line_number':1267,'multiline':False]
+['text':' Consecutive single quotes are a single quote literal,','line_number':1278,'multiline':False]
+['text':' either outside of quotes or between quotes','line_number':1279,'multiline':False]
+['text':''a'','line_number':1287,'multiline':True]
+['text':''z'','line_number':1287,'multiline':True]
+['text':''A'','line_number':1288,'multiline':True]
+['text':''Z'','line_number':1288,'multiline':True]
+['text':' ch is a date-time pattern character ','line_number':1289,'multiline':False]
+['text':' check last pattern char, distinguish','line_number':1294,'multiline':False]
+['text':' "dd MM" ( no repetition ), ','line_number':1295,'multiline':False]
+['text':' "d-d"(last char repeated ), and ','line_number':1296,'multiline':False]
+['text':' "d-d MM" ( repetition found )','line_number':1297,'multiline':False]
+['text':' has {0} and {1} in it','line_number':1310,'multiline':False]
+['text':' pattern and pos corresponding to {0}','line_number':1311,'multiline':False]
+['text':' pattern and pos corresponding to {1}','line_number':1312,'multiline':False]
+['text':' length of "{0}" or "{1}"','line_number':1319,'multiline':False]
+['text':' here index1 >= 3','line_number':1325,'multiline':False]
+['text':' adjust for pat0 replacing {0}','line_number':1326,'multiline':False]
+['text':' here index0 >= 3','line_number':1335,'multiline':False]
+['text':' adjust for pat1 replacing {1}','line_number':1336,'multiline':False]
+['text':' new','line_number':1346,'multiline':False]
+['text':' for saving the pattern in fDateFormat','line_number':1353,'multiline':False]
+['text':' the fall back','line_number':1355,'multiline':False]
+['text':' save current pattern, restore later','line_number':1357,'multiline':False]
+['text':' fallbackRange has just the time range, need to format the date part and combine that','line_number':1373,'multiline':False]
+['text':' {0} is time range','line_number':1381,'multiline':False]
+['text':' {1} is single date portion','line_number':1382,'multiline':False]
+['text':' restore full pattern','line_number':1391,'multiline':False]
+['text':'       A   B   C   D   E   F   G   H   I   J   K   L   M   N   O','line_number':1419,'multiline':False]
+['text':'   P   Q   R   S   T   U   V   W   X   Y   Z','line_number':1421,'multiline':False]
+['text':'       a   b   c   d   e   f   g   h   i   j   k   l   m   n   o','line_number':1423,'multiline':False]
+['text':'   p   q   r   s   t   u   v   w   x   y   z','line_number':1425,'multiline':False]
+['text':'       A   B   C   D   E   F   G   H   I   J   K   L   M   N   O','line_number':1431,'multiline':False]
+['text':'   P   Q   R   S   T   U   V   W   X   Y   Z','line_number':1433,'multiline':False]
+['text':'       a   b   c   d   e   f   g   h   i   j   k   l   m   n   o','line_number':1435,'multiline':False]
+['text':'   p   q   r   s   t   u   v   w   x   y   z','line_number':1437,'multiline':False]
+['text':' v ','line_number':1444,'multiline':True]
+['text':' z ','line_number':1445,'multiline':True]
+['text':' loop through the pattern string character by character ','line_number':1454,'multiline':False]
+['text':' check the repeativeness of pattern letter','line_number':1460,'multiline':False]
+['text':' there is no "L" (always be "M") in skeleton, ','line_number':1463,'multiline':False]
+['text':' but there is "L" in pattern.','line_number':1464,'multiline':False]
+['text':' for skeleton "M+", the pattern might be "...L..." ','line_number':1465,'multiline':False]
+['text':' Consecutive single quotes are a single quote literal,','line_number':1482,'multiline':False]
+['text':' either outside of quotes or between quotes','line_number':1483,'multiline':False]
+['text':''a'','line_number':1490,'multiline':True]
+['text':''z'','line_number':1490,'multiline':True]
+['text':''A'','line_number':1491,'multiline':True]
+['text':''Z'','line_number':1491,'multiline':True]
+['text':' ch is a date-time pattern character ','line_number':1492,'multiline':False]
+['text':' last item','line_number':1498,'multiline':False]
+['text':' check the repeativeness of pattern letter','line_number':1499,'multiline':False]
+['text':' there is no "L" (always be "M") in skeleton, ','line_number':1502,'multiline':False]
+['text':' but there is "L" in pattern.','line_number':1503,'multiline':False]
+['text':' for skeleton "M+", the pattern might be "...L..." ','line_number':1504,'multiline':False]
+['text':' following should not set wrong status','line_number':1526,'multiline':False]
+['text':' else: fall back','line_number':1544,'multiline':False]
+['text':' it should not happen if the interval format defined is valid','line_number':1545,'multiline':False]
+['text':'GyM','line_number':1553,'multiline':True]
+['text':'wWd','line_number':1554,'multiline':True]
+['text':'DEF','line_number':1555,'multiline':True]
+['text':'ahH','line_number':1556,'multiline':True]
+['text':'msS','line_number':1557,'multiline':True]
+['text':' MINUTE, SECOND, MILLISECOND','line_number':1557,'multiline':False]
+['text':'z.Y','line_number':1558,'multiline':True]
+['text':' ZONE_OFFSET, DST_OFFSET, YEAR_WOY,','line_number':1558,'multiline':False]
+['text':'eug','line_number':1559,'multiline':True]
+['text':' DOW_LOCAL, EXTENDED_YEAR, JULIAN_DAY,','line_number':1559,'multiline':False]
+['text':'A..','line_number':1560,'multiline':True]
+['text':' MILLISECONDS_IN_DAY, IS_LEAP_MONTH, FIELD_COUNT','line_number':1560,'multiline':False]

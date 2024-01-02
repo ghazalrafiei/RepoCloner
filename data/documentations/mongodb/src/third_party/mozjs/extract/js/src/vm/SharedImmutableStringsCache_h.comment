@@ -1,0 +1,151 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' for placement new','line_number':14,'multiline':False]
+['text':' std::move','line_number':15,'multiline':False]
+['text':'*
+ * The `SharedImmutableStringsCache` allows safely sharing and deduplicating
+ * immutable strings (either `const char*` [any encoding, not restricted to
+ * only Latin-1 or only UTF-8] or `const char16_t*`) between threads.
+ *
+ * The locking mechanism is dead-simple and coarse grained: a single lock guards
+ * all of the internal table itself, the table's entries, and the entries'
+ * reference counts. It is only safe to perform any mutation on the cache or any
+ * data stored within the cache when this lock is acquired.
+ ','line_number':31,'multiline':True]
+['text':'*
+   * Get the canonical, shared, and de-duplicated version of the given `const
+   * char*` string. If such a string does not exist, call `intoOwnedChars` and
+   * add the string it returns to the cache.
+   *
+   * `intoOwnedChars` must create an owned version of the given string, and
+   * must have one of the following types:
+   *
+   *     JS::UniqueChars   intoOwnedChars();
+   *     JS::UniqueChars&& intoOwnedChars();
+   *
+   * It can be used by callers to elide a copy of the string when it is safe
+   * to give up ownership of the lookup string to the cache. It must return a
+   * `nullptr` on failure.
+   *
+   * On success, `Some` is returned. In the case of OOM failure, `Nothing` is
+   * returned.
+   ','line_number':50,'multiline':True]
+['text':'*
+   * Take ownership of the given `chars` and return the canonical, shared and
+   * de-duplicated version.
+   *
+   * On success, `Some` is returned. In the case of OOM failure, `Nothing` is
+   * returned.
+   ','line_number':72,'multiline':True]
+['text':'*
+   * Do not take ownership of the given `chars`. Return the canonical, shared
+   * and de-duplicated version. If there is no extant shared version of
+   * `chars`, make a copy and insert it into the cache.
+   *
+   * On success, `Some` is returned. In the case of OOM failure, `Nothing` is
+   * returned.
+   ','line_number':82,'multiline':True]
+['text':'*
+   * Get the canonical, shared, and de-duplicated version of the given `const
+   * char16_t*` string. If such a string does not exist, call `intoOwnedChars`
+   * and add the string it returns to the cache.
+   *
+   * `intoOwnedTwoByteChars` must create an owned version of the given string,
+   * and must have one of the following types:
+   *
+   *     JS::UniqueTwoByteChars   intoOwnedTwoByteChars();
+   *     JS::UniqueTwoByteChars&& intoOwnedTwoByteChars();
+   *
+   * It can be used by callers to elide a copy of the string when it is safe
+   * to give up ownership of the lookup string to the cache. It must return a
+   * `nullptr` on failure.
+   *
+   * On success, `Some` is returned. In the case of OOM failure, `Nothing` is
+   * returned.
+   ','line_number':93,'multiline':True]
+['text':'*
+   * Take ownership of the given `chars` and return the canonical, shared and
+   * de-duplicated version.
+   *
+   * On success, `Some` is returned. In the case of OOM failure, `Nothing` is
+   * returned.
+   ','line_number':116,'multiline':True]
+['text':'*
+   * Do not take ownership of the given `chars`. Return the canonical, shared
+   * and de-duplicated version. If there is no extant shared version of
+   * `chars`, then make a copy and insert it into the cache.
+   *
+   * On success, `Some` is returned. In the case of OOM failure, `Nothing` is
+   * returned.
+   ','line_number':126,'multiline':True]
+['text':' Size of the table.','line_number':143,'multiline':False]
+['text':' Sizes of the strings and their boxes.','line_number':146,'multiline':False]
+['text':'*
+   * Construct a new cache of shared, immutable strings. Returns
+   * `mozilla::Nothing` on out of memory failure.
+   ','line_number':157,'multiline':True]
+['text':' ~ExclusiveData takes the lock, so be sure to drop the lock before','line_number':200,'multiline':False]
+['text':' attempting to destroy the inner.','line_number':201,'multiline':False]
+['text':'*
+   * Purge the cache of all refcount == 0 entries.
+   ','line_number':214,'multiline':True]
+['text':' The chars should be eagerly freed when refcount reaches zero.','line_number':223,'multiline':False]
+['text':' The chars should exist as long as the refcount is non-zero.','line_number':227,'multiline':False]
+['text':'*
+     * A structure used when querying for a `const char*` string in the cache.
+     ','line_number':277,'multiline':True]
+['text':' For strings longer than SHORT_STRING_MAX_LENGTH, we only hash the','line_number':302,'multiline':False]
+['text':' first HASH_CHUNK_LENGTH and last HASH_CHUNK_LENGTH characters in the','line_number':303,'multiline':False]
+['text':' string. This increases the risk of collisions, but in practice it','line_number':304,'multiline':False]
+['text':' should be rare, and it yields a large speedup for hashing long','line_number':305,'multiline':False]
+['text':' strings.','line_number':306,'multiline':False]
+['text':' The `Inner` struct contains the actual cached contents, and is reference','line_number':334,'multiline':False]
+['text':' counted and shared between all `SharedImmutableStringsCache` and','line_number':335,'multiline':False]
+['text':' `SharedImmutable[TwoByte]String` holders.','line_number':336,'multiline':False]
+['text':'*
+ * The `SharedImmutableString` class holds a reference to a `const char*` string
+ * from the `SharedImmutableStringsCache` and releases the reference upon
+ * destruction.
+ ','line_number':359,'multiline':True]
+['text':'*
+   * `SharedImmutableString`s are move-able. It is an error to use a
+   * `SharedImmutableString` after it has been moved.
+   ','line_number':373,'multiline':True]
+['text':'*
+   * Create another shared reference to the underlying string.
+   ','line_number':381,'multiline':True]
+['text':' If you want a copy, take one explicitly with `clone`!','line_number':386,'multiline':False]
+['text':'*
+   * Get a raw pointer to the underlying string. It is only safe to use the
+   * resulting pointer while this `SharedImmutableString` exists.
+   ','line_number':392,'multiline':True]
+['text':'*
+   * Get the length of the underlying string.
+   ','line_number':403,'multiline':True]
+['text':'*
+ * The `SharedImmutableTwoByteString` class holds a reference to a `const
+ * char16_t*` string from the `SharedImmutableStringsCache` and releases the
+ * reference upon destruction.
+ ','line_number':414,'multiline':True]
+['text':' If a `char*` string and `char16_t*` string happen to have the same bytes,','line_number':422,'multiline':False]
+['text':' the bytes will be shared but handed out as different types.','line_number':423,'multiline':False]
+['text':'*
+   * `SharedImmutableTwoByteString`s are move-able. It is an error to use a
+   * `SharedImmutableTwoByteString` after it has been moved.
+   ','line_number':431,'multiline':True]
+['text':'*
+   * Create another shared reference to the underlying string.
+   ','line_number':439,'multiline':True]
+['text':' If you want a copy, take one explicitly with `clone`!','line_number':444,'multiline':False]
+['text':'*
+   * Get a raw pointer to the underlying string. It is only safe to use the
+   * resulting pointer while this `SharedImmutableTwoByteString` exists.
+   ','line_number':448,'multiline':True]
+['text':'*
+   * Get the length of the underlying string.
+   ','line_number':456,'multiline':True]
+['text':' namespace js','line_number':462,'multiline':False]
+['text':' vm_SharedImmutableStringsCache_h','line_number':464,'multiline':False]

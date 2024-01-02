@@ -1,0 +1,953 @@
+['text':'************************************************
+*      Perl-Compatible Regular Expressions       *
+************************************************','line_number':1,'multiline':True]
+['text':' PCRE is a library of functions to support regular expressions whose syntax
+and semantics are as close as possible to those of the Perl 5 language.
+
+                       Written by Philip Hazel
+     Original API code Copyright (c) 1997-2012 University of Cambridge
+          New API code Copyright (c) 2016-2022 University of Cambridge
+
+-----------------------------------------------------------------------------
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the name of the University of Cambridge nor the names of its
+      contributors may be used to endorse or promote products derived from
+      this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+-----------------------------------------------------------------------------
+','line_number':5,'multiline':True]
+['text':' This module contains the external function pcre2_dfa_match(), which is an
+alternative matching function that uses a sort of DFA algorithm (not a true
+FSM). This is NOT Perl-compatible, but it has advantages in certain
+applications. ','line_number':42,'multiline':True]
+['text':' NOTE ABOUT PERFORMANCE: A user of this function sent some code that improved
+the performance of his patterns greatly. I could not use it as it stood, as it
+was not thread safe, and made assumptions about pattern sizes. Also, it caused
+test 7 to loop, and test 9 to crash with a segfault.
+
+The issue is the check for duplicate states, which is done by a simple linear
+search up the state list. (Grep for "duplicate" below to find the code.) For
+many patterns, there will never be many states active at one time, so a simple
+linear search is fine. In patterns that have many active states, it might be a
+bottleneck. The suggested code used an indexing scheme to remember which states
+had previously been used for each character, and avoided the linear search when
+it knew there was no chance of a duplicate. This was implemented when adding
+states to the state lists.
+
+I wrote some thread-safe, not-limited code to try something similar at the time
+of checking for duplicates (instead of when adding states), using index vectors
+on the stack. It did give a 13% improvement with one specially constructed
+pattern for certain subject strings, but on other strings and on many of the
+simpler patterns in the test suite it did worse. The major problem, I think,
+was the extra time to initialize the index. This had to be done for each call
+of internal_dfa_match(). (The supplied patch used a static vector, initialized
+only once - I suspect this was the cause of the problems with the tests.)
+
+Overall, I concluded that the gains in some cases did not outweigh the losses
+in others, so I abandoned this code. ','line_number':48,'multiline':True]
+['text':' Block containing newline information ','line_number':79,'multiline':True]
+['text':' Field containing processed string start ','line_number':80,'multiline':True]
+['text':' Field containing processed string end ','line_number':81,'multiline':True]
+['text':'************************************************
+*      Code parameters and static tables         *
+************************************************','line_number':92,'multiline':True]
+['text':' These are offsets that are used to turn the OP_TYPESTAR and friends opcodes
+into others, under special conditions. A gap of 20 between the blocks should be
+enough. The resulting opcodes don't have to be less than 256 because they are
+never stored, so we push them well clear of the normal opcodes. ','line_number':96,'multiline':True]
+['text':' This table identifies those opcodes that are followed immediately by a
+character that is to be tested in some way. This makes it possible to
+centralize the loading of these characters. In the case of Type * etc, the
+"character" is the opcode for \D, \d, \S, \s, \W, or \w, which will always be a
+small value. Non-zero values in the table are the offsets from the opcode where
+the character is to be found. ***NOTE*** If the start of this table is
+modified, the three tables that follow must also be modified. ','line_number':108,'multiline':True]
+['text':' End                                    ','line_number':117,'multiline':True]
+['text':' \A, \G, \K, \B, \b                     ','line_number':118,'multiline':True]
+['text':' \D, \d, \S, \s, \W, \w                 ','line_number':119,'multiline':True]
+['text':' Any, AllAny, Anybyte                   ','line_number':120,'multiline':True]
+['text':' \P, \p                                 ','line_number':121,'multiline':True]
+['text':' \R, \H, \h, \V, \v                     ','line_number':122,'multiline':True]
+['text':' \X                                     ','line_number':123,'multiline':True]
+['text':' \Z, \z, $, $M, ^, ^M                   ','line_number':124,'multiline':True]
+['text':' Char                                   ','line_number':125,'multiline':True]
+['text':' Chari                                  ','line_number':126,'multiline':True]
+['text':' not                                    ','line_number':127,'multiline':True]
+['text':' noti                                   ','line_number':128,'multiline':True]
+['text':' Positive single-char repeats                                          ','line_number':129,'multiline':True]
+['text':' *, *?, +, +?, ?, ??                    ','line_number':130,'multiline':True]
+['text':' upto, minupto                          ','line_number':131,'multiline':True]
+['text':' exact                                  ','line_number':132,'multiline':True]
+['text':' *+, ++, ?+, upto+                      ','line_number':133,'multiline':True]
+['text':' *I, *?I, +I, +?I, ?I, ??I              ','line_number':134,'multiline':True]
+['text':' upto I, minupto I                      ','line_number':135,'multiline':True]
+['text':' exact I                                ','line_number':136,'multiline':True]
+['text':' *+I, ++I, ?+I, upto+I                  ','line_number':137,'multiline':True]
+['text':' Negative single-char repeats - only for chars < 256                   ','line_number':138,'multiline':True]
+['text':' NOT *, *?, +, +?, ?, ??                ','line_number':139,'multiline':True]
+['text':' NOT upto, minupto                      ','line_number':140,'multiline':True]
+['text':' NOT exact                              ','line_number':141,'multiline':True]
+['text':' NOT *+, ++, ?+, upto+                  ','line_number':142,'multiline':True]
+['text':' NOT *I, *?I, +I, +?I, ?I, ??I          ','line_number':143,'multiline':True]
+['text':' NOT upto I, minupto I                  ','line_number':144,'multiline':True]
+['text':' NOT exact I                            ','line_number':145,'multiline':True]
+['text':' NOT *+I, ++I, ?+I, upto+I              ','line_number':146,'multiline':True]
+['text':' Positive type repeats                                                 ','line_number':147,'multiline':True]
+['text':' Type *, *?, +, +?, ?, ??               ','line_number':148,'multiline':True]
+['text':' Type upto, minupto                     ','line_number':149,'multiline':True]
+['text':' Type exact                             ','line_number':150,'multiline':True]
+['text':' Type *+, ++, ?+, upto+                 ','line_number':151,'multiline':True]
+['text':' Character class & ref repeats                                         ','line_number':152,'multiline':True]
+['text':' *, *?, +, +?, ?, ??                    ','line_number':153,'multiline':True]
+['text':' CRRANGE, CRMINRANGE                    ','line_number':154,'multiline':True]
+['text':' Possessive *+, ++, ?+, CRPOSRANGE      ','line_number':155,'multiline':True]
+['text':' CLASS                                  ','line_number':156,'multiline':True]
+['text':' NCLASS                                 ','line_number':157,'multiline':True]
+['text':' XCLASS - variable length               ','line_number':158,'multiline':True]
+['text':' REF                                    ','line_number':159,'multiline':True]
+['text':' REFI                                   ','line_number':160,'multiline':True]
+['text':' DNREF                                  ','line_number':161,'multiline':True]
+['text':' DNREFI                                 ','line_number':162,'multiline':True]
+['text':' RECURSE                                ','line_number':163,'multiline':True]
+['text':' CALLOUT                                ','line_number':164,'multiline':True]
+['text':' CALLOUT_STR                            ','line_number':165,'multiline':True]
+['text':' Alt                                    ','line_number':166,'multiline':True]
+['text':' Ket                                    ','line_number':167,'multiline':True]
+['text':' KetRmax                                ','line_number':168,'multiline':True]
+['text':' KetRmin                                ','line_number':169,'multiline':True]
+['text':' KetRpos                                ','line_number':170,'multiline':True]
+['text':' Reverse                                ','line_number':171,'multiline':True]
+['text':' Assert                                 ','line_number':172,'multiline':True]
+['text':' Assert not                             ','line_number':173,'multiline':True]
+['text':' Assert behind                          ','line_number':174,'multiline':True]
+['text':' Assert behind not                      ','line_number':175,'multiline':True]
+['text':' NA assert                              ','line_number':176,'multiline':True]
+['text':' NA assert behind                       ','line_number':177,'multiline':True]
+['text':' ONCE                                   ','line_number':178,'multiline':True]
+['text':' SCRIPT_RUN                             ','line_number':179,'multiline':True]
+['text':' BRA, BRAPOS, CBRA, CBRAPOS, COND       ','line_number':180,'multiline':True]
+['text':' SBRA, SBRAPOS, SCBRA, SCBRAPOS, SCOND  ','line_number':181,'multiline':True]
+['text':' CREF, DNCREF                           ','line_number':182,'multiline':True]
+['text':' RREF, DNRREF                           ','line_number':183,'multiline':True]
+['text':' FALSE, TRUE                            ','line_number':184,'multiline':True]
+['text':' BRAZERO, BRAMINZERO, BRAPOSZERO        ','line_number':185,'multiline':True]
+['text':' MARK, PRUNE, PRUNE_ARG                 ','line_number':186,'multiline':True]
+['text':' SKIP, SKIP_ARG, THEN, THEN_ARG         ','line_number':187,'multiline':True]
+['text':' COMMIT, COMMIT_ARG                     ','line_number':188,'multiline':True]
+['text':' FAIL, ACCEPT, ASSERT_ACCEPT            ','line_number':189,'multiline':True]
+['text':' CLOSE, SKIPZERO, DEFINE                ','line_number':190,'multiline':True]
+['text':' This table identifies those opcodes that inspect a character. It is used to
+remember the fact that a character could have been inspected when the end of
+the subject is reached. ***NOTE*** If the start of this table is modified, the
+two tables that follow must also be modified. ','line_number':193,'multiline':True]
+['text':' End                                    ','line_number':199,'multiline':True]
+['text':' \A, \G, \K, \B, \b                     ','line_number':200,'multiline':True]
+['text':' \D, \d, \S, \s, \W, \w                 ','line_number':201,'multiline':True]
+['text':' Any, AllAny, Anybyte                   ','line_number':202,'multiline':True]
+['text':' \P, \p                                 ','line_number':203,'multiline':True]
+['text':' \R, \H, \h, \V, \v                     ','line_number':204,'multiline':True]
+['text':' \X                                     ','line_number':205,'multiline':True]
+['text':' \Z, \z, $, $M, ^, ^M                   ','line_number':206,'multiline':True]
+['text':' Char                                   ','line_number':207,'multiline':True]
+['text':' Chari                                  ','line_number':208,'multiline':True]
+['text':' not                                    ','line_number':209,'multiline':True]
+['text':' noti                                   ','line_number':210,'multiline':True]
+['text':' Positive single-char repeats                                          ','line_number':211,'multiline':True]
+['text':' *, *?, +, +?, ?, ??                    ','line_number':212,'multiline':True]
+['text':' upto, minupto, exact                   ','line_number':213,'multiline':True]
+['text':' *+, ++, ?+, upto+                      ','line_number':214,'multiline':True]
+['text':' *I, *?I, +I, +?I, ?I, ??I              ','line_number':215,'multiline':True]
+['text':' upto I, minupto I, exact I             ','line_number':216,'multiline':True]
+['text':' *+I, ++I, ?+I, upto+I                  ','line_number':217,'multiline':True]
+['text':' Negative single-char repeats - only for chars < 256                   ','line_number':218,'multiline':True]
+['text':' NOT *, *?, +, +?, ?, ??                ','line_number':219,'multiline':True]
+['text':' NOT upto, minupto, exact               ','line_number':220,'multiline':True]
+['text':' NOT *+, ++, ?+, upto+                  ','line_number':221,'multiline':True]
+['text':' NOT *I, *?I, +I, +?I, ?I, ??I          ','line_number':222,'multiline':True]
+['text':' NOT upto I, minupto I, exact I         ','line_number':223,'multiline':True]
+['text':' NOT *+I, ++I, ?+I, upto+I              ','line_number':224,'multiline':True]
+['text':' Positive type repeats                                                 ','line_number':225,'multiline':True]
+['text':' Type *, *?, +, +?, ?, ??               ','line_number':226,'multiline':True]
+['text':' Type upto, minupto, exact              ','line_number':227,'multiline':True]
+['text':' Type *+, ++, ?+, upto+                 ','line_number':228,'multiline':True]
+['text':' Character class & ref repeats                                         ','line_number':229,'multiline':True]
+['text':' *, *?, +, +?, ?, ??                    ','line_number':230,'multiline':True]
+['text':' CRRANGE, CRMINRANGE                    ','line_number':231,'multiline':True]
+['text':' Possessive *+, ++, ?+, CRPOSRANGE      ','line_number':232,'multiline':True]
+['text':' CLASS                                  ','line_number':233,'multiline':True]
+['text':' NCLASS                                 ','line_number':234,'multiline':True]
+['text':' XCLASS - variable length               ','line_number':235,'multiline':True]
+['text':' REF                                    ','line_number':236,'multiline':True]
+['text':' REFI                                   ','line_number':237,'multiline':True]
+['text':' DNREF                                  ','line_number':238,'multiline':True]
+['text':' DNREFI                                 ','line_number':239,'multiline':True]
+['text':' RECURSE                                ','line_number':240,'multiline':True]
+['text':' CALLOUT                                ','line_number':241,'multiline':True]
+['text':' CALLOUT_STR                            ','line_number':242,'multiline':True]
+['text':' Alt                                    ','line_number':243,'multiline':True]
+['text':' Ket                                    ','line_number':244,'multiline':True]
+['text':' KetRmax                                ','line_number':245,'multiline':True]
+['text':' KetRmin                                ','line_number':246,'multiline':True]
+['text':' KetRpos                                ','line_number':247,'multiline':True]
+['text':' Reverse                                ','line_number':248,'multiline':True]
+['text':' Assert                                 ','line_number':249,'multiline':True]
+['text':' Assert not                             ','line_number':250,'multiline':True]
+['text':' Assert behind                          ','line_number':251,'multiline':True]
+['text':' Assert behind not                      ','line_number':252,'multiline':True]
+['text':' NA assert                              ','line_number':253,'multiline':True]
+['text':' NA assert behind                       ','line_number':254,'multiline':True]
+['text':' ONCE                                   ','line_number':255,'multiline':True]
+['text':' SCRIPT_RUN                             ','line_number':256,'multiline':True]
+['text':' BRA, BRAPOS, CBRA, CBRAPOS, COND       ','line_number':257,'multiline':True]
+['text':' SBRA, SBRAPOS, SCBRA, SCBRAPOS, SCOND  ','line_number':258,'multiline':True]
+['text':' CREF, DNCREF                           ','line_number':259,'multiline':True]
+['text':' RREF, DNRREF                           ','line_number':260,'multiline':True]
+['text':' FALSE, TRUE                            ','line_number':261,'multiline':True]
+['text':' BRAZERO, BRAMINZERO, BRAPOSZERO        ','line_number':262,'multiline':True]
+['text':' MARK, PRUNE, PRUNE_ARG                 ','line_number':263,'multiline':True]
+['text':' SKIP, SKIP_ARG, THEN, THEN_ARG         ','line_number':264,'multiline':True]
+['text':' COMMIT, COMMIT_ARG                     ','line_number':265,'multiline':True]
+['text':' FAIL, ACCEPT, ASSERT_ACCEPT            ','line_number':266,'multiline':True]
+['text':' CLOSE, SKIPZERO, DEFINE                ','line_number':267,'multiline':True]
+['text':' These 2 tables allow for compact code for testing for \D, \d, \S, \s, \W,
+and \w ','line_number':270,'multiline':True]
+['text':' OP_ANY, OP_ALLANY ','line_number':278,'multiline':True]
+['text':' OP_ANY, OP_ALLANY ','line_number':286,'multiline':True]
+['text':' Structure for holding data about a particular state, which is in effect the
+current data for an active path through the match tree. It must consist
+entirely of ints because the working vector we are passed, and which we put
+these structures in, is a vector of ints. ','line_number':290,'multiline':True]
+['text':' Offset to opcode (-ve has meaning) ','line_number':296,'multiline':True]
+['text':' Count for repeats ','line_number':297,'multiline':True]
+['text':' Some use extra data ','line_number':298,'multiline':True]
+['text':' Before version 10.32 the recursive calls of internal_dfa_match() were passed
+local working space and output vectors that were created on the stack. This has
+caused issues for some patterns, especially in small-stack environments such as
+Windows. A new scheme is now in use which sets up a vector on the stack, but if
+this is too small, heap memory is used, up to the heap_limit. The main
+parameters are all numbers of ints because the workspace is a vector of ints.
+
+The size of the starting stack vector, DFA_START_RWS_SIZE, is in bytes, and is
+defined in pcre2_internal.h so as to be available to pcre2test when it is
+finding the minimum heap requirement for a match. ','line_number':304,'multiline':True]
+['text':' Stack vector ','line_number':317,'multiline':True]
+['text':' Work size for recursion ','line_number':318,'multiline':True]
+['text':' Ovector for recursion ','line_number':319,'multiline':True]
+['text':' Ovector in other cases ','line_number':320,'multiline':True]
+['text':' This structure is at the start of each workspace block. ','line_number':322,'multiline':True]
+['text':' Number of ints ','line_number':326,'multiline':True]
+['text':' Number of ints ','line_number':327,'multiline':True]
+['text':'************************************************
+*               Process a callout                *
+************************************************','line_number':334,'multiline':True]
+['text':' This function is called to perform a callout.
+
+Arguments:
+  code              current code pointer
+  offsets           points to current capture offsets
+  current_subject   start of current subject match
+  ptr               current position in subject
+  mb                the match block
+  extracode         extra code offset when called from condition
+  lengthptr         where to return the callout length
+
+Returns:            the return from the callout
+','line_number':338,'multiline':True]
+['text':' No callout provided ','line_number':363,'multiline':True]
+['text':' Fixed fields in the callout block are set once and for all at the start of
+matching. ','line_number':365,'multiline':True]
+['text':'************************************************
+*         Expand local workspace memory          *
+************************************************','line_number':394,'multiline':True]
+['text':' This function is called when internal_dfa_match() is about to be called
+recursively and there is insufficient working space left in the current
+workspace block. If there's an existing next block, use it; otherwise get a new
+block unless the heap limit is reached.
+
+Arguments:
+  rwsptr     pointer to block pointer (updated)
+  ovecsize   space needed for an ovector
+  mb         the match block
+
+Returns:     0 rwsptr has been updated
+            !0 an error code
+','line_number':398,'multiline':True]
+['text':' Sizes in the RWS_anchor blocks are in units of sizeof(int), but
+mb->heap_limit and mb->heap_used are in kibibytes. Play carefully, to avoid
+overflow. ','line_number':423,'multiline':True]
+['text':'************************************************
+*     Match a Regular Expression - DFA engine    *
+************************************************','line_number':453,'multiline':True]
+['text':' This internal function applies a compiled pattern to a subject string,
+starting at a given point, using a DFA engine. This function is called from the
+external one, possibly multiple times if the pattern is not anchored. The
+function calls itself recursively for some kinds of subpattern.
+
+Arguments:
+  mb                the match_data block with fixed information
+  this_start_code   the opening bracket of this subexpression's code
+  current_subject   where we currently are in the subject string
+  start_offset      start offset in the subject string
+  offsets           vector to contain the matching string offsets
+  offsetcount       size of same
+  workspace         vector of workspace
+  wscount           size of same
+  rlevel            function call recursion level
+
+Returns:            > 0 => number of match offset pairs placed in offsets
+                    = 0 => offsets overflowed; longest matches are present
+                     -1 => failed to match
+                   < -1 => some kind of unexpected problem
+
+The following macros are used for adding states to the two state vectors (one
+for the current character, one for the following character). ','line_number':457,'multiline':True]
+['text':' And now, here is the code ','line_number':519,'multiline':True]
+['text':' Some fields in the mb block are frequently referenced, so we load them into
+independent variables in the hope that this will perform better. ','line_number':542,'multiline':True]
+['text':' Round down ','line_number':560,'multiline':True]
+['text':' A negative number ','line_number':570,'multiline':True]
+['text':' The first thing in any (sub) pattern is a bracket of some sort. Push all
+the alternative states onto the list, and find out where the end is. This
+makes is possible to use this function recursively, when we want to stop at a
+matching internal ket rather than at the end.
+
+If we are dealing with a backward assertion we have to find out the maximum
+amount to move back, and set up each alternative appropriately. ','line_number':576,'multiline':True]
+['text':' If we can't go back the amount required for the longest lookbehind
+  pattern, go back as far as we can; some alternatives may still be viable. ','line_number':598,'multiline':True]
+['text':' In character mode we have to step back character by character ','line_number':602,'multiline':True]
+['text':' In byte-mode we can do this quickly. ','line_number':617,'multiline':True]
+['text':' Save the earliest consulted character ','line_number':625,'multiline':True]
+['text':' Now we can process the individual branches. There will be an OP_REVERSE at
+  the start of each branch, except when the length of the branch is zero. ','line_number':630,'multiline':True]
+['text':' This is the code for a "normal" subpattern (not a backward assertion). The
+start of a whole pattern is always one of these. If we are at the top level,
+we may be asked to restart matching from the same point that we reached for a
+previous partial match. We still have to scan through the top-level branches to
+find the end state. ','line_number':648,'multiline':True]
+['text':' Restarting ','line_number':658,'multiline':True]
+['text':' Not restarting ','line_number':668,'multiline':True]
+['text':' Bit indicating which vector is current ','line_number':686,'multiline':True]
+['text':' Loop for scanning the subject ','line_number':688,'multiline':True]
+['text':' Make the new state list into the active state list and empty the
+  new state list. ','line_number':703,'multiline':True]
+['text':' Remember for the restarting feature ','line_number':712,'multiline':True]
+['text':' Set the pointers for adding new states ','line_number':715,'multiline':True]
+['text':' Load the current character from the subject outside the loop, as many
+  different states may want to look at it, and we assume that at least one
+  will. ','line_number':720,'multiline':True]
+['text':' Number of data items in the character ','line_number':726,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':731,'multiline':True]
+['text':' This indicates the end of the subject ','line_number':735,'multiline':True]
+['text':' This value should never actually be used ','line_number':736,'multiline':True]
+['text':' Scan up the active states and act on each one. The result of an action
+  may be to add more states to the currently active list (e.g. on hitting a
+  parenthesis) or it may be to put states on the new list, for considering
+  when we move the character pointer on. ','line_number':739,'multiline':True]
+['text':' A negative offset is a special case meaning "hold off going to this
+    (negated) state until the number of characters in the data field have
+    been skipped". If the could_continue flag was passed over from a previous
+    state, arrange for it to passed on. ','line_number':754,'multiline':True]
+['text':' Check for a duplicate state with the same count, and skip if found.
+    See the note at the head of this module about the possibility of improving
+    performance here. ','line_number':774,'multiline':True]
+['text':' The state offset is the offset to the opcode ','line_number':785,'multiline':True]
+['text':' If this opcode inspects a character, but we are at the end of the
+    subject, remember the fact for use when testing for a partial match. ','line_number':790,'multiline':True]
+['text':' If this opcode is followed by an inline character, load it. It is
+    tempting to test for the presence of a subject character here, but that
+    is wrong, because sometimes zero repetitions of the subject are
+    permitted.
+
+    We also use this mechanism for opcodes such as OP_TYPEPLUS that take an
+    argument that is not a data character - but is always one byte long because
+    the values are small. We have to take special action to deal with  \P, \p,
+    \H, \h, \V, \v and \X in this case. To keep the other cases fast, convert
+    these ones to new opcodes. ','line_number':796,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':812,'multiline':True]
+['text':' Not strictly necessary, but compilers moan ','line_number':833,'multiline':True]
+['text':' if these variables are not set. ','line_number':834,'multiline':True]
+['text':' Now process the individual opcodes ','line_number':838,'multiline':True]
+['text':' ========================================================================== ','line_number':842,'multiline':True]
+['text':' These cases are never obeyed. This is a fudge that causes a compile-
+      time error if the vectors coptable or poptable, which are indexed by
+      opcode, are not the correct length. It seems to be the only way to do
+      such a check at compile time, as the sizeof() operator does not work
+      in the C preprocessor. ','line_number':843,'multiline':True]
+['text':' ========================================================================== ','line_number':855,'multiline':True]
+['text':' Reached a closing bracket. If not at the end of the pattern, carry
+      on with the next opcode. For repeating opcodes, also add the repeat
+      state. Note that KETRPOS will always be encountered at the end of the
+      subpattern, because the possessive subpattern repeats are always handled
+      using recursive calls. Thus, it never adds any new states.
+
+      At the end of the (sub)pattern, unless we have an empty string and
+      PCRE2_NOTEMPTY is set, or PCRE2_NOTEMPTY_ATSTART is set and we are at the
+      start of the subject, save the match data, shifting up all previous
+      matches so we always have the longest first. ','line_number':856,'multiline':True]
+['text':' ========================================================================== ','line_number':902,'multiline':True]
+['text':' These opcodes add to the current list of states without looking
+      at the current character. ','line_number':903,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':906,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':912,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':923,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':935,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':944,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':951,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':957,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':965,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':975,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':980,'multiline':True]
+['text':' ========================================================================== ','line_number':986,'multiline':True]
+['text':' These opcodes inspect the next subject character, and sometimes
+      the previous one as well, but do not have an argument. The variable
+      clen contains the length of the current character and is zero if we are
+      at the end of the subject. ','line_number':987,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':992,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1011,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1017,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1027,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1054,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1081,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1091,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1100,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1160,'multiline':True]
+['text':' Check the next character by Unicode property. We will get here only
+      if the support is in the binary; otherwise a compile-time error occurs.
+      ','line_number':1161,'multiline':True]
+['text':' These are specials for combination cases. ','line_number':1201,'multiline':True]
+['text':' Perl space used to exclude VT, but from Perl 5.18 it is included,
+          which means that Perl space and POSIX space are now identical. PCRE
+          was changed at release 8.34. ','line_number':1208,'multiline':True]
+['text':' Perl space ','line_number':1212,'multiline':True]
+['text':' POSIX space ','line_number':1213,'multiline':True]
+['text':' Should never occur, but keep compilers from grumbling. ','line_number':1257,'multiline':True]
+['text':' ========================================================================== ','line_number':1271,'multiline':True]
+['text':' These opcodes likewise inspect the subject character, but have an
+      argument that is not a data character. It is one of these opcodes:
+      OP_ANY, OP_ALLANY, OP_DIGIT, OP_NOT_DIGIT, OP_WHITESPACE, OP_NOT_SPACE,
+      OP_WORDCHAR, OP_NOT_WORDCHAR. The value is loaded into d. ','line_number':1272,'multiline':True]
+['text':' Already matched ','line_number':1280,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1299,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1308,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1330,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1338,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1360,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1368,'multiline':True]
+['text':' Number already matched ','line_number':1370,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1394,'multiline':True]
+['text':' Number already matched ','line_number':1399,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1417,'multiline':True]
+['text':' ========================================================================== ','line_number':1428,'multiline':True]
+['text':' These are virtual opcodes that are used when something like
+      OP_TYPEPLUS has OP_PROP, OP_NOTPROP, OP_ANYNL, or OP_EXTUNI as its
+      argument. It keeps the code above fast for the other cases. The argument
+      is in the d variable. ','line_number':1429,'multiline':True]
+['text':' Already matched ','line_number':1438,'multiline':True]
+['text':' These are specials for combination cases. ','line_number':1473,'multiline':True]
+['text':' Perl space used to exclude VT, but from Perl 5.18 it is included,
+          which means that Perl space and POSIX space are now identical. PCRE
+          was changed at release 8.34. ','line_number':1480,'multiline':True]
+['text':' Perl space ','line_number':1484,'multiline':True]
+['text':' POSIX space ','line_number':1485,'multiline':True]
+['text':' Should never occur, but keep compilers from grumbling. ','line_number':1529,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1540,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1549,'multiline':True]
+['text':' Already matched ','line_number':1553,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1560,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1571,'multiline':True]
+['text':' Already matched ','line_number':1575,'multiline':True]
+['text':' Not EBCDIC ','line_number':1588,'multiline':True]
+['text':' Fall through ','line_number':1594,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1600,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1613,'multiline':True]
+['text':' Already matched ','line_number':1617,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1637,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1646,'multiline':True]
+['text':' Already matched ','line_number':1650,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1670,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1679,'multiline':True]
+['text':' These are specials for combination cases. ','line_number':1728,'multiline':True]
+['text':' Perl space used to exclude VT, but from Perl 5.18 it is included,
+          which means that Perl space and POSIX space are now identical. PCRE
+          was changed at release 8.34. ','line_number':1735,'multiline':True]
+['text':' Perl space ','line_number':1739,'multiline':True]
+['text':' POSIX space ','line_number':1740,'multiline':True]
+['text':' Should never occur, but keep compilers from grumbling. ','line_number':1784,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1796,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1804,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1825,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1835,'multiline':True]
+['text':' Not EBCDIC ','line_number':1860,'multiline':True]
+['text':' Fall through ','line_number':1866,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1873,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1885,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1917,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1925,'multiline':True]
+['text':' Remove non-match possibility ','line_number':1958,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':1966,'multiline':True]
+['text':' Number already matched ','line_number':1974,'multiline':True]
+['text':' These are specials for combination cases. ','line_number':2009,'multiline':True]
+['text':' Perl space used to exclude VT, but from Perl 5.18 it is included,
+          which means that Perl space and POSIX space are now identical. PCRE
+          was changed at release 8.34. ','line_number':2016,'multiline':True]
+['text':' Perl space ','line_number':2020,'multiline':True]
+['text':' POSIX space ','line_number':2021,'multiline':True]
+['text':' Should never occur, but keep compilers from grumbling. ','line_number':2065,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2076,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2087,'multiline':True]
+['text':' Number already matched ','line_number':2094,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2101,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2116,'multiline':True]
+['text':' Number already matched ','line_number':2123,'multiline':True]
+['text':' Not EBCDIC ','line_number':2135,'multiline':True]
+['text':' Fall through ','line_number':2141,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2147,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2162,'multiline':True]
+['text':' Number already matched ','line_number':2169,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2187,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2198,'multiline':True]
+['text':' Number already matched ','line_number':2205,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2224,'multiline':True]
+['text':' ========================================================================== ','line_number':2235,'multiline':True]
+['text':' These opcodes are followed by a character that is usually compared
+      to the current subject character; it is loaded into d. We still get
+      here even if there is no subject character, because in some cases zero
+      repetitions are permitted. ','line_number':2236,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2241,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2246,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':2264,'multiline':True]
+['text':' Not UTF or UCP mode ','line_number':2265,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2274,'multiline':True]
+['text':' This is a tricky one because it can match more than one character.
+      Find out how many characters to skip, and then set up a negative state
+      to wait for them to pass before continuing. ','line_number':2275,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2292,'multiline':True]
+['text':' This is a tricky like EXTUNI because it too can match more than one
+      character (when CR is followed by LF). In this case, set up a negative
+      state to wait for one character to pass before continuing. ','line_number':2293,'multiline':True]
+['text':' Not EBCDIC ','line_number':2306,'multiline':True]
+['text':' Fall through ','line_number':2308,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2333,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2346,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2359,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2372,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2385,'multiline':True]
+['text':' Match a negated single character casefully. ','line_number':2386,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2392,'multiline':True]
+['text':' Match a negated single character caselessly. ','line_number':2393,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':2403,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2410,'multiline':True]
+['text':' Fall through ','line_number':2420,'multiline':True]
+['text':' Already matched ','line_number':2427,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':2438,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2446,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2455,'multiline':True]
+['text':' Fall through ','line_number':2464,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':2481,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2488,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2496,'multiline':True]
+['text':' Fall through ','line_number':2505,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':2522,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2529,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2537,'multiline':True]
+['text':' Fall through ','line_number':2542,'multiline':True]
+['text':' Number already matched ','line_number':2545,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':2555,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2568,'multiline':True]
+['text':' Fall through ','line_number':2577,'multiline':True]
+['text':' Number already matched ','line_number':2585,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':2595,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2602,'multiline':True]
+['text':' ========================================================================== ','line_number':2614,'multiline':True]
+['text':' These are the class-handling opcodes ','line_number':2615,'multiline':True]
+['text':' For a simple class, there is always just a 32-byte table, and we
+        can set isinclass from it. ','line_number':2625,'multiline':True]
+['text':' An extended class may have a table or a list of single characters,
+        ranges, or both, and it may be positive or negative. There's a
+        function that sorts all this out. ','line_number':2638,'multiline':True]
+['text':' At this point, isinclass is set for all kinds of class, and ecode
+        points to the byte after the end of the class. If there is a
+        quantifier, this is where it will be. ','line_number':2648,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2664,'multiline':True]
+['text':' Already matched ','line_number':2674,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2680,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2696,'multiline':True]
+['text':' Already matched ','line_number':2706,'multiline':True]
+['text':' Remove non-match possibility ','line_number':2715,'multiline':True]
+['text':' Max 0 => no limit ','line_number':2719,'multiline':True]
+['text':' ========================================================================== ','line_number':2733,'multiline':True]
+['text':' These are the opcodes for fancy brackets of various kinds. We have
+      to use recursion in order to handle them. The "always failing" assertion
+      (?!) is optimised to OP_FAIL when compiling, so we have to support that,
+      though the other "backtracking verbs" are not supported. ','line_number':2734,'multiline':True]
+['text':' Count FAILs for multiple states ','line_number':2740,'multiline':True]
+['text':' static match data ','line_number':2768,'multiline':True]
+['text':' this subexpression's code ','line_number':2769,'multiline':True]
+['text':' where we currently are ','line_number':2770,'multiline':True]
+['text':' start offset ','line_number':2771,'multiline':True]
+['text':' offset vector ','line_number':2772,'multiline':True]
+['text':' size of same ','line_number':2773,'multiline':True]
+['text':' workspace vector ','line_number':2774,'multiline':True]
+['text':' size of same ','line_number':2775,'multiline':True]
+['text':' function recursion level ','line_number':2776,'multiline':True]
+['text':' recursion workspace ','line_number':2777,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2787,'multiline':True]
+['text':' Because of the way auto-callout works during compile, a callout item
+        is inserted between OP_COND and an assertion condition. This does not
+        happen for the other conditions. ','line_number':2794,'multiline':True]
+['text':' Abandon ','line_number':2804,'multiline':True]
+['text':' Fail this thread ','line_number':2805,'multiline':True]
+['text':' Skip callout data ','line_number':2806,'multiline':True]
+['text':' Back reference conditions and duplicate named recursion conditions
+        are not supported ','line_number':2811,'multiline':True]
+['text':' The DEFINE condition is always false, and the assertion (?!) is
+        converted to OP_FAIL. ','line_number':2818,'multiline':True]
+['text':' There is also an always-true condition ','line_number':2824,'multiline':True]
+['text':' The only supported version of OP_RREF is for the value RREF_ANY,
+        which means "test if in any recursion". We can't test for specifically
+        recursed groups. ','line_number':2829,'multiline':True]
+['text':' Otherwise, the condition is an assertion ','line_number':2842,'multiline':True]
+['text':' fixed match data ','line_number':2867,'multiline':True]
+['text':' this subexpression's code ','line_number':2868,'multiline':True]
+['text':' where we currently are ','line_number':2869,'multiline':True]
+['text':' start offset ','line_number':2870,'multiline':True]
+['text':' offset vector ','line_number':2871,'multiline':True]
+['text':' size of same ','line_number':2872,'multiline':True]
+['text':' workspace vector ','line_number':2873,'multiline':True]
+['text':' size of same ','line_number':2874,'multiline':True]
+['text':' function recursion level ','line_number':2875,'multiline':True]
+['text':' recursion workspace ','line_number':2876,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2890,'multiline':True]
+['text':' Check for repeating a recursion without advancing the subject
+        pointer. This should catch convoluted mutual recursions. (Some simple
+        cases are caught at compile time.) ','line_number':2913,'multiline':True]
+['text':' Remember this recursion and where we started it so as to
+        catch infinite loops. ','line_number':2921,'multiline':True]
+['text':' fixed match data ','line_number':2930,'multiline':True]
+['text':' this subexpression's code ','line_number':2931,'multiline':True]
+['text':' where we currently are ','line_number':2932,'multiline':True]
+['text':' start offset ','line_number':2933,'multiline':True]
+['text':' offset vector ','line_number':2934,'multiline':True]
+['text':' size of same ','line_number':2935,'multiline':True]
+['text':' workspace vector ','line_number':2936,'multiline':True]
+['text':' size of same ','line_number':2937,'multiline':True]
+['text':' function recursion level ','line_number':2938,'multiline':True]
+['text':' recursion workspace ','line_number':2939,'multiline':True]
+['text':' Done this recursion ','line_number':2942,'multiline':True]
+['text':' Ran out of internal offsets ','line_number':2944,'multiline':True]
+['text':' For each successful matched substring, set up the next state with a
+        count of characters to skip before trying it. Note that the count is in
+        characters, not bytes. ','line_number':2948,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':2980,'multiline':True]
+['text':' Codevalue will be one of above BRAs ','line_number':3009,'multiline':True]
+['text':' Loop to match the subpattern as many times as possible as if it were
+        a complete pattern. ','line_number':3013,'multiline':True]
+['text':' fixed match data ','line_number':3019,'multiline':True]
+['text':' this subexpression's code ','line_number':3020,'multiline':True]
+['text':' where we currently are ','line_number':3021,'multiline':True]
+['text':' start offset ','line_number':3022,'multiline':True]
+['text':' offset vector ','line_number':3023,'multiline':True]
+['text':' size of same ','line_number':3024,'multiline':True]
+['text':' workspace vector ','line_number':3025,'multiline':True]
+['text':' size of same ','line_number':3026,'multiline':True]
+['text':' function recursion level ','line_number':3027,'multiline':True]
+['text':' recursion workspace ','line_number':3028,'multiline':True]
+['text':' Failed to match ','line_number':3030,'multiline':True]
+['text':' Matched: break the loop if zero characters matched. ','line_number':3038,'multiline':True]
+['text':' Advance temporary position ptr ','line_number':3042,'multiline':True]
+['text':' At this point we have matched the subpattern matched_count
+        times, and local_ptr is pointing to the character after the end of the
+        last match. ','line_number':3047,'multiline':True]
+['text':' Optimization: if there are no more active states, and there
+          are no new states yet set up, then skip over the subject string
+          right here, to save looping. Otherwise, set up the new state to swing
+          into action when the end of the matched substring is reached. ','line_number':3061,'multiline':True]
+['text':'-----------------------------------------------------------------','line_number':3086,'multiline':True]
+['text':' fixed match data ','line_number':3106,'multiline':True]
+['text':' this subexpression's code ','line_number':3107,'multiline':True]
+['text':' where we currently are ','line_number':3108,'multiline':True]
+['text':' start offset ','line_number':3109,'multiline':True]
+['text':' offset vector ','line_number':3110,'multiline':True]
+['text':' size of same ','line_number':3111,'multiline':True]
+['text':' workspace vector ','line_number':3112,'multiline':True]
+['text':' size of same ','line_number':3113,'multiline':True]
+['text':' function recursion level ','line_number':3114,'multiline':True]
+['text':' recursion workspace ','line_number':3115,'multiline':True]
+['text':' If the end of this subpattern is KETRMAX or KETRMIN, we must
+          arrange for the repeat state also to be added to the relevant list.
+          Calculate the offset, or set -1 for no repeat. ','line_number':3130,'multiline':True]
+['text':' If we have matched an empty string, add the next state at the
+          current character pointer. This is important so that the duplicate
+          checking kicks in, which is what breaks infinite loops that match an
+          empty string. ','line_number':3138,'multiline':True]
+['text':' Optimization: if there are no more active states, and there
+          are no new states yet set up, then skip over the subject string
+          right here, to save looping. Otherwise, set up the new state to swing
+          into action when the end of the matched substring is reached. ','line_number':3148,'multiline':True]
+['text':' If we are adding a repeat state at the new character position,
+            we must fudge things so that it is the only current state.
+            Otherwise, it might be a duplicate of one we processed before, and
+            that would cause it to be skipped. ','line_number':3159,'multiline':True]
+['text':' ========================================================================== ','line_number':3192,'multiline':True]
+['text':' Handle callouts ','line_number':3193,'multiline':True]
+['text':' Abandon ','line_number':3201,'multiline':True]
+['text':' ========================================================================== ','line_number':3208,'multiline':True]
+['text':' Unsupported opcode ','line_number':3209,'multiline':True]
+['text':' End of loop scanning active states ','line_number':3215,'multiline':True]
+['text':' We have finished the processing at the current subject character. If no
+  new states have been set for the next character, we have found all the
+  matches that we are going to find. If partial matching has been requested,
+  check for appropriate conditions.
+
+  The "forced_ fail" variable counts the number of (*F) encountered for the
+  character. If it is equal to the original active_count (saved in
+  workspace[1]) it means that (*F) was found on every active state. In this
+  case we don't want to give a partial match.
+
+  The "could_continue" variable is true if a state could have continued but
+  for the fact that the end of the subject was reached. ','line_number':3217,'multiline':True]
+['text':' Some could go on, and ','line_number':3232,'multiline':True]
+['text':' Not all forced fail & ','line_number':3233,'multiline':True]
+['text':' either... ','line_number':3234,'multiline':True]
+['text':' Hard partial ','line_number':3235,'multiline':True]
+['text':' or... ','line_number':3236,'multiline':True]
+['text':' Soft partial and ','line_number':3237,'multiline':True]
+['text':' no matches ','line_number':3238,'multiline':True]
+['text':' And... ','line_number':3239,'multiline':True]
+['text':' Either partial NL ','line_number':3241,'multiline':True]
+['text':' or ... ','line_number':3242,'multiline':True]
+['text':' End of subject and ','line_number':3243,'multiline':True]
+['text':' either ','line_number':3244,'multiline':True]
+['text':' Inspected non-empty string ','line_number':3245,'multiline':True]
+['text':' or pattern has lookbehind ','line_number':3246,'multiline':True]
+['text':' or could match empty ','line_number':3247,'multiline':True]
+['text':' Exit from loop along the subject string ','line_number':3251,'multiline':True]
+['text':' One or more states are active for the next character. ','line_number':3254,'multiline':True]
+['text':' Advance to next subject character ','line_number':3256,'multiline':True]
+['text':' Loop to move along the subject string ','line_number':3257,'multiline':True]
+['text':' Control gets here from "break" a few lines above. If we have a match and
+PCRE2_ENDANCHORED is set, the match fails. ','line_number':3259,'multiline':True]
+['text':'************************************************
+*     Match a pattern using the DFA algorithm    *
+************************************************','line_number':3272,'multiline':True]
+['text':' This function matches a compiled pattern to a subject string, using the
+alternate matching algorithm that finds all matches at once.
+
+Arguments:
+  code          points to the compiled pattern
+  subject       subject string
+  length        length of subject string
+  startoffset   where to start matching in the subject
+  options       option bits
+  match_data    points to a match data structure
+  gcontext      points to a match context
+  workspace     pointer to workspace
+  wscount       size of workspace
+
+Returns:        > 0 => number of match offset pairs placed in offsets
+                = 0 => offsets overflowed; longest matches are present
+                 -1 => failed to match
+               < -1 => some kind of unexpected problem
+','line_number':3276,'multiline':True]
+['text':' We need to have mb pointing to a match block, because the IS_NEWLINE macro
+is used below, and it expects NLBLOCK to be defined as a pointer. ','line_number':3327,'multiline':True]
+['text':' Set up a starting block of memory for use during recursive calls to
+internal_dfa_match(). By putting this on the stack, it minimizes resource use
+in the case when it is not needed. If this is too small, more memory is
+obtained from the heap. At the start of each block is an anchor structure.','line_number':3334,'multiline':True]
+['text':' Recognize NULL, length 0 as an empty string. ','line_number':3345,'multiline':True]
+['text':' Plausibility checks ','line_number':3349,'multiline':True]
+['text':' Partial matching and PCRE2_ENDANCHORED are currently not allowed at the same
+time. ','line_number':3364,'multiline':True]
+['text':' Invalid UTF support is not available for DFA matching. ','line_number':3371,'multiline':True]
+['text':' Check that the first field in the block is the magic number. If it is not,
+return with PCRE2_ERROR_BADMAGIC. ','line_number':3376,'multiline':True]
+['text':' Check the code unit width. ','line_number':3381,'multiline':True]
+['text':' PCRE2_NOTEMPTY and PCRE2_NOTEMPTY_ATSTART are match-time flags in the
+options variable for this function. Users of PCRE2 who are not calling the
+function directly would like to have a way of setting these flags, in the same
+way that they can set pcre2_compile() flags like PCRE2_NO_AUTOPOSSESS with
+constructions like (*NO_AUTOPOSSESS). To enable this, (*NOTEMPTY) and
+(*NOTEMPTY_ATSTART) set bits in the pattern's "flag" function which can now be
+transferred to the options for this function. The bits are guaranteed to be
+adjacent, but do not have the same values. This bit of Boolean trickery assumes
+that the match-time bits are not more significant than the flag bits. If by
+accident this is not the case, a compile-time division by zero error will
+occur. ','line_number':3386,'multiline':True]
+['text':' If restarting after a partial match, do some sanity checks on the contents
+of the workspace. ','line_number':3404,'multiline':True]
+['text':' Set some local values ','line_number':3414,'multiline':True]
+['text':' The "must be at the start of a line" flags are used in a loop when finding
+where to start. ','line_number':3423,'multiline':True]
+['text':' Initialize and set up the fixed fields in the callout block, with a pointer
+in the match block. ','line_number':3430,'multiline':True]
+['text':' No capture support ','line_number':3438,'multiline':True]
+['text':' No (*MARK) support ','line_number':3440,'multiline':True]
+['text':' Get data from the match context, if present, and fill in the remaining
+fields in the match block. It is an error to set an offset limit without
+setting the flag at compile time. ','line_number':3442,'multiline':True]
+['text':' Process the \R and newline settings. ','line_number':3492,'multiline':True]
+['text':' Check a UTF string for validity if required. For 8-bit and 16-bit strings,
+we must also check that a starting offset does not point into the middle of a
+multiunit character. We check only the portion of the subject that is going to
+be inspected during matching - from the offset minus the maximum back reference
+to the given length. This saves time when a small part of a large subject is
+being matched by the use of a starting offset. Note that the maximum lookbehind
+is a number of characters, not code units. ','line_number':3530,'multiline':True]
+['text':' start_match includes offset ','line_number':3541,'multiline':True]
+['text':' 16-bit ','line_number':3555,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':3557,'multiline':True]
+['text':' In the 32-bit library, one code unit equals one character. ','line_number':3560,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH != 32 ','line_number':3563,'multiline':True]
+['text':' Validate the relevant portion of the subject. After an error, adjust the
+  offset to be an absolute offset in the whole string. ','line_number':3566,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':3577,'multiline':True]
+['text':' Set up the first code unit to match, if available. If there's no first code
+unit there may be a bitmap of possible first characters. ','line_number':3579,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':3597,'multiline':True]
+['text':' There may be a "last known required code unit" set. ','line_number':3604,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':3621,'multiline':True]
+['text':' If the match data block was previously used with PCRE2_COPY_MATCHED_SUBJECT,
+free the memory that was obtained. ','line_number':3625,'multiline':True]
+['text':' Fill in fields that are always returned in the match data. ','line_number':3635,'multiline':True]
+['text':' Default for no match ','line_number':3638,'multiline':True]
+['text':' Call the main matching function, looping for a non-anchored regex after a
+failed match. If not restarting, perform certain optimizations at the start of
+a match. ','line_number':3642,'multiline':True]
+['text':' ----------------- Start of match optimizations ---------------- ','line_number':3648,'multiline':True]
+['text':' There are some optimizations that avoid running the match if a known
+  starting point is not found, or if a known later code unit is not present.
+  However, there is an option (settable at compile time) that disables
+  these, for testing and for ensuring that all callouts do actually occur.
+  The optimizations must also be avoided when restarting a DFA match. ','line_number':3650,'multiline':True]
+['text':' If firstline is TRUE, the start of the match is constrained to the first
+    line of a multiline string. That is, the match must be before or at the
+    first newline following the start of matching. Temporarily adjust
+    end_subject so that we stop the optimization scans for a first code unit
+    immediately after the first character of a newline (the first code unit can
+    legitimately be a newline). If the match fails at the newline, later code
+    breaks this loop. ','line_number':3659,'multiline':True]
+['text':' Anchored: check the first code unit if one is recorded. This may seem
+    pointless but it can help in detecting a no match case without scanning for
+    the required code unit. ','line_number':3685,'multiline':True]
+['text':' Not anchored. Advance to a unique first code unit if there is one. ','line_number':3710,'multiline':True]
+['text':' Caseless ','line_number':3716,'multiline':True]
+['text':' In 16-bit and 32_bit modes we have to do our own search, so can
+          look for both cases at once. ','line_number':3718,'multiline':True]
+['text':' In 8-bit mode, the use of memchr() gives a big speed up, even
+          though we have to call it twice in order to find the earliest
+          occurrence of the code unit in either of its cases. Caching is used
+          to remember the positions of previously found code units. This can
+          make a huge difference when the strings are very long and only one
+          case is actually present. ','line_number':3728,'multiline':True]
+['text':' If we haven't got a previously found position for first_cu, or if
+          the current starting position is later, we need to do a search. If
+          the code unit is not found, set it to the end. ','line_number':3739,'multiline':True]
+['text':' If the start is before a previously found position, use the
+          previous position, or NULL if a previous search failed. ','line_number':3750,'multiline':True]
+['text':' Do the same thing for the other case. ','line_number':3756,'multiline':True]
+['text':' Set the start to the end of the subject if neither case was found.
+          Otherwise, use the earlier found point. ','line_number':3768,'multiline':True]
+['text':' 8-bit handling ','line_number':3776,'multiline':True]
+['text':' The caseful case is much simpler. ','line_number':3779,'multiline':True]
+['text':' 8-bit code units ','line_number':3787,'multiline':True]
+['text':' If we can't find the required code unit, having reached the true end
+        of the subject, break the bumpalong loop, to force a match failure,
+        except when doing partial matching, when we let the next cycle run at
+        the end of the subject. To see why, consider the pattern /(?<=abc)def/,
+        which partially matches "abc", even though the string does not contain
+        the starting character "d". If we have not reached the true end of the
+        subject (PCRE2_FIRSTLINE caused end_subject to be temporarily modified)
+        we also let the cycle run, because the matching string is legitimately
+        allowed to start with the first code unit of a newline. ','line_number':3793,'multiline':True]
+['text':' If there's no first code unit, advance to just after a linebreak for a
+      multiline match if required. ','line_number':3808,'multiline':True]
+['text':' If we have just passed a CR and the newline option is ANY or
+          ANYCRLF, and we are now at a LF, advance the match position by one
+          more code unit. ','line_number':3829,'multiline':True]
+['text':' If there's no first code unit or a requirement for a multiline line
+      start, advance to a non-unique first code unit if any have been
+      identified. The bitmap contains only 256 bits. When code units are 16 or
+      32 bits wide, all code units greater than 254 set the 255 bit. ','line_number':3841,'multiline':True]
+['text':' See comment above in first_cu checking about the next line. ','line_number':3858,'multiline':True]
+['text':' End of first code unit handling ','line_number':3864,'multiline':True]
+['text':' Restore fudged end_subject ','line_number':3866,'multiline':True]
+['text':' The following two optimizations are disabled for partial matching. ','line_number':3870,'multiline':True]
+['text':' The minimum matching length is a lower bound; no actual string of that
+      length may actually match the pattern. Although the value is, strictly,
+      in characters, we treat it as code units to avoid spending too much time
+      in this optimization. ','line_number':3876,'multiline':True]
+['text':' If req_cu is set, we know that that code unit must appear in the
+      subject for the match to succeed. If the first code unit is set, req_cu
+      must be later in the subject; otherwise the test starts at the match
+      point. This optimization can save a huge amount of backtracking in
+      patterns with nested unlimited repeats that aren't going to match.
+      Writing separate code for cased/caseless versions makes it go faster, as
+      does using an autoincrement and backing off on a match. As in the case of
+      the first code unit, using memchr() in the 8-bit library gives a big
+      speed up. Unlike the first_cu check above, we do not need to call
+      memchr() twice in the caseless case because we only need to check for the
+      presence of the character in either case, not find the first occurrence.
+
+      The search can be skipped if the code unit was found later than the
+      current starting point in a previous iteration of the bumpalong loop.
+
+      HOWEVER: when the subject string is very, very long, searching to its end
+      can take a long time, and give bad performance on quite ordinary
+      patterns. This showed up when somebody was matching something like
+      /^\d+C/ on a 32-megabyte string... so we don't do this when the string is
+      sufficiently long, but it's worth searching a lot more for unanchored
+      patterns. ','line_number':3883,'multiline':True]
+['text':' Caseless ','line_number':3913,'multiline':True]
+['text':' 8-bit code units ','line_number':3921,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH != 8 ','line_number':3929,'multiline':True]
+['text':' The caseful case ','line_number':3932,'multiline':True]
+['text':' 8-bit code units ','line_number':3942,'multiline':True]
+['text':' If we can't find the required code unit, break the matching loop,
+          forcing a match failure. ','line_number':3948,'multiline':True]
+['text':' If we have found the required code unit, save the point where we
+          found it, so that we don't search again next time round the loop if
+          the start hasn't passed this code unit yet. ','line_number':3953,'multiline':True]
+['text':' ------------ End of start of match optimizations ------------ ','line_number':3963,'multiline':True]
+['text':' Give no match if we have passed the bumpalong limit. ','line_number':3965,'multiline':True]
+['text':' OK, now we can do the business ','line_number':3969,'multiline':True]
+['text':' fixed match data ','line_number':3976,'multiline':True]
+['text':' this subexpression's code ','line_number':3977,'multiline':True]
+['text':' where we currently are ','line_number':3978,'multiline':True]
+['text':' start offset in subject ','line_number':3979,'multiline':True]
+['text':' offset vector ','line_number':3980,'multiline':True]
+['text':' actual size of same ','line_number':3981,'multiline':True]
+['text':' workspace vector ','line_number':3982,'multiline':True]
+['text':' size of same ','line_number':3983,'multiline':True]
+['text':' function recurse level ','line_number':3984,'multiline':True]
+['text':' initial workspace for recursion ','line_number':3985,'multiline':True]
+['text':' Anything other than "no match" means we are done, always; otherwise, carry
+  on only if not anchored. ','line_number':3987,'multiline':True]
+['text':' Advance to the next subject character unless we are at the end of a line
+  and firstline is set. ','line_number':4018,'multiline':True]
+['text':' If we have just passed a CR and we are now at a LF, and the pattern does
+  not contain any explicit matches for \r or \n, and the newline option is CRLF
+  or ANY or ANYCRLF, advance the match position by one more character. ','line_number':4031,'multiline':True]
+['text':' "Bumpalong" loop ','line_number':4044,'multiline':True]
+['text':' End of pcre2_dfa_match.c ','line_number':4060,'multiline':True]

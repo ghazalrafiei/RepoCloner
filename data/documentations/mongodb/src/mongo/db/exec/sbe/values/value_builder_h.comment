@@ -1,0 +1,102 @@
+['text':'*
+ *    Copyright (C) 2020-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * A ValueBuilder can be used as a stream input (with a << operator), like a BSONObjBuilder. Instead
+ * of converting its inputs to BSON, it converts them to pairs of sbe::value::TypeTags and
+ * sbe::value::Value. During construction, these pairs are stored in the parallel '_tagList' and
+ * '_valList' arrays, as a "structure of arrays."
+ *
+ * After constructing the array, an implementer of ValueBuilder must provide a 'readValues()' method
+ * to populate the tags/vals into a container or an  sbe SlotAccessor. Some "views" (values that are
+ * pointers into other memory) are constructed by appending them to the 'valueBufferBuilder'
+ * provided to the constructor, and the internal buffer in that 'valueBufferBuilder' must be kept
+ * alive for as long as the accessors are to remain valid.
+ *
+ * Note that, in addition to destroying the 'valueBufferBuilder' or calling its 'reset()' or
+ * 'release()' function, appending more values to the buffer (either directly or via this
+ * ValueBuilder) can invalidate the underlying buffer memory.
+ *
+ * The 'valueBufferBuilder' is _not_ owned by the ValueBuilder class, so that the caller can reuse
+ * it without freeing and then reallocating its memory.
+ *
+ * NB: The ValueBuilder is specifically intended to adapt key_string::Value conversion, which
+ * operates by appending results to a BSONObjBuilder, to instead convert to SBE values. It is not
+ * intended as a general-purpose tool for populating SBE accessors, and no new code should construct
+ * or use a ValueBuilder.
+ ','line_number':41,'multiline':True]
+['text':' includeEndingNull ','line_number':115,'multiline':True]
+['text':' includeEndingNull ','line_number':122,'multiline':True]
+['text':' Add one to account null byte at the end.','line_number':127,'multiline':False]
+['text':' includeEndingNull ','line_number':129,'multiline':True]
+['text':' includeEndingNull ','line_number':137,'multiline':True]
+['text':' includeEndingNull ','line_number':150,'multiline':True]
+['text':' includeEndingNull ','line_number':151,'multiline':True]
+['text':' includeEndingNull ','line_number':157,'multiline':True]
+['text':'*
+     * Returns the number of sbe tag/value pairs appended to this ValueBuilder.
+     ','line_number':188,'multiline':True]
+['text':' We expect most rows to end up containing this many values or fewer.','line_number':194,'multiline':False]
+['text':' As noted in the comments for the 'appendValueBufferOffset' function, some values','line_number':203,'multiline':False]
+['text':' are stored as offsets into the buffer during construction. This is where we','line_number':204,'multiline':False]
+['text':' convert those offsets into pointers.','line_number':205,'multiline':False]
+['text':' 'val' is already set correctly.','line_number':223,'multiline':False]
+['text':' For some TypeTags (e.g., StringBig), the corresponding Value is actually a pointer to the','line_number':238,'multiline':False]
+['text':' value's location in memory. In the case of the ValueBuilder, that memory will be within the','line_number':239,'multiline':False]
+['text':' buffer created by the '_valueBufferBuilder' object.','line_number':240,'multiline':False]
+['text':'','line_number':241,'multiline':False]
+['text':' During the building process, pointers into that memory can become invalidated, so instead of','line_number':242,'multiline':False]
+['text':' storing a pointer, we store an _offset_ into the under-construction buffer. Translation from','line_number':243,'multiline':False]
+['text':' offset to pointer occurs as part of the 'readValues()' function.','line_number':244,'multiline':False]
+['text':'*
+ * Allows sbe tag/values to be read into a vector of OwnedValueAccessors.
+ ','line_number':256,'multiline':True]
+['text':'
+     * Remove the last value that was streamed to this ValueBuilder.
+     ','line_number':265,'multiline':True]
+['text':' If the removed value was a view of a string, object or array in the '_valueBufferBuilder'','line_number':269,'multiline':False]
+['text':' buffer, this value will remain in that buffer, even though we've removed it from the','line_number':270,'multiline':False]
+['text':' list. It will still get deallocated along with everything else when that buffer gets','line_number':271,'multiline':False]
+['text':' cleared or deleted, though, so there is no leak.','line_number':272,'multiline':False]
+['text':'*
+     * Populate the given list of accessors with TypeTags and Values. Some Values may be "views"
+     * into the memory constructed by the '_valueBufferBuilder' object, which is a caller-owned
+     * object that must remain valid for as long as these accessors are to remain valid.
+     ','line_number':281,'multiline':True]
+['text':'*
+ * A ValueBuilder that supports reading of sbe tag/values into a MaterializedRow.
+ ','line_number':296,'multiline':True]
+['text':' Nothing case.','line_number':312,'multiline':False]
+['text':' Skip the next value','line_number':315,'multiline':False]
+['text':' The 'row' output parameter might be smaller than the number of values owned by this','line_number':327,'multiline':False]
+['text':' builder. Be careful to only read as many values into 'row' as this output 'row' has space','line_number':328,'multiline':False]
+['text':' for.','line_number':329,'multiline':False]
+['text':' Return a pointer to one byte past the sbeTag in the inner BinData.','line_number':352,'multiline':False]
+['text':' Read the KeyString size after the 'sbeTag' byte. This gets written to the','line_number':356,'multiline':False]
+['text':' buffer in 'key_string::Value::serialize'.','line_number':357,'multiline':False]
+['text':' namespace mongo::sbe::value','line_number':379,'multiline':False]

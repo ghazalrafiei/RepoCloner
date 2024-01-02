@@ -1,0 +1,306 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' A type suitable for returning either a value or an error from a function. ','line_number':7,'multiline':True]
+['text':'*
+ * Empty struct, indicating success for operations that have no return value.
+ * For example, if you declare another empty struct `struct OutOfMemory {};`,
+ * then `Result<Ok, OutOfMemory>` represents either success or OOM.
+ ','line_number':23,'multiline':True]
+['text':'*
+ * A tag used to differentiate between GenericErrorResult created by the Err
+ * function (completely new error) and GenericErrorResult created by the
+ * Result::propagateErr function (propagated error). This can be used to track
+ * error propagation and eventually produce error stacks for logging/debugging
+ * purposes.
+ ','line_number':30,'multiline':True]
+['text':' The purpose of AlignedStorageOrEmpty is to make an empty class look like','line_number':69,'multiline':False]
+['text':' std::aligned_storage_t for the purposes of the PackingStrategy::NullIsOk','line_number':70,'multiline':False]
+['text':' specializations of ResultImplementation below. We can't use','line_number':71,'multiline':False]
+['text':' std::aligned_storage_t itself with an empty class, since it would no longer','line_number':72,'multiline':False]
+['text':' be empty.','line_number':73,'multiline':False]
+['text':' XXX This can't be statically asserted in general, if ErrorStorageType is','line_number':88,'multiline':False]
+['text':' not a basic type. With C++20 bit_cast, we could probably re-add such as','line_number':89,'multiline':False]
+['text':' assertion. static_assert(kNullValue == decltype(kNullValue)(0));','line_number':90,'multiline':False]
+['text':'*
+ * Specialization for when the success type is default-constructible and the
+ * error type is a value type which can never have the value 0 (as determined by
+ * UnusedZero<>).
+ ','line_number':178,'multiline':True]
+['text':'*
+ * Specialization for when alignment permits using the least significant bit
+ * as a tag bit.
+ ','line_number':198,'multiline':True]
+['text':' Some gcc versions choke on using std::max with alignas, see','line_number':216,'multiline':False]
+['text':' https://gcc.gnu.org/bugzilla/show_bug.cgi?id=94929 (and this seems to have','line_number':217,'multiline':False]
+['text':' regressed in some gcc 9.x version before being fixed again) Keeping the','line_number':218,'multiline':False]
+['text':' code above since we would eventually drop this when we no longer support','line_number':219,'multiline':False]
+['text':' gcc versions with the bug.','line_number':220,'multiline':False]
+['text':' Return true if any of the struct can fit in a word.','line_number':261,'multiline':False]
+['text':'*
+ * Specialization for when both type are not using all the bytes, in order to
+ * use one byte as a tag.
+ ','line_number':281,'multiline':True]
+['text':' To use nullptr as a special value, we need the counter part to exclude zero','line_number':309,'multiline':False]
+['text':' from its range of valid representations.','line_number':310,'multiline':False]
+['text':'','line_number':311,'multiline':False]
+['text':' By default assume that zero can be represented.','line_number':312,'multiline':False]
+['text':' This template can be used as a helper for specializing UnusedZero for scoped','line_number':318,'multiline':False]
+['text':' enum types which never use 0 as an error value, e.g.','line_number':319,'multiline':False]
+['text':'','line_number':320,'multiline':False]
+['text':' namespace mozilla::detail {','line_number':321,'multiline':False]
+['text':'','line_number':322,'multiline':False]
+['text':' template <>','line_number':323,'multiline':False]
+['text':' struct UnusedZero<MyEnumType> : UnusedZeroEnum<MyEnumType> {};','line_number':324,'multiline':False]
+['text':'','line_number':325,'multiline':False]
+['text':' }  // namespace mozilla::detail','line_number':326,'multiline':False]
+['text':'','line_number':327,'multiline':False]
+['text':' A bit of help figuring out which of the above specializations to use.','line_number':346,'multiline':False]
+['text':'','line_number':347,'multiline':False]
+['text':' We begin by safely assuming types don't have a spare bit, unless they are','line_number':348,'multiline':False]
+['text':' empty.','line_number':349,'multiline':False]
+['text':' As an incomplete type, void* does not have a spare bit.','line_number':355,'multiline':False]
+['text':' The lowest bit of a properly-aligned pointer is always zero if the pointee','line_number':361,'multiline':False]
+['text':' type is greater than byte-aligned. That bit is free to use if it's masked','line_number':362,'multiline':False]
+['text':' out of such pointers before they're dereferenced.','line_number':363,'multiline':False]
+['text':' Select one of the previous result implementation based on the properties of','line_number':369,'multiline':False]
+['text':' the V and E types.','line_number':370,'multiline':False]
+['text':' namespace detail','line_number':392,'multiline':False]
+['text':'*
+ * Result<V, E> represents the outcome of an operation that can either succeed
+ * or fail. It contains either a success value of type V or an error value of
+ * type E.
+ *
+ * All Result methods are const, so results are basically immutable.
+ * This is just like Variant<V, E> but with a slightly different API, and the
+ * following cases are optimized so Result can be stored more efficiently:
+ *
+ * - If both the success and error types do not use their least significant bit,
+ * are trivially copyable and destructible, Result<V, E> is guaranteed to be as
+ * large as the larger type. This is determined via the HasFreeLSB trait. By
+ * default, empty classes (in particular Ok) and aligned pointer types are
+ * assumed to have a free LSB, but you can specialize this trait for other
+ * types. If the success type is empty, the representation is guaranteed to be
+ * all zero bits on success. Do not change this representation! There is JIT
+ * code that depends on it. (Implementation note: The lowest bit is used as a
+ * tag bit: 0 to indicate the Result's bits are a success value, 1 to indicate
+ * the Result's bits (with the 1 masked out) encode an error value)
+ *
+ * - Else, if the error type can't have a all-zero bits representation and is
+ * not larger than a pointer, a CompactPair is used to represent this rather
+ * than a Variant. This has shown to be better optimizable, and the template
+ * code is much simpler than that of Variant, so it should also compile faster.
+ * Whether an error type can't be all-zero bits, is determined via the
+ * UnusedZero trait. MFBT doesn't declare any public type UnusedZero, but
+ * nsresult is declared UnusedZero in XPCOM.
+ *
+ * The purpose of Result is to reduce the screwups caused by using `false` or
+ * `nullptr` to indicate errors.
+ * What screwups? See <https://bugzilla.mozilla.org/show_bug.cgi?id=912928> for
+ * a partial list.
+ *
+ * Result<const V, E> or Result<V, const E> are not meaningful. The success or
+ * error values in a Result instance are non-modifiable in-place anyway. This
+ * guarantee must also be maintained when evolving Result. They can be
+ * unwrap()ped, but this loses const qualification. However, Result<const V, E>
+ * or Result<V, const E> may be misleading and prevent movability. Just use
+ * Result<V, E>. (Result<const V*, E> may make sense though, just Result<const
+ * V* const, E> is not possible.)
+ ','line_number':400,'multiline':True]
+['text':' See class comment on Result<const V, E> and Result<V, const E>.','line_number':443,'multiline':False]
+['text':'* Create a success result. ','line_number':457,'multiline':True]
+['text':'* Create a success result. ','line_number':462,'multiline':True]
+['text':'* Create a success result in-place. ','line_number':467,'multiline':True]
+['text':'* Create an error result. ','line_number':474,'multiline':True]
+['text':'*
+   * Create a (success/error) result from another (success/error) result with a
+   * different but convertible error type. ','line_number':479,'multiline':True]
+['text':'*
+   * Implementation detail of MOZ_TRY().
+   * Create an error result from another error result.
+   ','line_number':488,'multiline':True]
+['text':'*
+   * Implementation detail of MOZ_TRY().
+   * Create an error result from another error result.
+   ','line_number':499,'multiline':True]
+['text':'* True if this Result is a success result. ','line_number':515,'multiline':True]
+['text':'* True if this Result is an error result. ','line_number':518,'multiline':True]
+['text':'* Take the success value from this Result, which must be a success result.
+   ','line_number':521,'multiline':True]
+['text':'*
+   * Take the success value from this Result, which must be a success result.
+   * If it is an error result, then return the aValue.
+   ','line_number':528,'multiline':True]
+['text':'* Take the error value from this Result, which must be an error result. ','line_number':536,'multiline':True]
+['text':'* See the success value from this Result, which must be a success result. ','line_number':542,'multiline':True]
+['text':'* See the error value from this Result, which must be an error result. ','line_number':552,'multiline':True]
+['text':'* Propagate the error value from this Result, which must be an error result.
+   *
+   * This can be used to propagate an error from a function call to the caller
+   * with a different value type, but the same error type:
+   *
+   *    Result<T1, E> Func1() {
+   *       Result<T2, E> res = Func2();
+   *       if (res.isErr()) { return res.propagateErr(); }
+   *    }
+   ','line_number':563,'multiline':True]
+['text':'*
+   * Map a function V -> V2 over this result's success variant. If this result
+   * is an error, do not invoke the function and propagate the error.
+   *
+   * Mapping over success values invokes the function to produce a new success
+   * value:
+   *
+   *     // Map Result<int, E> to another Result<int, E>
+   *     Result<int, E> res(5);
+   *     Result<int, E> res2 = res.map([](int x) { return x * x; });
+   *     MOZ_ASSERT(res.isOk());
+   *     MOZ_ASSERT(res2.unwrap() == 25);
+   *
+   *     // Map Result<const char*, E> to Result<size_t, E>
+   *     Result<const char*, E> res("hello, map!");
+   *     Result<size_t, E> res2 = res.map(strlen);
+   *     MOZ_ASSERT(res.isOk());
+   *     MOZ_ASSERT(res2.unwrap() == 11);
+   *
+   * Mapping over an error does not invoke the function and propagates the
+   * error:
+   *
+   *     Result<V, int> res(5);
+   *     MOZ_ASSERT(res.isErr());
+   *     Result<V2, int> res2 = res.map([](V v) { ... });
+   *     MOZ_ASSERT(res2.isErr());
+   *     MOZ_ASSERT(res2.unwrapErr() == 5);
+   ','line_number':578,'multiline':True]
+['text':'*
+   * Map a function E -> E2 over this result's error variant. If this result is
+   * a success, do not invoke the function and move the success over.
+   *
+   * Mapping over error values invokes the function to produce a new error
+   * value:
+   *
+   *     // Map Result<V, int> to another Result<V, int>
+   *     Result<V, int> res(5);
+   *     Result<V, int> res2 = res.mapErr([](int x) { return x * x; });
+   *     MOZ_ASSERT(res2.isErr());
+   *     MOZ_ASSERT(res2.unwrapErr() == 25);
+   *
+   *     // Map Result<V, const char*> to Result<V, size_t>
+   *     Result<V, const char*> res("hello, mapErr!");
+   *     Result<V, size_t> res2 = res.mapErr(strlen);
+   *     MOZ_ASSERT(res2.isErr());
+   *     MOZ_ASSERT(res2.unwrapErr() == 14);
+   *
+   * Mapping over a success does not invoke the function and moves the success:
+   *
+   *     Result<int, E> res(5);
+   *     MOZ_ASSERT(res.isOk());
+   *     Result<int, E2> res2 = res.mapErr([](E e) { ... });
+   *     MOZ_ASSERT(res2.isOk());
+   *     MOZ_ASSERT(res2.unwrap() == 5);
+   ','line_number':612,'multiline':True]
+['text':'*
+   * Map a function E -> Result<V, E2> over this result's error variant. If
+   * this result is a success, do not invoke the function and move the success
+   * over.
+   *
+   * `orElse`ing over error values invokes the function to produce a new
+   * result:
+   *
+   *     // `orElse` Result<V, int> error variant to another Result<V, int>
+   *     // error variant or Result<V, int> success variant
+   *     auto orElse = [](int x) -> Result<V, int> {
+   *       if (x != 6) {
+   *         return Err(x * x);
+   *       }
+   *       return V(...);
+   *     };
+   *
+   *     Result<V, int> res(5);
+   *     auto res2 = res.orElse(orElse);
+   *     MOZ_ASSERT(res2.isErr());
+   *     MOZ_ASSERT(res2.unwrapErr() == 25);
+   *
+   *     Result<V, int> res3(6);
+   *     auto res4 = res3.orElse(orElse);
+   *     MOZ_ASSERT(res4.isOk());
+   *     MOZ_ASSERT(res4.unwrap() == ...);
+   *
+   *     // `orElse` Result<V, const char*> error variant to Result<V, size_t>
+   *     // error variant or Result<V, size_t> success variant
+   *     auto orElse = [](const char* s) -> Result<V, size_t> {
+   *       if (strcmp(s, "foo")) {
+   *         return Err(strlen(s));
+   *       }
+   *       return V(...);
+   *     };
+   *
+   *     Result<V, const char*> res("hello, orElse!");
+   *     auto res2 = res.orElse(orElse);
+   *     MOZ_ASSERT(res2.isErr());
+   *     MOZ_ASSERT(res2.unwrapErr() == 14);
+   *
+   *     Result<V, const char*> res3("foo");
+   *     auto res4 = ress.orElse(orElse);
+   *     MOZ_ASSERT(res4.isOk());
+   *     MOZ_ASSERT(res4.unwrap() == ...);
+   *
+   * `orElse`ing over a success does not invoke the function and moves the
+   * success:
+   *
+   *     Result<int, E> res(5);
+   *     MOZ_ASSERT(res.isOk());
+   *     Result<int, E2> res2 = res.orElse([](E e) { ... });
+   *     MOZ_ASSERT(res2.isOk());
+   *     MOZ_ASSERT(res2.unwrap() == 5);
+   ','line_number':646,'multiline':True]
+['text':'*
+   * Given a function V -> Result<V2, E>, apply it to this result's success
+   * value and return its result. If this result is an error value, it is
+   * propagated.
+   *
+   * This is sometimes called "flatMap" or ">>=" in other contexts.
+   *
+   * `andThen`ing over success values invokes the function to produce a new
+   * result:
+   *
+   *     Result<const char*, Error> res("hello, andThen!");
+   *     Result<HtmlFreeString, Error> res2 = res.andThen([](const char* s) {
+   *       return containsHtmlTag(s)
+   *         ? Result<HtmlFreeString, Error>(Error("Invalid: contains HTML"))
+   *         : Result<HtmlFreeString, Error>(HtmlFreeString(s));
+   *       }
+   *     });
+   *     MOZ_ASSERT(res2.isOk());
+   *     MOZ_ASSERT(res2.unwrap() == HtmlFreeString("hello, andThen!");
+   *
+   * `andThen`ing over error results does not invoke the function, and just
+   * propagates the error result:
+   *
+   *     Result<int, const char*> res("some error");
+   *     auto res2 = res.andThen([](int x) { ... });
+   *     MOZ_ASSERT(res2.isErr());
+   *     MOZ_ASSERT(res.unwrapErr() == res2.unwrapErr());
+   ','line_number':706,'multiline':True]
+['text':'*
+ * A type that auto-converts to an error Result. This is like a Result without
+ * a success type. It's the best return type for functions that always return
+ * an error--functions designed to build and populate error objects. It's also
+ * useful in error-handling macros; see MOZ_TRY for an example.
+ ','line_number':741,'multiline':True]
+['text':' namespace mozilla','line_number':773,'multiline':False]
+['text':'*
+ * MOZ_TRY(expr) is the C++ equivalent of Rust's `try!(expr);`. First, it
+ * evaluates expr, which must produce a Result value. On success, it
+ * discards the result altogether. On error, it immediately returns an error
+ * Result from the enclosing function.
+ ','line_number':775,'multiline':True]
+['text':'*
+ * MOZ_TRY_VAR(target, expr) is the C++ equivalent of Rust's `target =
+ * try!(expr);`. First, it evaluates expr, which must produce a Result value. On
+ * success, the result's success value is assigned to target. On error,
+ * immediately returns the error result. |target| must be an lvalue.
+ ','line_number':789,'multiline':True]
+['text':' mozilla_Result_h','line_number':804,'multiline':False]

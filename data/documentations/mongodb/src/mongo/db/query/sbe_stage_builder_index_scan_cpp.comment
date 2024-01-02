@@ -1,0 +1,168 @@
+['text':'*
+ *    Copyright (C) 2020-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' IWYU pragma: keep','line_number':83,'multiline':False]
+['text':'*
+ * Returns 'true' if the index bounds in 'intervalLists' can be represented as a number of intervals
+ * between low and high keys, which can be statically generated. Inclusivity of each bound is
+ * returned through the relevant '*KeyInclusive' parameter. Returns 'false' otherwise.
+ ','line_number':91,'multiline':True]
+['text':' First, we skip over point intervals.','line_number':107,'multiline':False]
+['text':' Bail out early if all our intervals are points.','line_number':116,'multiline':False]
+['text':' After point intervals we can have exactly one non-point interval.','line_number':121,'multiline':False]
+['text':' Set the inclusivity from the non-point interval.','line_number':126,'multiline':False]
+['text':' And after the non-point interval we can have any number of "all values" intervals.','line_number':130,'multiline':False]
+['text':' If we've reached the end of the interval lists, then we can decompose a multi-interval index','line_number':139,'multiline':False]
+['text':' bounds into a number of single-interval bounds.','line_number':140,'multiline':False]
+['text':'*
+ * Decomposes multi-interval index bounds represented as 'intervalLists' into a number of
+ * single-interval bounds. Inclusivity of each bound is set through the relevant '*KeyInclusive'
+ * parameter. For example, if we've got an index {a: 1, b: 1, c: 1, d: 1} and would issue this
+ * query:
+ *
+ *   {a: {$in: [1,2]}, b: {$in: [10,11]}, c: {$gte: 20}}
+ *
+ * Then the 'intervalLists' would contain the following multi-interval bounds:
+ *
+ *   [
+ *     [ [1,1], [2,2] ],
+ *     [ [10,10], [11,11] ],
+ *     [ [20, Inf) ],
+ *     [ [MinKey, MaxKey]
+ *   ]
+ *
+ * And it'd be decomposed into the following single-intervals between low and high keys:
+ *
+ *  {'':1, '':10, '':20, '':MinKey} -> {'':1, '':10, '':Inf, '':MaxKey}
+ *  {'':1, '':11, '':20, '':MinKey} -> {'':1, '':11, '':Inf, '':MaxKey}
+ *  {'':2, '':10, '':20, '':MinKey} -> {'':2, '':10, '':Inf, '':MaxKey}
+ *  {'':2, '':11, '':20, '':MinKey} -> {'':2, '':11, '':Inf, '':MaxKey}
+ *
+ * TODO SERVER-48485: optimize this function to build and return the intervals as KeyString objects,
+ * rather than BSON.
+ ','line_number':144,'multiline':True]
+['text':' Appends the 'interval' bounds to the low and high keys and return the updated keys.','line_number':177,'multiline':False]
+['text':' Inclusivity of each bound is set through the relevant '*KeyInclusive' parameter.','line_number':178,'multiline':False]
+['text':' This is an adaptation of the BFS algorithm. The 'keysQueue' is initialized with a pair of','line_number':200,'multiline':False]
+['text':' empty low/high keys. For each step while traversing the 'intervalLists' we try to append the','line_number':201,'multiline':False]
+['text':' current interval to each generated pair in 'keysQueue' and then push the updated keys back to','line_number':202,'multiline':False]
+['text':' the queue.','line_number':203,'multiline':False]
+['text':' If the limit of maximum number of static intervals is exceeded, return an empty','line_number':213,'multiline':False]
+['text':' vector which will cause a fallback to build a generic index scan.','line_number':214,'multiline':False]
+['text':' The 'keysQueue' contains all generated pairs of low/high keys.','line_number':222,'multiline':False]
+['text':'*
+ * Constructs an optimized version of an index scan for multi-interval index bounds for the case
+ * when the bounds can be decomposed in a number of single-interval bounds. In this case, instead
+ * of building a generic index scan to navigate through the index using the 'IndexBoundsChecker',
+ * we will construct a subtree with a constant table scan containing all intervals we'd want to
+ * scan through. Specifically, we will build the following subtree:
+ *
+ *   env: { .., boundsSlot = .., keyStringSlot = .., snapshotIdSlot = .., .. }
+ *
+ *   nlj [] [lowKeySlot, highKeySlot]
+ *     left
+ *       project [lowKeySlot = getField(unwindSlot, "l"), highKeySlot = getField(unwindSlot, "h")]
+ *       unwind unwindSlot unusedIndexSlot boundsSlot false
+ *       limit 1
+ *       coscan
+ *     right
+ *       ixseek lowKeySlot highKeySlot keyStringSlot snapshotIdSlot recordIdSlot [] @coll @index
+ *
+ * In case when the 'intervals' are not specified, 'boundsSlot' will be registered in the runtime
+ * environment and returned as a third element of the tuple.
+ ','line_number':272,'multiline':True]
+['text':' Project out the constructed array as a constant value if intervals are known at compile time','line_number':322,'multiline':False]
+['text':' and add an unwind stage on top to flatten the interval bounds array.','line_number':323,'multiline':False]
+['text':' We don't need an index slot but must to provide it. ','line_number':329,'multiline':True]
+['text':' Preserve null and empty arrays, in our case it cannot be empty anyway. ','line_number':330,'multiline':True]
+['text':' Add another project stage to extract low and high keys from each value produced by unwind and','line_number':340,'multiline':False]
+['text':' bind the keys to the 'lowKeySlot' and 'highKeySlot'.','line_number':341,'multiline':False]
+['text':' Finally, get the keys from the outer side and feed them to the inner side (ixscan).','line_number':378,'multiline':False]
+['text':'*
+ * Builds a generic multi-interval index scan for the cases when index bounds cannot be represented
+ * as valid low/high keys. A 'GenericIndexScanStage' plan will be generated, and it will use either
+ * a constant IndexBounds* or a parameterized IndexBounds* from a runtime environment slot.
+ * The parameterized IndexBounds* obtained from environment slot can be rebound to a new value upon
+ * plan cache recovery.
+ *
+ * Returns a tuple composed of: (1) a 'GenericIndexScanStage' plan stage; (2) a set of output slots;
+ * and (3) boost::none or a runtime environment slot id for index bounds. In case when the 'bounds'
+ * are not specified, 'indexBounds' will be registered in the runtime environment and returned in
+ * the third element of the tuple.
+ ','line_number':389,'multiline':True]
+['text':' owned ','line_number':421,'multiline':True]
+['text':' 'sbe::EConstant' will take the ownership of the 'IndexBounds' pointer.','line_number':424,'multiline':False]
+['text':'*
+ * Checks if we can create a single interval index scan plan. Creation of the single interval index
+ * scan plans is preferred due to lower query latency as a result of faster plan recovery from the
+ * cache. The rule for checking if 'iets' resolve to a single interval is as follows:
+ * - an optional sequence of '$eq' or constant point intervals followed by
+ * - an optional single interval of a comparison match expression or a constant interval or an
+ * intersection of two such nodes followed by
+ * - an optional sequence of unbounded intervals [MinKey, MaxKey].
+ ','line_number':468,'multiline':True]
+['text':' Represents different allowed states while checking if the 'iets' could be represented as a','line_number':478,'multiline':False]
+['text':' single interval.','line_number':479,'multiline':False]
+['text':' Transition to the next state as we allow only one bounded range, after that all','line_number':517,'multiline':False]
+['text':' remaining fields must be unbounded.','line_number':518,'multiline':False]
+['text':' namespace','line_number':531,'multiline':False]
+['text':' If low and high keys are provided in the runtime environment, then we need to create','line_number':585,'multiline':False]
+['text':' a cfilter stage on top of project in order to be sure that the single interval','line_number':586,'multiline':False]
+['text':' exists (the interval may be empty), in which case the index scan plan should simply','line_number':587,'multiline':False]
+['text':' return EOF.','line_number':588,'multiline':False]
+['text':'IsConst','line_number':590,'multiline':True]
+['text':'IsEof','line_number':590,'multiline':True]
+['text':' Scan the index in the range {'lowKeySlot', 'highKeySlot'} (subject to inclusive or','line_number':635,'multiline':False]
+['text':' exclusive boundaries), and produce a single field recordIdSlot that can be used to','line_number':636,'multiline':False]
+['text':' position into the collection.','line_number':637,'multiline':False]
+['text':' Find the IndexAccessMethod which corresponds to the 'indexName'.','line_number':681,'multiline':False]
+['text':' Determine the set of fields from the index required to apply the filter and union those with','line_number':692,'multiline':False]
+['text':' the set of fields from the index required by the parent stage.','line_number':693,'multiline':False]
+['text':' Generate the various slots needed for a consistency check and/or a corruption check if','line_number':708,'multiline':False]
+['text':' requested.','line_number':709,'multiline':False]
+['text':' If we have just a single interval, we can construct a simplified sub-tree.','line_number':721,'multiline':False]
+['text':' If we were able to decompose multi-interval index bounds into a number of single-interval','line_number':739,'multiline':False]
+['text':' bounds, we can also built an optimized sub-tree to perform an index scan.','line_number':740,'multiline':False]
+['text':' Generate a generic index scan for multi-interval index bounds.','line_number':754,'multiline':False]
+['text':' Index bounds cannot be represented as valid low/high keys.','line_number':823,'multiline':False]
+['text':' Find the IndexAccessMethod which corresponds to the 'indexName'.','line_number':884,'multiline':False]
+['text':' Determine the set of fields from the index required to apply the filter and union those with','line_number':893,'multiline':False]
+['text':' the set of fields from the index required by the parent stage.','line_number':894,'multiline':False]
+['text':' Generate the various slots needed for a consistency check and/or a corruption check if','line_number':909,'multiline':False]
+['text':' requested.','line_number':910,'multiline':False]
+['text':' Whenever possible we should prefer building simplified single interval index scan plans in','line_number':920,'multiline':False]
+['text':' order to get the best performance.','line_number':921,'multiline':False]
+['text':' lowPriority ','line_number':937,'multiline':True]
+['text':' Generate a generic index scan for multi-interval index bounds.','line_number':953,'multiline':False]
+['text':' If we were able to decompose multi-interval index bounds into a number of','line_number':970,'multiline':False]
+['text':' single-interval bounds, we can also built an optimized sub-tree to perform an index','line_number':971,'multiline':False]
+['text':' scan.','line_number':972,'multiline':False]
+['text':' Generate a branch stage that will either execute an optimized or a generic index scan','line_number':1010,'multiline':False]
+['text':' based on the condition in the slot 'isGenericScanSlot'.','line_number':1011,'multiline':False]
+['text':' owned ','line_number':1013,'multiline':True]
+['text':' namespace mongo::stage_builder','line_number':1071,'multiline':False]

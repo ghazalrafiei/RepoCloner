@@ -1,0 +1,65 @@
+['text':'*
+ * Tests that in a tenant migration, values coming from non-majority reads that the recipient's
+ * tenant cloner performs (such as 'listCollections' and 'listDatabases') account for donor
+ * rollback.
+ *
+ * Incompatible with shard merge, which can't handle rollback.
+ *
+ * @tags: [
+ *   incompatible_with_macos,
+ *   incompatible_with_shard_merge,
+ *   incompatible_with_windows_tls,
+ *   requires_majority_read_concern,
+ *   requires_persistence,
+ *   serverless,
+ *   requires_fcv_71,
+ * ]
+ ','line_number':1,'multiline':True]
+['text':' This function does the following:','line_number':47,'multiline':False]
+['text':' 1. Runs the setup function, which typically involves loading the donor RST with some data.','line_number':48,'multiline':False]
+['text':' 2. Configures the failpoints passed in to pause. These failpoints usually mark the steps right','line_number':49,'multiline':False]
+['text':'    before and after calling a 'list*' command respectively. For example, the first failpoint may','line_number':50,'multiline':False]
+['text':'    cause the cloner to pause right before it calls 'listCollections', while the second failpoint','line_number':51,'multiline':False]
+['text':'    causes the cloner to pause right after calling 'listCollections'.','line_number':52,'multiline':False]
+['text':' 3. Once the first failpoint has been hit (i.e. right before calling 'list*'), replication is','line_number':53,'multiline':False]
+['text':'    paused on the donor. The 'whilePausedFunction' is run, which performs operations on the donor','line_number':54,'multiline':False]
+['text':'    that will not be majority committed (since we have paused replication). These operations will','line_number':55,'multiline':False]
+['text':'    later be rolled back.','line_number':56,'multiline':False]
+['text':' 4. We allow the 'list*' read to be performed, and then wait at the second failpoint (i.e. after','line_number':57,'multiline':False]
+['text':'    'list*' has been called).','line_number':58,'multiline':False]
+['text':' 5. One of the other nodes from the donor RST is made to step up.','line_number':59,'multiline':False]
+['text':' 6. The second failpoint is lifted. Thus the cloner continues, with the 'list*' read that wasn't','line_number':60,'multiline':False]
+['text':'    majority committed.','line_number':61,'multiline':False]
+['text':' 7. The migration is allowed to completed, and a 'forgetMigration' command is issued.','line_number':62,'multiline':False]
+['text':' Allow non-timestamped reads on donor after migration completes for testing.','line_number':75,'multiline':False]
+['text':' Set the 'catchUpTimeoutMillis' to 0, so that the new primary doesn't fetch operations','line_number':80,'multiline':False]
+['text':' that we want rolled back. Turn off chaining to make sure that the secondary the recipient','line_number':81,'multiline':False]
+['text':' initially syncs from is able to keep in sync with the primary.','line_number':82,'multiline':False]
+['text':' The failpoints correspond to the instants right before and after the 'list*' call that the','line_number':102,'multiline':False]
+['text':' recipient cloners make.','line_number':103,'multiline':False]
+['text':' Pause the oplog fetcher to make sure that the cloner's failure rather than the fetcher's','line_number':108,'multiline':False]
+['text':' failure results in restarting the migration.','line_number':109,'multiline':False]
+['text':' Perform any initial setup on the donor before running the tenant migration.','line_number':113,'multiline':False]
+['text':' Wait until right before the 'list*' call is made, and then stop replication on the donor RST.','line_number':121,'multiline':False]
+['text':' Figure out which donor node the recipient is syncing from.','line_number':125,'multiline':False]
+['text':' 'syncSourceNode' is the donor secondary from which the recipient is syncing. 'otherNodes'','line_number':131,'multiline':False]
+['text':' are the other secondaries in the donor RST.','line_number':132,'multiline':False]
+['text':' Perform some work on the donor primary while replication is paused. This work will not be','line_number':149,'multiline':False]
+['text':' replicated, and will later be rolled back due to donor primary step down.','line_number':150,'multiline':False]
+['text':' Once the 'list*' call has been made, the tenant migration can proceed. The 'list*' call will','line_number':155,'multiline':False]
+['text':' have returned information that wasn't majority committed. Step up a new primary to expose','line_number':156,'multiline':False]
+['text':' this situation. Allow replication once again.','line_number':157,'multiline':False]
+['text':' Advance the cluster time by applying new operations on the new primary. We insert documents','line_number':163,'multiline':False]
+['text':' into a non-tenant DB, so this data will not be migrated but will still advance the cluster','line_number':164,'multiline':False]
+['text':' time.','line_number':165,'multiline':False]
+['text':' Test to make sure some conditions post migration have been met.','line_number':189,'multiline':False]
+['text':' Creates a collection on the donor.','line_number':197,'multiline':False]
+['text':' Creates another collection on the donor, that isn't majority committed due to replication being','line_number':203,'multiline':False]
+['text':' halted.','line_number':204,'multiline':False]
+['text':' Makes sure that the collection that the donor RST failed to replicate does not exist on the','line_number':225,'multiline':False]
+['text':' recipient.','line_number':226,'multiline':False]
+['text':' Create a database on the donor RST.','line_number':236,'multiline':False]
+['text':' Create another database on the donor RST. This database doesn't exist on a majority of donor RST','line_number':242,'multiline':False]
+['text':' nodes, as replication has been paused.','line_number':243,'multiline':False]
+['text':' The database that failed to replicate on the donor RST must not exist on the recipient.','line_number':264,'multiline':False]
+['text':' Get all databases corresponding to the given tenant.','line_number':268,'multiline':False]

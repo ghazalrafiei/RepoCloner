@@ -1,0 +1,348 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __evict_exclusive_clear --
+ *     Release exclusive access to a page.
+ ','line_number':16,'multiline':True]
+['text':'
+ * __evict_exclusive --
+ *     Acquire exclusive access to a page.
+ ','line_number':28,'multiline':True]
+['text':'
+     * Check for a hazard pointer indicating another thread is using the page, meaning the page
+     * cannot be evicted.
+     ','line_number':37,'multiline':True]
+['text':'
+ * __wt_page_release_evict --
+ *     Release a reference to a page, and attempt to immediately evict it.
+ ','line_number':48,'multiline':True]
+['text':'
+     * This function always releases the hazard pointer - ensure that's done regardless of whether
+     * we can get exclusive access. Take some care with order of operations: if we release the
+     * hazard pointer without first locking the page, it could be evicted in between.
+     ','line_number':63,'multiline':True]
+['text':'
+     * There is no need to cache a history store cursor if evicting a readonly page. That includes
+     * pages from a checkpoint. Note that opening a history store cursor on a checkpoint page from
+     * here will explode because the identity of the matching history store checkpoint isn't
+     * available.
+     ','line_number':80,'multiline':True]
+['text':'
+ * __evict_stats_update --
+ *     Update the stats of eviction.
+ *
+ ','line_number':102,'multiline':True]
+['text':' Count page evictions in parallel with checkpoint. ','line_number':142,'multiline':True]
+['text':'
+         * We are in the reentrant history store eviction inside a data store reconciliation. Add to
+         * the total time taken to do the reentrant history store eviction.
+         ','line_number':169,'multiline':True]
+['text':'
+ * __wt_evict --
+ *     Evict a page.
+ ','line_number':180,'multiline':True]
+['text':' As re-entry into eviction is possible, only clear the statistics on the first entry. ','line_number':206,'multiline':True]
+['text':'
+     * Enter the eviction and split generation. If we re-enter eviction, leave the previous
+     * generation (eviction or split) generation (which must be as low as the current generation),
+     * untouched.
+     ','line_number':216,'multiline':True]
+['text':'
+     * Immediately increment the forcible eviction counter, we might do an in-memory split and not
+     * an eviction, which skips the other statistics.
+     ','line_number':224,'multiline':True]
+['text':'
+         * Track history store pages being force evicted while holding a history store cursor open.
+         ','line_number':232,'multiline':True]
+['text':'
+     * Get exclusive access to the page if our caller doesn't have the tree locked down.
+     ','line_number':241,'multiline':True]
+['text':'
+         * Now the page is locked, remove it from the LRU eviction queue. We have to do this before
+         * freeing the page memory or otherwise touching the reference because eviction paths assume
+         * a non-NULL reference on the queue is pointing at valid memory.
+         ','line_number':247,'multiline':True]
+['text':'
+     * Review the page for conditions that would block its eviction. If the check fails (for
+     * example, we find a page with active children), quit. Make this check for clean pages, too:
+     * while unlikely eviction would choose an internal page with children, it's not disallowed.
+     ','line_number':258,'multiline':True]
+['text':'
+     * If we decide to do an in-memory split. Do it now. If an in-memory split completes, the page
+     * stays in memory and the tree is left in the desired state: avoid the usual cleanup.
+     ','line_number':265,'multiline':True]
+['text':' No need to reconcile the page if it is from a dead tree or it is clean. ','line_number':274,'multiline':True]
+['text':' After this spot, the only recoverable failure is EBUSY. ','line_number':278,'multiline':True]
+['text':' Check we are not evicting an accessible internal page with an active split generation. ','line_number':281,'multiline':True]
+['text':' Count evictions of internal pages during normal operation. ','line_number':287,'multiline':True]
+['text':'
+     * Track the largest page size seen at eviction, it tells us something about our ability to
+     * force pages out before they're larger than the cache. We don't care about races, it's just a
+     * statistic.
+     ','line_number':291,'multiline':True]
+['text':' Figure out whether reconciliation was done on the page ','line_number':299,'multiline':True]
+['text':' Update the reference and discard the page. ','line_number':305,'multiline':True]
+['text':'
+         * Pages that belong to dead trees never write back to disk and can't support page splits.
+         ','line_number':309,'multiline':True]
+['text':'
+     * We have loaded the new disk image and updated the tree structure. We can no longer fail after
+     * this point.
+     ','line_number':316,'multiline':True]
+['text':' Leave any local eviction generation. ','line_number':335,'multiline':True]
+['text':'
+ * __evict_delete_ref --
+ *     Mark a page reference deleted and check if the parent can reverse split.
+ ','line_number':342,'multiline':True]
+['text':'
+     * Avoid doing reverse splits when closing the file, it is wasted work and some structures may
+     * have already been freed.
+     ','line_number':357,'multiline':True]
+['text':'
+         * If more than 10% of the parent references are deleted, try a reverse split. Don't bother
+         * if there is a single deleted reference: the internal page is empty and we have to wait
+         * for eviction to notice.
+         *
+         * This will consume the deleted ref (and eventually free it). If the reverse split can't
+         * get the access it needs because something is busy, be sure that the page still ends up
+         * marked deleted.
+         *
+         * Don't do it if we are a VLCS tree and the child we're deleting is the leftmost child. The
+         * reverse split will automatically remove the page entirely, creating a namespace gap at
+         * the beginning of the internal page, and that leaves search nowhere to go. Note that the
+         * situation will be handled safely if another child gets deleted, or if eviction comes for
+         * a visit.
+         ','line_number':366,'multiline':True]
+['text':'
+                 * The child must be locked after a failed reverse split.
+                 ','line_number':391,'multiline':True]
+['text':'
+ * __evict_page_clean_update --
+ *     Update a clean page's reference on eviction.
+ ','line_number':403,'multiline':True]
+['text':'
+     * We might discard an instantiated deleted page, because instantiated pages are not marked
+     * dirty by default. Check this before discarding the modify structure in __wt_ref_out.
+     ','line_number':413,'multiline':True]
+['text':'
+     * Discard the page and update the reference structure. A leaf page without a disk address is a
+     * deleted page that either was created empty and never written out, or had its on-disk page
+     * discarded already after the deletion became globally visible. It is not immediately clear if
+     * it's possible to get an internal page without a disk address here, but if one appears it can
+     * be deleted. (Note that deleting an internal page implicitly turns it into a leaf.)
+     *
+     * A page with a disk address is now on disk, unless it was deleted and instantiated and then
+     * evicted unmodified, in which case it is still deleted. In the latter case set the state back
+     * to WT_REF_DELETED.
+     ','line_number':424,'multiline':True]
+['text':'
+ * __evict_page_dirty_update --
+ *     Update a dirty page's reference on eviction.
+ ','line_number':445,'multiline':True]
+['text':'
+         * Page is empty: Update the parent to reference a deleted page. Reconciliation left the
+         * page "empty", so there's no older transaction in the system that might need to see an
+         * earlier version of the page. There's no backing address, if we're forced to "read" into
+         * that namespace, we instantiate a new page instead of trying to read from the backing
+         * store.
+         ','line_number':466,'multiline':True]
+['text':'
+         * Multiple blocks: Either a split where we reconciled a page and it turned into a lot of
+         * pages or an in-memory page that got too large, we forcibly evicted it, and there wasn't
+         * anything to write.
+         *
+         * The latter is a special case of forced eviction. Imagine a thread updating a small set
+         * keys on a leaf page. The page is too large or has too many deleted items, so we try and
+         * evict it, but after reconciliation there's only a small amount of live data (so it's a
+         * single page we can't split), and if there's an older reader somewhere, there's data on
+         * the page we can't write (so the page can't be evicted). In that case, we end up here with
+         * a single block that we can't write. Take advantage of the fact we have exclusive access
+         * to the page and rewrite it in memory.
+         ','line_number':478,'multiline':True]
+['text':'
+         * 1-for-1 page swap: Update the parent to reference the replacement page.
+         *
+         * Publish: a barrier to ensure the structure fields are set before the state change makes
+         * the page available to readers.
+         ','line_number':498,'multiline':True]
+['text':'
+         * Eviction wants to keep this page if we have a disk image, re-instantiate the page in
+         * memory, else discard the page.
+         ','line_number':511,'multiline':True]
+['text':' The split code works with WT_MULTI structures, build one for the disk image. ','line_number':520,'multiline':True]
+['text':'
+             * Store the disk image to a temporary pointer in case we fail to rewrite the page and
+             * we need to link the new disk image back to the old disk image.
+             ','line_number':523,'multiline':True]
+['text':'
+ * __evict_child_check --
+ *     Review an internal page for active children.
+ ','line_number':544,'multiline':True]
+['text':' Pre-fetch queue flags on a ref need to be checked while holding the pre-fetch lock. ','line_number':555,'multiline':True]
+['text':'
+     * There may be cursors in the tree walking the list of child pages. The parent is locked, so
+     * all we care about is cursors already in the child pages, no thread can enter them. Any cursor
+     * moving through the child pages must be hazard pointer coupling between pages, where the page
+     * on which it currently has a hazard pointer must be in a state other than on-disk. Walk the
+     * child list forward, then backward, to ensure we don't race with a cursor walking in the
+     * opposite direction from our check.
+     ','line_number':558,'multiline':True]
+['text':' It isn't safe to evict if there is a child on the pre-fetch queue. ','line_number':567,'multiline':True]
+['text':' On-disk ','line_number':574,'multiline':True]
+['text':' On-disk, deleted ','line_number':575,'multiline':True]
+['text':' On-disk ','line_number':590,'multiline':True]
+['text':' On-disk, deleted ','line_number':591,'multiline':True]
+['text':'
+     * It is always OK to evict pages from checkpoint cursor trees if they don't have children, and
+     * visibility checks for pages found to be deleted in the checkpoint aren't needed (or correct
+     * when done in eviction threads).
+     ','line_number':599,'multiline':True]
+['text':'
+     * The fast check is done and there are no cursors in the child pages. Make sure the child
+     * WT_REF structures pages can be discarded.
+     ','line_number':607,'multiline':True]
+['text':' On-disk ','line_number':614,'multiline':True]
+['text':' On-disk, deleted ','line_number':616,'multiline':True]
+['text':'
+                              * If the child page was part of a truncate, transaction rollback might
+                              * switch this page into its previous state at any time, so the delete
+                              * must be resolved before the parent can be evicted.
+                              *
+                              * We have the internal page locked, which prevents a search from
+                              * descending into it. However, a walk from an adjacent leaf page could
+                              * attempt to hazard couple into a child page and free the page_del
+                              * structure as we are examining it. Flip the state to locked to make
+                              * this check safe: if that fails, we have raced with a read and should
+                              * give up on evicting the parent.
+                              ','line_number':617,'multiline':True]
+['text':'
+             * Insert a read/read barrier so we're guaranteed the page_del state we read below comes
+             * after the locking operation on the ref state and therefore after the previous unlock
+             * of the ref. Otherwise we might read an inconsistent view of the page deletion info,
+             * and while many combinations are harmless and would just lead us to falsely refuse to
+             * evict, some (e.g. reading committed as true and a stale durable timestamp from before
+             * it was set by commit) are not.
+             *
+             * Note that while ordinarily a lock acquire should have an acquire (read/any) barrier
+             * after it, because we are only reading the write part is irrelevant and a read/read
+             * barrier is sufficient.
+             *
+             * FIXME-WT-9780: this and the CAS should be rolled into a WT_REF_TRYLOCK macro.
+             ','line_number':631,'multiline':True]
+['text':'
+             * We can evict any truncation that's committed. However, restrictions in reconciliation
+             * mean that it needs to be visible to us when we get there. And unfortunately we are
+             * upstream of the point where eviction threads get snapshots. Plus, application threads
+             * doing eviction can see their own uncommitted truncations. So, use the following
+             * logic:
+             *     1. First check if the operation is committed. If not, it's not visible for these
+             *        purposes.
+             *     2. If we already have a snapshot, use it to check visibility.
+             *     3. If we do not but we're an eviction thread, go ahead. We will get a snapshot
+             *        shortly and any committed operation will be visible in it.
+             *     4. Otherwise, check if the operation is globally visible.
+             *
+             * Even though we specifically can't evict prepared truncations, we don't need to deploy
+             * the special-case logic for prepared transactions in __wt_page_del_visible; prepared
+             * transactions aren't committed so they'll fail the first check.
+             ','line_number':647,'multiline':True]
+['text':' FIXME-WT-9780: is there a reason this doesn't use WT_REF_UNLOCK? ','line_number':672,'multiline':True]
+['text':'
+ * __evict_review --
+ *     Review the page and its subtree for conditions that would block its eviction.
+ ','line_number':686,'multiline':True]
+['text':'
+     * Fail if an internal has active children, the children must be evicted first. The test is
+     * necessary but shouldn't fire much: the eviction code is biased for leaf pages, an internal
+     * page shouldn't be selected for eviction until all children have been evicted.
+     ','line_number':706,'multiline':True]
+['text':' It is always OK to evict pages from dead trees if they don't have children. ','line_number':718,'multiline':True]
+['text':'
+     * Retrieve the modified state of the page. This must happen after the check for evictable
+     * internal pages otherwise there is a race where a page could be marked modified due to a child
+     * being transitioned to WT_REF_DISK after the modified check and before we visited the ref
+     * while walking the parent index.
+     ','line_number':722,'multiline':True]
+['text':'
+     * Clean pages can't be evicted when running in memory only. This should be uncommon - we don't
+     * add clean pages to the queue.
+     ','line_number':730,'multiline':True]
+['text':' Check if the page can be evicted. ','line_number':737,'multiline':True]
+['text':'
+         * Update the oldest ID to avoid wasted effort should it have fallen behind current.
+         ','line_number':739,'multiline':True]
+['text':' Check for an append-only workload needing an in-memory split. ','line_number':748,'multiline':True]
+['text':' If the page is clean, we're done and we can evict. ','line_number':753,'multiline':True]
+['text':'
+     * If we are trying to evict a dirty page that does not belong to history store(HS) and
+     * checkpoint is processing the HS file, avoid evicting the dirty non-HS page for now if the
+     * cache is already dominated by dirty HS content.
+     *
+     * Evicting an non-HS dirty page can generate even more HS content. As we cannot evict HS pages
+     * while checkpoint is operating on the HS file, we can end up in a situation where we exceed
+     * the cache size limit.
+     ','line_number':757,'multiline':True]
+['text':'
+     * If reconciliation is disabled for this thread (e.g., during an eviction that writes to the
+     * history store), give up.
+     ','line_number':771,'multiline':True]
+['text':'
+ * __evict_reconcile --
+ *     Reconcile the page for eviction.
+ ','line_number':781,'multiline':True]
+['text':'
+     * Urgent eviction and forced eviction want two different behaviors for inefficient update
+     * restore evictions, pass this flag so that reconciliation knows which to use.
+     ','line_number':802,'multiline':True]
+['text':'
+     * If we have an exclusive lock (we're discarding the tree), assert there are no updates we
+     * cannot read.
+     ','line_number':809,'multiline':True]
+['text':'
+     * Don't set any other flags for internal pages: there are no update lists to be saved and
+     * restored, changes can't be written into the history store table, nor can we re-create
+     * internal pages in memory.
+     *
+     * Don't set any other flags for history store table as all the content is evictable.
+     ','line_number':815,'multiline':True]
+['text':' Always do update restore for in-memory database. ','line_number':824,'multiline':True]
+['text':' For data store leaf pages, write the history to history store except for metadata. ','line_number':827,'multiline':True]
+['text':'
+         * Scrub and we're supposed to or toss it in sometimes if we are in debugging mode.
+         *
+         * Note that don't scrub if checkpoint is running on the tree.
+         ','line_number':831,'multiline':True]
+['text':'
+     * Acquire a snapshot if coming through the eviction thread route. Also, if we have entered
+     * eviction through application threads and we have a transaction snapshot, we will use our
+     * existing snapshot to evict pages that are not globally visible based on the last_running
+     * transaction. Avoid using snapshots when application transactions are in the final stages of
+     * commit or rollback as they have already released the snapshot. Otherwise, it becomes harder
+     * in the later part of the code to detect updates that belonged to the last running application
+     * transaction.
+     ','line_number':843,'multiline':True]
+['text':' Make sure that both conditions above are not true at the same time. ','line_number':857,'multiline':True]
+['text':'
+     * If checkpoint is running concurrently, set the checkpoint running flag and we will abort the
+     * eviction if we detect any updates without timestamps.
+     ','line_number':860,'multiline':True]
+['text':' Eviction thread doing eviction. ','line_number':867,'multiline':True]
+['text':'
+         * Eviction threads do not need to pin anything in the cache. We have an exclusive lock for
+         * the page being evicted so we are sure that the page will always be there while it is
+         * being processed. Therefore, we use snapshot API that doesn't publish shared IDs to the
+         * outside world.
+         ','line_number':869,'multiline':True]
+['text':' We should not be trying to evict using a checkpoint-cursor transaction. ','line_number':883,'multiline':True]
+['text':'
+     * Reconcile the page. Force read-committed isolation level if we are using snapshots for
+     * eviction workers or application threads.
+     ','line_number':886,'multiline':True]
+['text':'
+     * Success: assert that the page is clean or reconciliation was configured to save updates.
+     ','line_number':904,'multiline':True]

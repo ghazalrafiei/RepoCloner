@@ -1,0 +1,390 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]
+['text':'
+ * Python extensions by Paul Moore, David Leonard, Roland Puntaier, Nikolay
+ * Pavlov.
+ *
+ * Common code for if_python.c and if_python3.c.
+ ','line_number':9,'multiline':True]
+['text':' Python 2.4 and earlier don't have this type.','line_number':17,'multiline':False]
+['text':' Use values that are known to work, others may make Vim crash.','line_number':20,'multiline':False]
+['text':' Limited Python API. Need to call only exposed functions and remap macros.','line_number':34,'multiline':False]
+['text':' PyTypeObject is an opaque struct.','line_number':35,'multiline':False]
+['text':' This struct emulates the concrete _typeobject struct to allow the code to','line_number':57,'multiline':False]
+['text':' work the same way in both limited and full Python APIs.','line_number':58,'multiline':False]
+['text':' When adding new slots below, also need to make sure we add ADD_TP_SLOT','line_number':64,'multiline':False]
+['text':' call in AddHeapType for it.','line_number':65,'multiline':False]
+['text':' PyObject_HEAD_INIT_TYPE and PyObject_FINISH_INIT_TYPE need to come in pairs','line_number':97,'multiline':False]
+['text':' We first initialize with NULL because the type is not allocated until','line_number':98,'multiline':False]
+['text':' init_types() is called later. It's in FINISH_INIT_TYPE where we fill the','line_number':99,'multiline':False]
+['text':' type in with the newly allocated type.','line_number':100,'multiline':False]
+['text':' PyObject_NEW is not part of stable ABI, but PyObject_Malloc/Init are.','line_number':107,'multiline':False]
+['text':' This is a somewhat convoluted because limited API doesn't expose an easy way','line_number':118,'multiline':False]
+['text':' to get the tp_name field, and so we have to manually reconstruct it as','line_number':119,'multiline':False]
+['text':' "__module__.__name__" (with __module__ omitted for builtins to emulate','line_number':120,'multiline':False]
+['text':' Python behavior). Also, some of the more convenient functions like','line_number':121,'multiline':False]
+['text':' PyUnicode_AsUTF8AndSize and PyType_GetQualName() are not available until','line_number':122,'multiline':False]
+['text':' late Python 3 versions, and won't be available if you set Py_LIMITED_API too','line_number':123,'multiline':False]
+['text':' low.','line_number':124,'multiline':False]
+['text':' PyList_SET_ITEM and PyList_SetItem have slightly different behaviors. The','line_number':158,'multiline':False]
+['text':' former will leave the old item dangling, and the latter will decref on it.','line_number':159,'multiline':False]
+['text':' Since we only use this on new lists, this difference doesn't matter.','line_number':160,'multiline':False]
+['text':' PyIter_check only became part of stable ABI in 3.8, and there is no easy way','line_number':164,'multiline':False]
+['text':' to check for it in the API. We simply return false as a compromise. This','line_number':165,'multiline':False]
+['text':' does mean we should avoid compiling with stable ABI < 3.8.','line_number':166,'multiline':False]
+['text':' We just need to statically allocate a large enough buffer that can hold','line_number':179,'multiline':False]
+['text':' all slots. We need to leave a null-terminated slot at the end.','line_number':180,'multiline':False]
+['text':' this should never happen ','line_number':185,'multiline':True]
+['text':' this should never happen ','line_number':193,'multiline':True]
+['text':' Add a heap type, since static types do not work in limited API','line_number':238,'multiline':False]
+['text':' Each PYTYPE_READY is paired with PYTYPE_CLEANUP.','line_number':239,'multiline':False]
+['text':'','line_number':240,'multiline':False]
+['text':' Note that we don't call Py_DECREF(type##Ptr) in clean up. The reason for','line_number':241,'multiline':False]
+['text':' that in 3.7, it's possible to de-allocate a heap type before all instances','line_number':242,'multiline':False]
+['text':' are cleared, leading to a crash, whereas in 3.8 the semantics were changed','line_number':243,'multiline':False]
+['text':' and instances hold strong references to types. Since these types are','line_number':244,'multiline':False]
+['text':' designed to be static, just keep them around to avoid having to write','line_number':245,'multiline':False]
+['text':' version-specific handling. Vim does not re-start the Python runtime so there','line_number':246,'multiline':False]
+['text':' will be no long-term leak.','line_number':247,'multiline':False]
+['text':' Limited API does not provide PyRun_* functions. Need to implement manually','line_number':255,'multiline':False]
+['text':' using PyCompile and PyEval.','line_number':256,'multiline':False]
+['text':' Just pass "" for filename for now.','line_number':259,'multiline':False]
+['text':' This function emulates CPython's implementation.','line_number':270,'multiline':False]
+['text':' !defined(USE_LIMITED_API)','line_number':287,'multiline':False]
+['text':' Full Python API. Can make use of structs and macros directly.','line_number':289,'multiline':False]
+['text':' Add a static type','line_number':305,'multiline':False]
+['text':'
+ * obtain a lock on the Vim data structures
+ ','line_number':365,'multiline':True]
+['text':'
+ * release a lock on the Vim data structures
+ ','line_number':373,'multiline':True]
+['text':'
+ * The "todecref" argument holds a pointer to PyObject * that must be
+ * DECREF'ed after returned char_u * is no longer needed or NULL if all what
+ * was needed to generate returned value is object.
+ *
+ * Use Py_XDECREF to decrement reference count.
+ ','line_number':381,'multiline':True]
+['text':' Output buffer management','line_number':579,'multiline':False]
+['text':' Function to write a line, points to either msg() or emsg().','line_number':581,'multiline':False]
+['text':' Buffer IO, we write one whole line at a time.','line_number':626,'multiline':False]
+['text':' Flush when switching output function.','line_number':646,'multiline':False]
+['text':' Write each NL separated line.  Text after the last NL is kept for','line_number':651,'multiline':False]
+['text':' writing later.','line_number':652,'multiline':False]
+['text':' For normal messages: Do not output when "got_int" was set.  This avoids','line_number':653,'multiline':False]
+['text':' a loop gone crazy flooding the terminal with messages.  Also for when','line_number':654,'multiline':False]
+['text':' "q" is pressed at the more-prompt.','line_number':655,'multiline':False]
+['text':' Put the remaining text into io_ga for later printing.','line_number':672,'multiline':False]
+['text':' Iterator may have finished due to an exception','line_number':735,'multiline':False]
+['text':' do nothing','line_number':746,'multiline':False]
+['text':' do nothing','line_number':755,'multiline':False]
+['text':' do nothing','line_number':765,'multiline':False]
+['text':'*************','line_number':772,'multiline':True]
+['text':' name,	    function,				calling,	doc','line_number':775,'multiline':False]
+['text':' name,	    function,				calling,	doc','line_number':876,'multiline':False]
+['text':'
+ * Check to see whether a Vim error has been reported, or a keyboard
+ * interrupt has been detected.
+ ','line_number':882,'multiline':True]
+['text':' Without this it stops processing all subsequent Vim script commands and','line_number':896,'multiline':False]
+['text':' generates strange error messages if I e.g. try calling Test() in a cycle','line_number':897,'multiline':False]
+['text':' Keyboard interrupt should be preferred over anything else','line_number':899,'multiline':False]
+['text':' Python exception is preferred over Vim one; unlikely to occur though','line_number':932,'multiline':False]
+['text':' Finally transform Vim script exception to python one','line_number':938,'multiline':False]
+['text':' Vim module - Implementation','line_number':958,'multiline':False]
+['text':'
+ * Function to translate a typval_T into a PyObject; this will recursively
+ * translate lists/dictionaries into their Python equivalents.
+ *
+ * The depth parameter is to avoid infinite recursion, set it to 1 when
+ * you call VimToPython.
+ ','line_number':990,'multiline':True]
+['text':' Avoid infinite recursion','line_number':1004,'multiline':False]
+['text':' Check if we run into a recursive loop.  The item must be in lookup_dict','line_number':1012,'multiline':False]
+['text':' then and we can use it again.','line_number':1013,'multiline':False]
+['text':' For backwards compatibility numbers are stored as strings.','line_number':1035,'multiline':False]
+['text':' Convert the Vim type into a Python type.  Create a dictionary that's','line_number':1190,'multiline':False]
+['text':' used to check for recursive loops.','line_number':1191,'multiline':False]
+['text':'
+ * _vim_runtimepath_ special path implementation.
+ ','line_number':1390,'multiline':True]
+['text':' STRLEN("pythonx")','line_number':1412,'multiline':False]
+['text':' Apparently returning None works.','line_number':1509,'multiline':False]
+['text':'
+	 * There is a dot in the name: call find_module recursively without the
+	 * first component
+	 ','line_number':1557,'multiline':True]
+['text':'
+ * Vim module - Definitions
+ ','line_number':1676,'multiline':True]
+['text':' name,	    function,			calling,			documentation','line_number':1681,'multiline':False]
+['text':'
+ * Generic iterator object
+ ','line_number':1698,'multiline':True]
+['text':' Main purpose of this object is removing the need for do python','line_number':1709,'multiline':False]
+['text':' initialization (i.e. PyType_Ready and setting type attributes) for a big','line_number':1710,'multiline':False]
+['text':' bunch of objects.','line_number':1711,'multiline':False]
+['text':' Mac OSX defines clear() somewhere.','line_number':1764,'multiline':False]
+['text':' Incompatible with DICT_FLAG_POP','line_number':1978,'multiline':False]
+['text':' Iterator may have finished due to an exception','line_number':2429,'multiline':False]
+['text':' sq_length','line_number':2493,'multiline':False]
+['text':' sq_concat','line_number':2494,'multiline':False]
+['text':' sq_repeat','line_number':2495,'multiline':False]
+['text':' sq_item','line_number':2496,'multiline':False]
+['text':' sq_slice','line_number':2497,'multiline':False]
+['text':' sq_ass_item','line_number':2498,'multiline':False]
+['text':' sq_ass_slice','line_number':2499,'multiline':False]
+['text':' sq_contains','line_number':2500,'multiline':False]
+['text':' sq_inplace_concat','line_number':2501,'multiline':False]
+['text':' sq_inplace_repeat','line_number':2502,'multiline':False]
+['text':' Iterator may have finished due to an exception','line_number':2607,'multiline':False]
+['text':' No more suitable format specifications in python-2.3','line_number':2685,'multiline':False]
+['text':' Nothing to do. Only error out if obj has some items.','line_number':2812,'multiline':False]
+['text':' XXX May allocate zero bytes.','line_number':2834,'multiline':False]
+['text':' sq_length,	  len(x)','line_number':3193,'multiline':False]
+['text':' RangeConcat, sq_concat,  x+y','line_number':3194,'multiline':False]
+['text':' RangeRepeat, sq_repeat,  x*n','line_number':3195,'multiline':False]
+['text':' sq_item,	  x[i]','line_number':3196,'multiline':False]
+['text':' was_sq_slice,     x[i:j]','line_number':3197,'multiline':False]
+['text':' sq_as_item,  x[i]=v','line_number':3198,'multiline':False]
+['text':' was_sq_ass_slice, x[i:j]=v','line_number':3199,'multiline':False]
+['text':' sq_contains','line_number':3200,'multiline':False]
+['text':' sq_inplace_concat','line_number':3201,'multiline':False]
+['text':' sq_inplace_repeat','line_number':3202,'multiline':False]
+['text':' mp_length	','line_number':3206,'multiline':True]
+['text':' mp_subscript     ','line_number':3207,'multiline':True]
+['text':' mp_ass_subscript ','line_number':3208,'multiline':True]
+['text':'
+ * Populate partial_T given function object.
+ *
+ * "exported" should be set to true when it is needed to construct a partial
+ * that may be stored in a variable (i.e. may be freed by Vim).
+ ','line_number':3441,'multiline':True]
+['text':'
+ * Options object
+ ','line_number':3601,'multiline':True]
+['text':' sq_length','line_number':3963,'multiline':False]
+['text':' sq_concat','line_number':3964,'multiline':False]
+['text':' sq_repeat','line_number':3965,'multiline':False]
+['text':' sq_item','line_number':3966,'multiline':False]
+['text':' sq_slice','line_number':3967,'multiline':False]
+['text':' sq_ass_item','line_number':3968,'multiline':False]
+['text':' sq_ass_slice','line_number':3969,'multiline':False]
+['text':' sq_contains','line_number':3970,'multiline':False]
+['text':' sq_inplace_concat','line_number':3971,'multiline':False]
+['text':' sq_inplace_repeat','line_number':3972,'multiline':False]
+['text':' Tabpage object','line_number':3981,'multiline':False]
+['text':' For current tab window.c does not bother to set or update tp_curwin','line_number':4072,'multiline':False]
+['text':' name,	    function,			calling,	documentation','line_number':4102,'multiline':False]
+['text':'
+ * Window list object
+ ','line_number':4107,'multiline':True]
+['text':'
+ * Window object
+ ','line_number':4152,'multiline':True]
+['text':'
+     * We need to handle deletion of windows underneath us.
+     * If we add a "w_python*_ref" field to the win_T structure,
+     * then we can get at it in win_free() in vim. We then
+     * need to create only ONE Python object per window - if
+     * we try to create a second, just INCREF the existing one
+     * and return it. The (single) Python object referring to
+     * the window is stored in "w_python*_ref".
+     * On a win_free() we set the Python object's win_T* field
+     * to an invalid value. We trap all uses of a window
+     * object, and reject them if the win_T* field is invalid.
+     *
+     * Python2 and Python3 get different fields and different objects:
+     * w_python_ref and w_python3_ref fields respectively.
+     ','line_number':4186,'multiline':True]
+['text':' For current tab window.c does not bother to set or update tp_firstwin','line_number':4257,'multiline':False]
+['text':' Use the same order as in the WindowAttr() function.','line_number':4267,'multiline':False]
+['text':' Check for keyboard interrupts','line_number':4370,'multiline':False]
+['text':' When column is out of range silently correct it.','line_number':4378,'multiline':False]
+['text':' name,	    function,			calling,	documentation','line_number':4458,'multiline':False]
+['text':'
+ * Window list object
+ ','line_number':4463,'multiline':True]
+['text':'
+ * Convert a Python string into a Vim line.
+ *
+ * The result is in allocated memory. All internal nulls are replaced by
+ * newline characters. It is an error for the string to contain newline
+ * characters.
+ *
+ * On errors, the Python exception data is set, and NULL is returned.
+ ','line_number':4541,'multiline':True]
+['text':'
+     * Error checking: String must not contain newlines, as we
+     * are replacing a single line, and we must replace it with
+     * a single line.
+     * A trailing newline is removed, so that append(f.readlines()) works.
+     ','line_number':4593,'multiline':True]
+['text':'
+     * Create a copy of the string, with internal nulls replaced by
+     * newline characters, as is the Vim convention.
+     ','line_number':4612,'multiline':True]
+['text':' Python 2 does nothing here','line_number':4633,'multiline':False]
+['text':'
+ * Get a line from the specified buffer. The line number is
+ * in Vim format (1-based). The line is returned as a Python
+ * string object.
+ ','line_number':4638,'multiline':True]
+['text':'
+ * Get a list of lines from the specified buffer. The line numbers
+ * are in Vim format (1-based). The range is from lo up to, but not
+ * including, hi. The list is returned as a Python list of string objects.
+ ','line_number':4650,'multiline':True]
+['text':' The ownership of the Python list is passed to the caller (ie,','line_number':4685,'multiline':False]
+['text':' the caller should Py_DECREF() the object when it is finished','line_number':4686,'multiline':False]
+['text':' with it).','line_number':4687,'multiline':False]
+['text':'
+ * Check if deleting lines made the cursor position invalid.
+ * Changed the lines from "lo" to "hi" and added "extra" lines (negative if
+ * deleted).
+ ','line_number':4692,'multiline':True]
+['text':' Adjust the cursor position if it's in/after the changed','line_number':4702,'multiline':False]
+['text':' lines.','line_number':4703,'multiline':False]
+['text':'
+ * Replace a line in the specified buffer. The line number is
+ * in Vim format (1-based). The replacement line is given as
+ * a Python string object. The object is checked for validity
+ * and correct format. Errors are returned as a value of FAIL.
+ * The return value is OK on success.
+ * If OK is returned and len_change is not NULL, *len_change
+ * is set to the change in the buffer length.
+ ','line_number':4721,'multiline':True]
+['text':' First of all, we check the type of the supplied Python object.','line_number':4736,'multiline':False]
+['text':' There are three cases:','line_number':4737,'multiline':False]
+['text':'	  1. NULL, or None - this is a deletion.','line_number':4738,'multiline':False]
+['text':'	  2. A string	   - this is a replacement.','line_number':4739,'multiline':False]
+['text':'	  3. Anything else - this is an error.','line_number':4740,'multiline':False]
+['text':' Using an existing window for the buffer, adjust the cursor','line_number':4757,'multiline':False]
+['text':' position.','line_number':4758,'multiline':False]
+['text':' Only adjust marks if we managed to switch to a window that','line_number':4761,'multiline':False]
+['text':' holds the buffer, otherwise line numbers will be invalid.','line_number':4762,'multiline':False]
+['text':' We do not need to free "save" if ml_replace() consumes it.','line_number':4785,'multiline':False]
+['text':' Check that the cursor is not beyond the end of the line now.','line_number':4804,'multiline':False]
+['text':'
+ * Replace a range of lines in the specified buffer. The line numbers are in
+ * Vim format (1-based). The range is from lo up to, but not including, hi.
+ * The replacement lines are given as a Python list of string objects. The
+ * list is checked for validity and correct format. Errors are returned as a
+ * value of FAIL.  The return value is OK on success.
+ * If OK is returned and len_change is not NULL, *len_change
+ * is set to the change in the buffer length.
+ ','line_number':4823,'multiline':True]
+['text':' First of all, we check the type of the supplied Python object.','line_number':4843,'multiline':False]
+['text':' There are three cases:','line_number':4844,'multiline':False]
+['text':'	  1. NULL, or None - this is a deletion.','line_number':4845,'multiline':False]
+['text':'	  2. A list	   - this is a replacement.','line_number':4846,'multiline':False]
+['text':'	  3. Anything else - this is an error.','line_number':4847,'multiline':False]
+['text':' Using an existing window for the buffer, adjust the cursor','line_number':4872,'multiline':False]
+['text':' position.','line_number':4873,'multiline':False]
+['text':' Only adjust marks if we managed to switch to a window that','line_number':4876,'multiline':False]
+['text':' holds the buffer, otherwise line numbers will be invalid.','line_number':4877,'multiline':False]
+['text':' lines added to text, can be negative','line_number':4896,'multiline':False]
+['text':' avoid allocating zero bytes','line_number':4899,'multiline':False]
+['text':' START of region without "return".  Must call restore_buffer()!','line_number':4928,'multiline':False]
+['text':' If the size of the range is reducing (ie, new_len < old_len) we','line_number':4935,'multiline':False]
+['text':' need to delete some old_len. We do this at the start, by','line_number':4936,'multiline':False]
+['text':' repeatedly deleting line "lo".','line_number':4937,'multiline':False]
+['text':' For as long as possible, replace the existing old_len with the','line_number':4949,'multiline':False]
+['text':' new old_len. This is a more efficient operation, as it requires','line_number':4950,'multiline':False]
+['text':' less memory allocation and freeing.','line_number':4951,'multiline':False]
+['text':' Now we may need to insert the remaining new old_len. If we do, we','line_number':4965,'multiline':False]
+['text':' must free the strings as we finish with them (we can't pass the','line_number':4966,'multiline':False]
+['text':' responsibility to Vim in this case).','line_number':4967,'multiline':False]
+['text':' Free any left-over old_len, as a result of an error','line_number':4984,'multiline':False]
+['text':' Free the array of old_len. All of its contents have now','line_number':4991,'multiline':False]
+['text':' been dealt with (either freed, or the responsibility passed','line_number':4992,'multiline':False]
+['text':' to vim.','line_number':4993,'multiline':False]
+['text':' Adjust marks. Invalidate any which lie in the','line_number':4996,'multiline':False]
+['text':' changed range, and move any in the remainder of the buffer.','line_number':4997,'multiline':False]
+['text':' Only adjust marks if we managed to switch to a window that holds','line_number':4998,'multiline':False]
+['text':' the buffer, otherwise line numbers will be invalid.','line_number':4999,'multiline':False]
+['text':' Using an existing window for the buffer, adjust the cursor','line_number':5009,'multiline':False]
+['text':' position.','line_number':5010,'multiline':False]
+['text':' END of region without "return".','line_number':5013,'multiline':False]
+['text':'
+ * Insert a number of lines into the specified buffer after the specified line.
+ * The line number is in Vim format (1-based). The lines to be inserted are
+ * given as a Python list of string objects or as a single string. The lines
+ * to be added are checked for validity and correct format. Errors are
+ * returned as a value of FAIL.  The return value is OK on success.
+ * If OK is returned and len_change is not NULL, *len_change
+ * is set to the change in the buffer length.
+ ','line_number':5031,'multiline':True]
+['text':' First of all, we check the type of the supplied Python object.','line_number':5046,'multiline':False]
+['text':' It must be a string or a list, or the call is in error.','line_number':5047,'multiline':False]
+['text':' Only adjust marks if we managed to switch to a window that','line_number':5064,'multiline':False]
+['text':' holds the buffer, otherwise line numbers will be invalid.','line_number':5065,'multiline':False]
+['text':' Free the rest of the lines','line_number':5122,'multiline':False]
+['text':' Only adjust marks if we managed to switch to a window that','line_number':5131,'multiline':False]
+['text':' holds the buffer, otherwise line numbers will be invalid.','line_number':5132,'multiline':False]
+['text':' Free the array of lines. All of its contents have now','line_number':5136,'multiline':False]
+['text':' been freed.','line_number':5137,'multiline':False]
+['text':'
+ * Common routines for buffers and line ranges
+ * -------------------------------------------
+ ','line_number':5158,'multiline':True]
+['text':' Self must be a valid buffer','line_number':5283,'multiline':False]
+['text':' Sort out the slice range','line_number':5290,'multiline':False]
+['text':' Range object','line_number':5355,'multiline':False]
+['text':' HOW DO WE SIGNAL AN ERROR FROM THIS FUNCTION?','line_number':5421,'multiline':False]
+['text':' ???','line_number':5423,'multiline':False]
+['text':' name,	function,			calling,	documentation','line_number':5477,'multiline':False]
+['text':'
+     * We need to handle deletion of buffers underneath us.
+     * If we add a "b_python*_ref" field to the buf_T structure,
+     * then we can get at it in buf_freeall() in vim. We then
+     * need to create only ONE Python object per buffer - if
+     * we try to create a second, just INCREF the existing one
+     * and return it. The (single) Python object referring to
+     * the buffer is stored in "b_python*_ref".
+     * Question: what to do on a buf_freeall(). We'll probably
+     * have to either delete the Python object (DECREF it to
+     * zero - a bad idea, as it leaves dangling refs!) or
+     * set the buf_T * value to an invalid value (-1?), which
+     * means we need checks in all access functions... Bah.
+     *
+     * Python2 and Python3 get different fields and different objects:
+     * b_python_ref and b_python3_ref fields respectively.
+     ','line_number':5490,'multiline':True]
+['text':' HOW DO WE SIGNAL AN ERROR FROM THIS FUNCTION?','line_number':5540,'multiline':False]
+['text':' ???','line_number':5542,'multiline':False]
+['text':' Using aucmd_*: autocommands will be executed by rename_buffer','line_number':5620,'multiline':False]
+['text':' Or raise an error?','line_number':5693,'multiline':False]
+['text':' name,	    function,			calling,	documentation','line_number':5734,'multiline':False]
+['text':'
+ * Buffer list object - Implementation
+ ','line_number':5742,'multiline':True]
+['text':' Iteration was stopped before all buffers were processed','line_number':5797,'multiline':False]
+['text':' Do not increment reference: we no longer hold it (decref), but whoever','line_number':5845,'multiline':False]
+['text':' on other side will hold (incref). Decref+incref = nothing.','line_number':5846,'multiline':False]
+['text':' Current items object','line_number':5868,'multiline':False]
+['text':' name,	    function,			calling,	documentation','line_number':6012,'multiline':False]
+['text':' Check the line number, the command my have deleted lines.','line_number':6123,'multiline':False]
+['text':' Check that the command didn't switch to another buffer.','line_number':6138,'multiline':False]
+['text':' As we are not using copy_tv which increments reference count we must','line_number':6497,'multiline':False]
+['text':' do it ourself.','line_number':6498,'multiline':False]
+['text':' PyObject_GetIter can create built-in iterator for any sequence object','line_number':6688,'multiline':False]
+['text':' The std printer type is only exposed in full API. It is not essential','line_number':6821,'multiline':False]
+['text':' anyway and so in limited API we don't set it.','line_number':6822,'multiline':False]
+['text':' Disabled, because this causes a crash in test86','line_number':6828,'multiline':False]
+['text':' OutputType.tp_base = &PyFile_Type;','line_number':6829,'multiline':False]
+['text':' We need to finish initializing all the static objects because the types','line_number':7070,'multiline':False]
+['text':' are only just allocated on the heap now.','line_number':7071,'multiline':False]
+['text':' Each PyObject_HEAD_INIT_TYPE should correspond to a','line_number':7072,'multiline':False]
+['text':' PyObject_FINISH_INIT_TYPE below.','line_number':7073,'multiline':False]
+['text':' Discard the error','line_number':7146,'multiline':False]
+['text':' Discard the error','line_number':7174,'multiline':False]
+['text':' find_module() is deprecated, this may stop working in some later','line_number':7329,'multiline':False]
+['text':' version.','line_number':7330,'multiline':False]

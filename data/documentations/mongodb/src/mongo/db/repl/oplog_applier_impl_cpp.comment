@@ -1,0 +1,268 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' IWYU pragma: no_include "cxxabi.h"','line_number':32,'multiline':False]
+['text':' The oplog entries applied','line_number':116,'multiline':False]
+['text':' Tracks the oplog application batch size.','line_number':119,'multiline':False]
+['text':' Number and time of each ApplyOps worker pool round','line_number':122,'multiline':False]
+['text':'*
+ * Used for logging a report of ops that take longer than "slowMS" to apply. This is called
+ * right before returning from applyOplogEntryOrGroupedInserts, and it returns the same status.
+ ','line_number':125,'multiline':True]
+['text':' Obtain storage specific statistics and log them if they exist.','line_number':156,'multiline':False]
+['text':' Tracks writes to the side table config.image_collection.  This collection is implicitly','line_number':168,'multiline':False]
+['text':' replicated, and to avoid out-of-order writes, we only want to do the last write','line_number':169,'multiline':False]
+['text':' to a given row in this collection.  Writes to this collection may be implicit, in CRUD','line_number':170,'multiline':False]
+['text':' oplog entries with needsRetryImage set, or they can be explicit deletes done by the','line_number':171,'multiline':False]
+['text':' session reaper.  Anything else is not handled specially.','line_number':172,'multiline':False]
+['text':'','line_number':173,'multiline':False]
+['text':' For implicit writes we don't want to do, we clear the needsRetryImage field in the ops','line_number':174,'multiline':False]
+['text':' vector.  For explict deletes we don't want to do, we just don't add them to the','line_number':175,'multiline':False]
+['text':' writerVectors.','line_number':176,'multiline':False]
+['text':' We should have called the handleLatestDeletes method, which clears this','line_number':180,'multiline':False]
+['text':'*
+     * Returns true if the op should be skipped because it's a delete in the retry images
+     * table that we don't want to do because there could be a later delete or implicit update on
+     * the same row.
+     *
+     * The ops must be presented to shouldSkipOp in opTime the same order they were in the original
+     * ops vector, and they must be pointers to the ops which will be applied (whether the original
+     * ops or derived ops on the 'derivedOps' vector declared in _applyOplogBatch).  As a side
+     * effect, an OplogEntry passed in a previous call may be modified to prevent a retry image from
+     * being written.
+     ','line_number':188,'multiline':True]
+['text':' Keep _retryImageWrites up to date with the latest write for a session id.','line_number':220,'multiline':False]
+['text':' If the previous op had an implicit write of the retry image, we don't want to','line_number':223,'multiline':False]
+['text':' do that write.  If it was a delete we'll have already skipped it.','line_number':224,'multiline':False]
+['text':' We always skip deletes to the retry image table.','line_number':234,'multiline':False]
+['text':'*
+     * Handles any implicit retry images embedded in an applyOps.  The vector is modified to remove
+     * any image table deletes (which might occur if we are replicating multiple deletes in
+     * applyOps entries)
+     ','line_number':241,'multiline':True]
+['text':' We should never have delete from the retry images','line_number':251,'multiline':False]
+['text':' table in a prepared transaction.','line_number':252,'multiline':False]
+['text':' The following two lines record the ops in the _retryImageWrites table. We cannot do this','line_number':261,'multiline':False]
+['text':' until they have been placed on their respective vectors, because we need the','line_number':262,'multiline':False]
+['text':' _retryImageWrites table to hold pointers to the actual ops which will be applied.','line_number':263,'multiline':False]
+['text':'','line_number':264,'multiline':False]
+['text':' The order does not matter, because extracted ops vectors are all at the same timestamp.','line_number':265,'multiline':False]
+['text':' We do not expect either multiple implicit writes for the same session ID, nor','line_number':266,'multiline':False]
+['text':' an implicit write and a delete for the same session ID, in the same extracted ops vector.','line_number':267,'multiline':False]
+['text':' Convenience function to call handleExtractedOpsAndRemoveDeletes, store both deletes and','line_number':279,'multiline':False]
+['text':' remaining extracted ops in derivedOps, and return a reference to the remaining extractedOps','line_number':280,'multiline':False]
+['text':' on the derivedOps vector.  The deletes and extracted ops are stored in the derivedOps vector','line_number':281,'multiline':False]
+['text':' to ensure their lifetime continues until batch application is complete; the deletes may be','line_number':282,'multiline':False]
+['text':' applied when handleLatestDeletes() is called.','line_number':283,'multiline':False]
+['text':' Should be called after all oplog entries have been processed to handle the deletes that','line_number':296,'multiline':False]
+['text':' were not superceded by a later write.','line_number':297,'multiline':False]
+['text':' We don't want to execute operations with implicit updates again, we','line_number':303,'multiline':False]
+['text':' only want to do the deletes we skipped.','line_number':304,'multiline':False]
+['text':' namespace','line_number':316,'multiline':False]
+['text':' Acquire locks. We must acquire the locks for all collections we intend to write to before','line_number':352,'multiline':False]
+['text':' performing any writes. This avoids potential deadlocks created by waiting for locks while','line_number':353,'multiline':False]
+['text':' having generated oplog holes.','line_number':354,'multiline':False]
+['text':' opDebug ','line_number':363,'multiline':True]
+['text':' Write entries to the oplog.','line_number':367,'multiline':False]
+['text':' OpDebug ','line_number':374,'multiline':True]
+['text':' fromMigrate ','line_number':374,'multiline':True]
+['text':' Write the corresponding oplog entries to tenants respective change','line_number':380,'multiline':False]
+['text':' collections in the serverless.','line_number':381,'multiline':False]
+['text':' Do not enforce constraints.','line_number':395,'multiline':False]
+['text':' When querying indexes, we return the record matching the key if it exists, or an adjacent','line_number':398,'multiline':False]
+['text':' document. This means that it is possible for us to hit a prepare conflict if we query for an','line_number':399,'multiline':False]
+['text':' incomplete key and an adjacent key is prepared.','line_number':400,'multiline':False]
+['text':' We ignore prepare conflicts on secondaries because they may encounter prepare conflicts that','line_number':401,'multiline':False]
+['text':' did not occur on the primary.','line_number':402,'multiline':False]
+['text':' Applying an Oplog batch is crucial to the stability of the Replica Set. We','line_number':406,'multiline':False]
+['text':' mark it as having Immediate priority so that it skips waiting for ticket','line_number':407,'multiline':False]
+['text':' acquisition and flow control.','line_number':408,'multiline':False]
+['text':' Ensure future transactions read without a timestamp.','line_number':412,'multiline':False]
+['text':' namespace','line_number':416,'multiline':False]
+['text':' We have to use setMyLastAppliedOpTimeAndWallTimeForward since this thread races with','line_number':432,'multiline':False]
+['text':' ReplicationExternalStateImpl::onTransitionToPrimary.','line_number':433,'multiline':False]
+['text':' We know we're at a no-holes point and we've already advanced visibility; we need','line_number':435,'multiline':False]
+['text':' to notify waiters since we changed the lastAppliedSnapshot.','line_number':436,'multiline':False]
+['text':' Used to update the replication system's progress.','line_number':441,'multiline':False]
+['text':'*
+     * Loops continuously, waiting for writes to be flushed to disk and then calls
+     * ReplicationCoordinator::setMyLastOptime with _latestOpTime.
+     * Terminates once _shutdownSignaled is set true.
+     ','line_number':455,'multiline':True]
+['text':' Protects _cond, _shutdownSignaled, and _latestOpTime.','line_number':462,'multiline':False]
+['text':' Used to alert our thread of a new OpTime.','line_number':464,'multiline':False]
+['text':' The next OpTime to set as the ReplicationCoordinator's lastOpTime after flushing.','line_number':466,'multiline':False]
+['text':' Once this is set to true the _run method will terminate.','line_number':468,'multiline':False]
+['text':' Thread that will _run(). Must be initialized last as it depends on the other variables.','line_number':470,'multiline':False]
+['text':' namespace','line_number':519,'multiline':False]
+['text':' Start up a thread from the batcher to pull from the oplog buffer into the batcher's oplog','line_number':537,'multiline':False]
+['text':' batch.','line_number':538,'multiline':False]
+['text':' We don't start data replication for arbiters at all and it's not allowed to reconfig','line_number':543,'multiline':False]
+['text':' arbiterOnly field for any member.','line_number':544,'multiline':False]
+['text':' Exits on message from OplogBatcher.','line_number':552,'multiline':False]
+['text':' Use a new operation context each iteration, as otherwise we may appear to use a single','line_number':553,'multiline':False]
+['text':' collection name to refer to collections with different UUIDs.','line_number':554,'multiline':False]
+['text':' The oplog applier is crucial for stability of the replica set. As a result we mark it as','line_number':558,'multiline':False]
+['text':' having Immediate priority. This makes the operation skip waiting for ticket acquisition','line_number':559,'multiline':False]
+['text':' and flow control.','line_number':560,'multiline':False]
+['text':' For pausing replication in tests.','line_number':564,'multiline':False]
+['text':' Transition to SECONDARY state, if possible.','line_number':572,'multiline':False]
+['text':' Blocks up to a second waiting for a batch to be ready to apply. If one doesn't become','line_number':575,'multiline':False]
+['text':' ready in time, we'll loop again so we can do the above checks periodically.','line_number':576,'multiline':False]
+['text':' Shut down and exit oplog application loop.','line_number':580,'multiline':False]
+['text':' Signal drain complete if we're in Draining state and the buffer is empty.','line_number':587,'multiline':False]
+['text':' Since we check the states of batcher and oplog buffer without synchronization,','line_number':588,'multiline':False]
+['text':' they can be stale. We make sure the applier is still draining in the given term','line_number':589,'multiline':False]
+['text':' before and after the check, so that if the oplog buffer was exhausted, then','line_number':590,'multiline':False]
+['text':' it still will be.','line_number':591,'multiline':False]
+['text':' Try again.','line_number':594,'multiline':False]
+['text':' Extract some info from ops that we'll need after releasing the batch below.','line_number':597,'multiline':False]
+['text':' Make sure the oplog doesn't go back in time or repeat an entry.','line_number':604,'multiline':False]
+['text':' Don't allow the fsync+lock thread to see intermediate states of batch application.','line_number':614,'multiline':False]
+['text':' Apply the operations in this batch. '_applyOplogBatch' returns the optime of the','line_number':617,'multiline':False]
+['text':' last op that was applied, which should be the last optime in the batch.','line_number':618,'multiline':False]
+['text':' If an operation was interrupted at shutdown, fail the batch without advancing','line_number':621,'multiline':False]
+['text':' appliedThrough as if this were an unclean shutdown. This ensures the stable timestamp','line_number':622,'multiline':False]
+['text':' does not advance, and a checkpoint cannot be taken at a timestamp that includes this','line_number':623,'multiline':False]
+['text':' batch. On startup, we will recover from an earlier stable checkpoint and apply the','line_number':624,'multiline':False]
+['text':' operations from this batch again.','line_number':625,'multiline':False]
+['text':' Update various things that care about our last applied optime.','line_number':631,'multiline':False]
+['text':' 1. Ensure that the last applied op time hasn't changed since the start of this batch.','line_number':633,'multiline':False]
+['text':' 2. Update oplog visibility by notifying the storage engine of the new oplog entries.','line_number':641,'multiline':False]
+['text':' 3. Finalize this batch. The finalizer advances the global timestamp to lastOpTimeInBatch.','line_number':646,'multiline':False]
+['text':' Schedules the writes to the oplog and the change collection for 'ops' into threadPool. The caller','line_number':652,'multiline':False]
+['text':' must guarantee that 'ops' stays valid until all scheduled work in the thread pool completes.','line_number':653,'multiline':False]
+['text':' Skip performing any writes during the startup recovery when running in the non-serverless','line_number':659,'multiline':False]
+['text':' environment.','line_number':660,'multiline':False]
+['text':' The returned function will be run in a separate thread after this returns. Therefore','line_number':667,'multiline':False]
+['text':' all captures other than 'ops' must be by value since they will not be available. The','line_number':668,'multiline':False]
+['text':' caller guarantees that 'ops' will stay in scope until the spawned threads complete.','line_number':669,'multiline':False]
+['text':' Oplog writes are crucial to the stability of the replica set. We mark the operations','line_number':674,'multiline':False]
+['text':' as having Immediate priority so that it skips waiting for ticket acquisition and flow','line_number':675,'multiline':False]
+['text':' control.','line_number':676,'multiline':False]
+['text':' The 'nsOrUUID' is used only to log the debug message when retrying inserts on the','line_number':690,'multiline':False]
+['text':' oplog and change collections. The 'writeConflictRetry' assumes operations are done on','line_number':691,'multiline':False]
+['text':' a single namespace. But the method '_insertDocumentsToOplogAndChangeCollections' can','line_number':692,'multiline':False]
+['text':' perform inserts on the oplog and multiple change collections, ie. several namespaces.','line_number':693,'multiline':False]
+['text':' As such 'writeConflictRetry' will not log the correct namespace when retrying.','line_number':694,'multiline':False]
+['text':' tenantId ','line_number':697,'multiline':True]
+['text':' We want to be able to take advantage of bulk inserts so we don't use multiple threads if it','line_number':708,'multiline':False]
+['text':' would result too little work per thread. This also ensures that we can amortize the','line_number':709,'multiline':False]
+['text':' setup/teardown overhead across many writes.','line_number':710,'multiline':False]
+['text':' Storage engines support parallel writes to the oplog because they are required to ensure that','line_number':715,'multiline':False]
+['text':' oplog entries are ordered correctly, even if inserted out-of-order.','line_number':716,'multiline':False]
+['text':' Increment the batch size stat.','line_number':744,'multiline':False]
+['text':' Each node records cumulative batch application stats for itself using this timer.','line_number':749,'multiline':False]
+['text':' We must wait for the all work we've dispatched to complete before leaving this block','line_number':752,'multiline':False]
+['text':' because the spawned threads refer to objects on the stack','line_number':753,'multiline':False]
+['text':' Write batch of ops into oplog.','line_number':756,'multiline':False]
+['text':' Holds 'pseudo operations' generated by secondaries to aid in replication.','line_number':765,'multiline':False]
+['text':' Keep in scope until all operations in 'ops' and 'derivedOps' have been applied.','line_number':766,'multiline':False]
+['text':' Pseudo operations include:','line_number':767,'multiline':False]
+['text':' - applyOps operations expanded to individual ops.','line_number':768,'multiline':False]
+['text':' - ops to update config.transactions. Normal writes to config.transactions in the','line_number':769,'multiline':False]
+['text':'   primary don't create an oplog entry, so extract info from writes with transactions','line_number':770,'multiline':False]
+['text':'   and create a pseudo oplog.','line_number':771,'multiline':False]
+['text':' Wait for writes to finish before applying ops.','line_number':778,'multiline':False]
+['text':' Use this fail point to hang after we have written the oplog entries but before we have','line_number':781,'multiline':False]
+['text':' applied them.','line_number':782,'multiline':False]
+['text':' Read `minValid` prior to it possibly being written to.','line_number':790,'multiline':False]
+['text':' Reset consistency markers in case the node fails while applying ops.','line_number':794,'multiline':False]
+['text':' Doles out all the work to the writer pool threads. writerVectors is not modified,','line_number':802,'multiline':False]
+['text':' but applyOplogBatchPerWorker will modify the vectors that it contains.','line_number':803,'multiline':False]
+['text':' If any of the statuses is not ok, return error.','line_number':826,'multiline':False]
+['text':' Release the split sessions if the top-level transaction is committed or aborted.','line_number':843,'multiline':False]
+['text':' Use this fail point to prevent the batch from completing.','line_number':853,'multiline':False]
+['text':' Set any indexes to multikey that this batch ignored.','line_number':870,'multiline':False]
+['text':' We timestamp every multikey write with the first timestamp in the batch. It is always','line_number':873,'multiline':False]
+['text':' safe to set an index as multikey too early, just not too late. We conservatively pick','line_number':874,'multiline':False]
+['text':' the first timestamp in the batch since we do not have enough information to find out','line_number':875,'multiline':False]
+['text':' the timestamp of the first write that set the given multikey path.','line_number':876,'multiline':False]
+['text':' Increment the counter for the number of ops applied during catchup if the node is in catchup','line_number':888,'multiline':False]
+['text':' mode.','line_number':889,'multiline':False]
+['text':' We have now written all database writes and updated the oplog to match.','line_number':892,'multiline':False]
+['text':'*
+ * ops - This only modifies the isForCappedCollection and hasRetryImage fields on each op. It does
+ *       not alter the ops vector in any other way.
+ *
+ * writerVectors - Set of operations for each worker thread to apply.
+ *
+ * derivedOps - If provided, this function inserts a decomposition of applyOps operations and
+ *              instructions for updating the transactions table.  Required if processing oplogs
+ *              with transactions.
+ *
+ * sessionUpdateTracker - if provided, keeps track of session info from ops.
+ ','line_number':896,'multiline':True]
+['text':' Caches partial transaction operations. Each map entry contains a cumulative list','line_number':915,'multiline':False]
+['text':' of operations seen in this batch so far.','line_number':916,'multiline':False]
+['text':' Provided to _addOplogChainOpsToWriterVectors() when 'partialTxnOps' does not have any entries','line_number':919,'multiline':False]
+['text':' for 'prevOpTime'.','line_number':920,'multiline':False]
+['text':' Returns a mutable partial transaction list that is either an existing entry in','line_number':923,'multiline':False]
+['text':' 'partialTxnOps' or 'emptyPartialTxnOps'.','line_number':924,'multiline':False]
+['text':' cleared in _addOplogChainOpsToWriterVectors().','line_number':936,'multiline':False]
+['text':' If the operation's optime is before or the same as the beginApplyingOpTime we don't want','line_number':944,'multiline':False]
+['text':' to apply it, so don't include it in writerVectors.','line_number':945,'multiline':False]
+['text':' We need to track all types of ops, including type 'n' (these are generated from chunk','line_number':950,'multiline':False]
+['text':' migrations).','line_number':951,'multiline':False]
+['text':'serial','line_number':959,'multiline':True]
+['text':' If this is a delete for a config.images_collection entry that will be written later','line_number':962,'multiline':False]
+['text':' in this batch, skip it.  We only check this when there is a sessionUpdateTracker,','line_number':963,'multiline':False]
+['text':' because the operations passed in when there is no sessionUpdateTracker (which are','line_number':964,'multiline':False]
+['text':' session table updates) should not be affecting the retry image table.','line_number':965,'multiline':False]
+['text':' If this entry is part of a multi-oplog-entry transaction, ignore it until the prepare','line_number':971,'multiline':False]
+['text':' or commit. We must save it here because we are not guaranteed it has been written to','line_number':972,'multiline':False]
+['text':' the oplog yet.','line_number':973,'multiline':False]
+['text':' If this operation belongs to an existing partial transaction, partialTxnList','line_number':981,'multiline':False]
+['text':' must contain the previous operations of the transaction.','line_number':982,'multiline':False]
+['text':' Replace key with new optime corresponding to updated list.','line_number':986,'multiline':False]
+['text':' We also ignore prepares during initial sync as well until the commit. We do not need to','line_number':997,'multiline':False]
+['text':' save it here because prepares during initial sync are applied in their own batches.','line_number':998,'multiline':False]
+['text':' Extract applyOps operations and fill writers with extracted operations.','line_number':1003,'multiline':False]
+['text':' applyOps entries generated by a transaction must have a prevOpTime.','line_number':1005,'multiline':False]
+['text':' On commit of unprepared transactions, get transactional operations from the','line_number':1007,'multiline':False]
+['text':' oplog and fill writers with those operations.','line_number':1008,'multiline':False]
+['text':' Flush partialTxnList operations for current transaction.','line_number':1009,'multiline':False]
+['text':' The applyOps entry was not generated as part of a transaction.','line_number':1020,'multiline':False]
+['text':' isPrepared ','line_number':1024,'multiline':True]
+['text':' Nested entries cannot have different session updates.','line_number':1026,'multiline':False]
+['text':'serial','line_number':1028,'multiline':True]
+['text':' Prepare entries in secondary mode do not come in their own batch, extract applyOps','line_number':1033,'multiline':False]
+['text':' operations and fill writers with the extracted operations.','line_number':1034,'multiline':False]
+['text':' Fill the writers with commit or abort operation. Depending on whether the operation','line_number':1047,'multiline':False]
+['text':' refers to a split prepare, it might also be split into multiple ops.','line_number':1048,'multiline':False]
+['text':' If we see a commitTransaction command that is a part of a prepared transaction during','line_number':1056,'multiline':False]
+['text':' initial sync, find the prepare oplog entry, extract applyOps operations, and fill writers','line_number':1057,'multiline':False]
+['text':' with the extracted operations.','line_number':1058,'multiline':False]
+['text':' Certain operations like prepareTransaction might reset the recovery unit or lock state','line_number':1107,'multiline':False]
+['text':' due to doing things like stashTransactionResources. So we restore the necessary states','line_number':1108,'multiline':False]
+['text':' here every time before applying a new entry or grouped inserts.','line_number':1109,'multiline':False]
+['text':' Count each log op application as a separate operation, for reporting purposes','line_number':1112,'multiline':False]
+['text':' No-ops should never fail application, since there's nothing to do.','line_number':1138,'multiline':False]
+['text':' Ensure that the MultikeyPathTracker stops tracking paths.','line_number':1163,'multiline':False]
+['text':' namespace repl','line_number':1187,'multiline':False]
+['text':' namespace mongo','line_number':1188,'multiline':False]

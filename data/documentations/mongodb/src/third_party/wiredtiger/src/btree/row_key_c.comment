@@ -1,0 +1,197 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __wt_row_leaf_key_copy --
+ *     Get a copy of a row-store leaf-page key.
+ ','line_number':11,'multiline':True]
+['text':' The return buffer may only hold a reference to a key, copy it. ','line_number':20,'multiline':True]
+['text':'
+ * __wt_row_leaf_key_work --
+ *     Return a reference to a row-store leaf-page key, optionally instantiate the key into the
+ *     in-memory page.
+ ','line_number':27,'multiline':True]
+['text':'
+     * It is unusual to call this function: most code should be calling the front-end,
+     * __wt_row_leaf_key, be careful if you're calling this code directly.
+     ','line_number':50,'multiline':True]
+['text':' -Werror=maybe-uninitialized ','line_number':63,'multiline':True]
+['text':' -Werror=maybe-uninitialized ','line_number':64,'multiline':True]
+['text':' Switching to a forward roll. ','line_number':70,'multiline':True]
+['text':' Skip list of keys with compatible prefixes. ','line_number':74,'multiline':True]
+['text':'
+         * Figure out what the key looks like. The row-store key can change underfoot; explicitly
+         * take a copy.
+         ','line_number':80,'multiline':True]
+['text':' 1: the test for a directly referenced on-page key. ','line_number':87,'multiline':True]
+['text':'
+             * If there's a key without prefix compression, we're good to go, otherwise we have to
+             * deal with the prefix.
+             ','line_number':89,'multiline':True]
+['text':'
+             * If this is the key we originally wanted, we don't care if we're rolling forward or
+             * backward, or if it's an overflow key or not, it's what we wanted. This shouldn't
+             * normally happen, the fast-path code that front-ends this function will have figured
+             * it out before we were called.
+             *
+             * The key doesn't need to be instantiated, just return.
+             ','line_number':99,'multiline':True]
+['text':'
+             * This key is not an overflow key by definition and isn't compressed in any way, we can
+             * use it to roll forward.
+             *
+             * If rolling backward, switch directions.
+             *
+             * If rolling forward: there's a bug somewhere, we should have hit this key when rolling
+             * backward.
+             ','line_number':110,'multiline':True]
+['text':' 2: the test for an instantiated off-page key. ','line_number':122,'multiline':True]
+['text':'
+             * If this is the key we originally wanted, we don't care if we're rolling forward or
+             * backward, or if it's an overflow key or not, it's what we wanted. Take a copy and
+             * wrap up.
+             *
+             * The key doesn't need to be instantiated, just return.
+             ','line_number':124,'multiline':True]
+['text':'
+             * If we wanted a different key and this key is an overflow key:
+             *
+             * If we're rolling backward, this key is useless to us because it doesn't have a valid
+             * prefix: keep rolling backward.
+             *
+             * If we're rolling forward, there's no work to be done because prefixes skip overflow
+             * keys: keep rolling forward.
+             ','line_number':137,'multiline':True]
+['text':'
+             * If we wanted a different key and this key is not an overflow key, it has a valid
+             * prefix, we can use it.
+             *
+             * If rolling backward, take a copy of the key and switch directions, we can roll
+             * forward from this key.
+             *
+             * If rolling forward, replace the key we've been building with this key, it's what we
+             * would have built anyway.
+             *
+             * In short: if it's not an overflow key, take a copy and roll forward.
+             ','line_number':149,'multiline':True]
+['text':' Unpack the on-page cell. ','line_number':167,'multiline':True]
+['text':' 3: the test for an on-page reference to an overflow key. ','line_number':170,'multiline':True]
+['text':'
+             * If this is the key we wanted from the start, we don't care if it's an overflow key,
+             * get a copy and wrap up.
+             *
+             * We can race with reconciliation deleting overflow keys. Deleted overflow keys must be
+             * instantiated before deletion, acquire the overflow lock and check. If the key has
+             * been deleted, restart the slot and get the instantiated key, else read the key before
+             * releasing the lock.
+             ','line_number':172,'multiline':True]
+['text':'
+             * If we wanted a different key:
+             *
+             * If we're rolling backward, this key is useless to us because it doesn't have a valid
+             * prefix: keep rolling backward.
+             *
+             * If we're rolling forward, there's no work to be done because prefixes skip overflow
+             * keys: keep rolling forward.
+             ','line_number':193,'multiline':True]
+['text':'
+         * 4: the test for an on-page reference to a key that isn't prefix compressed.
+         ','line_number':205,'multiline':True]
+['text':'
+             * If this is the key we originally wanted, we don't care if we're rolling forward or
+             * backward, it's what we want. Take a copy and wrap up.
+             *
+             * If we wanted a different key, this key has a valid prefix, we can use it.
+             *
+             * If rolling backward, take a copy of the key and switch directions, we can roll
+             * forward from this key.
+             *
+             * If rolling forward there's a bug, we should have found this key while rolling
+             * backwards and switched directions then.
+             *
+             * The key doesn't need to be instantiated, just return.
+             ','line_number':209,'multiline':True]
+['text':'
+         * Proceed with a prefix-compressed key.
+         *
+         * Prefix compression means we don't yet have a key, but there's a special case: if the key
+         * is part of the group of compressed key prefixes we saved when reading the page into
+         * memory, we can build a key for this slot. Otherwise we have to keep rolling forward or
+         * backward.
+         ','line_number':234,'multiline':True]
+['text':'
+             * Get the root key's information (the row-store key can change underfoot; explicitly
+             * take a copy). Ignore the root key's size and prefix information because it must be
+             * large enough (else the current key couldn't have been prefix-compressed based on its
+             * value), and it can't have a prefix-compression value, it's a root key which is never
+             * prefix-compressed.
+             ','line_number':244,'multiline':True]
+['text':'
+                 * If this is the key we originally wanted, we don't care if we're rolling forward
+                 * or backward, it's what we want.
+                 *
+                 * The key doesn't need to be instantiated, just return.
+                 ','line_number':259,'multiline':True]
+['text':'
+         * 5: an on-page reference to a key that's prefix compressed.
+         *
+         * If rolling backward, keep looking for something we can use.
+         *
+         * If rolling forward, build the full key and keep rolling forward.
+         ','line_number':271,'multiline':True]
+['text':'
+             * If there's a set of keys with identical prefixes, we don't want to instantiate each
+             * one, the prefixes are all the same.
+             *
+             * As we roll backward through the page, track the last time the prefix decreased in
+             * size, so we can start with that key during our roll-forward. For a page populated
+             * with a single key prefix, we'll be able to instantiate the key we want as soon as we
+             * find a key without a prefix.
+             ','line_number':279,'multiline':True]
+['text':'
+             * Grow the buffer as necessary as well as ensure data has been copied into local buffer
+             * space, then append the suffix to the prefix already in the buffer.
+             *
+             * Don't grow the buffer unnecessarily or copy data we don't need, truncate the item's
+             * CURRENT data length to the prefix bytes before growing the buffer.
+             ','line_number':297,'multiline':True]
+['text':'
+     * Optionally instantiate the key: there's a cost to figuring out a key value in a leaf page
+     * with prefix-compressed keys, amortize the cost by instantiating a copy of the calculated key
+     * in allocated memory. We don't instantiate keys when pages are first brought into memory
+     * because it's wasted effort if the page is only read by a cursor in sorted order. If, instead,
+     * the page is read by a cursor in reverse order, we immediately instantiate periodic keys for
+     * the page (otherwise the reverse walk would be insanely slow). If, instead, the page is
+     * randomly searched, we instantiate keys as they are accessed (meaning, for example, as long as
+     * the binary search only touches one-half of the page, the only keys we instantiate will be in
+     * that half of the page).
+     ','line_number':327,'multiline':True]
+['text':' Check if we raced with another thread instantiating the key before doing real work. ','line_number':342,'multiline':True]
+['text':'
+         * Serialize the swap of the key into place: on success, update the page's memory footprint,
+         * on failure, free the allocated memory.
+         ','line_number':348,'multiline':True]
+['text':'
+ * __wt_row_ikey_alloc --
+ *     Instantiate a key in a WT_IKEY structure.
+ ','line_number':360,'multiline':True]
+['text':' quiet clang scan-build ','line_number':370,'multiline':True]
+['text':'
+     * Allocate memory for the WT_IKEY structure and the key, then copy the key into place.
+     ','line_number':372,'multiline':True]
+['text':'
+ * __wt_row_ikey_incr --
+ *     Instantiate a key in a WT_IKEY structure and increment the page's memory footprint.
+ ','line_number':383,'multiline':True]
+['text':'
+ * __wt_row_ikey --
+ *     Instantiate a key in a WT_IKEY structure.
+ ','line_number':398,'multiline':True]
+['text':'
+         * We should never overwrite an instantiated key, and we should never instantiate a key
+         * after a split.
+         ','line_number':417,'multiline':True]

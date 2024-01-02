@@ -1,0 +1,818 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]
+['text':'
+ * ops.c: implementation of various operators: op_shift, op_delete, op_tilde,
+ *	  op_change, op_yank, do_join
+ ','line_number':10,'multiline':True]
+['text':' Flags for third item in "opchars".','line_number':24,'multiline':False]
+['text':' operator always works on lines','line_number':25,'multiline':False]
+['text':' operator changes text','line_number':26,'multiline':False]
+['text':'
+ * The names of operators.
+ * IMPORTANT: Index must correspond with defines in vim.h!!!
+ * The third field holds OPF_ flags.
+ ','line_number':28,'multiline':True]
+['text':' OP_NOP','line_number':35,'multiline':False]
+['text':' OP_DELETE','line_number':36,'multiline':False]
+['text':' OP_YANK','line_number':37,'multiline':False]
+['text':' OP_CHANGE','line_number':38,'multiline':False]
+['text':' OP_LSHIFT','line_number':39,'multiline':False]
+['text':' OP_RSHIFT','line_number':40,'multiline':False]
+['text':' OP_FILTER','line_number':41,'multiline':False]
+['text':' OP_TILDE','line_number':42,'multiline':False]
+['text':' OP_INDENT','line_number':43,'multiline':False]
+['text':' OP_FORMAT','line_number':44,'multiline':False]
+['text':' OP_COLON','line_number':45,'multiline':False]
+['text':' OP_UPPER','line_number':46,'multiline':False]
+['text':' OP_LOWER','line_number':47,'multiline':False]
+['text':' DO_JOIN','line_number':48,'multiline':False]
+['text':' DO_JOIN_NS','line_number':49,'multiline':False]
+['text':' OP_ROT13','line_number':50,'multiline':False]
+['text':' OP_REPLACE','line_number':51,'multiline':False]
+['text':' OP_INSERT','line_number':52,'multiline':False]
+['text':' OP_APPEND','line_number':53,'multiline':False]
+['text':' OP_FOLD','line_number':54,'multiline':False]
+['text':' OP_FOLDOPEN','line_number':55,'multiline':False]
+['text':' OP_FOLDOPENREC','line_number':56,'multiline':False]
+['text':' OP_FOLDCLOSE','line_number':57,'multiline':False]
+['text':' OP_FOLDCLOSEREC','line_number':58,'multiline':False]
+['text':' OP_FOLDDEL','line_number':59,'multiline':False]
+['text':' OP_FOLDDELREC','line_number':60,'multiline':False]
+['text':' OP_FORMAT2','line_number':61,'multiline':False]
+['text':' OP_FUNCTION','line_number':62,'multiline':False]
+['text':' OP_NR_ADD','line_number':63,'multiline':False]
+['text':' OP_NR_SUB','line_number':64,'multiline':False]
+['text':'
+ * Translate a command name into an operator type.
+ * Must only be called with a valid operator name!
+ ','line_number':67,'multiline':True]
+['text':' ignore second character','line_number':76,'multiline':False]
+['text':' when tilde is an operator','line_number':78,'multiline':False]
+['text':' add','line_number':80,'multiline':False]
+['text':' subtract','line_number':82,'multiline':False]
+['text':' OP_YANK','line_number':84,'multiline':False]
+['text':'
+ * Return TRUE if operator "op" always works on whole lines.
+ ','line_number':99,'multiline':True]
+['text':'
+ * Return TRUE if operator "op" changes text.
+ ','line_number':109,'multiline':True]
+['text':'
+ * Get first operator command character.
+ * Returns 'g' or 'z' if there is another command character.
+ ','line_number':119,'multiline':True]
+['text':'
+ * Get second operator command character.
+ ','line_number':129,'multiline':True]
+['text':'
+ * op_shift - handle a shift operation
+ ','line_number':138,'multiline':True]
+['text':' empty line','line_number':158,'multiline':False]
+['text':' Move the line right if it doesn't start with '#', 'smartindent'','line_number':163,'multiline':False]
+['text':' isn't set or 'cindent' isn't set or '#' isn't in 'cino'.','line_number':164,'multiline':False]
+['text':' put cursor on first line, for ">>"','line_number':176,'multiline':False]
+['text':' shift_line() may have set cursor.col','line_number':179,'multiline':False]
+['text':' put cursor on last line, for ":>"','line_number':182,'multiline':False]
+['text':' The cursor line is not in a closed fold','line_number':185,'multiline':False]
+['text':' Set "'[" and "']" marks.','line_number':212,'multiline':False]
+['text':'
+ * Shift the current line one shiftwidth left (if left != 0) or right
+ * leaves cursor on first blank in the line.
+ ','line_number':221,'multiline':True]
+['text':' call changed_bytes()','line_number':230,'multiline':False]
+['text':' get current indent','line_number':236,'multiline':False]
+['text':' round off indent','line_number':238,'multiline':False]
+['text':' number of 'shiftwidth' rounded down','line_number':240,'multiline':False]
+['text':' extra spaces','line_number':241,'multiline':False]
+['text':' first remove extra spaces','line_number':242,'multiline':False]
+['text':' original vi indent','line_number':254,'multiline':False]
+['text':' Set new indent','line_number':266,'multiline':False]
+['text':'
+ * Shift one line of the current block one shiftwidth right or left.
+ * Leaves cursor on first character in block.
+ ','line_number':273,'multiline':True]
+['text':' the length of the line after the','line_number':291,'multiline':False]
+['text':' block shift','line_number':292,'multiline':False]
+['text':' don't want revins in indent','line_number':296,'multiline':False]
+['text':' don't want MODE_REPLACE for State','line_number':299,'multiline':False]
+['text':' total is number of screen columns to be inserted/removed','line_number':304,'multiline':False]
+['text':' multiplication overflow','line_number':307,'multiline':False]
+['text':'
+	 *  1. Get start vcol
+	 *  2. Total ws vcols
+	 *  3. Divvy into TABs & spp
+	 *  4. Construct new string
+	 ','line_number':316,'multiline':True]
+['text':' all virtual WS up to & incl a split TAB','line_number':322,'multiline':False]
+['text':' TODO: is passing bd.textstart for start of the line OK?','line_number':340,'multiline':False]
+['text':' OK, now total=all the VWS reqd, and textstart points at the 1st','line_number':353,'multiline':False]
+['text':' non-ws char in the block.','line_number':354,'multiline':False]
+['text':' number of tabs','line_number':363,'multiline':False]
+['text':' number of spp','line_number':365,'multiline':False]
+['text':' if we're splitting a TAB, allow for it','line_number':369,'multiline':False]
+['text':' Note that STRMOVE() copies the trailing NUL.','line_number':379,'multiline':False]
+['text':' left','line_number':382,'multiline':False]
+['text':' column to which text in block will','line_number':384,'multiline':False]
+['text':' be shifted','line_number':385,'multiline':False]
+['text':' end of the part of the line which is','line_number':386,'multiline':False]
+['text':' copied verbatim','line_number':387,'multiline':False]
+['text':' the (displayed) width of this part','line_number':388,'multiline':False]
+['text':' of line','line_number':389,'multiline':False]
+['text':' nr of spaces that replace a TAB','line_number':390,'multiline':False]
+['text':'
+	 * Firstly, let's find the first non-whitespace character that is
+	 * displayed after the block's start column and the character's column
+	 * number. Also, let's calculate the width of all the whitespace
+	 * characters that are displayed in the block and precede the searched
+	 * non-whitespace character.
+	 ','line_number':397,'multiline':True]
+['text':' If "bd.startspaces" is set, "bd.textstart" points to the character,','line_number':405,'multiline':False]
+['text':' the part of which is displayed at the block's beginning. Let's start','line_number':406,'multiline':False]
+['text':' searching from the next character.','line_number':407,'multiline':False]
+['text':' The character's column is in "bd.start_vcol".','line_number':411,'multiline':False]
+['text':' We will shift by "total" or "block_space_width", whichever is less.','line_number':426,'multiline':False]
+['text':' The column to which we will shift the text.','line_number':430,'multiline':False]
+['text':' Now let's find out how much of the beginning of the line we can','line_number':433,'multiline':False]
+['text':' reuse without modification.','line_number':434,'multiline':False]
+['text':' If "bd.startspaces" is set, "bd.textstart" points to the character','line_number':438,'multiline':False]
+['text':' preceding the block. We have to subtract its width to obtain its','line_number':439,'multiline':False]
+['text':' column number.','line_number':440,'multiline':False]
+['text':' If "destination_col" is different from the width of the initial','line_number':457,'multiline':False]
+['text':' part of the line that will be copied, it means we encountered a tab','line_number':458,'multiline':False]
+['text':' character, which we will have to partly replace with spaces.','line_number':459,'multiline':False]
+['text':' The replacement line will consist of:','line_number':462,'multiline':False]
+['text':' - the beginning of the original line up to "verbatim_copy_end",','line_number':463,'multiline':False]
+['text':' - "fill" number of spaces,','line_number':464,'multiline':False]
+['text':' - the rest of the line, pointed to by non_white.','line_number':465,'multiline':False]
+['text':' Note that STRMOVE() copies the trailing NUL.','line_number':475,'multiline':False]
+['text':' replace the line','line_number':478,'multiline':False]
+['text':'
+ * Insert string "s" (b_insert ? before : after) block :AKelly
+ * Caller must prepare for undo.
+ ','line_number':489,'multiline':True]
+['text':' extra spaces to replace a cut TAB','line_number':501,'multiline':False]
+['text':' non-zero if cutting a TAB','line_number':502,'multiline':False]
+['text':' pointer along new line','line_number':503,'multiline':False]
+['text':' column where insert starts','line_number':504,'multiline':False]
+['text':' STRLEN(s)','line_number':505,'multiline':False]
+['text':' new, old lines','line_number':506,'multiline':False]
+['text':' loop var','line_number':507,'multiline':False]
+['text':' don't want MODE_REPLACE for State','line_number':510,'multiline':False]
+['text':' OP_INSERT, line ends before block start','line_number':517,'multiline':False]
+['text':' we're cutting a TAB','line_number':526,'multiline':False]
+['text':' append','line_number':529,'multiline':False]
+['text':' spaces = padding after block','line_number':532,'multiline':False]
+['text':' we're cutting a TAB','line_number':536,'multiline':False]
+['text':' spaces = padding to block edge','line_number':539,'multiline':False]
+['text':' if $ used, just append to EOL (ie spaces==0)','line_number':541,'multiline':False]
+['text':' avoid copying part of a multi-byte character','line_number':550,'multiline':False]
+['text':' can happen when the cursor was moved','line_number':553,'multiline':False]
+['text':' Make sure the allocated size matches what is actually copied below.','line_number':556,'multiline':False]
+['text':' copy up to shifted part','line_number':563,'multiline':False]
+['text':' insert pre-padding','line_number':567,'multiline':False]
+['text':' copy the new text','line_number':571,'multiline':False]
+['text':' insert post-padding','line_number':579,'multiline':False]
+['text':' we're splitting a TAB, don't copy it','line_number':582,'multiline':False]
+['text':' We allowed for that TAB, remember this now','line_number':584,'multiline':False]
+['text':' Not a TAB, no extra spaces','line_number':588,'multiline':False]
+['text':' correct any text properties','line_number':599,'multiline':False]
+['text':' Set "']" mark to the end of the block instead of the end of','line_number':604,'multiline':False]
+['text':' the insert in the first line.','line_number':605,'multiline':False]
+['text':' for all lnum','line_number':609,'multiline':False]
+['text':'
+ * Handle a delete operation.
+ *
+ * Return FAIL if undo failed, OK otherwise.
+ ','line_number':616,'multiline':True]
+['text':' nothing to do','line_number':632,'multiline':False]
+['text':' Nothing to delete, return here.	Do prepare undo, for op_change().','line_number':635,'multiline':False]
+['text':' use register given with CTRL_R, defaults to zero','line_number':646,'multiline':False]
+['text':'
+     * Imitate the strange Vi behaviour: If the delete spans more than one
+     * line and motion_type == MCHAR and the result is a blank line, make the
+     * delete linewise.  Don't do this for the change command or Visual mode.
+     ','line_number':656,'multiline':True]
+['text':'
+     * Check for trying to delete (e.g. "D") in an empty line.
+     * Note: For the change operator it is ok.
+     ','line_number':676,'multiline':True]
+['text':'
+	 * It's an error to operate on an empty region, when 'E' included in
+	 * 'cpoptions' (Vi compatible).
+	 ','line_number':685,'multiline':True]
+['text':' Virtual editing: Nothing gets deleted, but we set the '[ and ']','line_number':690,'multiline':False]
+['text':' marks as if it happened.','line_number':691,'multiline':False]
+['text':'
+     * Do a yank of whatever we're about to delete.
+     * If a yank register was specified, put the deleted text into that
+     * register.  For the black hole register '_' don't yank anything.
+     ','line_number':698,'multiline':True]
+['text':' check for read-only register','line_number':707,'multiline':False]
+['text':' yank into specif'd reg.','line_number':713,'multiline':False]
+['text':' yank without message','line_number':714,'multiline':False]
+['text':' not appending to unnamed register','line_number':718,'multiline':False]
+['text':'
+	 * Put deleted text into register 1 and shift number registers if the
+	 * delete contains a line break, or when using a specific operator (Vi
+	 * compatible)
+	 ','line_number':720,'multiline':True]
+['text':' Yank into small delete register when no named register specified','line_number':733,'multiline':False]
+['text':' and the delete is within one line.','line_number':734,'multiline':False]
+['text':'
+	 * If there's too much stuff to fit in the yank register, then get a
+	 * confirmation before doing the delete. This is crude, but simple.
+	 * And it avoids doing a delete of something we can't put back if we
+	 * want.
+	 ','line_number':750,'multiline':True]
+['text':' must display the prompt','line_number':760,'multiline':False]
+['text':'
+     * block mode delete
+     ','line_number':776,'multiline':True]
+['text':' nothing to delete','line_number':788,'multiline':False]
+['text':' Adjust cursor position for tab replaced by spaces and 'lbr'.','line_number':791,'multiline':False]
+['text':' "n" == number of chars deleted','line_number':798,'multiline':False]
+['text':' If we delete a TAB, it may be replaced by several characters.','line_number':799,'multiline':False]
+['text':' Thus the number of characters may increase!','line_number':800,'multiline':False]
+['text':' copy up to deleted part','line_number':806,'multiline':False]
+['text':' insert spaces','line_number':808,'multiline':False]
+['text':' copy the part after the deleted part','line_number':811,'multiline':False]
+['text':' replace the line','line_number':814,'multiline':False]
+['text':' no lines deleted','line_number':826,'multiline':False]
+['text':' Delete the lines except the first one.  Temporarily move the','line_number':832,'multiline':False]
+['text':' cursor to the next line.  Save the current line number, if the','line_number':833,'multiline':False]
+['text':' last line is deleted it may be changed.','line_number':834,'multiline':False]
+['text':' don't delete indent','line_number':844,'multiline':False]
+['text':' cursor on first non-white','line_number':846,'multiline':False]
+['text':' delete the indent when ESC hit','line_number':847,'multiline':False]
+['text':' cursor in column 0','line_number':851,'multiline':False]
+['text':' delete the rest of the line','line_number':852,'multiline':False]
+['text':' leave cursor past last char in line','line_number':853,'multiline':False]
+['text':' "U" command not possible after "2cc"','line_number':855,'multiline':False]
+['text':' "U" command not possible after "dd"','line_number':861,'multiline':False]
+['text':' For virtualedit: break the tabs that are partly included.','line_number':870,'multiline':False]
+['text':' save first line for undo','line_number':873,'multiline':False]
+['text':' Break a tab only when it's included in the area.','line_number':888,'multiline':False]
+['text':' save last line for undo','line_number':892,'multiline':False]
+['text':' delete characters within one line','line_number':905,'multiline':False]
+['text':' save line for undo','line_number':907,'multiline':False]
+['text':' if 'cpoptions' contains '$', display '$' at end of change','line_number':910,'multiline':False]
+['text':' fix up things for virtualedit-delete:','line_number':921,'multiline':False]
+['text':' break the tabs which are going to get in our way','line_number':922,'multiline':False]
+['text':' Delete at least one char (e.g, when on a control char).','line_number':930,'multiline':False]
+['text':' When deleted a char in the line, reset coladd.','line_number':934,'multiline':False]
+['text':' delete characters between lines','line_number':941,'multiline':False]
+['text':' save deleted and changed lines for undo','line_number':945,'multiline':False]
+['text':' delete from cursor to end of line','line_number':950,'multiline':False]
+['text':' remember curwin->w_cursor','line_number':952,'multiline':False]
+['text':' delete from start of line until op_end','line_number':956,'multiline':False]
+['text':' restore curwin->w_cursor','line_number':961,'multiline':False]
+['text':'
+ * Adjust end of operating area for ending on a multi-byte character.
+ * Used for deletion.
+ ','line_number':986,'multiline':True]
+['text':'
+ * Replace the character under the cursor with "c".
+ * This takes care of multi-byte characters.
+ ','line_number':1002,'multiline':True]
+['text':' Backup to the replaced character.','line_number':1014,'multiline':False]
+['text':'
+ * Replace a whole area with one character.
+ ','line_number':1018,'multiline':True]
+['text':' nothing to do','line_number':1033,'multiline':False]
+['text':'
+     * block mode replace
+     ','line_number':1053,'multiline':True]
+['text':' make sure cursor position is valid','line_number':1061,'multiline':False]
+['text':' nothing to replace','line_number':1064,'multiline':False]
+['text':' n == number of extra chars required','line_number':1066,'multiline':False]
+['text':' If we split a TAB, it may be replaced by several characters.','line_number':1067,'multiline':False]
+['text':' Thus the number of characters may increase!','line_number':1068,'multiline':False]
+['text':' If the range starts in virtual space, count the initial','line_number':1069,'multiline':False]
+['text':' coladd offset as part of "startspaces"','line_number':1070,'multiline':False]
+['text':' allow for pre spaces','line_number':1081,'multiline':False]
+['text':' allow for post spp','line_number':1084,'multiline':False]
+['text':' Figure out how many characters to replace.','line_number':1088,'multiline':False]
+['text':' A double-wide character can be replaced only up to half the','line_number':1093,'multiline':False]
+['text':' times.','line_number':1094,'multiline':False]
+['text':' Compute bytes needed, move character count to num_chars.','line_number':1105,'multiline':False]
+['text':' oldlen includes textlen, so don't double count','line_number':1108,'multiline':False]
+['text':' copy up to deleted part','line_number':1117,'multiline':False]
+['text':' insert pre-spaces','line_number':1120,'multiline':False]
+['text':' insert replacement chars CHECK FOR ALLOCATED SPACE','line_number':1122,'multiline':False]
+['text':' REPLACE_CR_NCHAR/REPLACE_NL_NCHAR is used for entering CR','line_number':1123,'multiline':False]
+['text':' literally.','line_number':1124,'multiline':False]
+['text':' insert post-spaces','line_number':1137,'multiline':False]
+['text':' copy the part after the changed part','line_number':1139,'multiline':False]
+['text':' Replacing with \r or \n means splitting the line.','line_number':1145,'multiline':False]
+['text':' replace the line','line_number':1150,'multiline':False]
+['text':'
+	 * MCHAR and MLINE motion replace.
+	 ','line_number':1163,'multiline':True]
+['text':' This is slow, but it handles replacing a single-byte','line_number':1189,'multiline':False]
+['text':' with a multi-byte and the other way around.','line_number':1190,'multiline':False]
+['text':' oap->end has to be recalculated when','line_number':1204,'multiline':False]
+['text':' the tab breaks','line_number':1205,'multiline':False]
+['text':' with "coladd" set may move to just after a TAB','line_number':1213,'multiline':False]
+['text':' oap->end has been trimmed so it's effectively inclusive;','line_number':1229,'multiline':False]
+['text':' as a result an extra +1 must be counted so we don't','line_number':1230,'multiline':False]
+['text':' trample the NUL byte.','line_number':1231,'multiline':False]
+['text':' Advance to next character, stop at the end of the file.','line_number':1245,'multiline':False]
+['text':' Set "'[" and "']" marks.','line_number':1257,'multiline':False]
+['text':'
+ * Handle the (non-standard vi) tilde operator.  Also for "gu", "gU" and "g?".
+ ','line_number':1267,'multiline':True]
+['text':' Visual block mode','line_number':1282,'multiline':False]
+['text':' get the line now, it may have been flushed','line_number':1300,'multiline':False]
+['text':' not block mode','line_number':1310,'multiline':False]
+['text':' get the line again, it may have been flushed','line_number':1351,'multiline':False]
+['text':' get the line again, it may have been flushed','line_number':1360,'multiline':False]
+['text':' No change: need to remove the Visual selection','line_number':1370,'multiline':False]
+['text':' Set '[ and '] marks.','line_number':1375,'multiline':False]
+['text':'
+ * Invoke swapchar() on "length" bytes at position "pos".
+ * "pos" is advanced to just after the changed characters.
+ * "length" is rounded up to include the whole last multi-byte character.
+ * Also works correctly when the number of bytes changes.
+ * Returns TRUE if some character was changed.
+ ','line_number':1385,'multiline':True]
+['text':' we're counting bytes, not characters','line_number':1404,'multiline':False]
+['text':' at end of file','line_number':1409,'multiline':False]
+['text':'
+ * If op_type == OP_UPPER: make uppercase,
+ * if op_type == OP_LOWER: make lowercase,
+ * if op_type == OP_ROT13: do rot13 encoding,
+ * else swap case of character at 'pos'
+ * returns TRUE when something actually changed.
+ ','line_number':1415,'multiline':True]
+['text':' Only do rot13 encoding for ASCII characters.','line_number':1430,'multiline':False]
+['text':' Special handling of German sharp s: change to "SS".','line_number':1439,'multiline':False]
+['text':' No lower/uppercase letter','line_number':1448,'multiline':False]
+['text':' don't use del_char(), it also removes composing chars','line_number':1472,'multiline':False]
+['text':'
+ * op_insert - Insert and append operators for Visual mode.
+ ','line_number':1484,'multiline':True]
+['text':' offset when cursor was moved in insert mode','line_number':1498,'multiline':False]
+['text':' edit() changes this - record it for OP_APPEND','line_number':1501,'multiline':False]
+['text':' vis block is still marked. Get rid of it now.','line_number':1504,'multiline':False]
+['text':' When 'virtualedit' is used, need to insert the extra spaces before','line_number':1510,'multiline':False]
+['text':' doing block_prep().  When only "block" is used, virtual edit is','line_number':1511,'multiline':False]
+['text':' already disabled, but still need it when calling','line_number':1512,'multiline':False]
+['text':' coladvance_force().','line_number':1513,'multiline':False]
+['text':' coladvance_force() uses get_ve_flags() to get the 'virtualedit'','line_number':1514,'multiline':False]
+['text':' state for the current window.  To override that state, we need to','line_number':1515,'multiline':False]
+['text':' set the window-local value of ve_flags rather than the global value.','line_number':1516,'multiline':False]
+['text':' Get the info about the block before entering the text','line_number':1531,'multiline':False]
+['text':' Get indent information','line_number':1533,'multiline':False]
+['text':' Move the cursor to the character right of the block.','line_number':1547,'multiline':False]
+['text':' First line was too short, make it longer and adjust the','line_number':1554,'multiline':False]
+['text':' values in "bd".','line_number':1555,'multiline':False]
+['text':' Works just like an 'i'nsert on the next character.','line_number':1568,'multiline':False]
+['text':' When a tab was inserted, and the characters in front of the tab','line_number':1579,'multiline':False]
+['text':' have been converted to a tab as well, the column of the cursor','line_number':1580,'multiline':False]
+['text':' might have actually been reduced, so need to adjust here.','line_number':1581,'multiline':False]
+['text':' If user has moved off this line, we don't know what to do, so do','line_number':1586,'multiline':False]
+['text':' nothing.','line_number':1587,'multiline':False]
+['text':' Also don't repeat the insert when Insert mode ended with CTRL-C.','line_number':1588,'multiline':False]
+['text':' If indent kicked in, the firstline might have changed','line_number':1599,'multiline':False]
+['text':' but only do that, if the indent actually increased.','line_number':1600,'multiline':False]
+['text':' The user may have moved the cursor before inserting something, try','line_number':1610,'multiline':False]
+['text':' to adjust the block for that.  But only do it, if the difference','line_number':1611,'multiline':False]
+['text':' does not come from indent kicking in.','line_number':1612,'multiline':False]
+['text':' reset pre_textlen to the value of OP_INSERT','line_number':1634,'multiline':False]
+['text':' Spaces and tabs in the indent may have changed to other spaces and','line_number':1642,'multiline':False]
+['text':' tabs.  Get the starting column again and correct the length.','line_number':1643,'multiline':False]
+['text':' Don't do this when "$" used, end-of-line will have changed.','line_number':1644,'multiline':False]
+['text':'','line_number':1645,'multiline':False]
+['text':' if indent was added and the inserted text was after the indent,','line_number':1646,'multiline':False]
+['text':' correct the selection for the new indent.','line_number':1647,'multiline':False]
+['text':' undo for where "oap" is used below','line_number':1658,'multiline':False]
+['text':'
+	 * Subsequent calls to ml_get() flush the firstline data - take a
+	 * copy of the required string.
+	 ','line_number':1676,'multiline':True]
+['text':' account for pressing cursor in insert mode when '$' was used','line_number':1686,'multiline':False]
+['text':' moved outside of the visual block, what to do?','line_number':1696,'multiline':False]
+['text':' short line, point to the NUL','line_number':1701,'multiline':False]
+['text':' block handled here','line_number':1710,'multiline':False]
+['text':'
+ * op_change - handle a change operation
+ *
+ * return TRUE if edit() returns because of a CTRL-O command
+ ','line_number':1724,'multiline':True]
+['text':' Like opening a new line, do smart indent','line_number':1747,'multiline':False]
+['text':' First delete the text in the region.  In an empty buffer only need to','line_number':1750,'multiline':False]
+['text':' save for undo','line_number':1751,'multiline':False]
+['text':' check for still on same line (<CR> in inserted text meaningless)','line_number':1764,'multiline':False]
+['text':' skip blank lines too','line_number':1765,'multiline':False]
+['text':' Add spaces before getting the current line length.','line_number':1768,'multiline':False]
+['text':' Reset finish_op now, don't want it set inside edit().','line_number':1781,'multiline':False]
+['text':'
+     * In Visual block mode, handle copying the new text to all lines of the
+     * block.
+     * Don't repeat the insert when Insert mode ended with CTRL-C.
+     ','line_number':1789,'multiline':True]
+['text':' Auto-indenting may have changed the indent.  If the cursor was past','line_number':1796,'multiline':False]
+['text':' the indent, exclude that indent change from the inserted text.','line_number':1797,'multiline':False]
+['text':' Subsequent calls to ml_get() flush the firstline data - take a','line_number':1810,'multiline':False]
+['text':' copy of the inserted text.','line_number':1811,'multiline':False]
+['text':' If the block starts in virtual space, count the','line_number':1823,'multiline':False]
+['text':' initial coladd offset as part of "startspaces"','line_number':1824,'multiline':False]
+['text':' copy up to block start','line_number':1836,'multiline':False]
+['text':' Shift the properties for linenr as edit() would do.','line_number':1847,'multiline':False]
+['text':'
+ * When the cursor is on the NUL past the end of the line and it should not be
+ * there move it left.
+ ','line_number':1866,'multiline':True]
+['text':' Put the cursor on the last character in the line.','line_number':1882,'multiline':False]
+['text':' Coladd is set to the width of the last character.','line_number':1889,'multiline':False]
+['text':'
+ * If "process" is TRUE and the line begins with a comment leader (possibly
+ * after some white space), return a pointer to the text after it. Put a boolean
+ * value indicating whether the line ends with an unclosed comment in
+ * "is_comment".
+ * line - line to be processed,
+ * process - if FALSE, will only check whether the line ends with an unclosed
+ *	     comment,
+ * include_space - whether to also skip space following the comment leader,
+ * is_comment - will indicate whether the current line ends with an unclosed
+ *		comment.
+ ','line_number':1895,'multiline':True]
+['text':' Let's check whether the line ends with an unclosed comment.','line_number':1921,'multiline':False]
+['text':' If the last comment leader has COM_END in flags, there's no comment.','line_number':1922,'multiline':False]
+['text':' Find:','line_number':1942,'multiline':False]
+['text':' - COM_END,','line_number':1943,'multiline':False]
+['text':' - colon,','line_number':1944,'multiline':False]
+['text':' whichever comes first.','line_number':1945,'multiline':False]
+['text':' If we found a colon, it means that we are not processing a line','line_number':1954,'multiline':False]
+['text':' starting with a closing part of a three-part comment. That's good,','line_number':1955,'multiline':False]
+['text':' because we don't want to remove those as this would be annoying.','line_number':1956,'multiline':False]
+['text':'
+ * Join 'count' lines (minimal 2) at the cursor position.
+ * When "save_undo" is TRUE save lines for undo first.
+ * Set "use_formatoptions" to FALSE when e.g. processing backspace and comment
+ * leaders should not be removed.
+ * When setmark is TRUE, sets the '[ and '] mark, else, the caller is expected
+ * to set those marks.
+ *
+ * return FAIL for failure, OK otherwise
+ ','line_number':1963,'multiline':True]
+['text':' number of spaces inserted before a line','line_number':1986,'multiline':False]
+['text':' size of the current line','line_number':1989,'multiline':False]
+['text':' size of the long new line','line_number':1990,'multiline':False]
+['text':' number of props over all joined lines','line_number':1999,'multiline':False]
+['text':' Allocate an array to store the number of spaces inserted before each','line_number':2007,'multiline':False]
+['text':' line.  We will use it to pre-compute the length of the new line and the','line_number':2008,'multiline':False]
+['text':' proper placement of each original line in the new one.','line_number':2009,'multiline':False]
+['text':'
+     * Don't move anything yet, just compute the final line length
+     * and setup the array of space strings lengths
+     * This loops forward over the joined lines.
+     ','line_number':2023,'multiline':True]
+['text':' Set the '[ mark.','line_number':2037,'multiline':False]
+['text':' We don't want to remove the comment leader if the','line_number':2043,'multiline':False]
+['text':' previous line is not a comment.','line_number':2044,'multiline':False]
+['text':' don't add a space if the line is ending in a space','line_number':2072,'multiline':False]
+['text':' extra space when 'joinspaces' set and line ends in '.'','line_number':2077,'multiline':False]
+['text':' store the column position before last line','line_number':2116,'multiline':False]
+['text':' allocate the space for the new line','line_number':2119,'multiline':False]
+['text':'
+     * Move affected lines to the new long one.
+     * This loops backwards over the joined lines, including the original line.
+     *
+     * Move marks from each deleted line to the joined line, adjusting the
+     * column.  This is not Vi compatible, but Vi deletes the marks, thus that
+     * should not really be a problem.
+     ','line_number':2133,'multiline':True]
+['text':' If deleting more spaces than adding, the cursor moves no more than','line_number':2157,'multiline':False]
+['text':' what is added if it is inside these spaces.','line_number':2158,'multiline':False]
+['text':' Set the '] mark.','line_number':2182,'multiline':False]
+['text':' Only report the change in the first line here, del_lines() will report','line_number':2187,'multiline':False]
+['text':' the deleted line.','line_number':2188,'multiline':False]
+['text':'
+     * Delete following lines. To do this we move the cursor there
+     * briefly, and then move it back. After del_lines() the cursor may
+     * have moved up (last line deleted), so the current lnum is kept in t.
+     ','line_number':2191,'multiline':True]
+['text':'
+     * Set the cursor column:
+     * Vi compatible: use the column of the first join
+     * vim:	      use the column of the last join
+     ','line_number':2201,'multiline':True]
+['text':'
+ * Reset 'linebreak' and take care of side effects.
+ * Returns the previous value, to be passed to restore_lbr().
+ ','line_number':2221,'multiline':True]
+['text':' changing 'linebreak' may require w_virtcol to be updated','line_number':2230,'multiline':False]
+['text':'
+ * Restore 'linebreak' and take care of side effects.
+ ','line_number':2236,'multiline':True]
+['text':' changing 'linebreak' may require w_virtcol to be updated','line_number':2245,'multiline':False]
+['text':'
+ * prepare a few things for block mode yank/delete/tilde
+ *
+ * for delete:
+ * - textlen includes the first/last char to be (partly) deleted
+ * - start/endspaces is the number of columns that are taken by the
+ *   first/last deleted char minus the number of columns that have to be
+ *   deleted.
+ * for yank and tilde:
+ * - textlen includes the first/last char to be wholly yanked
+ * - start/endspaces is the number of columns of the first/last yanked char
+ *   that are to be yanked.
+ ','line_number':2251,'multiline':True]
+['text':' Avoid a problem with unwanted linebreaks in block mode.','line_number':2279,'multiline':False]
+['text':' Count a tab for what it's worth (if list mode not on)','line_number':2300,'multiline':False]
+['text':' line too short','line_number':2321,'multiline':False]
+['text':' notice: this converts partly selected Multibyte characters to','line_number':2330,'multiline':False]
+['text':' spaces, too.','line_number':2331,'multiline':False]
+['text':' it's all in one character','line_number':2337,'multiline':False]
+['text':' just putting the sum of those two into','line_number':2352,'multiline':False]
+['text':' bdp->startspaces doesn't work for Visual replace,','line_number':2353,'multiline':False]
+['text':' so we have to split the tab in two','line_number':2354,'multiline':False]
+['text':' count a tab for what it's worth (if list mode not on)','line_number':2368,'multiline':False]
+['text':' line too short','line_number':2380,'multiline':False]
+['text':' Alternative: include spaces to fill up the block.','line_number':2383,'multiline':False]
+['text':' Disadvantage: can lead to trailing spaces when the line is','line_number':2384,'multiline':False]
+['text':' short where the text is put','line_number':2385,'multiline':False]
+['text':' if (!is_del || oap->op_type == OP_APPEND)','line_number':2386,'multiline':False]
+['text':' replace doesn't add characters','line_number':2391,'multiline':False]
+['text':'
+ * Handle the add/subtract operator.
+ ','line_number':2416,'multiline':True]
+['text':' Amount of add/subtract','line_number':2422,'multiline':False]
+['text':' was g<c-a>/g<c-x>','line_number':2423,'multiline':False]
+['text':' do_addsub() might trigger re-evaluation of 'foldexpr' halfway, when the','line_number':2430,'multiline':False]
+['text':' buffer is not completely updated yet. Postpone updating folds until before','line_number':2431,'multiline':False]
+['text':' the call to changed_lines().','line_number':2432,'multiline':False]
+['text':' Visual block mode','line_number':2472,'multiline':False]
+['text':' oap->motion_type == MCHAR','line_number':2484,'multiline':False]
+['text':' Remember the start position of the first change.','line_number':2506,'multiline':False]
+['text':' No change: need to remove the Visual selection','line_number':2534,'multiline':False]
+['text':' Set '[ mark if something changed. Keep the last end','line_number':2537,'multiline':False]
+['text':' position from do_addsub().','line_number':2538,'multiline':False]
+['text':'
+ * Add or subtract 'Prenum1' from a number in a line
+ * op_type is OP_NR_ADD or OP_NR_SUB
+ *
+ * Returns TRUE if some character was changed.
+ ','line_number':2548,'multiline':True]
+['text':' 'X'/'x': hex; '0': octal; 'B'/'b': bin','line_number':2564,'multiline':False]
+['text':' 0xABC','line_number':2565,'multiline':False]
+['text':' "heX"','line_number':2588,'multiline':False]
+['text':' "Octal"','line_number':2589,'multiline':False]
+['text':' "Bin"','line_number':2590,'multiline':False]
+['text':' "alPha"','line_number':2591,'multiline':False]
+['text':' "Unsigned"','line_number':2592,'multiline':False]
+['text':'
+     * First check if we are on a hexadecimal number, after the "0x".
+     ','line_number':2607,'multiline':True]
+['text':' In case of binary/hexadecimal pattern overlap match, rescan','line_number':2639,'multiline':False]
+['text':' Found hexadecimal or binary number, move to its start.','line_number':2668,'multiline':False]
+['text':'
+	     * Search forward and then backward to find the start of number.
+	     ','line_number':2675,'multiline':True]
+['text':'
+     * If a number was found, and saving for undo works, replace the number.
+     ','line_number':2720,'multiline':True]
+['text':' decrement or increment alphabetic character','line_number':2732,'multiline':False]
+['text':' negative number','line_number':2777,'multiline':False]
+['text':' get the number value (unsigned)','line_number':2781,'multiline':False]
+['text':' ignore leading '-' for hex and octal and bin numbers','line_number':2794,'multiline':False]
+['text':' add or subtract','line_number':2801,'multiline':False]
+['text':' if number is too big don't add/subtract','line_number':2809,'multiline':False]
+['text':' handle wraparound for decimal numbers','line_number':2817,'multiline':False]
+['text':' add','line_number':2830,'multiline':False]
+['text':' sticking at zero.','line_number':2844,'multiline':False]
+['text':' sticking at 2^64 - 1.','line_number':2847,'multiline':False]
+['text':' need to remove the '-'','line_number':2854,'multiline':False]
+['text':'
+	 * Delete the old number.
+	 ','line_number':2859,'multiline':True]
+['text':'
+	 * Don't include the '-' in the length, only the length of the
+	 * part after it is kept the same.
+	 ','line_number':2868,'multiline':True]
+['text':'
+	 * Prepare the leading characters in buf1[].
+	 * When there are many leading zeros it could be very long.
+	 * Allocate a bit too much.
+	 ','line_number':2890,'multiline':True]
+['text':'
+	 * Put the number characters in buf2[].
+	 ','line_number':2913,'multiline':True]
+['text':' leading zeros','line_number':2921,'multiline':False]
+['text':'
+	 * Adjust number of zeros to the new number of digits, so the
+	 * total length of the number remains the same.
+	 * Don't do this when
+	 * the result may look like an octal number.
+	 ','line_number':2940,'multiline':True]
+['text':' Insert just after the first character to be removed, so that any','line_number':2953,'multiline':False]
+['text':' text properties will be adjusted.  Then delete the old number','line_number':2954,'multiline':False]
+['text':' afterwards.','line_number':2955,'multiline':False]
+['text':' insert the new number','line_number':2959,'multiline':False]
+['text':' del_char() will also mark line needing displaying','line_number':2962,'multiline':False]
+['text':' Delete the one character before the insert.','line_number':2968,'multiline':False]
+['text':' set the '[ and '] marks','line_number':2985,'multiline':False]
+['text':'
+ *  Count the number of bytes, characters and "words" in a line.
+ *
+ *  "Words" are counted by looking for boundaries between non-space and
+ *  space characters.  (it seems to produce results that match 'wc'.)
+ *
+ *  Return value is byte count; word count for the line is added to "*wc".
+ *  Char count is added to "*cc".
+ *
+ *  The function will only examine the first "limit" characters in the
+ *  line, stopping if it encounters an end-of-line (NUL byte).  In that
+ *  case, eol_size will be added to the character count to account for
+ *  the size of the EOL character.
+ ','line_number':3009,'multiline':True]
+['text':' Add eol_size if the end of line was reached before hitting limit.','line_number':3056,'multiline':False]
+['text':'
+ * Give some info about the position of the cursor (for "g CTRL-G").
+ * In Visual mode, give some info about the selected region.  (In this case,
+ * the *_count_cursor variables store running totals for the selection.)
+ * When "dict" is not NULL store the info there instead of showing it.
+ ','line_number':3066,'multiline':True]
+['text':'
+     * Compute the length of the file in characters.
+     ','line_number':3093,'multiline':True]
+['text':' Make 'sbr' empty for a moment to get the correct size.','line_number':3132,'multiline':False]
+['text':' Swap the start, end vcol if needed','line_number':3147,'multiline':False]
+['text':' Check for a CTRL-C every 100000 characters.','line_number':3160,'multiline':False]
+['text':' Do extra processing for VIsual mode.','line_number':3169,'multiline':False]
+['text':' In non-visual mode, check for the line the cursor is on','line_number':3214,'multiline':False]
+['text':' Add to the running totals','line_number':3226,'multiline':False]
+['text':' Correction for when last line doesn't have an EOL.','line_number':3232,'multiline':False]
+['text':' Don't shorten this message, the user asked for it.','line_number':3312,'multiline':False]
+['text':'
+ * Handle indent and format operators and visual mode ":".
+ ','line_number':3335,'multiline':True]
+['text':' Make the range look nice, so it can be repeated.','line_number':3346,'multiline':False]
+['text':' When using !! on a closed fold the range ".!" works best to operate','line_number':3353,'multiline':False]
+['text':' on, it will be made the whole closed fold later.','line_number':3354,'multiline':False]
+['text':' Make it a range with the end line.','line_number':3364,'multiline':False]
+['text':' do not use ".+number" for a closed fold, it would count','line_number':3372,'multiline':False]
+['text':' folded lines twice','line_number':3373,'multiline':False]
+['text':' do_cmdline() does the rest','line_number':3406,'multiline':False]
+['text':' callback function for 'operatorfunc'','line_number':3409,'multiline':False]
+['text':'
+ * Process the 'operatorfunc' option value.
+ * Returns OK or FAIL.
+ ','line_number':3412,'multiline':True]
+['text':'
+ * Mark the global 'operatorfunc' callback with "copyID" so that it is not
+ * garbage collected.
+ ','line_number':3436,'multiline':True]
+['text':'
+ * Handle the "g@" operator: call 'operatorfunc'.
+ ','line_number':3451,'multiline':True]
+['text':' Set '[ and '] marks to text to be operated on.','line_number':3467,'multiline':False]
+['text':' Exclude the end position.','line_number':3471,'multiline':False]
+['text':' Reset virtual_op so that 'virtualedit' can be changed in the','line_number':3483,'multiline':False]
+['text':' function.','line_number':3484,'multiline':False]
+['text':' Reset finish_op so that mode() returns the right value.','line_number':3488,'multiline':False]
+['text':'
+ * Calculate start/end virtual columns for operating in block mode.
+ ','line_number':3508,'multiline':True]
+['text':' when TRUE adjust position for 'selectmode'','line_number':3515,'multiline':False]
+['text':' prevent from moving onto a trail byte','line_number':3525,'multiline':False]
+['text':' if '$' was used, get oap->end_vcol from longest line','line_number':3547,'multiline':False]
+['text':' Correct oap->end.col and oap->start.col to be the','line_number':3563,'multiline':False]
+['text':' upper-left and lower-right corner of the block area.','line_number':3564,'multiline':False]
+['text':'','line_number':3565,'multiline':False]
+['text':' (Actually, this does convert column positions into character','line_number':3566,'multiline':False]
+['text':' positions)','line_number':3567,'multiline':False]
+['text':' Information for redoing the previous Visual selection.','line_number':3577,'multiline':False]
+['text':' 'v', 'V', or Ctrl-V','line_number':3579,'multiline':False]
+['text':' number of lines','line_number':3580,'multiline':False]
+['text':' number of cols or end column','line_number':3581,'multiline':False]
+['text':' count for Visual operator','line_number':3582,'multiline':False]
+['text':' extra argument','line_number':3583,'multiline':False]
+['text':'
+ * Handle an operator after Visual mode or when the movement is finished.
+ * "gui_yank" is true when yanking text for the clipboard.
+ ','line_number':3594,'multiline':True]
+['text':' The visual area is remembered for redo','line_number':3609,'multiline':False]
+['text':' Yank the visual area into the GUI selection register before we operate','line_number':3615,'multiline':False]
+['text':' on it and lose it forever.','line_number':3616,'multiline':False]
+['text':' Don't do it if a specific register was specified, so that ""x"*P works.','line_number':3617,'multiline':False]
+['text':' This could call do_pending_operator() recursively, but that's OK','line_number':3618,'multiline':False]
+['text':' because gui_yank will be TRUE for the nested call.','line_number':3619,'multiline':False]
+['text':' If an operation is pending, handle it...','line_number':3630,'multiline':False]
+['text':' Yank can be redone when 'y' is in 'cpoptions', but not when yanking','line_number':3633,'multiline':False]
+['text':' for the clipboard.','line_number':3634,'multiline':False]
+['text':' Avoid a problem with unwanted linebreaks in block mode.','line_number':3638,'multiline':False]
+['text':' If the motion was linewise, "inclusive" will not have been set.','line_number':3646,'multiline':False]
+['text':' Use "exclusive" to be consistent.  Makes "dvj" work nice.','line_number':3647,'multiline':False]
+['text':' If the motion already was characterwise, toggle "inclusive"','line_number':3650,'multiline':False]
+['text':' Change line- or characterwise motion into Visual block mode.','line_number':3657,'multiline':False]
+['text':' Only redo yank when 'y' flag is in 'cpoptions'.','line_number':3668,'multiline':False]
+['text':' Never redo "zf" (define fold).','line_number':3669,'multiline':False]
+['text':' Also redo Operator-pending Visual mode mappings','line_number':3672,'multiline':False]
+['text':' was a search','line_number':3690,'multiline':False]
+['text':' If 'cpoptions' does not contain 'r', insert the search','line_number':3692,'multiline':False]
+['text':' pattern to really repeat the same command.','line_number':3693,'multiline':False]
+['text':' do_cmdline() has stored the first typed line in','line_number':3700,'multiline':False]
+['text':' "repeat_cmdline".  When several lines are typed repeating','line_number':3701,'multiline':False]
+['text':' won't be possible.','line_number':3702,'multiline':False]
+['text':' Redo of an operation on a Visual area. Use the same size from','line_number':3719,'multiline':False]
+['text':' redo_VIsual.rv_line_count and redo_VIsual.rv_vcol.','line_number':3720,'multiline':False]
+['text':' Save the current VIsual area for '< and '> marks, and "gv"','line_number':3755,'multiline':False]
+['text':' In Select mode, a linewise selection is operated upon like a','line_number':3766,'multiline':False]
+['text':' characterwise selection.','line_number':3767,'multiline':False]
+['text':' Special case: gH<Del> deletes the last line.','line_number':3768,'multiline':False]
+['text':' If 'selection' is "exclusive", backup one character for','line_number':3785,'multiline':False]
+['text':' charwise selections.','line_number':3786,'multiline':False]
+['text':' Set oap->start to the first position of the operated text, oap->end','line_number':3798,'multiline':False]
+['text':' to the end of the operated text.  w_cursor is equal to oap->start.','line_number':3799,'multiline':False]
+['text':' Include folded lines completely.','line_number':3803,'multiline':False]
+['text':' w_virtcol may have been updated; if the cursor goes back to its','line_number':3818,'multiline':False]
+['text':' previous position w_virtcol becomes invalid and isn't updated','line_number':3819,'multiline':False]
+['text':' automatically.','line_number':3820,'multiline':False]
+['text':' Include folded lines completely.','line_number':3826,'multiline':False]
+['text':' Just in case lines were deleted that make the position invalid.','line_number':3840,'multiline':False]
+['text':' Set "virtual_op" before resetting VIsual_active.','line_number':3844,'multiline':False]
+['text':' Prepare to reselect and redo Visual: this is based on the','line_number':3853,'multiline':False]
+['text':' size of the Visual text','line_number':3854,'multiline':False]
+['text':' can't redo yank (unless 'y' is in 'cpoptions') and ":"','line_number':3876,'multiline':False]
+['text':' Prepare for redoing.  Only use the nchar field for "r",','line_number':3891,'multiline':False]
+['text':' otherwise it might be the second char of the operator.','line_number':3892,'multiline':False]
+['text':' reverse what nv_replace() did','line_number':3905,'multiline':False]
+['text':' also repeat the count for 'operatorfunc'','line_number':3912,'multiline':False]
+['text':' oap->inclusive defaults to TRUE.','line_number':3929,'multiline':False]
+['text':' If oap->end is on a NUL (empty line) oap->inclusive becomes','line_number':3930,'multiline':False]
+['text':' FALSE.  This makes "d}P" and "v}dP" work the same.','line_number':3931,'multiline':False]
+['text':' Try to include the newline, unless it's an operator','line_number':3943,'multiline':False]
+['text':' that works on lines only.','line_number':3944,'multiline':False]
+['text':' Switch Visual off now, so screen updating does','line_number':3959,'multiline':False]
+['text':' not show inverted text when the screen is redrawn.','line_number':3960,'multiline':False]
+['text':' With OP_YANK and sometimes with OP_COLON and OP_FILTER there is','line_number':3961,'multiline':False]
+['text':' no screen redraw, so it is done here to remove the inverted','line_number':3962,'multiline':False]
+['text':' part.','line_number':3963,'multiline':False]
+['text':' make sure redrawing is correct','line_number':3977,'multiline':False]
+['text':' Include the trailing byte of a multi-byte char.','line_number':3985,'multiline':False]
+['text':' oap->empty is set when start and end are the same.  The inclusive','line_number':3996,'multiline':False]
+['text':' flag affects this too, unless yanking and the end is on a NUL.','line_number':3997,'multiline':False]
+['text':' For delete, change and yank, it's an error to operate on an','line_number':4004,'multiline':False]
+['text':' empty region, when 'E' included in 'cpoptions' (Vi compatible).','line_number':4005,'multiline':False]
+['text':' Force a redraw when operating on an empty Visual region, when','line_number':4009,'multiline':False]
+['text':' 'modifiable is off or creating a fold.','line_number':4010,'multiline':False]
+['text':' If the end of an operator is in column one while oap->motion_type','line_number':4023,'multiline':False]
+['text':' is MCHAR and oap->inclusive is FALSE, we put op_end after the last','line_number':4024,'multiline':False]
+['text':' character in the previous line. If op_start is on or before the','line_number':4025,'multiline':False]
+['text':' first non-blank in the line, the operator becomes linewise','line_number':4026,'multiline':False]
+['text':' (strange, but that's the way vi does it).','line_number':4027,'multiline':False]
+['text':' remember that we did this','line_number':4036,'multiline':False]
+['text':' don't reselect now','line_number':4078,'multiline':False]
+['text':' save cursor line for undo if it wasn't saved yet','line_number':4087,'multiline':False]
+['text':' don't reselect now','line_number':4115,'multiline':False]
+['text':' This is a new edit command, not a restart.  Need to','line_number':4123,'multiline':False]
+['text':' remember it to make 'insertmode' work with mappings for','line_number':4124,'multiline':False]
+['text':' Visual mode.  But do this only once and not when typed and','line_number':4125,'multiline':False]
+['text':' 'insertmode' isn't set.','line_number':4126,'multiline':False]
+['text':' Restore linebreak, so that when the user edits it looks as','line_number':4133,'multiline':False]
+['text':' before.','line_number':4134,'multiline':False]
+['text':' trigger TextChangedI','line_number':4137,'multiline':False]
+['text':' will call edit()','line_number':4140,'multiline':False]
+['text':' use any last used !cmd','line_number':4149,'multiline':False]
+['text':' do_bang() will put cmd in redo buffer','line_number':4151,'multiline':False]
+['text':' FALLTHROUGH','line_number':4152,'multiline':False]
+['text':' If 'equalprg' is empty, do the indenting internally.','line_number':4157,'multiline':False]
+['text':' use expression','line_number':4198,'multiline':False]
+['text':' use external command','line_number':4203,'multiline':False]
+['text':' use internal function','line_number':4205,'multiline':False]
+['text':' use internal function','line_number':4209,'multiline':False]
+['text':' Restore linebreak, so that when the user edits it looks as','line_number':4217,'multiline':False]
+['text':' before.','line_number':4218,'multiline':False]
+['text':' call 'operatorfunc'','line_number':4221,'multiline':False]
+['text':' Restore the info for redoing Visual mode, the function may','line_number':4224,'multiline':False]
+['text':' invoke another operator and unintentionally change it.','line_number':4225,'multiline':False]
+['text':' don't reselect now','line_number':4232,'multiline':False]
+['text':' This is a new edit command, not a restart.  Need to','line_number':4240,'multiline':False]
+['text':' remember it to make 'insertmode' work with mappings for','line_number':4241,'multiline':False]
+['text':' Visual mode.  But do this only once.','line_number':4242,'multiline':False]
+['text':' Restore linebreak, so that when the user edits it looks as','line_number':4246,'multiline':False]
+['text':' before.','line_number':4247,'multiline':False]
+['text':' trigger TextChangedI','line_number':4250,'multiline':False]
+['text':' Reset linebreak, so that formatting works correctly.','line_number':4255,'multiline':False]
+['text':' TODO: when inserting in several lines, should format all','line_number':4259,'multiline':False]
+['text':' the lines.','line_number':4260,'multiline':False]
+['text':' don't reselect now','line_number':4271,'multiline':False]
+['text':' Restore linebreak, so that when the user edits it looks as','line_number':4280,'multiline':False]
+['text':' before.','line_number':4281,'multiline':False]
+['text':' don't reselect now','line_number':4290,'multiline':False]
+['text':' don't reselect now','line_number':4298,'multiline':False]
+['text':' don't reselect now','line_number':4309,'multiline':False]
+['text':' if 'sol' not set, go back to old column for some commands','line_number':4338,'multiline':False]
+['text':' put byte 'c' at position 'lp', but','line_number':4362,'multiline':False]
+['text':' verify, that the position to place','line_number':4363,'multiline':False]
+['text':' is actually safe','line_number':4364,'multiline':False]
+['text':' safety check','line_number':4371,'multiline':False]

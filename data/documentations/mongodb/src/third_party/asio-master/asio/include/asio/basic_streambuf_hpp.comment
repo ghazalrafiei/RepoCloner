@@ -1,0 +1,189 @@
+['text':'','line_number':1,'multiline':False]
+['text':' basic_streambuf.hpp','line_number':2,'multiline':False]
+['text':' ~~~~~~~~~~~~~~~~~~~','line_number':3,'multiline':False]
+['text':'','line_number':4,'multiline':False]
+['text':' Copyright (c) 2003-2018 Christopher M. Kohlhoff (chris at kohlhoff dot com)','line_number':5,'multiline':False]
+['text':'','line_number':6,'multiline':False]
+['text':' Distributed under the Boost Software License, Version 1.0. (See accompanying','line_number':7,'multiline':False]
+['text':' file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)','line_number':8,'multiline':False]
+['text':'','line_number':9,'multiline':False]
+['text':' defined(_MSC_VER) && (_MSC_VER >= 1200)','line_number':16,'multiline':False]
+['text':'/ Automatically resizable buffer class based on std::streambuf.','line_number':37,'multiline':False]
+['text':'*
+ * The @c basic_streambuf class is derived from @c std::streambuf to associate
+ * the streambuf's input and output sequences with one or more character
+ * arrays. These character arrays are internal to the @c basic_streambuf
+ * object, but direct access to the array elements is provided to permit them
+ * to be used efficiently with I/O operations. Characters written to the output
+ * sequence of a @c basic_streambuf object are appended to the input sequence
+ * of the same object.
+ *
+ * The @c basic_streambuf class's public interface is intended to permit the
+ * following implementation strategies:
+ *
+ * @li A single contiguous character array, which is reallocated as necessary
+ * to accommodate changes in the size of the character sequence. This is the
+ * implementation approach currently used in Asio.
+ *
+ * @li A sequence of one or more character arrays, where each array is of the
+ * same size. Additional character array objects are appended to the sequence
+ * to accommodate changes in the size of the character sequence.
+ *
+ * @li A sequence of one or more character arrays of varying sizes. Additional
+ * character array objects are appended to the sequence to accommodate changes
+ * in the size of the character sequence.
+ *
+ * The constructor for basic_streambuf accepts a @c size_t argument specifying
+ * the maximum of the sum of the sizes of the input sequence and output
+ * sequence. During the lifetime of the @c basic_streambuf object, the following
+ * invariant holds:
+ * @code size() <= max_size()@endcode
+ * Any member function that would, if successful, cause the invariant to be
+ * violated shall throw an exception of class @c std::length_error.
+ *
+ * The constructor for @c basic_streambuf takes an Allocator argument. A copy
+ * of this argument is used for any memory allocation performed, by the
+ * constructor and by all member functions, during the lifetime of each @c
+ * basic_streambuf object.
+ *
+ * @par Examples
+ * Writing directly from an streambuf to a socket:
+ * @code
+ * asio::streambuf b;
+ * std::ostream os(&b);
+ * os << "Hello, World!\n";
+ *
+ * // try sending some data in input sequence
+ * size_t n = sock.send(b.data());
+ *
+ * b.consume(n); // sent data is removed from input sequence
+ * @endcode
+ *
+ * Reading from a socket directly into a streambuf:
+ * @code
+ * asio::streambuf b;
+ *
+ * // reserve 512 bytes in output sequence
+ * asio::streambuf::mutable_buffers_type bufs = b.prepare(512);
+ *
+ * size_t n = sock.receive(bufs);
+ *
+ * // received data is "committed" from output sequence to input sequence
+ * b.commit(n);
+ *
+ * std::istream is(&b);
+ * std::string s;
+ * is >> s;
+ * @endcode
+ ','line_number':38,'multiline':True]
+['text':'/ The type used to represent the input sequence as a list of buffers.','line_number':116,'multiline':False]
+['text':'/ The type used to represent the output sequence as a list of buffers.','line_number':119,'multiline':False]
+['text':'/ Construct a basic_streambuf object.','line_number':126,'multiline':False]
+['text':'*
+   * Constructs a streambuf with the specified maximum size. The initial size
+   * of the streambuf's input sequence is 0.
+   ','line_number':127,'multiline':True]
+['text':'/ Get the size of the input sequence.','line_number':143,'multiline':False]
+['text':'*
+   * @returns The size of the input sequence. The value is equal to that
+   * calculated for @c s in the following code:
+   * @code
+   * size_t s = 0;
+   * const_buffers_type bufs = data();
+   * const_buffers_type::const_iterator i = bufs.begin();
+   * while (i != bufs.end())
+   * {
+   *   const_buffer buf(*i++);
+   *   s += buf.size();
+   * }
+   * @endcode
+   ','line_number':144,'multiline':True]
+['text':'/ Get the maximum size of the basic_streambuf.','line_number':163,'multiline':False]
+['text':'*
+   * @returns The allowed maximum of the sum of the sizes of the input sequence
+   * and output sequence.
+   ','line_number':164,'multiline':True]
+['text':'/ Get the current capacity of the basic_streambuf.','line_number':173,'multiline':False]
+['text':'*
+   * @returns The current total capacity of the streambuf, i.e. for both the
+   * input sequence and output sequence.
+   ','line_number':174,'multiline':True]
+['text':'/ Get a list of buffers that represents the input sequence.','line_number':183,'multiline':False]
+['text':'*
+   * @returns An object of type @c const_buffers_type that satisfies
+   * ConstBufferSequence requirements, representing all character arrays in the
+   * input sequence.
+   *
+   * @note The returned object is invalidated by any @c basic_streambuf member
+   * function that modifies the input sequence or output sequence.
+   ','line_number':184,'multiline':True]
+['text':'/ Get a list of buffers that represents the output sequence, with the given','line_number':198,'multiline':False]
+['text':'/ size.','line_number':199,'multiline':False]
+['text':'*
+   * Ensures that the output sequence can accommodate @c n characters,
+   * reallocating character array objects as necessary.
+   *
+   * @returns An object of type @c mutable_buffers_type that satisfies
+   * MutableBufferSequence requirements, representing character array objects
+   * at the start of the output sequence such that the sum of the buffer sizes
+   * is @c n.
+   *
+   * @throws std::length_error If <tt>size() + n > max_size()</tt>.
+   *
+   * @note The returned object is invalidated by any @c basic_streambuf member
+   * function that modifies the input sequence or output sequence.
+   ','line_number':200,'multiline':True]
+['text':'/ Move characters from the output sequence to the input sequence.','line_number':221,'multiline':False]
+['text':'*
+   * Appends @c n characters from the start of the output sequence to the input
+   * sequence. The beginning of the output sequence is advanced by @c n
+   * characters.
+   *
+   * Requires a preceding call <tt>prepare(x)</tt> where <tt>x >= n</tt>, and
+   * no intervening operations that modify the input or output sequence.
+   *
+   * @note If @c n is greater than the size of the output sequence, the entire
+   * output sequence is moved to the input sequence and no error is issued.
+   ','line_number':222,'multiline':True]
+['text':'/ Remove characters from the input sequence.','line_number':240,'multiline':False]
+['text':'*
+   * Removes @c n characters from the beginning of the input sequence.
+   *
+   * @note If @c n is greater than the size of the input sequence, the entire
+   * input sequence is consumed and no error is issued.
+   ','line_number':241,'multiline':True]
+['text':'/ Override std::streambuf behaviour.','line_number':259,'multiline':False]
+['text':'*
+   * Behaves according to the specification of @c std::streambuf::underflow().
+   ','line_number':260,'multiline':True]
+['text':'/ Override std::streambuf behaviour.','line_number':276,'multiline':False]
+['text':'*
+   * Behaves according to the specification of @c std::streambuf::overflow(),
+   * with the specialisation that @c std::length_error is thrown if appending
+   * the character to the input sequence would require the condition
+   * <tt>size() > max_size()</tt> to be true.
+   ','line_number':277,'multiline':True]
+['text':' Get current stream positions as offsets.','line_number':310,'multiline':False]
+['text':' Check if there is already enough space in the put area.','line_number':315,'multiline':False]
+['text':' Shift existing contents of get area to start of buffer.','line_number':321,'multiline':False]
+['text':' Ensure buffer is large enough to hold at least the specified size.','line_number':328,'multiline':False]
+['text':' Update stream positions.','line_number':343,'multiline':False]
+['text':' Helper function to get the preferred size for reading data.','line_number':352,'multiline':False]
+['text':'/ Adapts basic_streambuf to the dynamic buffer sequence type requirements.','line_number':362,'multiline':False]
+['text':'/ The type used to represent the input sequence as a list of buffers.','line_number':371,'multiline':False]
+['text':'/ The type used to represent the output sequence as a list of buffers.','line_number':375,'multiline':False]
+['text':'/ Construct a basic_streambuf_ref for the given basic_streambuf object.','line_number':379,'multiline':False]
+['text':'/ Copy construct a basic_streambuf_ref.','line_number':385,'multiline':False]
+['text':'/ Move construct a basic_streambuf_ref.','line_number':392,'multiline':False]
+['text':' defined(ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)','line_number':397,'multiline':False]
+['text':'/ Get the size of the input sequence.','line_number':399,'multiline':False]
+['text':'/ Get the maximum size of the dynamic buffer.','line_number':405,'multiline':False]
+['text':'/ Get the current capacity of the dynamic buffer.','line_number':411,'multiline':False]
+['text':'/ Get a list of buffers that represents the input sequence.','line_number':417,'multiline':False]
+['text':'/ Get a list of buffers that represents the output sequence, with the given','line_number':423,'multiline':False]
+['text':'/ size.','line_number':424,'multiline':False]
+['text':'/ Move bytes from the output sequence to the input sequence.','line_number':430,'multiline':False]
+['text':'/ Remove characters from the input sequence.','line_number':436,'multiline':False]
+['text':' namespace asio','line_number':446,'multiline':False]
+['text':' !defined(ASIO_NO_IOSTREAM)','line_number':450,'multiline':False]
+['text':' ASIO_BASIC_STREAMBUF_HPP','line_number':452,'multiline':False]

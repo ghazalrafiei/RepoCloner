@@ -1,0 +1,197 @@
+['text':' Copyright 2014 The Bazel Authors. All rights reserved.','line_number':1,'multiline':False]
+['text':'','line_number':2,'multiline':False]
+['text':' Licensed under the Apache License, Version 2.0 (the "License");','line_number':3,'multiline':False]
+['text':' you may not use this file except in compliance with the License.','line_number':4,'multiline':False]
+['text':' You may obtain a copy of the License at','line_number':5,'multiline':False]
+['text':'','line_number':6,'multiline':False]
+['text':'    http://www.apache.org/licenses/LICENSE-2.0','line_number':7,'multiline':False]
+['text':'','line_number':8,'multiline':False]
+['text':' Unless required by applicable law or agreed to in writing, software','line_number':9,'multiline':False]
+['text':' distributed under the License is distributed on an "AS IS" BASIS,','line_number':10,'multiline':False]
+['text':' WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.','line_number':11,'multiline':False]
+['text':' See the License for the specific language governing permissions and','line_number':12,'multiline':False]
+['text':' limitations under the License.','line_number':13,'multiline':False]
+['text':'*
+ * An StarlarkThread represents a Starlark thread.
+ *
+ * <p>It holds the stack of active Starlark and built-in function calls. In addition, it may hold
+ * per-thread application state (see {@link #setThreadLocal}) that passes through Starlark functions
+ * but does not directly affect them, such as information about the BUILD file being loaded.
+ *
+ * <p>StarlarkThreads are not thread-safe: they should be confined to a single Java thread.
+ *
+ * <p>Every StarlarkThread has an associated {@link Mutability}, which should be created for that
+ * thread, and closed once the thread's work is done. (A try-with-resources statement is handy for
+ * this purpose.) Starlark values created by the thread are associated with the thread's Mutability,
+ * so that when the Mutability is closed at the end of the computation, all the values created by
+ * the thread become frozen. This pattern ensures that all Starlark values are frozen before they
+ * are published to another thread, and thus that concurrently executing Starlark threads are free
+ * from data races. Once a thread's mutability is frozen, the thread is unlikely to be useful for
+ * further computation because it can no longer create mutable values. (This is occasionally
+ * valuable in tests.)
+ ','line_number':28,'multiline':True]
+['text':'* The mutability of values created by this thread. ','line_number':49,'multiline':True]
+['text':' profiler state','line_number':52,'multiline':False]
+['text':'','line_number':53,'multiline':False]
+['text':' The profiler field (and savedThread) are set when we first observe during a','line_number':54,'multiline':False]
+['text':' push (function call entry) that the profiler is active. They are unset','line_number':55,'multiline':False]
+['text':' not in the corresponding pop, but when the last frame is popped, because','line_number':56,'multiline':False]
+['text':' the profiler session might start in the middle of a call and/or run beyond','line_number':57,'multiline':False]
+['text':' the lifetime of this thread.','line_number':58,'multiline':False]
+['text':' saved StarlarkThread, when profiling reentrant evaluation','line_number':61,'multiline':False]
+['text':' count of logical computation steps executed so far','line_number':67,'multiline':False]
+['text':' limit on logical computation steps','line_number':68,'multiline':False]
+['text':'*
+   * Returns the number of Starlark computation steps executed by this thread according to a
+   * small-step semantics. (Today, that means exec, eval, and assign operations executed by the
+   * tree-walking evaluator, but in future will mean byte code instructions; the two are not
+   * commensurable.)
+   ','line_number':70,'multiline':True]
+['text':'*
+   * Sets the maximum number of Starlark computation steps that may be executed by this thread (see
+   * {@link #getExecutedSteps}). When the step counter reaches or exceeds this value, execution
+   * fails with an EvalException.
+   ','line_number':80,'multiline':True]
+['text':'*
+   * Disables polling of the {@link java.lang.Thread#interrupted} flag during Starlark evaluation.
+   ','line_number':89,'multiline':True]
+['text':' TODO(adonovan): expose a public API for this if we can establish a stronger semantics. (There','line_number':92,'multiline':False]
+['text':' are other ways besides polling for evaluation to be interrupted, such as calling certain','line_number':93,'multiline':False]
+['text':' built-in functions.)','line_number':94,'multiline':False]
+['text':'*
+   * setThreadLocal saves {@code value} as a thread-local variable of this Starlark thread, keyed by
+   * {@code key}, so that it can later be retrieved by {@code getThreadLocal(key)}.
+   ','line_number':105,'multiline':True]
+['text':'*
+   * getThreadLocal returns the value {@code v} supplied to the most recent {@code
+   * setThreadLocal(key, v)} call, or null if there was no prior call.
+   ','line_number':113,'multiline':True]
+['text':'* A Frame records information about an active function call. ','line_number':122,'multiline':True]
+['text':' the called function','line_number':125,'multiline':False]
+['text':' the debugger, if active for this frame','line_number':128,'multiline':False]
+['text':' the operand of a Starlark return statement','line_number':130,'multiline':False]
+['text':' Current PC location. Initially fn.getLocation(); for Starlark functions,','line_number':132,'multiline':False]
+['text':' it is updated at key points when it may be observed: calls, breakpoints, errors.','line_number':133,'multiline':False]
+['text':' Indicates that setErrorLocation has been called already and the error','line_number':136,'multiline':False]
+['text':' location (loc) should not be overrwritten.','line_number':137,'multiline':False]
+['text':' The locals of this frame, if fn is a StarlarkFunction, otherwise null.','line_number':140,'multiline':False]
+['text':' Set by StarlarkFunction.fastcall. Elements may be regular Starlark','line_number':141,'multiline':False]
+['text':' values, or wrapped in StarlarkFunction.Cells if shared with a nested function.','line_number':142,'multiline':False]
+['text':' current span of walltime call profiler','line_number':145,'multiline':False]
+['text':' Updates the PC location in this frame.','line_number':152,'multiline':False]
+['text':' Sets location only the first time it is called,','line_number':157,'multiline':False]
+['text':' to ensure that the location of the innermost expression','line_number':158,'multiline':False]
+['text':' is used for errors.','line_number':159,'multiline':False]
+['text':' (Once we switch to a bytecode interpreter, we can afford','line_number':160,'multiline':False]
+['text':' to update fr.pc before each fallible operation, but until then','line_number':161,'multiline':False]
+['text':' we must materialize Locations only after the fact of failure.)','line_number':162,'multiline':False]
+['text':' Sets errorLocationSet.','line_number':163,'multiline':False]
+['text':' TODO(adonovan): provide a more efficient API.','line_number':183,'multiline':False]
+['text':'* The semantics options that affect how Starlark code is evaluated. ','line_number':205,'multiline':True]
+['text':'* Whether recursive calls are allowed (cached from semantics). ','line_number':208,'multiline':True]
+['text':'* PrintHandler for Starlark print statements. ','line_number':211,'multiline':True]
+['text':'* Loader for Starlark load statements. Null if loading is disallowed. ','line_number':214,'multiline':True]
+['text':'* Stack of active function calls. ','line_number':219,'multiline':True]
+['text':'* A hook for notifications of assignments at top level. ','line_number':222,'multiline':True]
+['text':'* Pushes a function onto the call stack. ','line_number':225,'multiline':True]
+['text':' Notify debug tools of the thread's first push.','line_number':230,'multiline':False]
+['text':' Start wall-time call profile span.','line_number':237,'multiline':False]
+['text':' Poll for newly installed CPU profiler.','line_number':243,'multiline':False]
+['text':' Associated current Java thread with this StarlarkThread.','line_number':248,'multiline':False]
+['text':' (Save the previous association so we can restore it later.)','line_number':249,'multiline':False]
+['text':'* Pops a function off the call stack. ','line_number':255,'multiline':True]
+['text':' If this is the final pop in this thread,','line_number':266,'multiline':False]
+['text':' unregister it from the profiler.','line_number':267,'multiline':False]
+['text':' Restore the previous association (in case of reentrant evaluation).','line_number':269,'multiline':False]
+['text':' pop','line_number':276,'multiline':False]
+['text':' End wall-time profile span.','line_number':278,'multiline':False]
+['text':' Notify debug tools of the thread's last pop.','line_number':284,'multiline':False]
+['text':'* Returns the mutability for values created by this thread. ','line_number':290,'multiline':True]
+['text':'*
+   * A PrintHandler determines how a Starlark thread deals with print statements. It is invoked by
+   * the built-in {@code print} function. Its default behavior is to write the message to standard
+   * error, preceded by the location of the print statement, {@code thread.getCallerLocation()}.
+   ','line_number':295,'multiline':True]
+['text':'* Returns the PrintHandler for Starlark print statements. ','line_number':305,'multiline':True]
+['text':'* Sets the behavior of Starlark print statements executed by this thread. ','line_number':310,'multiline':True]
+['text':'*
+   * A Loader determines the behavior of load statements executed by this thread. It returns the
+   * named module, or null if not found.
+   ','line_number':319,'multiline':True]
+['text':'* Returns the loader for Starlark load statements. ','line_number':329,'multiline':True]
+['text':'* Sets the behavior of Starlark load statements executed by this thread. ','line_number':334,'multiline':True]
+['text':'*
+   * Supplies additional context to append to the message of {@link Starlark.UncheckedEvalException}
+   * or {@link Starlark.UncheckedEvalError}.
+   ','line_number':339,'multiline':True]
+['text':' TODO(brandjon): This seems unnecessary. Instead of implementing a hook that is mutated after','line_number':343,'multiline':False]
+['text':' thread is constructed, we should be able to just attach this information at construction time.','line_number':344,'multiline':False]
+['text':'* Reports whether {@code fn} has been recursively reentered within this thread. ','line_number':357,'multiline':True]
+['text':' Find fn buried within stack. (The top of the stack is assumed to be fn.)','line_number':359,'multiline':False]
+['text':' We compare code, not closure values, otherwise one can defeat the','line_number':362,'multiline':False]
+['text':' check by writing the Y combinator.','line_number':363,'multiline':False]
+['text':'*
+   * Returns the location of the program counter in the enclosing call frame. If called from within
+   * a built-in function, this is the location of the call expression that called the built-in. It
+   * returns BUILTIN if called with fewer than two frames (such as within a test).
+   ','line_number':371,'multiline':True]
+['text':'*
+   * Reports whether the call stack has less than two frames. Zero frames means an idle thread. One
+   * frame means the function for the top-level statements of a file is active. More than that means
+   * a function call is in progress.
+   *
+   * <p>Every use of this function is a hack to work around the lack of proper local vs global
+   * identifier resolution at top level.
+   ','line_number':380,'multiline':True]
+['text':' Returns the stack frame at the specified depth. 0 means top of stack, 1 is its caller, etc.','line_number':392,'multiline':False]
+['text':'*
+   * Constructs a StarlarkThread.
+   *
+   * @param mu the (non-frozen) mutability of values created by this thread.
+   * @param semantics the StarlarkSemantics for this thread. Note that it is generally a code smell
+   *     to use {@link StarlarkSemantics#DEFAULT} if the application permits customizing the
+   *     semantics (e.g. via command line flags). Usually, all Starlark evaluation contexts within
+   *     the same application would use the same {@code StarlarkSemantics} instance.
+   ','line_number':397,'multiline':True]
+['text':'*
+   * Constructs a StarlarkThread.
+   *
+   * @param mu the (non-frozen) mutability of values created by this thread.
+   * @param semantics the StarlarkSemantics for this thread. Note that it is generally a code smell
+   *     to use {@link StarlarkSemantics#DEFAULT} if the application permits customizing the
+   *     semantics (e.g. via command line flags). Usually, all Starlark evaluation contexts within
+   *     the same application would use the same {@code StarlarkSemantics} instance.
+   * @param contextDescription a short description of this evaluation, add as context when an
+   *     exception is thrown
+   ','line_number':413,'multiline':True]
+['text':'*
+   * Specifies a hook function to be run after each assignment at top level.
+   *
+   * <p>This is a short-term hack to allow us to consolidate all StarlarkFile execution in one place
+   * even while BzlLoadFunction implements the old "export" behavior, in which rules, aspects and
+   * providers are "exported" as soon as they are assigned, not at the end of file execution.
+   ','line_number':429,'multiline':True]
+['text':'* A hook for notifications of assignments at top level. ','line_number':440,'multiline':True]
+['text':'* Reports whether this thread is allowed to make recursive calls. ','line_number':450,'multiline':True]
+['text':' Implementation of Debug.getCallStack.','line_number':455,'multiline':False]
+['text':' Intentionally obscured to steer most users to the simpler getCallStack.','line_number':456,'multiline':False]
+['text':'* Returns the size of the callstack. This is needed for the debugger. ','line_number':476,'multiline':True]
+['text':'*
+   * The value of {@link CallStackEntry#name} for the implicit function that executes the top-level
+   * statements of a file.
+   ','line_number':481,'multiline':True]
+['text':'* Creates a new {@link CallStackEntry}. ','line_number':487,'multiline':True]
+['text':'*
+   * A CallStackEntry describes the name and PC location of an active function call. See {@link
+   * #getCallStack}.
+   ','line_number':492,'multiline':True]
+['text':'*
+   * Returns information about this thread's current stack of active function calls, outermost call
+   * first. For each function, it reports its name, and the location of its current program counter.
+   * The result is immutable and does not reference interpreter data structures, so it may retained
+   * indefinitely and safely shared with other threads.
+   ','line_number':529,'multiline':True]
+['text':'* Sets the given throwable's stack trace to a Java-style version of {@link #getCallStack}. ','line_number':544,'multiline':True]
+['text':' avoid nondeterminism','line_number':558,'multiline':False]
+['text':'* CallProfiler records the start and end wall times of function calls. ','line_number':571,'multiline':True]
+['text':'* Installs a global hook that will be notified of function calls. ','line_number':578,'multiline':True]

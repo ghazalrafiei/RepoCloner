@@ -1,0 +1,277 @@
+['text':'*
+ *    Copyright (C) 2019-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Serves as a container of the non-templatised parts of the ReadThroughCache class below.
+ ','line_number':61,'multiline':True]
+['text':'*
+     * This method is an extension of ThreadPoolInterface::schedule, with the following additions:
+     *  - Creates a client and an operation context and executes the specified 'work' under that
+     * environment
+     *  - Returns a CancelToken, which can be used to attempt to cancel 'work'
+     *
+     * If the task manages to get canceled before it is executed (through a call to tryCancel),
+     * 'work' will be invoked out-of-line with a non-OK status, set to error code
+     * ReadThroughCacheLookupCanceled.
+     ','line_number':73,'multiline':True]
+['text':' Service context under which this cache has been instantiated (used for access to service-wide','line_number':100,'multiline':False]
+['text':' functionality, such as client/operation context creation)','line_number':101,'multiline':False]
+['text':' Thread pool to be used for invoking the blocking 'lookup' calls','line_number':105,'multiline':False]
+['text':' Used to protect calls to 'tryCancel' above and is shared across all emitted CancelTokens.','line_number':108,'multiline':False]
+['text':' Semantically, each CancelToken's interruption is independent from all the others so they','line_number':109,'multiline':False]
+['text':' could have their own mutexes, but in the interest of not creating a mutex for each async task','line_number':110,'multiline':False]
+['text':' spawned, we share the mutex here.','line_number':111,'multiline':False]
+['text':'','line_number':112,'multiline':False]
+['text':' Has a lock level of 2, meaning what while held, any code is only allowed to take the Client','line_number':113,'multiline':False]
+['text':' lock.','line_number':114,'multiline':False]
+['text':'*
+ * Implements an (optionally) causally consistent read-through cache from Key to Value, built on top
+ * of InvalidatingLRUCache.
+ *
+ * Causal consistency is provided by requiring the backing store to asociate every Value it returns
+ * with a logical timestamp of type Time.
+ *
+ * Lookup functions to the backing store can be supplied with additional arguments as specified in
+ * LookupArgs. These additional arguments are expected to be supplied to all calls to `acquire()`
+ * for the cache. The signature of the backing `LookupFn` is also expected to correspond with these
+ * `LookupArgs`.
+ ','line_number':133,'multiline':True]
+['text':'*
+     * Data structure wrapping and expanding on the values stored in the cache.
+     ','line_number':150,'multiline':True]
+['text':' Contains the wallclock time of when the value was fetched from the backing storage. This','line_number':156,'multiline':False]
+['text':' value is not precise and should only be used for diagnostics purposes (i.e., it cannot be','line_number':157,'multiline':False]
+['text':' relied on to perform any recency comparisons for example).','line_number':158,'multiline':False]
+['text':'*
+     * Common type for values returned from the cache.
+     ','line_number':167,'multiline':True]
+['text':' The three constructors below are present in order to offset the fact that the cache','line_number':172,'multiline':False]
+['text':' doesn't support pinning items. Their only usage must be in the authorization mananager','line_number':173,'multiline':False]
+['text':' for the internal authentication user.','line_number':174,'multiline':False]
+['text':'*
+         * See the comments for `StoredValue::updateWallClockTime` above.
+         ','line_number':216,'multiline':True]
+['text':'*
+     * Signature for a blocking function to provide the value for a key when there is a cache miss.
+     *
+     * The implementation must throw a uassertion to indicate an error while looking up the value,
+     * return boost::none if the key is not found, or return an actual value.
+     *
+     * See the comments on 'advanceTimeInStore' for additional requirements that this function must
+     * fulfill with respect to causal consistency.
+     ','line_number':232,'multiline':True]
+['text':' The 't' parameter is mandatory for causally-consistent caches, but not needed otherwise','line_number':242,'multiline':False]
+['text':' (since the time never changes). Using a default of '= CacheNotCausallyConsistent()'','line_number':243,'multiline':False]
+['text':' allows non-causally-consistent users to not have to pass a second parameter, but would','line_number':244,'multiline':False]
+['text':' fail compilation if causally-consistent users forget to pass it.','line_number':245,'multiline':False]
+['text':' If boost::none, it means the '_lookupFn' did not find the key in the store','line_number':251,'multiline':False]
+['text':' If value is boost::none, specifies the time which was passed to '_lookupFn', effectively','line_number':254,'multiline':False]
+['text':' meaning, at least as of 'time', there was no entry in the store for the key. Otherwise','line_number':255,'multiline':False]
+['text':' contains the time that the store returned for the 'value'.','line_number':256,'multiline':False]
+['text':' Exposed publicly so it can be unit-tested indepedently of the usages in this class. Must not','line_number':263,'multiline':False]
+['text':' be used independently.','line_number':264,'multiline':False]
+['text':'*
+     * If 'key' is found in the cache and it fulfills the requested 'causalConsistency', returns a
+     * set ValueHandle (its operator bool will be true). Otherwise, either causes the blocking
+     * 'LookupFn' to be asynchronously invoked to fetch 'key' from the backing store or joins an
+     * already scheduled invocation) and returns a future which will be signaled when the lookup
+     * completes. The blocking 'LookupFn' will be invoked with the arguments supplied in
+     * 'lookupArgs.'
+     *
+     * If the lookup is successful and 'key' is found in the store, it will be cached (so subsequent
+     * lookups won't have to re-fetch it) and the future will be set. If 'key' is not found in the
+     * backing store, returns a not-set ValueHandle (it's bool operator will be false). If 'lookup'
+     * fails, the future will be set to the appropriate exception and nothing will be cached,
+     * meaning that subsequent calls to 'acquireAsync' will kick-off 'lookup' again.
+     *
+     * NOTES:
+     *  The returned value may be invalid by the time the caller gets to access it, if 'invalidate'
+     *  is called for 'key'.
+     ','line_number':267,'multiline':True]
+['text':' Fast path','line_number':291,'multiline':False]
+['text':' Re-check the cache under a mutex, before kicking-off the asynchronous lookup','line_number':297,'multiline':False]
+['text':' Join an in-progress lookup if one has already been scheduled','line_number':301,'multiline':False]
+['text':' Schedule an asynchronous lookup for the key','line_number':305,'multiline':False]
+['text':'*
+     * A blocking variant of 'acquireAsync' above - refer to it for more details.
+     *
+     * NOTES:
+     *  This is a potentially blocking method.
+     ','line_number':333,'multiline':True]
+['text':'*
+     * Acquires the latest value from the cache, or an empty ValueHandle if the key is not present
+     * in the cache.
+     *
+     * Doesn't attempt to lookup, and so doesn't block, but this means it will ignore any
+     * in-progress keys or keys whose time in store is newer than what is currently cached.
+     ','line_number':358,'multiline':True]
+['text':'*
+     * Returns a vector of the latest values from the cache which satisfy the predicate.
+     *
+     * Doesn't attempt to lookup, and so doesn't block, but this means it will ignore any
+     * in-progress keys or keys whose time in store is newer than what is currently cached.
+     ','line_number':370,'multiline':True]
+['text':'*
+     * Invalidates the given 'key' and immediately replaces it with a new value.
+     *
+     * The 'time' parameter is mandatory for causally-consistent caches, but not needed otherwise
+     * (since the time never changes).
+     ','line_number':396,'multiline':True]
+['text':'*
+     * Invalidates the given 'key' and immediately replaces it with a new value, returning a handle
+     * to the new value.
+     *
+     * The 'time' parameter is mandatory for causally-consistent caches, but not needed otherwise
+     * (since the time never changes).
+     ','line_number':419,'multiline':True]
+['text':'*
+     * Indicates to the cache that the backing store has a newer version of 'key', corresponding to
+     * 'newTime'. Subsequent calls to 'acquireAsync' with a causal consistency set to 'LatestKnown'
+     * will block and perform refresh until the cached value reaches 'newTime'.
+     *
+     * With respect to causal consistency, the 'LookupFn' used for this cache must provide the
+     * guarantee that if 'advanceTimeInStore' is called with a 'newTime', a subsequent call to
+     * 'LookupFn' for 'key' must return at least 'newTime' or later.
+     *
+     * Returns true if the passed 'newTimeInStore' is greater than the time of the currently cached
+     * value or if no value is cached for 'key'.
+     ','line_number':443,'multiline':True]
+['text':'*
+     * The invalidate+ methods below guarantee the following:
+     *  - All affected keys already in the cache (or returned to callers) will be invalidated and
+     *    removed from the cache
+     *  - All affected keys, which are in the process of being loaded (i.e., acquireAsync has not
+     *    yet completed) will be internally interrupted and rescheduled again, as if 'acquireAsync'
+     *    was called *after* the call to invalidate
+     *
+     * In essence, the invalidate+ calls serve as an externally induced "barrier" for the affected
+     * keys.
+     ','line_number':464,'multiline':True]
+['text':'*
+     * Invalidates only the entries whose key is matched by the predicate.
+     ','line_number':484,'multiline':True]
+['text':'*
+     * Invalidates all entries.
+     ','line_number':497,'multiline':True]
+['text':'*
+     * The method below guarantees only that the affected key/value(s) already in the cache (or
+     * returned to callers) will be invalidated and removed from the cache. However, any affected
+     * keys, which are in the process of being loaded (i.e., acquireAsync has not yet completed)
+     * will not be interrupted and will eventually end-up on the cache.
+     *
+     * Because the behaviour described above does not provide any guarantees about the in-progress
+     * lookups, it should be considered as "best-effort".
+     ','line_number':504,'multiline':True]
+['text':'*
+     * Returns statistics information about the cache for reporting purposes.
+     ','line_number':520,'multiline':True]
+['text':'*
+     * ReadThroughCache constructor.
+     *
+     * The 'mutex' is for the exclusive usage of the ReadThroughCache and must not be used in any
+     * way by the implementing class. Having the mutex stored by the sub-class allows latch
+     * diagnostics to be correctly associated with the sub-class (not the generic ReadThroughCache
+     * class).
+     *
+     * The 'threadPool' can be used for other purposes, but it is mandatory that by the time this
+     * object is destructed that it is shut down and joined so that there are no more asynchronous
+     * loading activities going on.
+     *
+     * The 'cacheSize' parameter specifies the maximum size of the cache before the least recently
+     * used entries start getting evicted. It is allowed to be zero, in which case no entries will
+     * actually be cached, but it doesn't guarantee that every `acquire` call will result in an
+     * invocation of `lookup`. Specifically, several concurrent invocations of `acquire` for the
+     * same key may group together for a single `lookup`.
+     ','line_number':527,'multiline':True]
+['text':'*
+     * This method implements an asynchronous "while (!valid)" loop over the in-progress lookup
+     * object for 'key', which must have been previously placed on the in-progress map.
+     ','line_number':565,'multiline':True]
+['text':' The thread pool is shutting down, so terminate the loop','line_number':575,'multiline':False]
+['text':' There was a concurrent call to 'invalidate', so start all over','line_number':581,'multiline':False]
+['text':' Lookup resulted in an error, which is not cancellation','line_number':588,'multiline':False]
+['text':' Value (or boost::none) was returned by lookup and there was no concurrent call to','line_number':594,'multiline':False]
+['text':' 'invalidate'. Place the value on the cache and return the necessary promises to','line_number':595,'multiline':False]
+['text':' signal (those which are waiting for time < time at the store).','line_number':596,'multiline':False]
+['text':' In the case that 'key' was not present in the store up to this lookup's','line_number':611,'multiline':False]
+['text':' completion, it is possible that concurrent callers advanced the time in store','line_number':612,'multiline':False]
+['text':' further than what was returned by the lookup. Because of this, the time in','line_number':613,'multiline':False]
+['text':' the cache must be synchronised with that of the InProgressLookup.','line_number':614,'multiline':False]
+['text':' The only reason this loop pops the values as it goes and std::moves into the last value','line_number':632,'multiline':False]
+['text':' is to support the CacheSizeZero unit-test, which requires that once the future it waits','line_number':633,'multiline':False]
+['text':' on is set, it contains the last reference on the returned ValueHandle','line_number':634,'multiline':False]
+['text':' Used to protect the shared below. Has a lock level of 3, meaning that while held, any code is','line_number':654,'multiline':False]
+['text':' only allowed to take '_cancelTokensMutex' (which in turn is allowed to be followed by the','line_number':655,'multiline':False]
+['text':' Client lock).','line_number':656,'multiline':False]
+['text':' Blocking function which will be invoked to retrieve entries from the backing store. It will','line_number':659,'multiline':False]
+['text':' be supplied with the arguments specified by the LookupArgs parameter pack.','line_number':660,'multiline':False]
+['text':' Contains all the currently cached keys. This structure is self-synchronising and doesn't','line_number':663,'multiline':False]
+['text':' require a mutex. However, on cache miss it is accessed under '_mutex', which is safe, because','line_number':664,'multiline':False]
+['text':' _cache's mutex itself is at level 0.','line_number':665,'multiline':False]
+['text':'','line_number':666,'multiline':False]
+['text':' NOTE: From destruction order point of view, because keys first "start" in','line_number':667,'multiline':False]
+['text':' '_inProgressLookups' and then move on to '_cache' the order of these two fields is important.','line_number':668,'multiline':False]
+['text':' Keeps track of all the keys, which were attempted to be 'acquireAsync'-ed, weren't found in','line_number':671,'multiline':False]
+['text':' the cache and are currently in the process of being looked up from the backing store. A','line_number':672,'multiline':False]
+['text':' single key may be missing from '_cache', or contain an old 'kLatestCached' and have an active','line_number':673,'multiline':False]
+['text':' lookup on this map for 'kLatestKnown'.','line_number':674,'multiline':False]
+['text':'','line_number':675,'multiline':False]
+['text':' This map is protected by '_mutex'.','line_number':676,'multiline':False]
+['text':'*
+ * This class represents an in-progress lookup for a specific key and implements the guarantees of
+ * the invalidation logic as described in the comments of 'ReadThroughCache::invalidate'.
+ *
+ * It is intended to be used in conjunction with the 'ReadThroughCache', which operates on it under
+ * its '_mutex' and ensures there is always at most one active instance at a time active for each
+ * 'key'.
+ *
+ * The methods of this class are not thread-safe, unless indicated in the comments.
+ *
+ * Its lifecycle is intended to be like this:
+ *
+ * inProgressLookups.emplace(inProgress);
+ * while (true) {
+ *      result = inProgress.asyncLookupRound();
+ *      if (!inProgress.valid()) {
+ *          continue;
+ *      }
+ *
+ *      inProgressLookups.remove(inProgress)
+ *      cachedValues.insert(result);
+ *      inProgress.signalWaiters(result);
+ * }
+ ','line_number':680,'multiline':True]
+['text':'*
+     * Returns the time associated to the oldest promise. This function will invariant if there are
+     * no promises.
+     ','line_number':773,'multiline':True]
+['text':' The owning cache, from which mutex, lookupFn, async task scheduling, etc. will be used. It is','line_number':813,'multiline':False]
+['text':' the responsibility of the owning cache to join all outstanding lookups at destruction time.','line_number':814,'multiline':False]
+['text':' The validity status must start as false so that the first round ignores the error code with','line_number':819,'multiline':False]
+['text':' which it would have completed and will loop around','line_number':820,'multiline':False]
+['text':' namespace mongo','line_number':833,'multiline':False]

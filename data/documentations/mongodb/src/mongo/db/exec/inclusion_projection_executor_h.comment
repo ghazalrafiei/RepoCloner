@@ -1,0 +1,111 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' IWYU pragma: no_include "boost/intrusive/detail/iterator.hpp"','line_number':35,'multiline':False]
+['text':'*
+ * A node used to define the parsed structure of an inclusion projection. Each InclusionNode
+ * represents one 'level' of the parsed specification. The root InclusionNode represents all top
+ * level inclusions or additions, with any child InclusionNodes representing dotted or nested
+ * inclusions or additions.
+ ','line_number':72,'multiline':True]
+['text':' The shape of any computed fields in the output will change depending on if there are','line_number':93,'multiline':False]
+['text':' any arrays on the path to the expression.  In addition to any dependencies of the','line_number':94,'multiline':False]
+['text':' expression itself, we need to add this field to our dependencies.','line_number':95,'multiline':False]
+['text':' The following two methods extract from the InclusionNode computed projections that depend','line_number':112,'multiline':False]
+['text':' only on the 'oldName' field. We need two versions for $project and $addFields, due to','line_number':113,'multiline':False]
+['text':' different functionality: we need to replace the fields in $project to not lose them, and we','line_number':114,'multiline':False]
+['text':' can just remove them from $addFields.','line_number':115,'multiline':False]
+['text':'*
+     * Returns a pair of <BSONObj, bool>. The BSONObj contains extracted computed projections that
+     * depend only on the 'oldName' field and is empty if no such projection exists. In the
+     * extracted expressions the 'oldName' is substituted for the 'newName'. If a projection name
+     * is in the 'reservedNames' set, it is ineligible for extraction. Each extracted computed
+     * projection is replaced with a projected field or with an identity projection.
+     * The returned boolean flag is always false meaning that the original projection is not empty
+     * and cannot be deleted.
+     ','line_number':116,'multiline':True]
+['text':'*
+     * Returns a pair of <BSONObj, bool>. The BSONObj contains extracted computed projections that
+     * depend only on the 'oldName' field and is empty if no such projection exists. In the
+     * extracted expressions the 'oldName' is substituted for the 'newName'. If a projection name
+     * is in the 'reservedNames' set, it is ineligible for extraction. To preserve the original
+     * field order the extraction stops when reaching a field which cannot be extracted. The
+     * extracted projections are removed from the node.
+     * The returned boolean flag is true if the original projection has become empty after the
+     * extraction and can be deleted by the caller.
+     ','line_number':130,'multiline':True]
+['text':' For inclusions, we can apply an optimization here by simply appending to the output document','line_number':146,'multiline':False]
+['text':' via MutableDocument::addField, rather than always checking for existing fields via setField.','line_number':147,'multiline':False]
+['text':' Technically this value could be min(number of projected fields, size of input','line_number':156,'multiline':False]
+['text':' document). However, the size() function on Document() can take linear time, so we just','line_number':157,'multiline':False]
+['text':' allocate the number of projected fields.','line_number':158,'multiline':False]
+['text':'*
+ * A fast-path inclusion projection implementation which applies a BSON-to-BSON transformation
+ * rather than constructing an output document using the Document/Value API. For inclusion-only
+ * projections (as defined by projection_ast::Projection::isInclusionOnly) it can be much faster
+ * than the default InclusionNode implementation. On a document-by-document basis, if the fast-path
+ * projection cannot be applied to the input document, it will fall back to the default
+ * implementation.
+ ','line_number':174,'multiline':True]
+['text':' This element is included by the projection, so it is added to the output.','line_number':200,'multiline':False]
+['text':' No-op. This element is not included in the projection, so it is not added to the output.','line_number':204,'multiline':False]
+['text':' No-op. This array element is not included in the projection, so it is not added to the','line_number':207,'multiline':False]
+['text':' output.','line_number':208,'multiline':False]
+['text':' No-op. We processed all inclusions, rest of the elements can be discarded.','line_number':211,'multiline':False]
+['text':'*
+ * A InclusionProjectionExecutor represents an execution tree for an inclusion projection.
+ *
+ * This class is mostly a wrapper around an InclusionNode tree and defers most execution logic to
+ * the underlying tree.
+ ','line_number':217,'multiline':True]
+['text':'*
+     * Serialize the projection.
+     ','line_number':256,'multiline':True]
+['text':' The InclusionNode tree in '_root' will always have a top-level _id node if _id is to be','line_number':263,'multiline':False]
+['text':' included. If the _id node is not present, then explicitly set {_id: false} to avoid','line_number':264,'multiline':False]
+['text':' ambiguity in the expected behavior of the serialized projection.','line_number':265,'multiline':False]
+['text':'*
+     * Optimize any computed expressions.
+     ','line_number':275,'multiline':True]
+['text':' A root-replacement expression can replace the entire root document, so all paths are','line_number':299,'multiline':False]
+['text':' considered as modified.','line_number':300,'multiline':False]
+['text':'*
+     * Apply this exclusion projection to 'inputDoc'.
+     *
+     * All inclusions are processed before all computed fields. Computed fields will be added
+     * afterwards in the order in which they were specified to the $project stage.
+     *
+     * Arrays will be traversed, with any dotted/nested exclusions or computed fields applied to
+     * each element in the array.
+     ','line_number':319,'multiline':True]
+['text':'*
+     * Returns the exhaustive set of all paths that will be preserved by this projection, or
+     * boost::none if the exhaustive set cannot be determined.
+     ','line_number':332,'multiline':True]
+['text':' The InclusionNode tree does most of the execution work once constructed.','line_number':355,'multiline':False]
+['text':' namespace mongo::projection_executor','line_number':358,'multiline':False]

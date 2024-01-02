@@ -1,0 +1,505 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' nullable','line_number':117,'multiline':False]
+['text':' ProfileSettings represents a state, not a request to change the state.','line_number':121,'multiline':False]
+['text':' -1 is not a valid profiling level: it is only used in requests, to represent','line_number':122,'multiline':False]
+['text':' leaving the state unchanged.','line_number':123,'multiline':False]
+['text':'*
+     * Returns a CollectionCatalog instance capable of returning Collection instances consistent
+     * with the storage snapshot. Is the same as latest() below if no snapshot is opened.
+     *
+     * Is the default method of acquiring a CollectionCatalog instance.
+     ','line_number':135,'multiline':True]
+['text':'*
+     * Returns a CollectionCatalog instance that reflects the latest state of the server.
+     *
+     * Used to confirm whether Collection instances are write eligiable.
+     ','line_number':143,'multiline':True]
+['text':'*
+     * Like latest() above.
+     *
+     * Bypasses batched writing and should not be used in a context where there might be an ongoing
+     * batched write.
+     ','line_number':150,'multiline':True]
+['text':'*
+     * Stashes provided CollectionCatalog pointer on the RecoveryUnit snapshot.
+     * Will cause get() to return this instance while the snapshot remains open.
+     ','line_number':158,'multiline':True]
+['text':'*
+     * Perform a write to the catalog using copy-on-write. A catalog previously returned by get()
+     * will not be modified.
+     *
+     * This call will block until the modified catalog has been committed. Concurrant writes are
+     * batched together and will thus block each other. It is important to not perform blocking
+     * operations such as acquiring locks or waiting for I/O in the write job as that would also
+     * block other writers.
+     *
+     * The provided job is allowed to throw which will be propagated through this call.
+     *
+     * The write job may execute on a different thread.
+     ','line_number':164,'multiline':True]
+['text':'*
+     * Create a new view 'viewName' with contents defined by running the specified aggregation
+     * 'pipeline' with collation 'collation' on a collection or view 'viewOn'. May insert this view
+     * into the system.views collection depending on 'durability'.
+     *
+     * Must be in WriteUnitOfWork. View creation rolls back if the unit of work aborts.
+     *
+     * Caller must ensure corresponding database exists. Expects db.system.views MODE_X lock and
+     * view namespace MODE_IX lock (unless 'durability' is set to kAlreadyDurable).
+     ','line_number':181,'multiline':True]
+['text':'*
+     * Drop the view named 'viewName'.
+     *
+     * Must be in WriteUnitOfWork. The drop rolls back if the unit of work aborts.
+     *
+     * Caller must ensure corresponding database exists.
+     ','line_number':200,'multiline':True]
+['text':'*
+     * Modify the view named 'viewName' to have the new 'viewOn' and 'pipeline'.
+     *
+     * Must be in WriteUnitOfWork. The modification rolls back if the unit of work aborts.
+     *
+     * Caller must ensure corresponding database exists.
+     ','line_number':209,'multiline':True]
+['text':'*
+     * Reloads the in-memory state of the view catalog from the 'system.views' collection. The
+     * durable view definitions will be validated. Reading stops on the first invalid entry with
+     * errors logged and returned. Performs no cycle detection, etc.
+     *
+     * This is implicitly called by other methods when write operations are performed on the
+     * view catalog, on external changes to the 'system.views' collection and on the first
+     * opening of a database.
+     *
+     * Callers must re-fetch the catalog to observe changes.
+     *
+     * Requires an X lock on the 'system.views' collection'.
+     ','line_number':222,'multiline':True]
+['text':'*
+     * Establish a collection instance consistent with the opened storage snapshot.
+     *
+     * Returns the collection pointer representative of 'nssOrUUID' at the provided read timestamp.
+     * If no timestamp is provided, returns instance of the latest collection. When called
+     * concurrently with a DDL operation the latest collection returned may be the instance being
+     * committed by the concurrent DDL operation.
+     *
+     * Returns nullptr when reading from a point-in-time where the collection did not exist.
+     *
+     * The returned collection instance is only valid while a reference to this catalog instance is
+     * held or stashed and as long as the storage snapshot remains open. Releasing catalog reference
+     * or closing the storage snapshot invalidates the instance.
+     *
+     * Future calls to lookupCollection, lookupNSS, lookupUUID on this namespace/UUID will return
+     * results consistent with the opened storage snapshot.
+     *
+     * Depending on the internal state of the CollectionCatalog a read from the durable catalog may
+     * be performed and this call may block on I/O. No mutex should be held while calling this
+     * function.
+     *
+     * Multikey state is not guaranteed to be consistent with the storage snapshot. It may indicate
+     * an index to be multikey where it is not multikey in the storage snapshot. However, it will
+     * never be wrong in the other direction.
+     *
+     * No collection level lock is required to call this function.
+     ','line_number':237,'multiline':True]
+['text':'*
+     * Returns a shared_ptr to a drop pending index if it's found and not expired.
+     ','line_number':273,'multiline':True]
+['text':'*
+     * Handles committing a collection to the catalog within a WriteUnitOfWork.
+     *
+     * Must be called within a WriteUnitOfWork.
+     ','line_number':278,'multiline':True]
+['text':'*
+     * This function is responsible for safely tracking a Collection rename within a
+     * WriteUnitOfWork.
+     *
+     * Must be called within a WriteUnitOfWork.
+     ','line_number':285,'multiline':True]
+['text':'*
+     * Marks an index as dropped for this OperationContext. The drop will be committed into the
+     * catalog on commit.
+     *
+     * Maintains the index in a drop pending state in the catalog until the underlying data files
+     * are deleted.
+     *
+     * Must be called within a WriteUnitOfWork.
+     ','line_number':295,'multiline':True]
+['text':'*
+     * Marks a collection as dropped for this OperationContext. Will cause the collection
+     * to appear dropped for this OperationContext. The drop will be committed into the catalog on
+     * commit.
+     *
+     * Maintains the collection in a drop pending state in the catalog until the underlying data
+     * files are deleted.
+     *
+     * Must be called within a WriteUnitOfWork.
+     ','line_number':309,'multiline':True]
+['text':'*
+     * Removes the view records associated with 'dbName', if any, from the in-memory
+     * representation of the catalog. Should be called when Database instance is closed. Requires X
+     * lock on database namespace.
+     ','line_number':321,'multiline':True]
+['text':'*
+     * Register the collection with `uuid` at a given commitTime.
+     *
+     * The global lock must be held in exclusive mode.
+     ','line_number':328,'multiline':True]
+['text':'*
+     * Deregister the collection.
+     *
+     * Adds the collection to the drop pending state in the catalog when isDropPending=true.
+     ','line_number':337,'multiline':True]
+['text':'*
+     * Create a temporary record of an uncommitted view namespace to aid in detecting a simultaneous
+     * attempt to create a collection with the same namespace.
+     ','line_number':347,'multiline':True]
+['text':'*
+     * Remove the temporary record for an uncommitted view namespace, either on commit or rollback.
+     ','line_number':353,'multiline':True]
+['text':'*
+     * Deregister all the collection objects and view namespaces.
+     ','line_number':358,'multiline':True]
+['text':'*
+     * Adds the index entry to the drop pending state in the catalog.
+     ','line_number':363,'multiline':True]
+['text':'*
+     * Clears the in-memory state for the views associated with a particular database.
+     *
+     * Callers must re-fetch the catalog to observe changes.
+     ','line_number':370,'multiline':True]
+['text':'*
+     * Notifies the collection catalog that the data files for the drop pending ident have been
+     * removed from disk.
+     ','line_number':377,'multiline':True]
+['text':'*
+     * Returns a Collection pointer that corresponds to the provided
+     * NamespaceString/UUID/NamespaceOrUUID.
+     *
+     * For the returned collection instance to remain valid remains valid, one of two preconditions
+     * needs to be met:
+     * 1. A collection lock of at least MODE_IS is being held.
+     * 2. A reference to this catalog instance is held or stashed AND the storage snapshot remains
+     *    open.
+     *
+     * Releasing the collection lock, catalog instance or storage snapshot will invalidate the
+     * returned collection instance.
+     *
+     * A read or write AutoGetCollection style RAII object meets the requirements and ensures
+     * validity for collection instances during its lifetime.
+     *
+     * It is NOT safe to cache this pointer or any pointer obtained from this instance across
+     * storage snapshots such as query yield.
+     *
+     * Returns nullptr if no collection is known.
+     ','line_number':383,'multiline':True]
+['text':'*
+     * Returns a non-const Collection pointer that corresponds to the provided NamespaceString/UUID
+     * for a DDL operation.
+     *
+     * A MODE_X collection lock is required to call this function, unless the namespace/UUID
+     * corresponds to an uncommitted collection creation in which case a MODE_IX lock is sufficient.
+     *
+     * A WriteUnitOfWork must be active and the instance returned will be created using
+     * copy-on-write and will be different than prior calls to lookupCollection. However, subsequent
+     * calls to lookupCollection will return the same instance as this function as long as the
+     * WriteUnitOfWork remains active.
+     *
+     * When the WriteUnitOfWork commits future versions of the CollectionCatalog will return this
+     * instance. If the WriteUnitOfWork rolls back the instance will be discarded.
+     *
+     * It is safe to write to the returned instance in onCommit handlers but not in onRollback
+     * handlers.
+     *
+     * Returns nullptr if the 'uuid' is not known.
+     ','line_number':410,'multiline':True]
+['text':'*
+     * This function gets the NamespaceString from the collection catalog entry that
+     * corresponds to UUID uuid. If no collection exists with the uuid, return
+     * boost::none. See onCloseCatalog/onOpenCatalog for more info.
+     ','line_number':435,'multiline':True]
+['text':'*
+     * Returns the UUID if `nss` exists in CollectionCatalog.
+     ','line_number':443,'multiline':True]
+['text':'*
+     * Checks if the provided instance is the latest version for this catalog version. This check
+     * should be used to determine if the collection instance is safe to perform CRUD writes on. For
+     * the check to be meaningful it should be performed against CollectionCatalog::latest.
+     ','line_number':449,'multiline':True]
+['text':'*
+     * Verifies that the provided collection name doesn't exist in the catalog and is exclusively
+     * present in the uncommitted updates of the operation. For the check to be meaningful it should
+     * be performed against CollectionCatalog::latest.
+     ','line_number':456,'multiline':True]
+['text':'*
+     * Iterates through the views in the catalog associated with database `dbName`, applying
+     * 'callback' to each view.  If the 'callback' returns false, the iterator exits early.
+     *
+     * Caller must ensure corresponding database exists.
+     ','line_number':463,'multiline':True]
+['text':'*
+     * Look up the 'nss' in the view catalog, returning a shared pointer to a View definition,
+     * or nullptr if it doesn't exist.
+     *
+     * Caller must ensure corresponding database exists.
+     ','line_number':473,'multiline':True]
+['text':'*
+     * Same functionality as above, except this function skips validating durable views in the
+     * view catalog.
+     *
+     * Caller must ensure corresponding database exists.
+     ','line_number':482,'multiline':True]
+['text':'*
+     * Without acquiring any locks resolves the given NamespaceStringOrUUID to an actual namespace.
+     * Throws NamespaceNotFound if the collection UUID cannot be resolved to a name, or if the UUID
+     * can be resolved, but the resulting collection is in the wrong database.
+     ','line_number':491,'multiline':True]
+['text':'*
+     * Returns whether the collection with 'uuid' satisfies the provided 'predicate'. If the
+     * collection with 'uuid' is not found, false is returned.
+     ','line_number':499,'multiline':True]
+['text':'*
+     * This function gets the UUIDs of all collections from `dbName`.
+     *
+     * If the caller does not take a strong database lock, some of UUIDs might no longer exist (due
+     * to collection drop) after this function returns.
+     *
+     * Returns empty vector if the 'dbName' is not known.
+     ','line_number':505,'multiline':True]
+['text':'*
+     * This function gets the ns of all collections from `dbName`. The result is not sorted.
+     *
+     * Caller must take a strong database lock; otherwise, collections returned could be dropped or
+     * renamed.
+     *
+     * Returns empty vector if the 'dbName' is not known.
+     ','line_number':515,'multiline':True]
+['text':'*
+     * This function gets all the database names. The result is sorted in alphabetical ascending
+     * order.
+     *
+     * Callers of this method must hold the global lock in at least MODE_IS.
+     *
+     * Unlike DatabaseHolder::getNames(), this does not return databases that are empty.
+     ','line_number':526,'multiline':True]
+['text':'*
+     * This function gets all the database names associated with tenantId. The result is sorted in
+     * alphabetical ascending order.
+     *
+     * Callers of this method must hold the global lock in at least MODE_IS.
+     *
+     * Unlike DatabaseHolder::getNames(), this does not return databases that are empty.
+     ','line_number':536,'multiline':True]
+['text':'*
+     * This function gets all tenantIds in the database in ascending order.
+     *
+     * Callers of this method must hold the global lock in at least MODE_IS.
+     *
+     * Only returns tenantIds which are attached to at least one non-empty database.
+     ','line_number':546,'multiline':True]
+['text':'*
+     * Updates the profile filter on all databases with non-default settings.
+     ','line_number':555,'multiline':True]
+['text':'*
+     * Sets 'newProfileSettings' as the profiling settings for the database 'dbName'.
+     ','line_number':560,'multiline':True]
+['text':'*
+     * Fetches the profiling settings for database 'dbName'.
+     *
+     * Returns the server's default database profile settings if the database does not exist.
+     ','line_number':565,'multiline':True]
+['text':'*
+     * Fetches the profiling level for database 'dbName'.
+     *
+     * Returns the server's default database profile settings if the database does not exist.
+     *
+     * There is no corresponding setDatabaseProfileLevel; use setDatabaseProfileSettings instead.
+     * This method only exists as a convenience.
+     ','line_number':572,'multiline':True]
+['text':'*
+     * Clears the database profile settings entry for 'dbName'.
+     ','line_number':584,'multiline':True]
+['text':'*
+     * Statistics for the types of collections in the catalog.
+     * Total collections = 'internal' + 'userCollections'
+     ','line_number':589,'multiline':True]
+['text':' Non-system collections on non-internal databases','line_number':594,'multiline':False]
+['text':' Non-system capped collections on non-internal databases','line_number':596,'multiline':False]
+['text':' Non-system clustered collection on non-internal databases.','line_number':598,'multiline':False]
+['text':' System collections or collections on internal databases','line_number':600,'multiline':False]
+['text':' Client Side Field Level Encryption collections on non-internal databases','line_number':602,'multiline':False]
+['text':' Queryable Encryption collections on non-internal databases','line_number':604,'multiline':False]
+['text':'*
+     * Returns statistics for the collection catalog.
+     ','line_number':608,'multiline':True]
+['text':'*
+     * Returns view statistics for the specified database.
+     ','line_number':613,'multiline':True]
+['text':'*
+     * Returns a set of databases, by name, that have view catalogs.
+     ','line_number':619,'multiline':True]
+['text':'*
+     * Puts the catalog in closed state. In this state, the lookupNSSByUUID method will fall back to
+     * the pre-close state to resolve queries for currently unknown UUIDs. This allows processes,
+     * like authorization and replication, which need to do lookups outside of database locks, to
+     * proceed.
+     *
+     * Must be called with the global lock acquired in exclusive mode.
+     ','line_number':625,'multiline':True]
+['text':'*
+     * Puts the catalog back in open state, removing the pre-close state. See onCloseCatalog.
+     *
+     * Must be called with the global lock acquired in exclusive mode.
+     ','line_number':635,'multiline':True]
+['text':'*
+     * The epoch is incremented whenever the catalog is closed and re-opened.
+     *
+     * Callers of this method must hold the global lock in at least MODE_IS.
+     *
+     * This allows callers to detect an intervening catalog close. For example, closing the catalog
+     * must kill all active queries. This is implemented by checking that the epoch has not changed
+     * during query yield recovery.
+     ','line_number':642,'multiline':True]
+['text':'*
+     * Provides an iterable range for the collections belonging to the specified database.
+     *
+     * Will not observe any updates made to the catalog after the creation of the 'Range'. The
+     * 'Range' object just remain in scope for the duration of the iteration.
+     ','line_number':653,'multiline':True]
+['text':'*
+     * Ensures we have a MODE_X lock on a collection or MODE_IX lock for newly created collections.
+     ','line_number':661,'multiline':True]
+['text':'*
+     * Returns HistoricalCatalogIdTracker for historical namespace/uuid mappings to catalogId based
+     * on timestamp.
+     ','line_number':668,'multiline':True]
+['text':'*
+     * Gets shared_ptr to Collections by UUID/Namespace.
+     ','line_number':681,'multiline':True]
+['text':'*
+     * Register the collection.
+     ','line_number':690,'multiline':True]
+['text':'*
+     * Searches for a catalog entry at a point-in-time.
+     ','line_number':701,'multiline':True]
+['text':'*
+     * Tries to create a Collection instance using existing shared collection state. Returns nullptr
+     * if unable to do so.
+     ','line_number':709,'multiline':True]
+['text':'*
+     * Creates a Collection instance from scratch if the ident has not yet been dropped.
+     ','line_number':719,'multiline':True]
+['text':'*
+     * Retrieves the views for a given database, including any uncommitted changes for this
+     * operation.
+     ','line_number':727,'multiline':True]
+['text':'*
+     * Iterates over databases, and performs a callback on each database. If any callback fails,
+     * returns its error code. If tenantId is set, will iterate only over databases with that
+     * tenantId. nextUpperBound is a callback that controls how we iterate -- given the current
+     * database name, returns a <DatabaseName, UUID> pair which must be strictly less than the next
+     * entry we iterate to.
+     ','line_number':734,'multiline':True]
+['text':'*
+     * Sets all namespaces used by views for a database. Will uassert if there is a conflicting
+     * collection name in the catalog.
+     ','line_number':747,'multiline':True]
+['text':'*
+     * Returns true if this CollectionCatalog instance is part of an ongoing batched catalog write.
+     ','line_number':753,'multiline':True]
+['text':'*
+     * Returns true if we can saftely skip performing copy-on-write on the provided collection
+     * instance.
+     ','line_number':758,'multiline':True]
+['text':'*
+     * Throws 'WriteConflictException' if given namespace is already registered with the catalog, as
+     * either a view or collection. The results will include namespaces which have been registered
+     * by preCommitHooks on other threads, but which have not truly been committed yet.
+     *
+     * If 'type' is set to 'NamespaceType::kCollection', we will only check for collisions with
+     * collections. If set to 'NamespaceType::kAll', we will check against both collections and
+     * views.
+     ','line_number':764,'multiline':True]
+['text':'*
+     * Returns true if catalog information about this namespace or UUID should be looked up from the
+     * durable catalog rather than using the in-memory state of the catalog.
+     *
+     * This is true when either:
+     *  - The readTimestamp is prior to the minimum valid timestamp for the collection corresponding
+     *    to this namespace, or
+     *  - There's no read timestamp provided and this namespace has a pending DDL operation that has
+     *    not completed yet (which would imply that the latest version of the catalog may or may not
+     *    match the state of the durable catalog for this collection).
+     ','line_number':778,'multiline':True]
+['text':'*
+     * Returns the collection pointer representative of 'nssOrUUID' at the provided read timestamp.
+     * If no timestamp is provided, returns instance of the latest collection. The returned
+     * collection instance is only valid while the storage snapshot is open and becomes invalidated
+     * when the snapshot is closed.
+     *
+     * Returns nullptr when reading from a point-in-time where the collection did not exist.
+     ','line_number':793,'multiline':True]
+['text':' Helpers to perform openCollection at latest or at point-in-time on Namespace/UUID.','line_number':805,'multiline':False]
+['text':'*
+     * When present, indicates that the catalog is in closed state, and contains a map from UUID
+     * to pre-close NSS. See also onCloseCatalog.
+     ','line_number':813,'multiline':True]
+['text':' Ordered by <dbName, collUUID> pair','line_number':828,'multiline':False]
+['text':' Namespaces and UUIDs in pending commit. The opened storage snapshot must be consulted to','line_number':832,'multiline':False]
+['text':' confirm visibility. The instance may be used if the namespace/uuid are otherwise unoccupied','line_number':833,'multiline':False]
+['text':' in the CollectionCatalog.','line_number':834,'multiline':False]
+['text':' Provides functionality to lookup catalogId by namespace/uuid for a given timestamp.','line_number':838,'multiline':False]
+['text':' Map of database names to their corresponding views and other associated state.','line_number':841,'multiline':False]
+['text':' Map of drop pending idents to their instance of Collection/IndexCatalogEntry. To avoid','line_number':844,'multiline':False]
+['text':' affecting the lifetime and delay of the ident drop from the ident reaper, these need to be a','line_number':845,'multiline':False]
+['text':' weak_ptr.','line_number':846,'multiline':False]
+['text':' Incremented whenever the CollectionCatalog gets closed and reopened (onCloseCatalog and','line_number':853,'multiline':False]
+['text':' onOpenCatalog).','line_number':854,'multiline':False]
+['text':'','line_number':855,'multiline':False]
+['text':' Catalog objects are destroyed and recreated when the catalog is closed and re-opened. We','line_number':856,'multiline':False]
+['text':' increment this counter to track when the catalog is reopened. This permits callers to detect','line_number':857,'multiline':False]
+['text':' after yielding whether their catalog pointers are still valid. Collection UUIDs are not','line_number':858,'multiline':False]
+['text':' sufficient, since they remain stable across catalog re-opening.','line_number':859,'multiline':False]
+['text':'','line_number':860,'multiline':False]
+['text':' A thread must hold the global exclusive lock to write to this variable, and must hold the','line_number':861,'multiline':False]
+['text':' global lock in at least MODE_IS to read it.','line_number':862,'multiline':False]
+['text':'*
+     * Contains non-default database profile settings. New collections, current collections and
+     * views must all be able to access the correct profile settings for the database in which they
+     * reside. Simple database name to struct ProfileSettings map.
+     ','line_number':865,'multiline':True]
+['text':' Tracks usage of collection usage features (e.g. capped).','line_number':872,'multiline':False]
+['text':'*
+ * RAII class to perform multiple writes to the CollectionCatalog on a single copy of the
+ * CollectionCatalog instance. Requires the global lock to be held in exclusive write mode (MODE_X)
+ * for the lifetime of this object.
+ ','line_number':876,'multiline':True]
+['text':' Store base when we clone the CollectionCatalog so we can verify that there has been no other','line_number':895,'multiline':False]
+['text':' writers during the batching.','line_number':896,'multiline':False]
+['text':' namespace mongo','line_number':901,'multiline':False]

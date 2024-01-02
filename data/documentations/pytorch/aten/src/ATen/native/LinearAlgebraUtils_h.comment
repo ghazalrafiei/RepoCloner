@@ -1,0 +1,131 @@
+['text':' f_contig chooses between the strides of a batch of Fortran (F-contiguous)','line_number':41,'multiline':False]
+['text':' and C-contiguous matrices','line_number':42,'multiline':False]
+['text':' Fix the strides of the last two dimensions, so that we return','line_number':47,'multiline':False]
+['text':' C-contiguous batches of F-contiguous matrices.','line_number':48,'multiline':False]
+['text':'
+ * Clones a Tensor so that the following conditions hold:
+ * If we think of a Tensor of having size (B, M, N), where B is any number
+ * of batch dimensions, then:
+ * - Each (M, N) matrix is in column major form
+ * - Let Tensor P have size (B, M, N) and Q have size (B, M', N').
+ *   Then when laid out in memory, the M by N matrix starting at
+ *   P.data_ptr()[B * M * N] is of the same corresponding batch as the M' by N'
+ *   matrix starting at Q.data_ptr()[B * M' * N'].
+ ','line_number':55,'multiline':True]
+['text':' If src is already in batched column major format, then','line_number':66,'multiline':False]
+['text':' this will be efficient (no reordering of the data will occur)','line_number':67,'multiline':False]
+['text':' because the first transpose will make the tensor contiguous,','line_number':68,'multiline':False]
+['text':' and cloning a contiguous tensor is fast.','line_number':69,'multiline':False]
+['text':'
+ * contig chooses between C-contig (true) and F-contig (false)
+ ','line_number':75,'multiline':True]
+['text':'
+ * This method is designed to be a faster alternative to
+ * `cloneBatchedColumnMajor` with some additional features,
+ * namely:
+ * 1. It uses `copy` instead of `clone` which could be much faster.
+ * 2. `nrows` parameter used to create inputs with the number of rows larger
+ *  than the original input, which is required for some LAPACK/MAGMA methods.
+ * 3. `desired_batch_size` is used to create copies with the batch size
+ *  which is either the original batch size of the input, or its larger
+ *  broadcasted shape.
+ ','line_number':84,'multiline':True]
+['text':'f-contig','line_number':102,'multiline':True]
+['text':'
+ * Given batches of matrices with arbitrary batch dim,
+ * computes the number of batches.
+ ','line_number':108,'multiline':True]
+['text':' Computes the number of elements of a matrix in a batched matrix tensor','line_number':120,'multiline':False]
+['text':' Validates input shapes for operations on batches of square matrices (inverse, cholesky, symeig, eig)','line_number':125,'multiline':False]
+['text':' This could be made more general, similar to how it's checked in matmul, which would allow to','line_number':150,'multiline':False]
+['text':' ellide the copy with strides such as (6, 12, 1, 3) or (3, 1, 9), but this is quite tricky.','line_number':151,'multiline':False]
+['text':' We choose to be conservative for simplicity','line_number':152,'multiline':False]
+['text':' This function is designed to be used with linear algebra methods that minimize','line_number':167,'multiline':False]
+['text':' L(ax - b) = 0, where L is generally the identity map (`solve`, for example)','line_number':168,'multiline':False]
+['text':' or the L2 norm (`lstsq`).','line_number':169,'multiline':False]
+['text':' It is expected that `a` and `b` are contiguous tensors of column-major matrices','line_number':170,'multiline':False]
+['text':' (so that a.view({-1, a.size(-2), a.size(-1)}) succeeds, same for `b`),','line_number':171,'multiline':False]
+['text':' with the following additional properties:','line_number':172,'multiline':False]
+['text':'','line_number':173,'multiline':False]
+['text':' 1. a.dim() == b.dim()','line_number':174,'multiline':False]
+['text':' 2. a.shape[:-2] broadcasts over b.shape[:-2]','line_number':175,'multiline':False]
+['text':' 3. a.size(i) <= b.size(i) for i=0,..., a.dim() - 3 (only for batch dimensions)','line_number':176,'multiline':False]
+['text':'','line_number':177,'multiline':False]
+['text':' MAGMA/LAPACK modify tensor `a` in-place, and the main goal of this method','line_number':178,'multiline':False]
+['text':' is to be memory efficient, which means that if there exists an index i such that','line_number':179,'multiline':False]
+['text':' a.shape[i] < b.shape[i], 0 <= i <= a.dim() - 3,','line_number':180,'multiline':False]
+['text':' then instead of materializing copies of `a` in the broadcasted shape, we keep','line_number':181,'multiline':False]
+['text':' a buffer copy of `a` along with flags that check whether specific batch dimension','line_number':182,'multiline':False]
+['text':' indices for `a` were already accessed. If they were, we copy the data from the buffer','line_number':183,'multiline':False]
+['text':' into `a`. The number of copies does not exceed','line_number':184,'multiline':False]
+['text':' prod(max(a.shape[:-2], b.shape[:-2]) - a.shape[:-2] + 1)','line_number':185,'multiline':False]
+['text':' and this value is attained by tensors with non-empty batch dimensions.','line_number':186,'multiline':False]
+['text':'','line_number':187,'multiline':False]
+['text':' func_t `f` is a callable that is being supplied with','line_number':188,'multiline':False]
+['text':' scalar_t* a_working_ptr, scalar_t* b_working_ptr, int64_t a_linear_batch_idx.','line_number':189,'multiline':False]
+['text':' a_working_ptr and b_working_ptr can directly be passed to LAPACK/MAGMA routines,','line_number':190,'multiline':False]
+['text':' and a_linear_batch_idx is an index in the 3d representation which corresponds to','line_number':191,'multiline':False]
+['text':' the memory a_working_ptr points to, in other words:','line_number':192,'multiline':False]
+['text':' a_working_ptr == a.view({-1, a.size(-2), a.size(-1)}.select(0, a_linear_batch_idx).data_ptr<scalar_t>();','line_number':193,'multiline':False]
+['text':' a_linear_batch_idx is useful to store metadata related to `a`, such as, for example,','line_number':194,'multiline':False]
+['text':' its rank or singular values (see linalg_lstsq).','line_number':195,'multiline':False]
+['text':'a_curr_linear_batch_idx','line_number':220,'multiline':True]
+['text':' Returns the epsilon value for floating types except half','line_number':263,'multiline':False]
+['text':' Validates input shapes and devices','line_number':275,'multiline':False]
+['text':' for linear solve methods (solve, cholesky_solve, lu_solve, triangular_solve)','line_number':276,'multiline':False]
+['text':' Checks if all the Tensors in a TensorList are of the same dimensions','line_number':307,'multiline':False]
+['text':' broadcast the batch dimensions of arg1 and arg2.','line_number':315,'multiline':False]
+['text':' If there's no name we assume we don't want to check the errors','line_number':329,'multiline':False]
+['text':' Return a permutation with the given axes moved to the end.','line_number':349,'multiline':False]
+['text':' parse the "mode" param in linalg_qr: return a tuple of bools (compute_q, reduced)','line_number':371,'multiline':False]
+['text':' this is actually irrelevant in this mode','line_number':383,'multiline':False]
+['text':' Function to compute sizes, strides and the extra columns for the Q matrix in the QR Decomposition','line_number':391,'multiline':False]
+['text':' We need to compute the required size of Q based on the `reduced` option','line_number':398,'multiline':False]
+['text':'f-contig','line_number':407,'multiline':True]
+['text':' if cusolver is available, it is used unconditionally','line_number':412,'multiline':False]
+['text':' Function used instead of .to so that the original strides are retained','line_number':419,'multiline':False]
+['text':' .to doesn't retain strides and make the output tensor contiguous','line_number':420,'multiline':False]
+['text':' Creates a dimension permutation array that can be given to `at::permute()`, which will shift','line_number':429,'multiline':False]
+['text':' the two specified dimensions to the end of a tensor, without changing the order of','line_number':430,'multiline':False]
+['text':' the other dimensions. `dim1` will be placed at the very end, and `dim0` will be','line_number':431,'multiline':False]
+['text':' placed just to the left of it.','line_number':432,'multiline':False]
+['text':'','line_number':433,'multiline':False]
+['text':' For instance, given a 4-D tensor, dimensions 1 and 3 can be shifted to the end by','line_number':434,'multiline':False]
+['text':' calling `create_dim_backshift_permutation(1, 3, 4)`. The resulting vector will','line_number':435,'multiline':False]
+['text':' be `vec(0, 2, 1, 3)`.','line_number':436,'multiline':False]
+['text':' Creates a dimension permutation array that can be given to `at::permute()`, which','line_number':453,'multiline':False]
+['text':' will reverse a given permutation.','line_number':454,'multiline':False]
+['text':' The reverse permutation array is created by swapping the indices and their','line_number':455,'multiline':False]
+['text':' associated values from the given permutation array.','line_number':456,'multiline':False]
+['text':' Compute R-work array size for MAGMA/LAPACK cgesdd/zgesdd','line_number':466,'multiline':False]
+['text':' See https://github.com/Reference-LAPACK/lapack/blob/122506cd8b6ce050a200920c3d4c0b153b150fd8/SRC/cgesdd.f#L186','line_number':467,'multiline':False]
+['text':' According to `vecLib.framework/Headers/clapack.h` Accelerate.framework is based on LAPACK 3.2.1','line_number':473,'multiline':False]
+['text':' These setting is valid for on LAPACK 3.6+','line_number':476,'multiline':False]
+['text':' This function checks whether the uplo argument input is valid','line_number':486,'multiline':False]
+['text':' Allowed strings are "u", "U", "l", "L"','line_number':487,'multiline':False]
+['text':' To use std::toupper safely with plain chars (or signed chars), the argument should first be converted to unsigned char','line_number':489,'multiline':False]
+['text':' Check the dtype of result and input tensors (for _out variants).','line_number':503,'multiline':False]
+['text':' Most linear algebra functions have the same dtype for input and output','line_number':504,'multiline':False]
+['text':' (either floating or complex type input), so we can check whether input's dtype can be casted to result's dtype.','line_number':505,'multiline':False]
+['text':' According to https://github.com/pytorch/pytorch/wiki/Developer-FAQ#how-does-out-work-in-pytorch','line_number':506,'multiline':False]
+['text':' c10::canCast is used for checking the "safe copy" dtype requirements.','line_number':507,'multiline':False]
+['text':' Alternatively, we can check whether the specific expected output type (result_type) can be safely casted to out tensor dtype (out_type)','line_number':517,'multiline':False]
+['text':'
+  Two types of 'other' tensors are supported when solving
+  a system of linear equations matmul(input, x) = other:
+  * 1-dimensional (1D) tensor or batch of 1D tensors (vector case)
+  * 2-dimensional (2D) tensor or batch of 2D tensors (matrix case).
+  The original torch.solve supported only the matrix case, while NumPy works for both cases.
+  For the batched input we need to be able to distinguish them.
+  Let input.shape = (batch_dimensions, m, n), then 'other' is of vector type if other.shape == (batch_dimensions, m).
+  This rule is compatible with NumPy, see https://github.com/numpy/numpy/blob/v1.20.0/numpy/linalg/linalg.py#L384-L389
+','line_number':532,'multiline':True]
+['text':' input.shape[:-1]','line_number':543,'multiline':False]
+['text':'
+  Computes linear indices for a tensor with original_shape to access its elements like it was a materialized broadcast tensor.
+','line_number':548,'multiline':True]
+['text':' The assumption is that the broadcast_shape is a materialized broadcast','line_number':566,'multiline':False]
+['text':' shape of the original_shape. We need to compute the linear indices','line_number':567,'multiline':False]
+['text':' compatible with the original_shape to access the elements in the original','line_number':568,'multiline':False]
+['text':' tensor corresponding to the broadcast tensor.','line_number':569,'multiline':False]
+['text':' namespace at::native','line_number':624,'multiline':False]

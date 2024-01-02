@@ -1,0 +1,95 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' js::jit::Assembler::GetPointer','line_number':17,'multiline':False]
+['text':' js::DumpObject, js::DumpValue','line_number':22,'multiline':False]
+['text':' N.B. the current IonScript is not the same as the frame's','line_number':63,'multiline':False]
+['text':' IonScript if the frame has since been invalidated.','line_number':64,'multiline':False]
+['text':' The Baseline Interpreter stores the bytecode pc in the frame.','line_number':137,'multiline':False]
+['text':' There must be a BaselineScript with a RetAddrEntry for the current return','line_number':144,'multiline':False]
+['text':' address.','line_number':145,'multiline':False]
+['text':' Compute BaselineFrame size, the size stored in the descriptor excluding','line_number':161,'multiline':False]
+['text':' VMFunction arguments pushed for VM calls.','line_number':162,'multiline':False]
+['text':'','line_number':163,'multiline':False]
+['text':' In debug builds this is equivalent to BaselineFrame::debugFrameSize_. This','line_number':164,'multiline':False]
+['text':' is asserted at the end of this method.','line_number':165,'multiline':False]
+['text':' If the next frame is the entry frame, just exit. Don't update current_,','line_number':180,'multiline':False]
+['text':' since the entry and first frames overlap.','line_number':181,'multiline':False]
+['text':' Get the base address to where safepoint registers are spilled.','line_number':198,'multiline':False]
+['text':' Out-of-line calls do not unwind the extra padding space used to','line_number':199,'multiline':False]
+['text':' aggregate bailout tables, so we use frameSize instead of frameLocals,','line_number':200,'multiline':False]
+['text':' which would only account for local stack slots.','line_number':201,'multiline':False]
+['text':' The MachineState is used by GCs for tracing call-sites.','line_number':208,'multiline':False]
+['text':' Only say that registers that actually start here start here.','line_number':230,'multiline':False]
+['text':' e.g. d0 should not start at s1, only at s0.','line_number':231,'multiline':False]
+['text':' Only handle Ion frames for now.','line_number':400,'multiline':False]
+['text':' Don't verify while off thread.','line_number':407,'multiline':False]
+['text':' Don't verify if sampling is being suppressed.','line_number':412,'multiline':False]
+['text':' Look up and print bytecode info for the native address.','line_number':423,'multiline':False]
+['text':' Create an InlineFrameIterator here and verify the mapped info against the','line_number':452,'multiline':False]
+['text':' iterator info.','line_number':453,'multiline':False]
+['text':' DEBUG','line_number':478,'multiline':False]
+['text':' If no profilingActivation is live, initialize directly to','line_number':482,'multiline':False]
+['text':' end-of-iteration state.','line_number':483,'multiline':False]
+['text':' If the top JitActivation has a null lastProfilingFrame, assume that','line_number':495,'multiline':False]
+['text':' it's a trivially empty activation, and initialize directly','line_number':496,'multiline':False]
+['text':' to end-of-iteration state.','line_number':497,'multiline':False]
+['text':' Get the fp from the current profilingActivation','line_number':505,'multiline':False]
+['text':' Profiler sampling must NOT be suppressed if we are here.','line_number':508,'multiline':False]
+['text':' Try initializing with sampler pc','line_number':511,'multiline':False]
+['text':' Try initializing with sampler pc using native=>bytecode table.','line_number':516,'multiline':False]
+['text':' forLastCallSite = ','line_number':519,'multiline':True]
+['text':' Try initializing with lastProfilingCallSite pc','line_number':523,'multiline':False]
+['text':' Try initializing with lastProfilingCallSite pc using native=>bytecode','line_number':530,'multiline':False]
+['text':' table.','line_number':531,'multiline':False]
+['text':' forLastCallSite = ','line_number':532,'multiline':True]
+['text':' If nothing matches, for now just assume we are at the start of the last','line_number':537,'multiline':False]
+['text':' frame's baseline jit code or interpreter code.','line_number':538,'multiline':False]
+['text':' Check for Ion first, since it's more likely for hot code.','line_number':563,'multiline':False]
+['text':' Check for containment in Baseline jitcode second.','line_number':571,'multiline':False]
+['text':' Treat dummy lookups as an empty frame sequence.','line_number':599,'multiline':False]
+['text':' If looked-up callee doesn't match frame callee, don't accept','line_number':608,'multiline':False]
+['text':' lastProfilingCallSite','line_number':609,'multiline':False]
+['text':' If looked-up callee doesn't match frame callee, don't accept','line_number':620,'multiline':False]
+['text':' lastProfilingCallSite','line_number':621,'multiline':False]
+['text':' No previous js jit frame, this is a transition frame, used to','line_number':671,'multiline':False]
+['text':' pass a wasm iterator the correct value of FP.','line_number':672,'multiline':False]
+['text':' No previous frame, set to nullptr to indicate that','line_number':680,'multiline':False]
+['text':' JSJitProfilingFrameIterator is done().','line_number':681,'multiline':False]
+['text':'
+   * fp_ points to a Baseline or Ion frame.  The possible call-stacks
+   * patterns occurring between this frame and a previous Ion or Baseline
+   * frame are as follows:
+   *
+   * <Baseline-Or-Ion>
+   * ^
+   * |
+   * ^--- Ion
+   * |
+   * ^--- Baseline Stub <---- Baseline
+   * |
+   * ^--- WasmToJSJit <---- (other wasm frames, not handled by this iterator)
+   * |
+   * ^--- Argument Rectifier
+   * |    ^
+   * |    |
+   * |    ^--- Ion
+   * |    |
+   * |    ^--- Baseline Stub <---- Baseline
+   * |    |
+   * |    ^--- WasmToJSJit <--- (other wasm frames)
+   * |    |
+   * |    ^--- CppToJSJit
+   * |
+   * ^--- Entry Frame (From C++)
+   *      Exit Frame (From previous JitActivation)
+   *      ^
+   *      |
+   *      ^--- Ion
+   *      |
+   *      ^--- Baseline
+   *      |
+   *      ^--- Baseline Stub <---- Baseline
+   ','line_number':688,'multiline':True]

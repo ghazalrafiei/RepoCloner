@@ -1,0 +1,112 @@
+['text':'*
+ *    Copyright (C) 2020-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * A ClientObserver that adds hooks for every time an OpCtx is created on a thread that is part of a
+ * PrimaryOnlyService. OpCtxs created on PrimaryOnlyService threads get registered with the
+ * associated service, which can then ensure that all associated OpCtxs get interrupted any time
+ * this service is interrupted due to a replica set stepDown. Additionally, we ensure that any
+ * OpCtxs created while the node is *already* stepped down get created in an already-interrupted
+ * state.
+ ','line_number':102,'multiline':True]
+['text':' This OpCtx/Client is not a part of a PrimaryOnlyService','line_number':119,'multiline':False]
+['text':' Ensure this OpCtx will get interrupted at stepDown by the ReplicationCoordinator','line_number':123,'multiline':False]
+['text':' machinery when it tries to take the RSTL lock. This isn't strictly necessary for','line_number':124,'multiline':False]
+['text':' correctness since registering the OpCtx below will ensure that the OpCtx gets interrupted','line_number':125,'multiline':False]
+['text':' at stepDown anyway, but setting this lets it get interrupted a little earlier in the','line_number':126,'multiline':False]
+['text':' stepDown process.','line_number':127,'multiline':False]
+['text':' Register the opCtx with the PrimaryOnlyService so it will get interrupted on stepDown. We','line_number':130,'multiline':False]
+['text':' need this, and cannot simply rely on the ReplicationCoordinator to interrupt this OpCtx','line_number':131,'multiline':False]
+['text':' for us, as new OpCtxs can be created on PrimaryOnlyService threads even after the','line_number':132,'multiline':False]
+['text':' ReplicationCoordinator has finished its stepDown procedure.','line_number':133,'multiline':False]
+['text':' This OpCtx/Client is not a part of a PrimaryOnlyService','line_number':142,'multiline':False]
+['text':' namespace','line_number':155,'multiline':False]
+['text':' Unit tests may not have replication coordinator set up.','line_number':217,'multiline':False]
+['text':' Since this method is called before we mark the node writable in','line_number':227,'multiline':False]
+['text':' ReplicationCoordinatorImpl::signalDrainComplete and therefore can block the new primary from','line_number':228,'multiline':False]
+['text':' starting to receive writes, generate a warning if we are spending too long here.','line_number':229,'multiline':False]
+['text':' Additionally, generate a warning if any individual service is taking too long.','line_number':243,'multiline':False]
+['text':' We do not allow creating an opCtx while in kRebuilding (unless the thread has explicitly','line_number':313,'multiline':False]
+['text':' requested it) in case the node has stepped down and back up. In that case the second','line_number':314,'multiline':False]
+['text':' stepup would join the instance from the first stepup which could wait on the opCtx which','line_number':315,'multiline':False]
+['text':' would not get interrupted. This could cause the second stepup to take a long time','line_number':316,'multiline':False]
+['text':' to join the old instance. Note that opCtx's created through a','line_number':317,'multiline':False]
+['text':' CancelableOperationContextFactory with a cancellation token *would* be interrupted (and','line_number':318,'multiline':False]
+['text':' would not delay the join), because the stepdown would have cancelled the cancellation','line_number':319,'multiline':False]
+['text':' token.','line_number':320,'multiline':False]
+['text':' If this service isn't running when an OpCtx associated with this service is created, then','line_number':323,'multiline':False]
+['text':' ensure that the OpCtx starts off immediately interrupted.','line_number':324,'multiline':False]
+['text':' We don't use ServiceContext::killOperation to avoid taking the Client lock unnecessarily,','line_number':325,'multiline':False]
+['text':' given that we're running on behalf of the thread that owns the OpCtx.','line_number':326,'multiline':False]
+['text':' Initialize the thread pool options with the service-specific limits on pool size.','line_number':343,'multiline':False]
+['text':' Now add the options that are fixed for all PrimaryOnlyServices.','line_number':346,'multiline':False]
+['text':' Associate this Client with this PrimaryOnlyService','line_number':355,'multiline':False]
+['text':' Install a new executor, while moving the old one into 'newThenOldScopedExecutor' so it','line_number':395,'multiline':False]
+['text':' can be accessed outside of _mutex.','line_number':396,'multiline':False]
+['text':' Don't destroy the Instances until all outstanding tasks run against them are complete.','line_number':399,'multiline':False]
+['text':' Save off the new executor temporarily.','line_number':402,'multiline':False]
+['text':' Ensure that all tasks from the previous term have completed before allowing tasks to be','line_number':407,'multiline':False]
+['text':' scheduled on the new executor.','line_number':408,'multiline':False]
+['text':' shutdown() happens in onStepDown of previous term, so we only need to join() here.','line_number':410,'multiline':False]
+['text':' This ensures that all instances from previous term have joined.','line_number':414,'multiline':False]
+['text':' Now wait for the first write of the new term to be majority committed, so that we know','line_number':424,'multiline':False]
+['text':' all previous writes to state documents are also committed, and then schedule work to','line_number':425,'multiline':False]
+['text':' rebuild Instances from their persisted state documents.','line_number':426,'multiline':False]
+['text':' Note that checking both the state and the term are optimizations and are','line_number':437,'multiline':False]
+['text':' not strictly necessary. This is also true in the later continuation.','line_number':438,'multiline':False]
+['text':' We've either stepped or shut down, or advanced to a new term.','line_number':469,'multiline':False]
+['text':' In either case, we rely on the stepdown/shutdown logic or the','line_number':470,'multiline':False]
+['text':' step-up of the new term to set _state and do nothing here.','line_number':471,'multiline':False]
+['text':' Ignore the result Future','line_number':485,'multiline':False]
+['text':' If the _state is already kPaused, the instances have already been interrupted.','line_number':541,'multiline':False]
+['text':' Save the executor to join() with it outside of _mutex.','line_number':549,'multiline':False]
+['text':' Maintain the lifetime of the instances until all outstanding tasks using them are','line_number':552,'multiline':False]
+['text':' complete.','line_number':553,'multiline':False]
+['text':' shutdown can race with startup, so access _hasExecutor in this critical section.','line_number':557,'multiline':False]
+['text':' Ensures all work on scoped task executor is completed; in-turn ensures that','line_number':562,'multiline':False]
+['text':' Instance::_finishedNotifyFuture gets set if instance is running.','line_number':563,'multiline':False]
+['text':' Ensures that the instance cleanup (if any) gets completed before shutting down the','line_number':567,'multiline':False]
+['text':' parent task executor.','line_number':568,'multiline':False]
+['text':' If this operation is holding any database locks, then it must have opted into getting','line_number':626,'multiline':False]
+['text':' interrupted at stepdown to prevent deadlocks.','line_number':627,'multiline':False]
+['text':' If this operation is holding any database locks, then it must have opted into getting','line_number':655,'multiline':False]
+['text':' interrupted at stepdown to prevent deadlocks.','line_number':656,'multiline':False]
+['text':' After this _activeInstances will be empty and savedInstances will contain','line_number':698,'multiline':False]
+['text':' the contents of _activeInstances.','line_number':699,'multiline':False]
+['text':' The PrimaryOnlyServiceClientObserver will make any OpCtx created as part of a','line_number':735,'multiline':False]
+['text':' PrimaryOnlyService immediately get interrupted if the service is not in state kRunning.','line_number':736,'multiline':False]
+['text':' Since we are in State::kRebuilding here, we need to install a','line_number':737,'multiline':False]
+['text':' AllowOpCtxWhenServiceNotRunningBlock so that the database read we need to do can complete','line_number':738,'multiline':False]
+['text':' successfully.','line_number':739,'multiline':False]
+['text':' Node stepped down','line_number':772,'multiline':False]
+['text':' Node stepped down before finishing rebuilding service from previous stepUp.','line_number':781,'multiline':False]
+['text':' Construct new instances using the state documents and add to _activeInstances.','line_number':787,'multiline':False]
+['text':' TODO SERVER-61717 remove this error handler once instance are automatically released','line_number':823,'multiline':False]
+['text':' at the end of run()','line_number':824,'multiline':False]
+['text':' namespace repl','line_number':890,'multiline':False]
+['text':' namespace mongo','line_number':891,'multiline':False]

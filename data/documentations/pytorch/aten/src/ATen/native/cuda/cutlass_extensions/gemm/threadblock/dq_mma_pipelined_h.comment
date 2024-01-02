@@ -1,0 +1,122 @@
+['text':'**************************************************************************************************
+ * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *************************************************************************************************','line_number':1,'multiline':True]
+['text':'! \file
+    \brief Template for a double-buffered threadblock-scoped GEMM kernel.
+','line_number':31,'multiline':True]
+['text':'///////////////////////////////////////////////////////////////////////////////////////////////','line_number':54,'multiline':False]
+['text':'///////////////////////////////////////////////////////////////////////////////////////////////','line_number':60,'multiline':False]
+['text':'/ Structure to compute the matrix product targeting CUDA cores and SIMT math instructions.','line_number':62,'multiline':False]
+['text':'/ Size of the Gemm problem - concept: gemm::GemmShape<>','line_number':64,'multiline':False]
+['text':'/ Iterates over tiles of A operand in global memory','line_number':66,'multiline':False]
+['text':'  (concept: ReadableTileIterator | ForwardTileIterator | MaskedTileIterator)','line_number':67,'multiline':False]
+['text':'/ Iterates over tiles of A operand in shared memory','line_number':69,'multiline':False]
+['text':'/ (concept: WriteableTileIterator | RandomAccessTileIterator)','line_number':70,'multiline':False]
+['text':'/ Iterates over tiles of B operand in global memory','line_number':72,'multiline':False]
+['text':'  (concept: ReadableTileIterator | ForwardTileIterator | MaskedTileIterator)','line_number':73,'multiline':False]
+['text':'/ Iterates over tiles of B operand in shared memory','line_number':75,'multiline':False]
+['text':'/ (concept: WriteableTileIterator | RandomAccessTileIterator)','line_number':76,'multiline':False]
+['text':'/ Data type for the scales','line_number':78,'multiline':False]
+['text':'/ Iterators over scales in shared memory','line_number':80,'multiline':False]
+['text':'/ Data type of accumulator matrix','line_number':82,'multiline':False]
+['text':'/ Data type of accumulator matrix','line_number':84,'multiline':False]
+['text':'/ Policy describing tuning details (concept: MmaPolicy)','line_number':86,'multiline':False]
+['text':'/ Converter for B matrix applied immediately after the LDG (before STS)','line_number':88,'multiline':False]
+['text':'/ Converter for B matrix applited immediately after the LDS','line_number':90,'multiline':False]
+['text':'/ Used for partial specialization','line_number':92,'multiline':False]
+['text':'/< Base class','line_number':96,'multiline':False]
+['text':'/< Size of the Gemm problem - concept: gemm::GemmShape<>','line_number':99,'multiline':False]
+['text':'/< Iterates over tiles of A operand in global memory','line_number':100,'multiline':False]
+['text':'/< Iterates over tiles of B operand in global memory','line_number':101,'multiline':False]
+['text':'/< Data type of accumulator matrix','line_number':102,'multiline':False]
+['text':'/< Layout of accumulator matrix','line_number':103,'multiline':False]
+['text':'/< Policy describing tuning details','line_number':104,'multiline':False]
+['text':'','line_number':117,'multiline':False]
+['text':' Dependent types','line_number':118,'multiline':False]
+['text':'','line_number':119,'multiline':False]
+['text':'/ Fragment of operand A loaded from global memory','line_number':121,'multiline':False]
+['text':'/ Fragment of operand B loaded from global memory','line_number':124,'multiline':False]
+['text':'/ Fragment of operand Scale loaded from global memory;','line_number':127,'multiline':False]
+['text':'/ Fragment of accumulator tile','line_number':130,'multiline':False]
+['text':'/ Warp-level Mma','line_number':133,'multiline':False]
+['text':'/ Obtain the arch tag from the warp-level operator','line_number':136,'multiline':False]
+['text':'/ Complex transform on A operand','line_number':146,'multiline':False]
+['text':'/ Complex transform on B operand','line_number':149,'multiline':False]
+['text':' staticaly assert kStages for DqMmaPipelined is two (Double-buffered pipeline)','line_number':152,'multiline':False]
+['text':'/ Iterator to write threadblock-scoped tile of A operand to shared memory','line_number':169,'multiline':False]
+['text':'/ Iterator to write threadblock-scoped tile of B operand to shared memory','line_number':172,'multiline':False]
+['text':'/ Iterator to write threadblock-scoped tile of scale operand to shared memory','line_number':175,'multiline':False]
+['text':'/ Construct from tensor references','line_number':179,'multiline':False]
+['text':'/< Shared storage needed for internal use by threadblock-scoped GEMM','line_number':182,'multiline':False]
+['text':'/< ID within the threadblock','line_number':183,'multiline':False]
+['text':'/< ID of warp','line_number':184,'multiline':False]
+['text':'/< ID of each thread within a warp','line_number':185,'multiline':False]
+['text':' Compute warp location within threadblock tile by mapping the warp_id to','line_number':196,'multiline':False]
+['text':' three coordinates:','line_number':197,'multiline':False]
+['text':'   _m: the warp's position within the threadblock along the M dimension','line_number':198,'multiline':False]
+['text':'   _n: the warp's position within the threadblock along the N dimension','line_number':199,'multiline':False]
+['text':'   _k: the warp's position within the threadblock along the K dimension','line_number':200,'multiline':False]
+['text':' Add per-warp offsets in units of warp-level tiles','line_number':208,'multiline':False]
+['text':'/ Perform a threadblock-scoped matrix multiply-accumulate','line_number':213,'multiline':False]
+['text':'/< number of iterations of the mainloop','line_number':215,'multiline':False]
+['text':'/< destination accumulator tile','line_number':216,'multiline':False]
+['text':'/< iterator over A operand in global memory','line_number':217,'multiline':False]
+['text':'/< iterator over B operand in global memory','line_number':218,'multiline':False]
+['text':'/< iterator over scale operand in global memory','line_number':219,'multiline':False]
+['text':'/< source accumulator tile','line_number':221,'multiline':False]
+['text':'','line_number':223,'multiline':False]
+['text':' Prologue','line_number':224,'multiline':False]
+['text':'','line_number':225,'multiline':False]
+['text':' These transforms are mainly to handle when we have bfloat activations and weights in GMEM and want','line_number':236,'multiline':False]
+['text':' to issue HMMA on architectures older than Ampere. We will convert to FP16 before STS.','line_number':237,'multiline':False]
+['text':' Perform accumulation in the 'd' output operand','line_number':241,'multiline':False]
+['text':' The last kblock is loaded in the prolog','line_number':255,'multiline':False]
+['text':' Pair of fragments used to overlap shared memory loads and math instructions','line_number':274,'multiline':False]
+['text':' Avoid reading out of bounds','line_number':291,'multiline':False]
+['text':' Issue loads during the first warp-level matrix multiply-add *AFTER* issuing','line_number':295,'multiline':False]
+['text':' shared memory loads (which have the tighest latency requirement).','line_number':296,'multiline':False]
+['text':'','line_number':298,'multiline':False]
+['text':' Mainloop','line_number':299,'multiline':False]
+['text':'','line_number':300,'multiline':False]
+['text':' Note: The main loop does not support Base::kWarpGemmIterations == 2.','line_number':302,'multiline':False]
+['text':'','line_number':305,'multiline':False]
+['text':' Loop over GEMM K dimension','line_number':306,'multiline':False]
+['text':'','line_number':307,'multiline':False]
+['text':' Load warp-level tiles from shared memory, wrapping to k offset if this is the last group','line_number':312,'multiline':False]
+['text':' as the case may be.','line_number':313,'multiline':False]
+['text':' Write fragments to shared memory','line_number':317,'multiline':False]
+['text':' Add negative offsets to return iterators to the 'start' of the circular buffer in shared memory','line_number':327,'multiline':False]
+['text':' We are just about to finish computing on a fragment of B, so initiate the load for the next fragment.','line_number':348,'multiline':False]
+['text':' Avoid reading out of bounds if this was the last loop iteration','line_number':364,'multiline':False]
+['text':'///////////////////////////////////////////////////////////////////////////////////////////////','line_number':379,'multiline':False]
+['text':' namespace threadblock','line_number':381,'multiline':False]
+['text':' namespace gemm','line_number':382,'multiline':False]
+['text':' namespace cutlass','line_number':383,'multiline':False]
+['text':'///////////////////////////////////////////////////////////////////////////////////////////////','line_number':385,'multiline':False]

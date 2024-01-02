@@ -1,0 +1,233 @@
+['text':'*
+ *    Copyright (C) 2019-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Returns a vector of the slot IDs corresponding to 'reqs', ordered by slot name. This function
+ * is intended for use in situations where a branch or union is being constructed and the contents
+ * of multiple PlanStageSlots objects need to be merged together.
+ *
+ * Note that a given slot ID may appear more than once in the SlotVector returned. This is
+ * the intended behavior.
+ ','line_number':83,'multiline':True]
+['text':'*
+ * Returns a vector of the unique slot IDs needed by 'reqs', ordered by slot ID, and metadata slots.
+ * This function is intended for use in situations where a join or sort or something else is being
+ * constructed and a PlanStageSlot's contents need to be "forwarded" through a PlanStage.
+ ','line_number':94,'multiline':True]
+['text':'*
+ * This function prepares the SBE tree for execution, such as attaching the OperationContext,
+ * ensuring that the SBE tree is registered with the PlanYieldPolicySBE and populating the
+ * "RuntimeEnvironment".
+ *
+ * The caller should pass true for 'preparingFromCache' if the SBE plan being prepared is being
+ * recovered from the SBE plan cache.
+ ','line_number':104,'multiline':True]
+['text':'*
+ * Associate a slot with a signature representing all the possible types that the value stored at
+ * runtime in the slot can assume.
+ ','line_number':128,'multiline':True]
+['text':'*
+ * The PlanStageSlots class is used by SlotBasedStageBuilder to return the output slots produced
+ * after building a stage.
+ ','line_number':137,'multiline':True]
+['text':' The _slotNameToIdMap map is capable of holding different "types" of slots:','line_number':143,'multiline':False]
+['text':' 1) kMeta slots are used to hold the current document (kResult), record ID (kRecordId), and','line_number':144,'multiline':False]
+['text':'    various pieces of metadata.','line_number':145,'multiline':False]
+['text':' 2) kField slots represent the values of top-level fields, or in some cases of dotted field','line_number':146,'multiline':False]
+['text':'    paths (when we are getting the dotted field from a non-multikey index and we know no array','line_number':147,'multiline':False]
+['text':'    traversal is needed). These slots hold the actual values of the fields / field paths (not','line_number':148,'multiline':False]
+['text':'    the sort key or collation comparison key for the field).','line_number':149,'multiline':False]
+['text':' 3) kSortKey slots represent the raw key value that comes from an ixscan / ixseek stage for a','line_number':150,'multiline':False]
+['text':'    given field path. This raw key value can be used for sorting / comparison, but it is not','line_number':151,'multiline':False]
+['text':'    always equal to the actual value of the field path (for example, if the key is coming from','line_number':152,'multiline':False]
+['text':'    an index that has a non-simple collation).','line_number':153,'multiline':False]
+['text':' 4) kPathExpr slots represent the value obtained from evaluating an 'ExpressionFieldPath'.','line_number':154,'multiline':False]
+['text':'    Typically, this is requested by stages that wish to avoid generating duplicate','line_number':155,'multiline':False]
+['text':'    expressions for path traversal (for example, $group stages which reference the same','line_number':156,'multiline':False]
+['text':'    field path across multiple accumulators).','line_number':157,'multiline':False]
+['text':' 5) kFilterCellField slots represent the value obtained from evaluating a dotted path on top','line_number':158,'multiline':False]
+['text':'    of a timeseries bucket, expanding arrays as they are encountered during the traversal.','line_number':159,'multiline':False]
+['text':' Slot "names" in this file are really type-and-name pairs.','line_number':168,'multiline':False]
+['text':'*
+     * In addition to holding individual output slots, a PlanStageSlots object can also optionally
+     * contain a single "MakeResultInfo" object. (Likewise, in addition to providing APIs to ask for
+     * individual named slots, PlanStageReqs provides an API to ask for a "MakeResultInfo" object.)
+     *
+     * Some stages, like project, work by returning a modified version of their child's result doc.
+     * If we have a chain of projects (or other stages that behave similarly) and the stage at the
+     * top of the chain receives a kResult req from its parent, ideally when possible we would like
+     * to avoid the scenario where each stage asks its child for kResult and each stage materializes
+     * a new result doc just to potentially add, modify, or drop 1 or 2 fields.
+     *
+     * "MakeResultInfo" provides a means for stages like project to satisfy a kResult req without
+     * having to ask their child for kResult.
+     *
+     * Conceptually, the MakeResultInfo class can be thought of as a "package" that contains (or
+     * points to) all the information that is needed to eventually materialize a result doc,
+     * specifically:
+     * - A kResultBase slot
+     * - 0 or more kField slots
+     *
+     * The requirement to produce a MakeResultInfo is represented by the MakeResultInfoReq class,
+     * which is defined inside PlanStageReqs.
+     *
+     * If a stage receives a kResult req from its parent and it decides it wants to ask its child
+     * for MakeResultInfo, it adds a MakeResultInfoReq to the reqs passed to the child containing a
+     * ProjectionEffects that describes how it plans to materialize the result doc. Specifically,
+     * the ProjectionEffects object inside MakeResultInfoReq indicates which fields from kResultBase
+     * are going to be ignored (i.e. dropped), which fields are going to be preserved as-is without
+     * any modification, and which fields will be updated with a new value.
+     *
+     * When a stage receives a MakeResultInfo req, it can satisfy the req either by producing the
+     * kResult document or by "participating" with the MakeResultInfo scheme. If a stage opts to not
+     * "participate" and returns kResult, the stage builder will create a "default" MakeResultInfo
+     * with kResultBase equal to kResult and an empty "modified fields" list that gets returned to
+     * the parent. If a stage opts to "participate", it will copy the MakeResultInfoReq and update
+     * the ProjectionEffects appropriately, and then it will pass the updated MakeResultInfoReq to
+     * its child. Then it will receive MakeResultInfo object from its child, it will add the
+     * appropriate field names the the MakeResultInfo's "modified fields" list, and then it will
+     * return the MakeResultInfo object to its parent.
+     *
+     * When the stage that received a kResult req and asked for MakeResultInfo eventually receives
+     * a MakeResultInfo object back from its child, it creates the kResult doc by taking the
+     * contents of kResultBase as a starting point, dropping 0 or more fields from the doc, writing
+     * new values (retrieved from kField slots) to 0 or more fields in the doc, and finally making
+     * stage-specific modifications as appropriate to the doc and then materializing it.
+     ','line_number':211,'multiline':True]
+['text':'*
+         * When the build() depth-first traversal backtracks through a merge point in the QSN
+         * tree, if one or more of the PlanStageOutputs objects have "MakeResultInfo" set, then we
+         * need to do a "merge" process in order to produce a single unified "MakeResultInfo"
+         * object. The mergeInfos() method implements this merge process.
+         ','line_number':261,'multiline':True]
+['text':' Clear a single field (SlotType::kField) in '_slotNameToIdMap' by its string name.','line_number':387,'multiline':False]
+['text':' Clear all fields (SlotType::kField) in '_slotNameToIdMap'.','line_number':395,'multiline':False]
+['text':' Returns true if the kResult slot is set or if the MakeResultInfo object is set.','line_number':423,'multiline':False]
+['text':' Slot type-and-name to SlotId map for the output slots produced by this plan stage.','line_number':478,'multiline':False]
+['text':' If this PlanStageSlots object has "MakeResultInfo" set, then this field will be point to a','line_number':481,'multiline':False]
+['text':' MakeResultInfo object, otherwise this field will be null.','line_number':482,'multiline':False]
+['text':' class PlanStageSlots','line_number':484,'multiline':False]
+['text':'*
+ * The PlanStageReqs class is used by SlotBasedStageBuilder to represent the context and parent's
+ * required inputs ('reqs'), which thus double as the current stage's required outputs, when
+ * building a stage.
+ ','line_number':486,'multiline':True]
+['text':'*
+     * In addition to providing APIs to ask for individual named slots, PlanStageReqs provides an
+     * API to ask for a "MakeResultInfo" object. The requirement to produce a MakeResultInfo object
+     * is called a "MakeResultInfo req" and is represented using the 'MakeResultInfoReq' class.
+     ','line_number':502,'multiline':True]
+['text':' The flag to signal that block processing is supported must be be explicitly set to true','line_number':564,'multiline':False]
+['text':' by the code handling each block-enabled stage.','line_number':565,'multiline':False]
+['text':'*
+     * Returns the list of fields that are explicitly required to be put into individual kField
+     * slots.
+     *
+     * Note that the list returned is not an exhaustive list of every field that might be
+     * needed, nor is it an exhaustive list of all the fields that will ultimately be required
+     * to be put into kField slots (since MakeResultInfo provides a mechanism that allows
+     * the child to "implicitly" require additional fields to be put in kField slots).
+     * For detais, see getNeededFieldSet().
+     ','line_number':645,'multiline':True]
+['text':'*
+     * Returns the set of all field names that are potentially needed (either in an individual
+     * kField slots or stored within kResult / kResultBase).
+     *
+     * This method returns a FieldSet. A FieldSet can either be a finite set (if scope == kClosed)
+     * or it can an infinite set that is the complement of some finite set (if scope == kOpen).
+     *
+     * If hasResult() is true, this method always returns the set of all possible fields names.
+     * Otherwise, this method returns getFields() unioned with the set of fields needed by the
+     * MakeResultInfo req (if it is set).
+     ','line_number':663,'multiline':True]
+['text':' Returns true if the kResult req is set or if the MakeResultInfo req is set.','line_number':708,'multiline':False]
+['text':' The set of the type-and-names of the slots required as inputs by this plan stage.','line_number':803,'multiline':False]
+['text':' If this PlanStageReqs object has a "MakeResultInfo" req set, then this field will be point','line_number':806,'multiline':False]
+['text':' to a MakeResultInfoReq object, otherwise this field will be null.','line_number':807,'multiline':False]
+['text':' When we're in the middle of building a special union sub-tree implementing a tailable','line_number':810,'multiline':False]
+['text':' cursor collection scan, this flag will be set to true. Otherwise this flag will be false.','line_number':811,'multiline':False]
+['text':' When we're in the middle of building a special union sub-tree implementing a tailable','line_number':814,'multiline':False]
+['text':' cursor collection scan, this flag indicates whether we're currently building an anchor or','line_number':815,'multiline':False]
+['text':' resume branch. At all other times, this flag will be false.','line_number':816,'multiline':False]
+['text':' When we are processing a stage that can work on top of block values, this flag instruct the','line_number':819,'multiline':False]
+['text':' child stage not to insert a BlockToRow stage to convert the block values into scalar values.','line_number':820,'multiline':False]
+['text':' Tracks the current namespace that we're building a plan over. Given that the stage','line_number':823,'multiline':False]
+['text':' builder can build plans for multiple namespaces, a node in the tree that targets a','line_number':824,'multiline':False]
+['text':' namespace different from its parent node can set this value to notify any child nodes of','line_number':825,'multiline':False]
+['text':' the correct namespace.','line_number':826,'multiline':False]
+['text':' When the pipeline has a limit stage this will be set to true. The flag is used by the sort','line_number':829,'multiline':False]
+['text':' stage to improve the performance of queries that have both sort and limit.','line_number':830,'multiline':False]
+['text':' class PlanStageReqs','line_number':832,'multiline':False]
+['text':'*
+ * We use one of these structs per node in the QSN tree to store the results of the
+ * analyze() phase.
+ ','line_number':861,'multiline':True]
+['text':'*
+ * A stage builder which builds an executable tree using slot-based PlanStages.
+ ','line_number':869,'multiline':True]
+['text':'*
+     * This method will build an SBE PlanStage tree for QuerySolutionNode 'root' and its
+     * descendents.
+     *
+     * This method is a wrapper around 'build(const QuerySolutionNode*, const PlanStageReqs&)'.
+     ','line_number':905,'multiline':True]
+['text':'*
+     * This method will build an SBE PlanStage tree for QuerySolutionNode 'root' and its
+     * descendents.
+     *
+     * Based on the type of 'root', this method will dispatch to the appropriate buildXXX()
+     * method. This method will also handle generating calls to getField() to satisfy kField
+     * reqs that were not satisfied by the buildXXX() method.
+     ','line_number':938,'multiline':True]
+['text':'*
+     * Constructs an optimized SBE plan for 'root' in the case that the fields of the shard key
+     * pattern are provided by the child index scan. In this case, the SBE plan for the child
+     * index scan node will fill out slots for the necessary components of the index key. These
+     * slots can be read directly in order to determine the shard key that should be passed to
+     * the 'shardFiltererSlot'.
+     ','line_number':1027,'multiline':True]
+['text':' Given an expression built on top of scalar processing, along with the definition of the','line_number':1058,'multiline':False]
+['text':' visible slots (some of which could be marked as holding block of values), produce an','line_number':1059,'multiline':False]
+['text':' expression tree that can be executed directly on top of them. Returns an empty result if the','line_number':1060,'multiline':False]
+['text':' expression isn't vectorizable.','line_number':1061,'multiline':False]
+['text':'*
+     * Returns a CollectionPtr corresponding to the collection that we are currently building a
+     * plan over. If no current namespace is configured, a CollectionPtr referencing the main
+     * collection tracked by '_collections' is returned.
+     ','line_number':1066,'multiline':True]
+['text':' Hash set tracking the InListDatas used by the SBE plan being built.','line_number':1077,'multiline':False]
+['text':' Hash set tracking the Collators used by the SBE plan being built.','line_number':1080,'multiline':False]
+['text':' Indicates the main namespace that we're building a plan over.','line_number':1085,'multiline':False]
+['text':' Aside from generating the PlanStage tree, this builder also produces a few auxiliary data','line_number':1090,'multiline':False]
+['text':' structures that are needed to execute the tree: the RuntimeEnvironment, the CompileCtx,','line_number':1091,'multiline':False]
+['text':' and the PlanStageStaticData. Note that the PlanStageStaticData ('_data') is mutable','line_number':1092,'multiline':False]
+['text':' inside SlotBasedStageBuilder, but after the 'build(const QuerySolutionNode*)' method is','line_number':1093,'multiline':False]
+['text':' called the data will become immutable.','line_number':1094,'multiline':False]
+['text':' Common parameters to SBE stage builder functions.','line_number':1103,'multiline':False]
+['text':' class SlotBasedStageBuilder','line_number':1105,'multiline':False]
+['text':' namespace mongo::stage_builder','line_number':1107,'multiline':False]

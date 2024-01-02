@@ -1,0 +1,92 @@
+['text':'
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+ ','line_number':1,'multiline':True]
+['text':'
+  * FileIO AsyncIO exposes read/write IO pools that allow doing IO asynchronously.
+  * Current implementation relies on having one thread that reads and one that
+  * writes.
+  * Each IO pool supports up to `MAX_IO_JOBS` that can be enqueued for work, but
+  * are performed serially by the appropriate worker thread.
+  * Most systems exposes better primitives to perform asynchronous IO, such as
+  * io_uring on newer linux systems. The API is built in such a way that in the
+  * future we could replace the threads with better solutions when available.
+  ','line_number':11,'multiline':True]
+['text':' U32, U64 ','line_number':29,'multiline':True]
+['text':' These struct fields should be set only on creation and not changed afterwards ','line_number':39,'multiline':True]
+['text':' Controls the file we currently write to, make changes only by using provided utility functions ','line_number':46,'multiline':True]
+['text':' The jobs and availableJobsCount fields are accessed by both the main and worker threads and should
+     * only be mutated after locking the mutex ','line_number':49,'multiline':True]
+['text':' State regarding the currently read file ','line_number':60,'multiline':True]
+['text':' We may hold an IOJob object as needed if we actively expose its buffer. ','line_number':65,'multiline':True]
+['text':' Coalesce buffer is used to join two buffers in case where we need to read more bytes than left in
+     * the first of them. Shouldn't be accessed from outside ot utility functions. ','line_number':68,'multiline':True]
+['text':' Read buffer can be used by consumer code, take care when copying this pointer aside as it might
+     * change when consuming / refilling buffer. ','line_number':72,'multiline':True]
+['text':' We need to know what tasks completed so we can use their buffers when their time comes.
+     * Should only be accessed after locking base.ioJobsMutex . ','line_number':77,'multiline':True]
+['text':' These fields are automatically set and shouldn't be changed by non WritePool code. ','line_number':90,'multiline':True]
+['text':' This field should be changed before a job is queued for execution and should contain the number
+     * of bytes to write from the buffer. ','line_number':96,'multiline':True]
+['text':' AIO_supported:
+ * Returns 1 if AsyncIO is supported on the system, 0 otherwise. ','line_number':102,'multiline':True]
+['text':' AIO_WritePool_releaseIoJob:
+ * Releases an acquired job back to the pool. Doesn't execute the job. ','line_number':107,'multiline':True]
+['text':' AIO_WritePool_acquireJob:
+ * Returns an available write job to be used for a future write. ','line_number':111,'multiline':True]
+['text':' AIO_WritePool_enqueueAndReacquireWriteJob:
+ * Enqueues a write job for execution and acquires a new one.
+ * After execution `job`'s pointed value would change to the newly acquired job.
+ * Make sure to set `usedBufferSize` to the wanted length before call.
+ * The queued job shouldn't be used directly after queueing it. ','line_number':115,'multiline':True]
+['text':' AIO_WritePool_sparseWriteEnd:
+ * Ends sparse writes to the current file.
+ * Blocks on completion of all current write jobs before executing. ','line_number':122,'multiline':True]
+['text':' AIO_WritePool_setFile:
+ * Sets the destination file for future writes in the pool.
+ * Requires completion of all queues write jobs and release of all otherwise acquired jobs.
+ * Also requires ending of sparse write if a previous file was used in sparse mode. ','line_number':127,'multiline':True]
+['text':' AIO_WritePool_getFile:
+ * Returns the file the writePool is currently set to write to. ','line_number':133,'multiline':True]
+['text':' AIO_WritePool_closeFile:
+ * Ends sparse write and closes the writePool's current file and sets the file to NULL.
+ * Requires completion of all queues write jobs and release of all otherwise acquired jobs.  ','line_number':137,'multiline':True]
+['text':' AIO_WritePool_create:
+ * Allocates and sets and a new write pool including its included jobs.
+ * bufferSize should be set to the maximal buffer we want to write to at a time. ','line_number':142,'multiline':True]
+['text':' AIO_WritePool_free:
+ * Frees and releases a writePool and its resources. Closes destination file. ','line_number':147,'multiline':True]
+['text':' AIO_WritePool_setAsync:
+ * Allows (de)activating async mode, to be used when the expected overhead
+ * of asyncio costs more than the expected gains. ','line_number':151,'multiline':True]
+['text':' AIO_ReadPool_create:
+ * Allocates and sets and a new readPool including its included jobs.
+ * bufferSize should be set to the maximal buffer we want to read at a time, will also be used
+ * as our basic read size. ','line_number':156,'multiline':True]
+['text':' AIO_ReadPool_free:
+ * Frees and releases a readPool and its resources. Closes source file. ','line_number':162,'multiline':True]
+['text':' AIO_ReadPool_setAsync:
+ * Allows (de)activating async mode, to be used when the expected overhead
+ * of asyncio costs more than the expected gains. ','line_number':166,'multiline':True]
+['text':' AIO_ReadPool_consumeBytes:
+ * Consumes byes from srcBuffer's beginning and updates srcBufferLoaded accordingly. ','line_number':171,'multiline':True]
+['text':' AIO_ReadPool_fillBuffer:
+ * Makes sure buffer has at least n bytes loaded (as long as n is not bigger than the initialized bufferSize).
+ * Returns if srcBuffer has at least n bytes loaded or if we've reached the end of the file.
+ * Return value is the number of bytes added to the buffer.
+ * Note that srcBuffer might have up to 2 times bufferSize bytes. ','line_number':175,'multiline':True]
+['text':' AIO_ReadPool_consumeAndRefill:
+ * Consumes the current buffer and refills it with bufferSize bytes. ','line_number':182,'multiline':True]
+['text':' AIO_ReadPool_setFile:
+ * Sets the source file for future read in the pool. Initiates reading immediately if file is not NULL.
+ * Waits for all current enqueued tasks to complete if a previous file was set. ','line_number':186,'multiline':True]
+['text':' AIO_ReadPool_getFile:
+ * Returns the current file set for the read pool. ','line_number':191,'multiline':True]
+['text':' AIO_ReadPool_closeFile:
+ * Closes the current set file. Waits for all current enqueued tasks to complete and resets state. ','line_number':195,'multiline':True]
+['text':' ZSTD_FILEIO_ASYNCIO_H ','line_number':203,'multiline':True]

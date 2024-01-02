@@ -1,0 +1,475 @@
+['text':'
+******************************************************************************
+*   Copyright (C) 1997-2015, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+******************************************************************************
+*   Date        Name        Description
+*   03/22/00    aliu        Adapted from original C++ ICU Hashtable.
+*   07/06/01    aliu        Modified to support int32_t keys on
+*                           platforms with sizeof(void*) < 32.
+******************************************************************************
+','line_number':1,'multiline':True]
+['text':'*
+ * UHashtable stores key-value pairs and does moderately fast lookup
+ * based on keys.  It provides a good tradeoff between access time and
+ * storage space.  As elements are added to it, it grows to accomodate
+ * them.  By default, the table never shrinks, even if all elements
+ * are removed from it.
+ *
+ * Keys and values are stored as void* pointers.  These void* pointers
+ * may be actual pointers to strings, objects, or any other structure
+ * in memory, or they may simply be integral values cast to void*.
+ * UHashtable doesn't care and manipulates them via user-supplied
+ * functions.  These functions hash keys, compare keys, delete keys,
+ * and delete values.  Some function pointers are optional (may be
+ * NULL); others must be supplied.  Several prebuilt functions exist
+ * to handle common key types.
+ *
+ * UHashtable ownership of keys and values is flexible, and controlled
+ * by whether or not the key deleter and value deleter functions are
+ * set.  If a void* key is actually a pointer to a deletable object,
+ * then UHashtable can be made to delete that object by setting the
+ * key deleter function pointer to a non-NULL value.  If this is done,
+ * then keys passed to uhash_put() are owned by the hashtable and will
+ * be deleted by it at some point, either as keys are replaced, or
+ * when uhash_close() is finally called.  The same is true of values
+ * and the value deleter function pointer.  Keys passed to methods
+ * other than uhash_put() are never owned by the hashtable.
+ *
+ * NULL values are not allowed.  uhash_get() returns NULL to indicate
+ * a key that is not in the table, and having a NULL value in the
+ * table would generate an ambiguous result.  If a key and a NULL
+ * value is passed to uhash_put(), this has the effect of doing a
+ * uhash_remove() on that key.  This keeps uhash_get(), uhash_count(),
+ * and uhash_nextElement() consistent with one another.
+ *
+ * To see everything in a hashtable, use uhash_nextElement() to
+ * iterate through its contents.  Each call to this function returns a
+ * UHashElement pointer.  A hash element contains a key, value, and
+ * hashcode.  During iteration an element may be deleted by calling
+ * uhash_removeElement(); iteration may safely continue thereafter.
+ * The uhash_remove() function may also be safely called in
+ * mid-iteration.  If uhash_put() is called during iteration,
+ * the iteration is still guaranteed to terminate reasonably, but
+ * there is no guarantee that every element will be returned or that
+ * some won't be returned more than once.
+ *
+ * Under no circumstances should the UHashElement returned by
+ * uhash_nextElement be modified directly.
+ *
+ * By default, the hashtable grows when necessary, but never shrinks,
+ * even if all items are removed.  For most applications this is
+ * optimal.  However, in a highly dynamic usage where memory is at a
+ * premium, the table can be set to both grow and shrink by calling
+ * uhash_setResizePolicy() with the policy U_GROW_AND_SHRINK.  In a
+ * situation where memory is critical and the client wants a table
+ * that does not grow at all, the constant U_FIXED can be used.
+ ','line_number':21,'multiline':True]
+['text':'*******************************************************************
+ * Data Structures
+ *******************************************************************','line_number':78,'multiline':True]
+['text':'*
+ * A key or value within a UHashtable.
+ * The hashing and comparison functions take a pointer to a
+ * UHashTok, but the deleter receives the void* pointer within it.
+ ','line_number':84,'multiline':True]
+['text':'*
+ * This is a single hash element.
+ ','line_number':91,'multiline':True]
+['text':' Reorder these elements to pack nicely if necessary ','line_number':95,'multiline':True]
+['text':'*
+ * A hashing function.
+ * @param key A key stored in a hashtable
+ * @return A NON-NEGATIVE hash code for parm.
+ ','line_number':102,'multiline':True]
+['text':'*
+ * A key equality (boolean) comparison function.
+ ','line_number':109,'multiline':True]
+['text':'*
+ * A value equality (boolean) comparison function.
+ ','line_number':114,'multiline':True]
+['text':' see cmemory.h for UObjectDeleter and uprv_deleteUObject() ','line_number':119,'multiline':True]
+['text':'*
+ * This specifies whether or not, and how, the hastable resizes itself.
+ * See uhash_setResizePolicy().
+ ','line_number':121,'multiline':True]
+['text':' Grow on demand, do not shrink ','line_number':126,'multiline':True]
+['text':' Grow and shrink on demand ','line_number':127,'multiline':True]
+['text':' Never change size ','line_number':128,'multiline':True]
+['text':'*
+ * The UHashtable struct.  Clients should treat this as an opaque data
+ * type and manipulate it only through the uhash_... API.
+ ','line_number':131,'multiline':True]
+['text':' Main key-value pair storage array ','line_number':137,'multiline':True]
+['text':' Function pointers ','line_number':141,'multiline':True]
+['text':' Computes hash from key.
+                                   * Never null. ','line_number':143,'multiline':True]
+['text':' Compares keys for equality.
+                                   * Never null. ','line_number':145,'multiline':True]
+['text':' Compares the values for equality ','line_number':147,'multiline':True]
+['text':' Deletes keys when required.
+                                   * If NULL won't do anything ','line_number':149,'multiline':True]
+['text':' Deletes values when required.
+                                   * If NULL won't do anything ','line_number':151,'multiline':True]
+['text':' Size parameters ','line_number':154,'multiline':True]
+['text':' The number of key-value pairs in this table.
+                             * 0 <= count <= length.  In practice we
+                             * never let count == length (see code). ','line_number':156,'multiline':True]
+['text':' The physical size of the arrays hashes, keys
+                             * and values.  Must be prime. ','line_number':159,'multiline':True]
+['text':' Rehashing thresholds ','line_number':162,'multiline':True]
+['text':' If count > highWaterMark, rehash ','line_number':164,'multiline':True]
+['text':' If count < lowWaterMark, rehash ','line_number':165,'multiline':True]
+['text':' 0..1; high water as a fraction of length ','line_number':166,'multiline':True]
+['text':' 0..1; low water as a fraction of length ','line_number':167,'multiline':True]
+['text':' Index into our prime table for length.
+                                 * length == PRIMES[primeIndex] ','line_number':169,'multiline':True]
+['text':' Was this UHashtable allocated? ','line_number':171,'multiline':True]
+['text':'*******************************************************************
+ * API
+ *******************************************************************','line_number':177,'multiline':True]
+['text':'*
+ * Initialize a new UHashtable.
+ * @param keyHash A pointer to the key hashing function.  Must not be
+ * NULL.
+ * @param keyComp A pointer to the function that compares keys.  Must
+ * not be NULL.
+ * @param status A pointer to an UErrorCode to receive any errors.
+ * @return A pointer to a UHashtable, or 0 if an error occurred.
+ * @see uhash_openSize
+ ','line_number':181,'multiline':True]
+['text':'*
+ * Initialize a new UHashtable with a given initial size.
+ * @param keyHash A pointer to the key hashing function.  Must not be
+ * NULL.
+ * @param keyComp A pointer to the function that compares keys.  Must
+ * not be NULL.
+ * @param size The initial capacity of this hash table.
+ * @param status A pointer to an UErrorCode to receive any errors.
+ * @return A pointer to a UHashtable, or 0 if an error occurred.
+ * @see uhash_open
+ ','line_number':197,'multiline':True]
+['text':'*
+ * Initialize an existing UHashtable.
+ * @param keyHash A pointer to the key hashing function.  Must not be
+ * NULL.
+ * @param keyComp A pointer to the function that compares keys.  Must
+ * not be NULL.
+ * @param status A pointer to an UErrorCode to receive any errors.
+ * @return A pointer to a UHashtable, or 0 if an error occurred.
+ * @see uhash_openSize
+ ','line_number':215,'multiline':True]
+['text':'*
+ * Close a UHashtable, releasing the memory used.
+ * @param hash The UHashtable to close. If hash is NULL no operation is performed.
+ ','line_number':232,'multiline':True]
+['text':'*
+ * Set the function used to hash keys.
+ * @param hash The UHashtable to set
+ * @param fn the function to be used hash keys; must not be NULL
+ * @return the previous key hasher; non-NULL
+ ','line_number':241,'multiline':True]
+['text':'*
+ * Set the function used to compare keys.  The default comparison is a
+ * void* pointer comparison.
+ * @param hash The UHashtable to set
+ * @param fn the function to be used compare keys; must not be NULL
+ * @return the previous key comparator; non-NULL
+ ','line_number':250,'multiline':True]
+['text':'*
+ * Set the function used to compare values.  The default comparison is a
+ * void* pointer comparison.
+ * @param hash The UHashtable to set
+ * @param fn the function to be used compare keys; must not be NULL
+ * @return the previous key comparator; non-NULL
+ ','line_number':260,'multiline':True]
+['text':'*
+ * Set the function used to delete keys.  If this function pointer is
+ * NULL, this hashtable does not delete keys.  If it is non-NULL, this
+ * hashtable does delete keys.  This function should be set once
+ * before any elements are added to the hashtable and should not be
+ * changed thereafter.
+ * @param hash The UHashtable to set
+ * @param fn the function to be used delete keys, or NULL
+ * @return the previous key deleter; may be NULL
+ ','line_number':270,'multiline':True]
+['text':'*
+ * Set the function used to delete values.  If this function pointer
+ * is NULL, this hashtable does not delete values.  If it is non-NULL,
+ * this hashtable does delete values.  This function should be set
+ * once before any elements are added to the hashtable and should not
+ * be changed thereafter.
+ * @param hash The UHashtable to set
+ * @param fn the function to be used delete values, or NULL
+ * @return the previous value deleter; may be NULL
+ ','line_number':283,'multiline':True]
+['text':'*
+ * Specify whether or not, and how, the hastable resizes itself.
+ * By default, tables grow but do not shrink (policy U_GROW).
+ * See enum UHashResizePolicy.
+ * @param hash The UHashtable to set
+ * @param policy The way the hashtable resizes itself, {U_GROW, U_GROW_AND_SHRINK, U_FIXED}
+ ','line_number':296,'multiline':True]
+['text':'*
+ * Get the number of key-value pairs stored in a UHashtable.
+ * @param hash The UHashtable to query.
+ * @return The number of key-value pairs stored in hash.
+ ','line_number':306,'multiline':True]
+['text':'*
+ * Put a (key=pointer, value=pointer) item in a UHashtable.  If the
+ * keyDeleter is non-NULL, then the hashtable owns 'key' after this
+ * call.  If the valueDeleter is non-NULL, then the hashtable owns
+ * 'value' after this call.  Storing a NULL value is the same as
+ * calling uhash_remove().
+ * @param hash The target UHashtable.
+ * @param key The key to store.
+ * @param value The value to store, may be NULL (see above).
+ * @param status A pointer to an UErrorCode to receive any errors.
+ * @return The previous value, or NULL if none.
+ * @see uhash_get
+ ','line_number':314,'multiline':True]
+['text':'*
+ * Put a (key=integer, value=pointer) item in a UHashtable.
+ * keyDeleter must be NULL.  If the valueDeleter is non-NULL, then the
+ * hashtable owns 'value' after this call.  Storing a NULL value is
+ * the same as calling uhash_remove().
+ * @param hash The target UHashtable.
+ * @param key The integer key to store.
+ * @param value The value to store, may be NULL (see above).
+ * @param status A pointer to an UErrorCode to receive any errors.
+ * @return The previous value, or NULL if none.
+ * @see uhash_get
+ ','line_number':333,'multiline':True]
+['text':'*
+ * Put a (key=pointer, value=integer) item in a UHashtable.  If the
+ * keyDeleter is non-NULL, then the hashtable owns 'key' after this
+ * call.  valueDeleter must be NULL.  Storing a 0 value is the same as
+ * calling uhash_remove().
+ * @param hash The target UHashtable.
+ * @param key The key to store.
+ * @param value The integer value to store.
+ * @param status A pointer to an UErrorCode to receive any errors.
+ * @return The previous value, or 0 if none.
+ * @see uhash_get
+ ','line_number':351,'multiline':True]
+['text':'*
+ * Put a (key=integer, value=integer) item in a UHashtable.  If the
+ * keyDeleter is non-NULL, then the hashtable owns 'key' after this
+ * call.  valueDeleter must be NULL.  Storing a 0 value is the same as
+ * calling uhash_remove().
+ * @param hash The target UHashtable.
+ * @param key The key to store.
+ * @param value The integer value to store.
+ * @param status A pointer to an UErrorCode to receive any errors.
+ * @return The previous value, or 0 if none.
+ * @see uhash_get
+ ','line_number':369,'multiline':True]
+['text':'*
+ * Retrieve a pointer value from a UHashtable using a pointer key,
+ * as previously stored by uhash_put().
+ * @param hash The target UHashtable.
+ * @param key A pointer key stored in a hashtable
+ * @return The requested item, or NULL if not found.
+ ','line_number':387,'multiline':True]
+['text':'*
+ * Retrieve a pointer value from a UHashtable using a integer key,
+ * as previously stored by uhash_iput().
+ * @param hash The target UHashtable.
+ * @param key An integer key stored in a hashtable
+ * @return The requested item, or NULL if not found.
+ ','line_number':398,'multiline':True]
+['text':'*
+ * Retrieve an integer value from a UHashtable using a pointer key,
+ * as previously stored by uhash_puti().
+ * @param hash The target UHashtable.
+ * @param key A pointer key stored in a hashtable
+ * @return The requested item, or 0 if not found.
+ ','line_number':409,'multiline':True]
+['text':'*
+ * Retrieve an integer value from a UHashtable using an integer key,
+ * as previously stored by uhash_iputi().
+ * @param hash The target UHashtable.
+ * @param key An integer key stored in a hashtable
+ * @return The requested item, or 0 if not found.
+ ','line_number':419,'multiline':True]
+['text':'*
+ * Remove an item from a UHashtable stored by uhash_put().
+ * @param hash The target UHashtable.
+ * @param key A key stored in a hashtable
+ * @return The item removed, or NULL if not found.
+ ','line_number':430,'multiline':True]
+['text':'*
+ * Remove an item from a UHashtable stored by uhash_iput().
+ * @param hash The target UHashtable.
+ * @param key An integer key stored in a hashtable
+ * @return The item removed, or NULL if not found.
+ ','line_number':440,'multiline':True]
+['text':'*
+ * Remove an item from a UHashtable stored by uhash_puti().
+ * @param hash The target UHashtable.
+ * @param key An key stored in a hashtable
+ * @return The item removed, or 0 if not found.
+ ','line_number':450,'multiline':True]
+['text':'*
+ * Remove an item from a UHashtable stored by uhash_iputi().
+ * @param hash The target UHashtable.
+ * @param key An integer key stored in a hashtable
+ * @return The item removed, or 0 if not found.
+ ','line_number':460,'multiline':True]
+['text':'*
+ * Remove all items from a UHashtable.
+ * @param hash The target UHashtable.
+ ','line_number':470,'multiline':True]
+['text':'*
+ * Locate an element of a UHashtable.  The caller must not modify the
+ * returned object.  The primary use of this function is to obtain the
+ * stored key when it may not be identical to the search key.  For
+ * example, if the compare function is a case-insensitive string
+ * compare, then the hash key may be desired in order to obtain the
+ * canonical case corresponding to a search key.
+ * @param hash The target UHashtable.
+ * @param key A key stored in a hashtable
+ * @return a hash element, or NULL if the key is not found.
+ ','line_number':477,'multiline':True]
+['text':'*
+ * \def UHASH_FIRST
+ * Constant for use with uhash_nextElement
+ * @see uhash_nextElement
+ ','line_number':491,'multiline':True]
+['text':'*
+ * Iterate through the elements of a UHashtable.  The caller must not
+ * modify the returned object.  However, uhash_removeElement() may be
+ * called during iteration to remove an element from the table.
+ * Iteration may safely be resumed afterwards.  If uhash_put() is
+ * called during iteration the iteration will then be out of sync and
+ * should be restarted.
+ * @param hash The target UHashtable.
+ * @param pos This should be set to UHASH_FIRST initially, and left untouched
+ * thereafter.
+ * @return a hash element, or NULL if no further key-value pairs
+ * exist in the table.
+ ','line_number':498,'multiline':True]
+['text':'*
+ * Remove an element, returned by uhash_nextElement(), from the table.
+ * Iteration may be safely continued afterwards.
+ * @param hash The hashtable
+ * @param e The element, returned by uhash_nextElement(), to remove.
+ * Must not be NULL.  Must not be an empty or deleted element (as long
+ * as this was returned by uhash_nextElement() it will not be empty or
+ * deleted).  Note: Although this parameter is const, it will be
+ * modified.
+ * @return the value that was removed.
+ ','line_number':515,'multiline':True]
+['text':'*******************************************************************
+ * UHashTok convenience
+ *******************************************************************','line_number':529,'multiline':True]
+['text':'*
+ * Return a UHashTok for an integer.
+ * @param i The given integer
+ * @return a UHashTok for an integer.
+ ','line_number':533,'multiline':True]
+['text':'U_CAPI UHashTok U_EXPORT2 
+uhash_toki(int32_t i);','line_number':538,'multiline':True]
+['text':'*
+ * Return a UHashTok for a pointer.
+ * @param p The given pointer
+ * @return a UHashTok for a pointer.
+ ','line_number':541,'multiline':True]
+['text':'U_CAPI UHashTok U_EXPORT2 
+uhash_tokp(void* p);','line_number':546,'multiline':True]
+['text':'*******************************************************************
+ * UChar* and char* Support Functions
+ *******************************************************************','line_number':549,'multiline':True]
+['text':'*
+ * Generate a hash code for a null-terminated UChar* string.  If the
+ * string is not null-terminated do not use this function.  Use
+ * together with uhash_compareUChars.
+ * @param key The string (const UChar*) to hash.
+ * @return A hash code for the key.
+ ','line_number':553,'multiline':True]
+['text':'*
+ * Generate a hash code for a null-terminated char* string.  If the
+ * string is not null-terminated do not use this function.  Use
+ * together with uhash_compareChars.
+ * @param key The string (const char*) to hash.
+ * @return A hash code for the key.
+ ','line_number':563,'multiline':True]
+['text':'*
+ * Generate a case-insensitive hash code for a null-terminated char*
+ * string.  If the string is not null-terminated do not use this
+ * function.  Use together with uhash_compareIChars.
+ * @param key The string (const char*) to hash.
+ * @return A hash code for the key.
+ ','line_number':573,'multiline':True]
+['text':'*
+ * Comparator for null-terminated UChar* strings.  Use together with
+ * uhash_hashUChars.
+ * @param key1 The string for comparison
+ * @param key2 The string for comparison
+ * @return true if key1 and key2 are equal, return false otherwise.
+ ','line_number':583,'multiline':True]
+['text':'*
+ * Comparator for null-terminated char* strings.  Use together with
+ * uhash_hashChars.
+ * @param key1 The string for comparison
+ * @param key2 The string for comparison
+ * @return true if key1 and key2 are equal, return false otherwise.
+ ','line_number':593,'multiline':True]
+['text':'*
+ * Case-insensitive comparator for null-terminated char* strings.  Use
+ * together with uhash_hashIChars.
+ * @param key1 The string for comparison
+ * @param key2 The string for comparison
+ * @return true if key1 and key2 are equal, return false otherwise.
+ ','line_number':603,'multiline':True]
+['text':'*******************************************************************
+ * UnicodeString Support Functions
+ *******************************************************************','line_number':613,'multiline':True]
+['text':'*
+ * Hash function for UnicodeString* keys.
+ * @param key The string (const char*) to hash.
+ * @return A hash code for the key.
+ ','line_number':617,'multiline':True]
+['text':'*
+ * Hash function for UnicodeString* keys (case insensitive).
+ * Make sure to use together with uhash_compareCaselessUnicodeString.
+ * @param key The string (const char*) to hash.
+ * @return A hash code for the key.
+ ','line_number':625,'multiline':True]
+['text':'*******************************************************************
+ * int32_t Support Functions
+ *******************************************************************','line_number':634,'multiline':True]
+['text':'*
+ * Hash function for 32-bit integer keys.
+ * @param key The string (const char*) to hash.
+ * @return A hash code for the key.
+ ','line_number':638,'multiline':True]
+['text':'*
+ * Comparator function for 32-bit integer keys.
+ * @param key1 The integer for comparison
+ * @param Key2 The integer for comparison
+ * @return true if key1 and key2 are equal, return false otherwise
+ ','line_number':646,'multiline':True]
+['text':'*******************************************************************
+ * Other Support Functions
+ *******************************************************************','line_number':655,'multiline':True]
+['text':'*
+ * Deleter for Hashtable objects.
+ * @param obj The object to be deleted
+ ','line_number':659,'multiline':True]
+['text':' Use uprv_free() itself as a deleter for any key or value allocated using uprv_malloc. ','line_number':666,'multiline':True]
+['text':'*
+ * Checks if the given hash tables are equal or not.
+ * @param hash1
+ * @param hash2
+ * @return true if the hashtables are equal and false if not.
+ ','line_number':668,'multiline':True]
+['text':'*
+ * \class LocalUResourceBundlePointer
+ * "Smart pointer" class, closes a UResourceBundle via ures_close().
+ * For most methods see the LocalPointerBase base class.
+ *
+ * @see LocalPointerBase
+ * @see LocalPointer
+ * @stable ICU 4.4
+ ','line_number':682,'multiline':True]

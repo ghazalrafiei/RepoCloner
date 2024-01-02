@@ -1,0 +1,249 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' MOZ_ASSERT','line_number':10,'multiline':False]
+['text':' JS::BuildIdOp','line_number':35,'multiline':False]
+['text':' JS::CTypesActivityCallback','line_number':37,'multiline':False]
+['text':' js::SourceHook','line_number':38,'multiline':False]
+['text':' js::ReportOverRecursed','line_number':39,'multiline':False]
+['text':' JSAccumulateTelemetryDataCallback','line_number':40,'multiline':False]
+['text':' JS::Module{DynamicImport,Metadata,Resolve}Hook','line_number':44,'multiline':False]
+['text':' For AutoEnterPolicy','line_number':46,'multiline':False]
+['text':' JS::AbortSignalIsAborted','line_number':48,'multiline':False]
+['text':' JS::WarningReporter','line_number':53,'multiline':False]
+['text':' js::OffThreadPromiseRuntimeState','line_number':62,'multiline':False]
+['text':' js::SharedImmutableScriptDataTable','line_number':65,'multiline':False]
+['text':' namespace js','line_number':80,'multiline':False]
+['text':' Different signature because the return type has [[nodiscard]]_TYPE. ','line_number':95,'multiline':True]
+['text':' namespace jit','line_number':115,'multiline':False]
+['text':' namespace frontend','line_number':119,'multiline':False]
+['text':' [SMDOC] JS Engine Threading','line_number':121,'multiline':False]
+['text':'','line_number':122,'multiline':False]
+['text':' Threads interacting with a runtime are divided into two categories:','line_number':123,'multiline':False]
+['text':'','line_number':124,'multiline':False]
+['text':' - The main thread is capable of running JS. There's at most one main thread','line_number':125,'multiline':False]
+['text':'   per runtime.','line_number':126,'multiline':False]
+['text':'','line_number':127,'multiline':False]
+['text':' - Helper threads do not run JS, and are controlled or triggered by activity','line_number':128,'multiline':False]
+['text':'   on the main thread (or main threads, since all runtimes in a process share','line_number':129,'multiline':False]
+['text':'   helper threads). Helper threads may have exclusive access to zones created','line_number':130,'multiline':False]
+['text':'   for them, for parsing and similar tasks, but their activities do not cause','line_number':131,'multiline':False]
+['text':'   observable changes in script behaviors. Activity on helper threads may be','line_number':132,'multiline':False]
+['text':'   referred to as happening 'off thread' or on a background thread in some','line_number':133,'multiline':False]
+['text':'   parts of the VM.','line_number':134,'multiline':False]
+['text':' namespace js ','line_number':136,'multiline':True]
+['text':' namespace JS','line_number':140,'multiline':False]
+['text':'
+ * Storage for well-known symbols. It's a separate struct from the Runtime so
+ * that it can be shared across multiple runtimes. As in JSAtomState, each
+ * field is a smart pointer that's immutable once initialized.
+ * `rt->wellKnownSymbols->iterator` is convertible to Handle<Symbol*>.
+ *
+ * Well-known symbols are never GC'd. The description() of each well-known
+ * symbol is a permanent atom.
+ ','line_number':144,'multiline':True]
+['text':' There are several coarse locks in the enum below. These may be either','line_number':174,'multiline':False]
+['text':' per-runtime or per-process. When acquiring more than one of these locks,','line_number':175,'multiline':False]
+['text':' the acquisition must be done in the order below to avoid deadlocks.','line_number':176,'multiline':False]
+['text':' Self-hosted lazy functions do not maintain a BaseScript as we can clone from','line_number':190,'multiline':False]
+['text':' the copy in the self-hosting zone. To allow these functions to be called by','line_number':191,'multiline':False]
+['text':' the JITs, we need a minimal script object. There is one instance per runtime.','line_number':192,'multiline':False]
+['text':' Pointer to interpreter trampoline. This field is stored at same location as','line_number':196,'multiline':False]
+['text':' in BaseScript::jitCodeRaw_.','line_number':197,'multiline':False]
+['text':' Warm-up count of zero. This field is stored at the same offset as','line_number':200,'multiline':False]
+['text':' BaseScript::warmUpData_.','line_number':201,'multiline':False]
+['text':' namespace js','line_number':212,'multiline':False]
+['text':' Space for interpreter frames. ','line_number':223,'multiline':True]
+['text':'
+   * If non-null, another runtime guaranteed to outlive this one and whose
+   * permanent data may be used by this one where possible.
+   ','line_number':229,'multiline':True]
+['text':' The number of child runtimes that have this runtime as their parent. ','line_number':238,'multiline':True]
+['text':' The JSContext* for the runtime's main thread. Immutable after this is set','line_number':266,'multiline':False]
+['text':' in JSRuntime::init.','line_number':267,'multiline':False]
+['text':'
+   * The start of the range stored in the profiler sample buffer, as measured
+   * after the most recent sample.
+   * All JitcodeGlobalTable entries referenced from a given sample are
+   * assigned the buffer position of the START of the sample. The buffer
+   * entries that reference the JitcodeGlobalTable entries will only ever be
+   * read from the buffer while the entire sample is still inside the buffer;
+   * if some buffer entries at the start of the sample have left the buffer,
+   * the entire sample will be considered inaccessible.
+   * This means that, once profilerSampleBufferRangeStart_ advances beyond
+   * the sample position that's stored on a JitcodeGlobalTable entry, the
+   * buffer entries that reference this JitcodeGlobalTable entry will be
+   * considered inaccessible, and those JitcodeGlobalTable entry can be
+   * disposed of.
+   ','line_number':277,'multiline':True]
+['text':' Call this to accumulate telemetry data. May be called from any thread; the
+   * embedder is responsible for locking. ','line_number':306,'multiline':True]
+['text':' Call this to accumulate use counter data. ','line_number':310,'multiline':True]
+['text':' Accumulates data for Firefox telemetry. |id| is the ID of a JS_TELEMETRY_*','line_number':316,'multiline':False]
+['text':' histogram. |key| provides an additional key to identify the histogram.','line_number':317,'multiline':False]
+['text':' |sample| is the data to add to the histogram.','line_number':318,'multiline':False]
+['text':' Sets the use counter for a specific feature, measuring the presence or','line_number':329,'multiline':False]
+['text':' absence of usage of a feature on a specific web page and document which','line_number':330,'multiline':False]
+['text':' the passed JSObject belongs to.','line_number':331,'multiline':False]
+['text':' Had an out-of-memory error which did not populate an exception. ','line_number':348,'multiline':True]
+['text':'
+   * Allow relazifying functions in compartments that are active. This is
+   * only used by the relazifyFunctions() testing function.
+   ','line_number':351,'multiline':True]
+['text':' Zone destroy callback. ','line_number':357,'multiline':True]
+['text':' Compartment destroy callback. ','line_number':360,'multiline':True]
+['text':' Compartment memory reporting callback. ','line_number':363,'multiline':True]
+['text':' Callback for creating ubi::Nodes representing DOM node objects. Set by
+   * JS::ubi::SetConstructUbiNodeForDOMObjectCallback. Refer to
+   * js/public/UbiNode.h.
+   ','line_number':367,'multiline':True]
+['text':' Realm destroy callback. ','line_number':373,'multiline':True]
+['text':' Call this to get the name of a realm. ','line_number':376,'multiline':True]
+['text':' Optional warning reporter. ','line_number':386,'multiline':True]
+['text':' Lazy self-hosted functions use a shared SelfHostedLazyScript instance','line_number':389,'multiline':False]
+['text':' instead instead of a BaseScript. This contains the minimal pointers to','line_number':390,'multiline':False]
+['text':' trampolines for the scripts to support direct jitCodeRaw calls.','line_number':391,'multiline':False]
+['text':' Gecko profiling metadata ','line_number':395,'multiline':True]
+['text':' Heap GC roots for PersistentRooted pointers.','line_number':401,'multiline':False]
+['text':' List of non-ephemeron weak containers to sweep during','line_number':459,'multiline':False]
+['text':' beginSweepingSweepGroup.','line_number':460,'multiline':False]
+['text':'
+   * List of all enabled Debuggers that have onNewGlobalObject handler
+   * methods established.
+   ','line_number':493,'multiline':True]
+['text':'
+   * List of all enabled Debuggers that have onGarbageCollection handler
+   * methods established.
+   ','line_number':499,'multiline':True]
+['text':' Linked list of all Debugger objects in the runtime. ','line_number':516,'multiline':True]
+['text':'
+   * Lock used to protect the script data table, which can be used by
+   * off-thread parsing.
+   *
+   * Locking this only occurs if there is actually a thread other than the
+   * main thread which could access this.
+   ','line_number':525,'multiline':True]
+['text':' Number of off-thread ParseTasks that are using this runtime. This is only','line_number':537,'multiline':False]
+['text':' updated on main-thread. If this is non-zero we must use `scriptDataLock` to','line_number':538,'multiline':False]
+['text':' protect access to the bytecode table;','line_number':539,'multiline':False]
+['text':' Number of zones which may be operated on by helper threads.','line_number':542,'multiline':False]
+['text':' How many realms there are across all zones. This number includes','line_number':577,'multiline':False]
+['text':' off-thread context realms, so it isn't necessarily equal to the','line_number':578,'multiline':False]
+['text':' number of realms visited by RealmsIter.','line_number':579,'multiline':False]
+['text':' The Gecko Profiler may want to sample the allocations happening across the','line_number':582,'multiline':False]
+['text':' browser. This callback can be registered to record the allocation.','line_number':583,'multiline':False]
+['text':' Number of debuggee realms in the runtime.','line_number':588,'multiline':False]
+['text':' Number of debuggee realms in the runtime observing code coverage.','line_number':591,'multiline':False]
+['text':' Locale-specific callbacks for string conversion. ','line_number':608,'multiline':True]
+['text':' Default locale for Internationalization API ','line_number':611,'multiline':True]
+['text':' If true, new scripts must be created with PC counter information. ','line_number':614,'multiline':True]
+['text':' Strong references on scripts held for PCCount profiling API. ','line_number':617,'multiline':True]
+['text':' Code coverage output. ','line_number':622,'multiline':True]
+['text':'
+   * Self-hosting state cloned on demand into other compartments. Shared with
+   * the parent runtime if there is one.
+   ','line_number':631,'multiline':True]
+['text':' Used to generate random keys for hash tables.','line_number':648,'multiline':False]
+['text':' Used to generate random hash codes for symbols.','line_number':652,'multiline':False]
+['text':'-------------------------------------------------------------------------','line_number':662,'multiline':False]
+['text':' Self-hosting support','line_number':663,'multiline':False]
+['text':'-------------------------------------------------------------------------','line_number':664,'multiline':False]
+['text':'-------------------------------------------------------------------------','line_number':694,'multiline':False]
+['text':' Locale information','line_number':695,'multiline':False]
+['text':'-------------------------------------------------------------------------','line_number':696,'multiline':False]
+['text':'
+   * Set the default locale for the ECMAScript Internationalization API
+   * (Intl.Collator, Intl.NumberFormat, Intl.DateTimeFormat).
+   * Note that the Internationalization API encourages clients to
+   * specify their own locales.
+   * The locale string remains owned by the caller.
+   ','line_number':698,'multiline':True]
+['text':' Reset the default locale to OS defaults. ','line_number':707,'multiline':True]
+['text':' Gets current default locale. String remains owned by context. ','line_number':710,'multiline':True]
+['text':' Garbage collector state. ','line_number':713,'multiline':True]
+['text':' Garbage collector state has been successfully initialized. ','line_number':716,'multiline':True]
+['text':' Number localization, used by jsnum.cpp. ','line_number':737,'multiline':True]
+['text':' If this particular JSRuntime has a SharedImmutableStringsCache, return a','line_number':747,'multiline':False]
+['text':' pointer to it, otherwise return nullptr.','line_number':748,'multiline':False]
+['text':' Get a reference to this JSRuntime's or its parent's','line_number':754,'multiline':False]
+['text':' SharedImmutableStringsCache.','line_number':755,'multiline':False]
+['text':' Table of all atoms other than those in permanentAtoms and staticStrings.','line_number':778,'multiline':False]
+['text':' Set of all live symbols produced by Symbol.for(). All such symbols are','line_number':781,'multiline':False]
+['text':' allocated in the atoms zone. Reading or writing the symbol registry','line_number':782,'multiline':False]
+['text':' can only be done from the main thread.','line_number':783,'multiline':False]
+['text':' Permanent atoms are fixed during initialization of the runtime and are','line_number':824,'multiline':False]
+['text':' not modified or collected until the runtime is destroyed. These may be','line_number':825,'multiline':False]
+['text':' shared with another, longer living runtime through |parentRuntime| and','line_number':826,'multiline':False]
+['text':' can be freely accessed with no locking necessary.','line_number':827,'multiline':False]
+['text':' Permanent atoms pre-allocated for general use.','line_number':829,'multiline':False]
+['text':' Cached pointers to various permanent property names.','line_number':832,'multiline':False]
+['text':' All permanent atoms in the runtime, other than those in staticStrings.','line_number':836,'multiline':False]
+['text':' Access to this does not require a lock because it is frozen and thus','line_number':837,'multiline':False]
+['text':' read-only.','line_number':838,'multiline':False]
+['text':' The permanent atoms table is populated during initialization.','line_number':844,'multiline':False]
+['text':' For internal use, return the permanent atoms table while it is being','line_number':847,'multiline':False]
+['text':' populated.','line_number':848,'multiline':False]
+['text':' Cached well-known symbols (ES6 rev 24 6.1.5.1). Like permanent atoms,','line_number':857,'multiline':False]
+['text':' these are shared with the parentRuntime, if any.','line_number':858,'multiline':False]
+['text':' Shared Intl data for this runtime. ','line_number':862,'multiline':True]
+['text':' Table of bytecode and other data that may be shared across scripts','line_number':868,'multiline':False]
+['text':' within the runtime. This may be modified by threads using','line_number':869,'multiline':False]
+['text':' AutoLockScriptData.','line_number':870,'multiline':False]
+['text':' destroyRuntime is used instead of a destructor, to ensure the downcast','line_number':889,'multiline':False]
+['text':' to JSContext remains valid. The final GC triggered here depends on this.','line_number':890,'multiline':False]
+['text':' Number of live SharedArrayBuffer objects, including those in Wasm shared','line_number':898,'multiline':False]
+['text':' memories.  uint64_t to avoid any risk of overflow.','line_number':899,'multiline':False]
+['text':'
+   * This should be called after system malloc/calloc/realloc returns nullptr
+   * to try to recove some memory or to report an error.  For realloc, the
+   * original pointer must be passed as reallocPtr.
+   *
+   * The function must be called outside the GC lock.
+   ','line_number':922,'multiline':True]
+['text':'  onOutOfMemory but can call OnLargeAllocationFailure. ','line_number':934,'multiline':True]
+['text':' Settings for how helper threads can be used.','line_number':945,'multiline':False]
+['text':' Note: these values may be toggled dynamically (in response to about:config','line_number':959,'multiline':False]
+['text':' prefs changing).','line_number':960,'multiline':False]
+['text':' See comment for JS::SetOutOfMemoryCallback in jsapi.h. ','line_number':1001,'multiline':True]
+['text':'
+   * Debugger.Memory functions like takeCensus use this embedding-provided
+   * function to assess the size of malloc'd blocks of memory.
+   ','line_number':1005,'multiline':True]
+['text':' Last time at which an animation was played for this runtime. ','line_number':1011,'multiline':True]
+['text':' The stack format for the current runtime.  Only valid on non-child
+   * runtimes. ','line_number':1015,'multiline':True]
+['text':' List of all the live wasm::Instances in the runtime. Equal to the union','line_number':1041,'multiline':False]
+['text':' of all instances registered in all JS::Realms. Accessed from watchdog','line_number':1042,'multiline':False]
+['text':' threads for purposes of wasm::InterruptRunningCode().','line_number':1043,'multiline':False]
+['text':' The implementation-defined abstract operation HostResolveImportedModule.','line_number':1046,'multiline':False]
+['text':' A hook that implements the abstract operations','line_number':1049,'multiline':False]
+['text':' HostGetImportMetaProperties and HostFinalizeImportMeta.','line_number':1050,'multiline':False]
+['text':' A hook that implements the abstract operation','line_number':1053,'multiline':False]
+['text':' HostImportModuleDynamically. This is also used to enable/disable dynamic','line_number':1054,'multiline':False]
+['text':' module import and can accessed by off-thread parsing.','line_number':1055,'multiline':False]
+['text':' Hooks called when script private references are created and destroyed.','line_number':1058,'multiline':False]
+['text':' Support for informing the embedding of any error thrown.','line_number':1076,'multiline':False]
+['text':' This mechanism is designed to let the embedding','line_number':1077,'multiline':False]
+['text':' log/report/fail in case certain errors are thrown','line_number':1078,'multiline':False]
+['text':' (e.g. SyntaxError, ReferenceError or TypeError','line_number':1079,'multiline':False]
+['text':' in critical code).','line_number':1080,'multiline':False]
+['text':' true if the error interceptor is currently executing,','line_number':1084,'multiline':False]
+['text':' false otherwise. Used to avoid infinite loops.','line_number':1085,'multiline':False]
+['text':' if non-null, any call to `setPendingException`','line_number':1088,'multiline':False]
+['text':' in this runtime will trigger the call to `interceptor`','line_number':1089,'multiline':False]
+['text':' defined(NIGHTLY_BUILD)','line_number':1093,'multiline':False]
+['text':' Context for sending telemetry to the embedder from any thread, main or','line_number':1096,'multiline':False]
+['text':' helper.  Obtain a |JSTelemetrySender| by calling |getTelemetrySender()| on','line_number':1097,'multiline':False]
+['text':' the |JSRuntime|.','line_number':1098,'multiline':False]
+['text':' Accumulates data for Firefox telemetry. |id| is the ID of a JS_TELEMETRY_*','line_number':1114,'multiline':False]
+['text':' histogram. |key| provides an additional key to identify the histogram.','line_number':1115,'multiline':False]
+['text':' |sample| is the data to add to the histogram.','line_number':1116,'multiline':False]
+['text':' Don't PodZero here because JS::Value is non-trivial.','line_number':1127,'multiline':False]
+['text':' This callback is set by JS::SetProcessLargeAllocationFailureCallback','line_number':1175,'multiline':False]
+['text':' and may be null. See comment in jsapi.h.','line_number':1176,'multiline':False]
+['text':' This callback is set by JS::SetBuildIdOp and may be null. See comment in','line_number':1180,'multiline':False]
+['text':' jsapi.h.','line_number':1181,'multiline':False]
+['text':' namespace js ','line_number':1186,'multiline':True]
+['text':' vm_Runtime_h ','line_number':1188,'multiline':True]

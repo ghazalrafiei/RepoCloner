@@ -1,0 +1,207 @@
+['text':'---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------','line_number':1,'multiline':True]
+['text':';','line_number':12,'multiline':False]
+['text':';','line_number':13,'multiline':False]
+['text':' scheme, must be set','line_number':17,'multiline':False]
+['text':' scheme, https://tools.ietf.org/html/rfc3986#section-3.1','line_number':22,'multiline':False]
+['text':' ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )','line_number':23,'multiline':False]
+['text':' path, http://tools.ietf.org/html/rfc3986#section-3.3','line_number':28,'multiline':False]
+['text':' If a URI contains an authority component, then the path component','line_number':29,'multiline':False]
+['text':' must either be empty or begin with a slash ("/") character.  If a URI','line_number':30,'multiline':False]
+['text':' does not contain an authority component, then the path cannot begin','line_number':31,'multiline':False]
+['text':' with two slash characters ("//").','line_number':32,'multiline':False]
+['text':' for a while we allowed uris *without* schemes and this is the migration','line_number':46,'multiline':False]
+['text':' for them, e.g. an uri without scheme and without strict-mode warns and falls','line_number':47,'multiline':False]
+['text':' back to the file-scheme. that should cause the least carnage and still be a','line_number':48,'multiline':False]
+['text':' clear warning','line_number':49,'multiline':False]
+['text':' implements a bit of https://tools.ietf.org/html/rfc3986#section-5','line_number':57,'multiline':False]
+['text':' the slash-character is our 'default base' as we don't','line_number':60,'multiline':False]
+['text':' support constructing URIs relative to other URIs. This','line_number':61,'multiline':False]
+['text':' also means that we alter and potentially break paths.','line_number':62,'multiline':False]
+['text':' see https://tools.ietf.org/html/rfc3986#section-5.1.4','line_number':63,'multiline':False]
+['text':'*
+ * Uniform Resource Identifier (URI) http://tools.ietf.org/html/rfc3986.
+ * This class is a simple parser which creates the basic component parts
+ * (http://tools.ietf.org/html/rfc3986#section-3) with minimal validation
+ * and encoding.
+ *
+ * ```txt
+ *       foo://example.com:8042/over/there?name=ferret#nose
+ *       \_/   \______________/\_________/ \_________/ \__/
+ *        |           |            |            |        |
+ *     scheme     authority       path        query   fragment
+ *        |   _____________________|__
+ *       / \ /                        \
+ *       urn:example:animal:ferret:nose
+ * ```
+ ','line_number':82,'multiline':True]
+['text':'*
+	 * scheme is the 'http' part of 'http://www.example.com/some/path?query#fragment'.
+	 * The part before the first colon.
+	 ','line_number':117,'multiline':True]
+['text':'*
+	 * authority is the 'www.example.com' part of 'http://www.example.com/some/path?query#fragment'.
+	 * The part between the first double slashes and the next slash.
+	 ','line_number':123,'multiline':True]
+['text':'*
+	 * path is the '/some/path' part of 'http://www.example.com/some/path?query#fragment'.
+	 ','line_number':129,'multiline':True]
+['text':'*
+	 * query is the 'query' part of 'http://www.example.com/some/path?query#fragment'.
+	 ','line_number':134,'multiline':True]
+['text':'*
+	 * fragment is the 'fragment' part of 'http://www.example.com/some/path?query#fragment'.
+	 ','line_number':139,'multiline':True]
+['text':'*
+	 * @internal
+	 ','line_number':144,'multiline':True]
+['text':'*
+	 * @internal
+	 ','line_number':149,'multiline':True]
+['text':'*
+	 * @internal
+	 ','line_number':154,'multiline':True]
+['text':' no validation because it's this URI','line_number':165,'multiline':False]
+['text':' that creates uri components.','line_number':166,'multiline':False]
+['text':' _validateUri(this);','line_number':167,'multiline':False]
+['text':' ---- filesystem path -----------------------','line_number':179,'multiline':False]
+['text':'*
+	 * Returns a string representing the corresponding file system path of this URI.
+	 * Will handle UNC paths, normalizes windows drive letters to lower-case, and uses the
+	 * platform specific path separator.
+	 *
+	 * * Will *not* validate the path for invalid characters and semantics.
+	 * * Will *not* look at the scheme of this URI.
+	 * * The result shall *not* be used for display purposes but for accessing a file on disk.
+	 *
+	 *
+	 * The *difference* to `URI#path` is the use of the platform specific separator and the handling
+	 * of UNC paths. See the below sample of a file-uri with an authority (UNC path).
+	 *
+	 * ```ts
+		const u = URI.parse('file://server/c$/folder/file.txt')
+		u.authority === 'server'
+		u.path === '/shares/c$/file.txt'
+		u.fsPath === '\\server\c$\folder\file.txt'
+	```
+	 *
+	 * Using `URI#path` to read a file (using fs-apis) would not be enough because parts of the path,
+	 * namely the server name, would be missing. Therefore `URI#fsPath` exists - it's sugar to ease working
+	 * with URIs that represent files on disk (`file` scheme).
+	 ','line_number':181,'multiline':True]
+['text':' if (this.scheme !== 'file') {','line_number':206,'multiline':False]
+['text':' 	console.warn(`[UriError] calling fsPath with scheme ${this.scheme}`);','line_number':207,'multiline':False]
+['text':' }','line_number':208,'multiline':False]
+['text':' ---- modify to new -------------------------','line_number':212,'multiline':False]
+['text':' ---- parse & validate ------------------------','line_number':259,'multiline':False]
+['text':'*
+	 * Creates a new URI from a string, e.g. `http://www.example.com/some/path`,
+	 * `file:///usr/home`, or `scheme:with/path`.
+	 *
+	 * @param value A string which represents an URI (see `URI#toString`).
+	 ','line_number':261,'multiline':True]
+['text':'*
+	 * Creates a new URI from a file system path, e.g. `c:\my\files`,
+	 * `/usr/home`, or `\\server\share\some\path`.
+	 *
+	 * The *difference* between `URI#parse` and `URI#file` is that the latter treats the argument
+	 * as path, not as stringified-uri. E.g. `URI.file(path)` is **not the same as**
+	 * `URI.parse('file://' + path)` because the path might contain characters that are
+	 * interpreted (# and ?). See the following sample:
+	 * ```ts
+	const good = URI.file('/coding/c#/project1');
+	good.scheme === 'file';
+	good.path === '/coding/c#/project1';
+	good.fragment === '';
+	const bad = URI.parse('file://' + '/coding/c#/project1');
+	bad.scheme === 'file';
+	bad.path === '/coding/c'; // path is now broken
+	bad.fragment === '/project1';
+	```
+	 *
+	 * @param path A file system path (see `URI#fsPath`)
+	 ','line_number':282,'multiline':True]
+['text':' normalize to fwd-slashes on windows,','line_number':307,'multiline':False]
+['text':' on other systems bwd-slashes are valid','line_number':308,'multiline':False]
+['text':' filename character, eg /f\oo/ba\r.txt','line_number':309,'multiline':False]
+['text':' check for authority as used in UNC shares','line_number':314,'multiline':False]
+['text':' or use the path as given','line_number':315,'multiline':False]
+['text':'*
+	 * Creates new URI from uri components.
+	 *
+	 * Unless `strict` is `true` the scheme is defaults to be `file`. This function performs
+	 * validation and should be used for untrusted uri components retrieved from storage,
+	 * user input, command arguments etc
+	 ','line_number':330,'multiline':True]
+['text':'*
+	 * Join a URI path with path fragments and normalizes the resulting path.
+	 *
+	 * @param uri The input URI.
+	 * @param pathFragment The path fragment to add to the URI path.
+	 * @returns The resulting URI.
+	 ','line_number':349,'multiline':True]
+['text':' ---- printing/externalize ---------------------------','line_number':369,'multiline':False]
+['text':'*
+	 * Creates a string representation for this URI. It's guaranteed that calling
+	 * `URI.parse` with the result of this function creates an URI which is equal
+	 * to this URI.
+	 *
+	 * * The result shall *not* be used for display purposes but for externalization or transport.
+	 * * The result will be encoded using the percentage encoding and encoding happens mostly
+	 * ignore the scheme-specific encoding rules.
+	 *
+	 * @param skipEncoding Do not encode the result, default is `false`
+	 ','line_number':371,'multiline':True]
+['text':'*
+	 * A helper function to revive URIs.
+	 *
+	 * **Note** that this function should only be used when receiving URI#toJSON generated data
+	 * and that it doesn't do any validation. Use {@link URI.from} when received "untrusted"
+	 * uri components such as command arguments or data from storage.
+	 *
+	 * @param data The URI components or URI to revive.
+	 * @returns The revived URI or undefined or null.
+	 ','line_number':390,'multiline':True]
+['text':' This class exists so that URI is compatible with vscode.Uri (API).','line_number':446,'multiline':False]
+['text':' we don't cache that','line_number':466,'multiline':False]
+['text':' cached state','line_number':475,'multiline':False]
+['text':'--- uri components','line_number':483,'multiline':False]
+['text':' TODO','line_number':487,'multiline':False]
+['text':' this isn't correct and can violate the UriComponents contract but','line_number':488,'multiline':False]
+['text':' this is part of the vscode.Uri API and we shouldn't change how that','line_number':489,'multiline':False]
+['text':' works anymore','line_number':490,'multiline':False]
+['text':' reserved characters: https://tools.ietf.org/html/rfc3986#section-2.2','line_number':507,'multiline':False]
+['text':' gen-delims','line_number':509,'multiline':False]
+['text':' sub-delims','line_number':517,'multiline':False]
+['text':' unreserved characters: https://tools.ietf.org/html/rfc3986#section-2.3','line_number':539,'multiline':False]
+['text':' check if we are delaying native encode','line_number':553,'multiline':False]
+['text':' check if we write into a new string (by default we try to return the param)','line_number':558,'multiline':False]
+['text':' encoding needed, we need to allocate a new string','line_number':564,'multiline':False]
+['text':' check with default table first','line_number':569,'multiline':False]
+['text':' check if we are delaying native encode','line_number':573,'multiline':False]
+['text':' append escaped variant to result','line_number':579,'multiline':False]
+['text':' use native encode only when needed','line_number':583,'multiline':False]
+['text':'*
+ * Compute `fsPath` for the given uri
+ ','line_number':614,'multiline':True]
+['text':' unc path: file://shares/c$/far/boo','line_number':621,'multiline':False]
+['text':'${uri.authority}${uri.path}`;','line_number':622,'multiline':False]
+['text':' windows drive letter: file:///c:/far/boo','line_number':629,'multiline':False]
+['text':' other path','line_number':635,'multiline':False]
+['text':'g, '\\');','line_number':639,'multiline':False]
+['text':'*
+ * Create the external version of a uri
+ ','line_number':644,'multiline':True]
+['text':' <user>@<auth>','line_number':666,'multiline':False]
+['text':' <user>:<pass>@<auth>','line_number':673,'multiline':False]
+['text':' <auth>:<port>','line_number':685,'multiline':False]
+['text':' lower-case windows drive letters in /C:/fff or C:/fff','line_number':691,'multiline':False]
+['text':' "/c:".length === 3','line_number':695,'multiline':False]
+['text':' "/c:".length === 3','line_number':700,'multiline':False]
+['text':' encode the rest of the path','line_number':703,'multiline':False]
+['text':' --- decode','line_number':717,'multiline':False]
+['text':'*
+ * Mapped-type that replaces all occurrences of URI with UriComponents
+ ','line_number':740,'multiline':True]

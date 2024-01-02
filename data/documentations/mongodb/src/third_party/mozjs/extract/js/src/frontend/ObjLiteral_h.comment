@@ -1,0 +1,146 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sw=2 et tw=0 ft=c:
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' mozilla::BitBloomFilter','line_number':11,'multiline':False]
+['text':' ParserAtomsTable, TaggedParserAtomIndex','line_number':15,'multiline':False]
+['text':'
+ * [SMDOC] ObjLiteral (Object Literal) Handling
+ * ============================================
+ *
+ * The `ObjLiteral*` family of classes defines an infastructure to handle
+ * object literals as they are encountered at parse time and translate them
+ * into objects that are attached to the bytecode.
+ *
+ * The object-literal "instructions", whose opcodes are defined in
+ * `ObjLiteralOpcode` below, each specify one key (atom property name, or
+ * numeric index) and one value. An `ObjLiteralWriter` buffers a linear
+ * sequence of such instructions, along with a side-table of atom references.
+ * The writer stores a compact binary format that is then interpreted by the
+ * `ObjLiteralReader` to construct an object according to the instructions.
+ *
+ * This may seem like an odd dance: create an intermediate data structure that
+ * specifies key/value pairs, then later build the object. Why not just do so
+ * directly, as we parse? In fact, we used to do this. However, for several
+ * good reasons, we want to avoid allocating or touching GC objects at all
+ * *during* the parse. We thus use a sequence of ObjLiteral instructions as an
+ * intermediate data structure to carry object literal contents from parse to
+ * the time at which we *can* allocate objects.
+ *
+ * (The original intent was to allow for ObjLiteral instructions to actually be
+ * invoked by a new JS opcode, JSOp::ObjLiteral, thus replacing the more
+ * general opcode sequences sometimes generated to fill in objects and removing
+ * the need to attach actual objects to JSOp::Object or JSOp::NewObject.
+ * However, this was far too invasive and led to performance regressions, so
+ * currently ObjLiteral only carries literals as far as the end of the parse
+ * pipeline, when all GC things are allocated.)
+ *
+ * ObjLiteral data structures are used to represent object literals whenever
+ * they are "compatible". See
+ * BytecodeEmitter::isPropertyListObjLiteralCompatible for the precise
+ * conditions; in brief, we can represent object literals with "primitive"
+ * (numeric, boolean, string, null/undefined) values, and "normal"
+ * (non-computed) object names. We can also represent arrays with the same
+ * value restrictions. We cannot represent nested objects. We use ObjLiteral in
+ * two different ways:
+ *
+ * - To build a template object, when we can support the properties but not the
+ *   keys.
+ * - To build the actual result object, when we support the properties and the
+ *   keys and this is a JSOp::Object case (see below).
+ *
+ * Design and Performance Considerations
+ * -------------------------------------
+ *
+ * As a brief overview, there are a number of opcodes that allocate objects:
+ *
+ * - JSOp::NewInit allocates a new empty `{}` object.
+ *
+ * - JSOp::NewObject, with an object as an argument (held by the script data
+ *   side-tables), allocates a new object with `undefined` property values but
+ *   with a defined set of properties. The given object is used as a
+ *   *template*.
+ *
+ * - JSOp::Object, with an object as argument, instructs the runtime to
+ *   literally return the object argument as the result. This is thus only an
+ *   "allocation" in the sense that the object was originally allocated when
+ *   the script data / bytecode was created. It is only used when we know for
+ *   sure that the script, and this program point within the script, will run
+ *   *once*. (See the `treatAsRunOnce` flag on JSScript.)
+ *
+ * An operation occurs in a "singleton context", according to the parser, if it
+ * will only ever execute once. In particular, this happens when (i) the script
+ * is a "run-once" script, which is usually the case for e.g. top-level scripts
+ * of web-pages (they run on page load, but no function or handle wraps or
+ * refers to the script so it can't be invoked again), and (ii) the operation
+ * itself is not within a loop or function in that run-once script.
+ *
+ * When we encounter an object literal, we decide which opcode to use, and we
+ * construct the ObjLiteral and the bytecode using its result appropriately:
+ *
+ * - If in a singleton context, and if we support the values, we use
+ *   JSOp::Object and we build the ObjLiteral instructions with values.
+ * - Otherwise, if we support the keys but not the values, or if we are not
+ *   in a singleton context, we use JSOp::NewObject. In this case, the initial
+ *   opcode only creates an object with empty values, so BytecodeEmitter then
+ *   generates bytecode to set the values appropriately.
+ * - Otherwise, we generate JSOp::NewInit and bytecode to add properties one at
+ *   a time. This will always work, but is the slowest and least
+ *   memory-efficient option.
+ ','line_number':22,'multiline':True]
+['text':' namespace frontend','line_number':116,'multiline':False]
+['text':' Object-literal instruction opcodes. An object literal is constructed by a','line_number':118,'multiline':False]
+['text':' straight-line sequence of these ops, each adding one property to the','line_number':119,'multiline':False]
+['text':' object.','line_number':120,'multiline':False]
+['text':' numeric types only.','line_number':124,'multiline':False]
+['text':' Flags that are associated with a sequence of object-literal instructions.','line_number':134,'multiline':False]
+['text':' (These become bitflags by wrapping with EnumSet below.)','line_number':135,'multiline':False]
+['text':' If set, this object is an array.','line_number':137,'multiline':False]
+['text':' If set, this is an object literal in a singleton context and property','line_number':140,'multiline':False]
+['text':' values are included. See also JSOp::Object.','line_number':141,'multiline':False]
+['text':' If set, this object contains index property, or duplicate non-index','line_number':144,'multiline':False]
+['text':' property.','line_number':145,'multiline':False]
+['text':' This flag is valid only if Array flag isn't set.','line_number':146,'multiline':False]
+['text':' Property name (as TaggedParserAtomIndex) or an integer index.  Only used for','line_number':162,'multiline':False]
+['text':' object-type literals; array literals do not require the index (the sequence','line_number':163,'multiline':False]
+['text':' is always dense, with no holes, so the index is implicit). For the latter','line_number':164,'multiline':False]
+['text':' case, we have a `None` placeholder.','line_number':165,'multiline':False]
+['text':' for access to mask and shift.','line_number':213,'multiline':False]
+['text':' If set, the atom index field is an array index, not an atom index.','line_number':215,'multiline':False]
+['text':' An object-literal instruction writer. This class, held by the bytecode','line_number':279,'multiline':False]
+['text':' emitter, keeps a sequence of object-literal instructions emitted as object','line_number':280,'multiline':False]
+['text':' literal expressions are parsed. It allows the user to 'begin' and 'end'','line_number':281,'multiline':False]
+['text':' straight-line sequences, returning the offsets for this range of instructions','line_number':282,'multiline':False]
+['text':' within the writer.','line_number':283,'multiline':False]
+['text':' Only valid in object-mode.','line_number':300,'multiline':False]
+['text':' OK to early return if we've already discovered a potential duplicate.','line_number':307,'multiline':False]
+['text':' Check bloom filter for duplicate, and add if not already represented.','line_number':312,'multiline':False]
+['text':' Only valid in object-mode.','line_number':323,'multiline':False]
+['text':' Only valid in object-mode.','line_number':329,'multiline':False]
+['text':' Only valid in array-mode.','line_number':336,'multiline':False]
+['text':' Dense array element sequences do not use the keys; the indices are','line_number':338,'multiline':False]
+['text':' implicit.','line_number':339,'multiline':False]
+['text':' Set to true if we've found possible duplicate names while building.','line_number':388,'multiline':False]
+['text':' This field is placed next to `flags_` field, to reduce padding.','line_number':389,'multiline':False]
+['text':' Duplicate property names detection is performed in the following way:','line_number':396,'multiline':False]
+['text':'   * while emitting code, add each property names with','line_number':397,'multiline':False]
+['text':'     `propNamesFilter_`','line_number':398,'multiline':False]
+['text':'   * if possible duplicate property name is detected, set','line_number':399,'multiline':False]
+['text':'     `mightContainDuplicatePropertyNames_` to true','line_number':400,'multiline':False]
+['text':'   * in `checkForDuplicatedNames` method,','line_number':401,'multiline':False]
+['text':'     if `mightContainDuplicatePropertyNames_` is true,','line_number':402,'multiline':False]
+['text':'     check the duplicate property names with `HashSet`, and if it exists,','line_number':403,'multiline':False]
+['text':'     set HasIndexOrDuplicatePropName flag.','line_number':404,'multiline':False]
+['text':' A single object-literal instruction, creating one property on an object.','line_number':481,'multiline':False]
+['text':' A reader that parses a sequence of object-literal instructions out of the','line_number':558,'multiline':False]
+['text':' encoded form.','line_number':559,'multiline':False]
+['text':' A class to modify the code, while keeping the structure.','line_number':592,'multiline':False]
+['text':' Map `atom` with `map`, and write to `atomCursor` of `mutableData_`.','line_number':601,'multiline':False]
+['text':' Map atoms in single instruction.','line_number':610,'multiline':False]
+['text':' Return true if it successfully maps.','line_number':611,'multiline':False]
+['text':' Return false if there's no more instruction.','line_number':612,'multiline':False]
+['text':' Map TaggedParserAtomIndex inside the code in place, with given function.','line_number':648,'multiline':False]
+['text':' namespace js','line_number':693,'multiline':False]
+['text':' frontend_ObjLiteral_h','line_number':694,'multiline':False]

@@ -1,0 +1,565 @@
+['text':'-
+ * Public Domain 2014-present MongoDB, Inc.
+ * Public Domain 2008-2014 WiredTiger, Inc.
+ *
+ * This is free and unencumbered software released into the public domain.
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ ','line_number':1,'multiline':True]
+['text':' Program working dir ','line_number':35,'multiline':True]
+['text':'
+ * Create three tables that we will write the same data to and verify that
+ * all the types of usage have the expected data in them after a crash and
+ * recovery.  We want:
+ * 1. A table that is logged and is not involved in timestamps.  This table
+ * simulates a user local table.
+ * 2. A table that is logged and involved in timestamps.  This simulates
+ * the oplog.
+ * 3. A table that is not logged and involved in timestamps.  This simulates
+ * a typical collection file.
+ *
+ * We also create a fourth table that is not logged and not involved directly
+ * in timestamps to store the stable timestamp.  That way we can know what the
+ * latest stable timestamp is on checkpoint.
+ *
+ * We also create several files that are not WiredTiger tables.  The checkpoint
+ * thread creates a file indicating that a checkpoint has completed.  The parent
+ * process uses this to know when at least one checkpoint is done and it can
+ * start the timer to abort.
+ *
+ * Each worker thread creates its own records file that records the data it
+ * inserted and it records the timestamp that was used for that insertion.
+ *
+ * This program can be also used to test backups in the presence of failures.
+ * It first creates a full backup, after which it periodically creates
+ * an incremental backup.  Unlike other tests, each backup is created in a new
+ * directory (as opposed to "patching" the previous backup), because it is
+ * more robust and easier to reason about.  For example, if we crash while
+ * creating a backup, we would still have good backups from which we can
+ * recover.  Similarly, if we crash in the middle of taking a checkpoint after
+ * a backup, the database may not have properly recorded the ID of the last
+ * snapshot.
+ ','line_number':37,'multiline':True]
+['text':' Maximum interval between backups ','line_number':75,'multiline':True]
+['text':' Maximum interval between checkpoints ','line_number':76,'multiline':True]
+['text':' Maximum configurable threads ','line_number':77,'multiline':True]
+['text':' Include worker threads and prepare extra sessions ','line_number':87,'multiline':True]
+['text':'
+ * Print that we are doing backup verification.
+ ','line_number':110,'multiline':True]
+['text':'
+ * The configuration sets the eviction update and dirty targets at 20% so that on average, each
+ * thread can have a couple of dirty pages before eviction threads kick in. See below where these
+ * symbols are used for cache sizing - we'll have about 10 pages allocated per thread. On the other
+ * side, the eviction update and dirty triggers are 90%, so application threads aren't involved in
+ * eviction until we're close to running out of cache.
+ ','line_number':120,'multiline':True]
+['text':'
+ * A minimum width of 10, along with zero filling, means that all the keys sort according to their
+ * integer value, making each thread's key space distinct. For column-store we just use the integer
+ * values and that has the same effect.
+ ','line_number':141,'multiline':True]
+['text':'
+ * We reserve timestamps for each thread for the entire run. The timestamp for the i-th key that a
+ * thread writes is given by the macro below. In a given iteration for each thread, there are three
+ * timestamps available, though we don't always use the third. The first is used to timestamp the
+ * transaction at the beginning. The second is used to timestamp after an insert is done. Then, we
+ * sometimes want the durable timestamp ahead of the commit timestamp, so we reserve the last
+ * timestamp for that use.
+ ','line_number':150,'multiline':True]
+['text':' The index of a backup. ','line_number':161,'multiline':True]
+['text':' Get back the workload iteration number from a backup index. ','line_number':165,'multiline':True]
+['text':' Last absent key ','line_number':169,'multiline':True]
+['text':' First existing key after miss ','line_number':170,'multiline':True]
+['text':' First key in range ','line_number':171,'multiline':True]
+['text':' First missing key ','line_number':172,'multiline':True]
+['text':' Last key in range ','line_number':173,'multiline':True]
+['text':' Number of threads. ','line_number':185,'multiline':True]
+['text':' Oldest timestamps still in use. ','line_number':186,'multiline':True]
+['text':'
+ * __int_comparator --
+ *     "int" comparator.
+ ','line_number':204,'multiline':True]
+['text':'
+ * stat_func --
+ *     Function to run with the early connection and gather statistics.
+ ','line_number':214,'multiline':True]
+['text':' Start last and value at different numbers so we print the first value, likely 0. ','line_number':229,'multiline':True]
+['text':' Pick some statistic that is likely changed during recovery RTS. ','line_number':235,'multiline':True]
+['text':'
+ * handle_conn_close --
+ *     Function to handle connection close callbacks from WiredTiger.
+ ','line_number':249,'multiline':True]
+['text':'
+     * Signal the statistics thread to exit and clear the global connection. This function cannot
+     * return until the user thread stops using the connection.
+     ','line_number':256,'multiline':True]
+['text':'
+ * handle_conn_ready --
+ *     Function to handle connection ready callbacks from WiredTiger.
+ ','line_number':265,'multiline':True]
+['text':'
+     * Set the global connection for statistics and then start a statistics thread.
+     ','line_number':274,'multiline':True]
+['text':'
+ * handle_error --
+ *     Function to handle errors.
+ ','line_number':285,'multiline':True]
+['text':' Ignore complaints about incremental backup not being configured. ','line_number':296,'multiline':True]
+['text':'
+ * handle_general --
+ *     Function to handle general event callbacks.
+ ','line_number':304,'multiline':True]
+['text':'
+ * usage --
+ *     Print usage help for the program.
+ ','line_number':323,'multiline':True]
+['text':'
+ * thread_ts_run --
+ *     Runner function for a timestamp thread.
+ ','line_number':337,'multiline':True]
+['text':' Update the oldest/stable timestamps every 1 millisecond. ','line_number':359,'multiline':True]
+['text':' Get the last committed timestamp periodically in order to update the oldest
+         * timestamp. ','line_number':361,'multiline':True]
+['text':' Let the oldest timestamp lag 25% of the time. ','line_number':368,'multiline':True]
+['text':'
+         * Only perform the reconfigure test after statistics have a chance to run. If we do it too
+         * frequently then internal servers like the statistics server get destroyed and restarted
+         * too fast to do any work.
+         ','line_number':377,'multiline':True]
+['text':'
+             * Set and reset the checkpoint retention setting on a regular basis. We want to test
+             * racing with the internal log removal thread while we're here.
+             ','line_number':384,'multiline':True]
+['text':' NOTREACHED ','line_number':397,'multiline':True]
+['text':'
+ * set_flush_tier_delay --
+ *     Set up a random delay for the next flush_tier.
+ ','line_number':400,'multiline':True]
+['text':'
+     * We are checkpointing with a random interval up to MAX_CKPT_INVL seconds, and we'll do a flush
+     * tier randomly every 0-10 seconds.
+     ','line_number':407,'multiline':True]
+['text':'
+ * backup_create_full --
+ *     Perform a full backup.
+ ','line_number':414,'multiline':True]
+['text':' Remember that this was a full backup. ','line_number':432,'multiline':True]
+['text':' Remember that the backup finished successfully. ','line_number':435,'multiline':True]
+['text':'
+ * backup_create_incremental --
+ *     Perform an incremental backup.
+ ','line_number':441,'multiline':True]
+['text':' verbose ','line_number':458,'multiline':True]
+['text':' Remember that the backup finished successfully. ','line_number':460,'multiline':True]
+['text':' Immediately verify the backup. ','line_number':467,'multiline':True]
+['text':'
+ * backup_delete_old_backups --
+ *     Delete old backups, keeping just a few recent ones, so that we don't take too much space for
+ *     no good reason.
+ ','line_number':478,'multiline':True]
+['text':' If the backup failed to finish, delete it right away. ','line_number':505,'multiline':True]
+['text':' Check if this is a full backup - we'd like to keep at least one. ','line_number':511,'multiline':True]
+['text':' If we have too many backups, finish next time. ','line_number':515,'multiline':True]
+['text':'
+             * First rename the directory so that if the child process is killed during the remove
+             * the verify function doesn't attempt to open a partial database.
+             ','line_number':532,'multiline':True]
+['text':'
+ * thread_ckpt_run --
+ *     Runner function for the checkpoint thread.
+ ','line_number':545,'multiline':True]
+['text':'
+     * Keep a separate file with the records we wrote for checking.
+     ','line_number':572,'multiline':True]
+['text':'
+         * Since this is the default, send in this string even if running without timestamps.
+         ','line_number':581,'multiline':True]
+['text':'
+             * FIXME: when we change the API to notify that a flush_tier has completed, we'll need
+             * to set up a general event handler and catch that notification, so we can pass the
+             * flush_tier "cookie" to the test utility function.
+             ','line_number':592,'multiline':True]
+['text':'
+         * Create the checkpoint file so that the parent process knows at least one checkpoint has
+         * finished and can start its timer. If running with timestamps, wait until the stable
+         * timestamp has moved past WT_TS_NONE to give writer threads a chance to add something to
+         * the database.
+         ','line_number':604,'multiline':True]
+['text':' NOTREACHED ','line_number':616,'multiline':True]
+['text':'
+ * thread_backup_run --
+ *     Runner function for the backup thread.
+ ','line_number':619,'multiline':True]
+['text':' Pick random points for starting the full backup and force stop backup cycles. ','line_number':637,'multiline':True]
+['text':'
+     * Find the last successful backup.
+     ','line_number':644,'multiline':True]
+['text':'
+         * If the query indicates no previous backup exists, then we only want to create a full
+         * backup this iteration.
+         ','line_number':649,'multiline':True]
+['text':' Check whether the backup has indeed completed. ','line_number':661,'multiline':True]
+['text':'
+     * Create backups until we get killed.
+     ','line_number':677,'multiline':True]
+['text':' Force creation of a new full backup. ','line_number':688,'multiline':True]
+['text':' Create a backup. ','line_number':691,'multiline':True]
+['text':' Periodically delete old backups. ','line_number':701,'multiline':True]
+['text':' NOTREACHED ','line_number':706,'multiline':True]
+['text':'
+ * thread_run --
+ *     Runner function for the worker threads.
+ ','line_number':709,'multiline':True]
+['text':'
+     * Set up the separate file for checking.
+     ','line_number':735,'multiline':True]
+['text':'
+     * Set to line buffering. But that is advisory only. We've seen cases where the result files end
+     * up with partial lines.
+     ','line_number':742,'multiline':True]
+['text':'
+     * Have 10% of the threads use prepared transactions if timestamps are in use. Thread numbers
+     * start at 0 so we're always guaranteed that at least one thread is using prepared
+     * transactions.
+     ','line_number':748,'multiline':True]
+['text':'
+     * For the prepared case we have two sessions so that the oplog session can have its own
+     * transaction in parallel with the collection session We need this because prepared
+     * transactions cannot have any operations that modify a table that is logged. But we also want
+     * to test mixed logged and not-logged transactions.
+     ','line_number':756,'multiline':True]
+['text':'
+     * Open a cursor to each table.
+     ','line_number':767,'multiline':True]
+['text':'
+     * Write our portion of the key space until we're killed.
+     ','line_number':791,'multiline':True]
+['text':'
+             * Set the active timestamp to the first of the three timestamps we reserve for use this
+             * iteration. Use the first reserved timestamp.
+             ','line_number':802,'multiline':True]
+['text':'
+             * Set the transaction's timestamp now before performing the operation. If we are using
+             * prepared transactions, set the timestamp for the session used for oplog. The
+             * collection session in that case would continue to use this timestamp.
+             ','line_number':808,'multiline':True]
+['text':'
+         * Put an informative string into the value so that it can be viewed well in a binary dump.
+         ','line_number':828,'multiline':True]
+['text':'
+             * Change the timestamp in the middle of the transaction so that we simulate a
+             * secondary. This uses our second reserved timestamp.
+             ','line_number':845,'multiline':True]
+['text':'
+             * Run with prepare every once in a while. And also yield after prepare sometimes too.
+             * This is only done on the collection session.
+             ','line_number':863,'multiline':True]
+['text':'
+                 * Make half of the prepared transactions' durable timestamp larger than their
+                 * commit timestamp.
+                 ','line_number':872,'multiline':True]
+['text':' Make checkpoint and backup race more likely to happen. ','line_number':887,'multiline':True]
+['text':'
+         * Insert into the local table outside the timestamp txn. This must occur after the
+         * timestamp transaction, not before, because of the possibility of rollback in the
+         * transaction. The local table must stay in sync with the other tables.
+         ','line_number':890,'multiline':True]
+['text':'
+         * Save the timestamps and key separately for checking later. Optionally use our third
+         * reserved timestamp.
+         ','line_number':900,'multiline':True]
+['text':' We're done with the timestamps, allow oldest and stable to move forward. ','line_number':915,'multiline':True]
+['text':' NOTREACHED ','line_number':919,'multiline':True]
+['text':'
+ * init_thread_data --
+ *     Initialize the thread data struct.
+ ','line_number':922,'multiline':True]
+['text':'
+ * run_workload --
+ *     Child process creates the database and table, and then creates worker threads to add data
+ *     until it is killed by the parent.
+ ','line_number':940,'multiline':True]
+['text':'
+     * Size the cache appropriately for the number of threads. Each thread adds keys sequentially to
+     * its own portion of the key space, so each thread will be dirtying one page at a time. By
+     * default, a leaf page grows to 32K in size before it splits and the thread begins to fill
+     * another page. We'll budget for 10 full size leaf pages per thread in the cache plus a little
+     * extra in the total for overhead.
+     ','line_number':960,'multiline':True]
+['text':'
+     * Do not remove log files when using model verification. The current implementation requires
+     * the debug log to be present from the beginning of time, as it uses it to populate the model.
+     * (To remove this requirement in the future, we could explore the possibility of populating the
+     * model from an earlier checkpoint and then rolling forward using the debug log, just from that
+     * position.)
+     ','line_number':969,'multiline':True]
+['text':'
+     * The eviction dirty target and trigger configurations are not compatible with certain other
+     * configurations.
+     ','line_number':990,'multiline':True]
+['text':'
+     * Create all the tables on the first iteration.
+     ','line_number':1000,'multiline':True]
+['text':'
+     * Don't log the stable timestamp table so that we know what timestamp was stored at the
+     * checkpoint.
+     ','line_number':1021,'multiline':True]
+['text':' The backup, checkpoint, timestamp, and worker threads are added at the end. ','line_number':1036,'multiline':True]
+['text':'
+         * We use the following key format:
+         *
+         *    12004000000123
+         *     ^  ^        ^
+         *     |  |        |
+         *     |  |        +-- key
+         *     |  +----------- thread ID
+         *     +-------------- iteration ID
+         *
+         * This setup creates a unique key-space for each thread execution. We can accommodate one
+         * billion keys and one thousand threads for each iteration.
+         ','line_number':1059,'multiline':True]
+['text':'
+     * The threads never exit, so the child will just wait here until it is killed.
+     ','line_number':1078,'multiline':True]
+['text':'
+     * NOTREACHED
+     ','line_number':1085,'multiline':True]
+['text':'
+ * initialize_rep --
+ *     Initialize a report structure. Since zero is a valid key we cannot just clear it.
+ ','line_number':1093,'multiline':True]
+['text':'
+ * print_missing --
+ *     Print out information if we detect missing records in the middle of the data of a report
+ *     structure.
+ ','line_number':1104,'multiline':True]
+['text':'
+ * backup_exists --
+ *     Check whether the backup with the given ID exists in the database.
+ ','line_number':1119,'multiline':True]
+['text':'
+     * Check if we find the backup with the given ID. But depending on scheduling of backups,
+     * checkpoints and killing the process, the backup ID may or may not have been saved to disk
+     * after a restart. If opening the backup query cursor gets EINVAL then there is no backup.
+     ','line_number':1136,'multiline':True]
+['text':'
+ * backup_verify --
+ *     Verify previous backups created within the given workload iteration (use 0 to verify all).
+ ','line_number':1160,'multiline':True]
+['text':' Verify the backup only if it has completed. ','line_number':1178,'multiline':True]
+['text':' Just check that chunks that are supposed to be different are indeed different. ','line_number':1187,'multiline':True]
+['text':' Continue the verification only if we have the backup ID. ','line_number':1190,'multiline':True]
+['text':' Perform a full test. ','line_number':1198,'multiline':True]
+['text':' Delete any check directories that we might have created for backup verification. ','line_number':1207,'multiline':True]
+['text':'
+ * recover_and_verify --
+ *     Run the recovery and verify the database or the given backup (use 0 for the main database).
+ *     The workload_iteration argument limits which backups to verify when the backup index is 0
+ *     (use 0 to verify all backups irrespective of the iteration in which they were created).
+ ','line_number':1211,'multiline':True]
+['text':'
+     * Open the connection which forces recovery to be run.
+     ','line_number':1238,'multiline':True]
+['text':' Compare against the copy of the home directory just before recovery. ','line_number':1245,'multiline':True]
+['text':'
+         * Only call this when index is 0 because it calls back into here to verify a specific
+         * backup.
+         ','line_number':1252,'multiline':True]
+['text':'
+         * Open the database connection to the backup. But don't pass the general event handler, so
+         * that we don't create another statistics thread. Not only we don't need it here, but
+         * trying to create it would cause the test to abort as we currently allow only one
+         * statistics thread at a time.
+         ','line_number':1264,'multiline':True]
+['text':' Sleep to guarantee the statistics thread has enough time to run. ','line_number':1273,'multiline':True]
+['text':'
+     * Open a cursor on all the tables.
+     ','line_number':1277,'multiline':True]
+['text':'
+     * Find the biggest stable timestamp value that was saved.
+     ','line_number':1289,'multiline':True]
+['text':'
+         * For every key in the saved file, verify that the key exists in the table after recovery.
+         * If we're doing in-memory log buffering we never expect a record missing in the middle,
+         * but records may be missing at the end. If we did write-no-sync, we expect every key to
+         * have been recovered.
+         ','line_number':1310,'multiline':True]
+['text':'
+                 * If we find a partial line, consider it like an EOF.
+                 ','line_number':1324,'multiline':True]
+['text':'
+             * If we're unlucky, the last line may be a partially written key at the end that can
+             * result in a false negative error for a missing record. Detect it.
+             ','line_number':1333,'multiline':True]
+['text':'
+             * When we are verifying a backup, don't expect anything over the stable timestamp.
+             ','line_number':1343,'multiline':True]
+['text':'
+             * The collection table should always only have the data as of the checkpoint. The
+             * shadow table should always have the exact same data (or not) as the collection table,
+             * except for the last key that may be committed after the stable timestamp.
+             ','line_number':1362,'multiline':True]
+['text':'
+                 * If we don't find a record, the durable timestamp written to our file better be
+                 * larger than the saved one.
+                 ','line_number':1373,'multiline':True]
+['text':'
+                 * We respectively insert the record to the collection table at timestamp t and to
+                 * the shadow table at t + 1. If the checkpoint finishes at timestamp t, the last
+                 * shadow table record will be removed by rollback to stable after restart.
+                 ','line_number':1389,'multiline':True]
+['text':'
+                 * If we get here we found a record that exists after absent records, a hole in our
+                 * data.
+                 ','line_number':1399,'multiline':True]
+['text':'
+                 * If we found a record, the commit timestamp written to our file better be no
+                 * larger than the checkpoint one.
+                 ','line_number':1406,'multiline':True]
+['text':' Collection and shadow both have the data. ','line_number':1415,'multiline':True]
+['text':'
+             * The local table should always have all data.
+             ','line_number':1418,'multiline':True]
+['text':'
+                 * We should never find an existing key after we have detected one missing.
+                 ','line_number':1431,'multiline':True]
+['text':'
+             * The oplog table should always have all data.
+             ','line_number':1437,'multiline':True]
+['text':'
+                 * We should never find an existing key after we have detected one missing.
+                 ','line_number':1450,'multiline':True]
+['text':'
+     * Also verify using the model. This must be called after the recovery is complete, and the
+     * database is closed. At this point, verify only the main database (not backups) for
+     * expediency.
+     ','line_number':1487,'multiline':True]
+['text':'
+ * handler --
+ *     Signal handler to catch if the child died unexpectedly.
+ ','line_number':1500,'multiline':True]
+['text':'
+     * The core file will indicate why the child exited. Choose EINVAL here.
+     ','line_number':1511,'multiline':True]
+['text':'
+ * main --
+ *     The entry point for the test.
+ ','line_number':1517,'multiline':True]
+['text':' The working directory when we started ','line_number':1530,'multiline':True]
+['text':' Automatically flush after each newline, so that we don't miss any messages if we crash. ','line_number':1535,'multiline':True]
+['text':' FIXME-WT-11669 Re-enable the test once this issue is fixed. Set the interval to 3. ','line_number':1542,'multiline':True]
+['text':' Variable-length columns only (for now) ','line_number':1569,'multiline':True]
+['text':' The option is either one that we're asking testutil to support, or illegal. ','line_number':1612,'multiline':True]
+['text':'
+     * Among other things, this initializes the random number generators in the option structure.
+     ','line_number':1620,'multiline':True]
+['text':'
+     * If the user wants to verify they need to tell us how many threads there were so we can find
+     * the old record files.
+     ','line_number':1628,'multiline':True]
+['text':' Remember the current working directory. ','line_number':1637,'multiline':True]
+['text':' Set up the test. ','line_number':1640,'multiline':True]
+['text':' Create the test's home directory. ','line_number':1642,'multiline':True]
+['text':' Set up the test subdirectories. ','line_number':1645,'multiline':True]
+['text':' Set up LazyFS. ','line_number':1651,'multiline':True]
+['text':'
+         * We unconditionally grab a random value to be used for the thread count to keep the RNG in
+         * sync for all runs. If we are run first without having a thread count or random seed
+         * argument, then when we rerun (with the thread count and random seed that was output),
+         * we'll have the same results.
+         *
+         * We use the data random generator because the number of threads affects the data for this
+         * test.
+         ','line_number':1666,'multiline':True]
+['text':'
+         * Go inside the home directory (typically WT_TEST), but not all the way into the database's
+         * home directory.
+         ','line_number':1699,'multiline':True]
+['text':'
+         * Create the database, run the test, and fail. Do multiple iterations to make sure that we
+         * don't only recover, but that we can also keep going, as sometimes bugs can occur during
+         * database operation following an unclean shutdown.
+         ','line_number':1706,'multiline':True]
+['text':'
+             * Advance the random number generators, so that child process created in the loop would
+             * not all start with the same random state. Note that we cannot simply use (void) to
+             * ignore the return value, because that generates compiler warnings.
+             ','line_number':1716,'multiline':True]
+['text':'
+             * Fork a child to insert as many items. We will then randomly kill the child, run
+             * recovery and make sure all items we wrote exist after recovery runs.
+             ','line_number':1725,'multiline':True]
+['text':' child ','line_number':1730,'multiline':True]
+['text':' NOTREACHED ','line_number':1732,'multiline':True]
+['text':' parent ','line_number':1735,'multiline':True]
+['text':'
+             * Set the child death handler, but only for the parent process. Setting this before the
+             * fork has the unfortunate consequence of the handler getting called on any invocation
+             * of system(). But because we set this up after fork, we need to double-check that the
+             * child process is still running, i.e., that it did not fail already.
+             ','line_number':1737,'multiline':True]
+['text':' Check on the child; positive return value indicates that it has already died. ','line_number':1747,'multiline':True]
+['text':'
+             * Sleep for the configured amount of time before killing the child. Start the timeout
+             * from the time we notice that the file has been created. That allows the test to run
+             * correctly on really slow machines.
+             ','line_number':1751,'multiline':True]
+['text':'
+             * !!! It should be plenty long enough to make sure more than
+             * one log file exists.  If wanted, that check would be added
+             * here.
+             ','line_number':1762,'multiline':True]
+['text':' We don't need the file that checks whether the checkpoint was created. ','line_number':1771,'multiline':True]
+['text':'
+             * !!! If we wanted to take a copy of the directory before recovery,
+             * this is the place to do it. Don't do it all the time because
+             * it can use a lot of disk space, which can cause test machine
+             * issues.
+             ','line_number':1774,'multiline':True]
+['text':' Copy the data to a separate folder for debugging purpose. ','line_number':1781,'multiline':True]
+['text':'
+             * Clear the cache, if we are using LazyFS. Do this after we save the data for debugging
+             * purposes, so that we can see what we might have lost. If we are using LazyFS, the
+             * underlying directory shows the state that we'd get after we clear the cache.
+             ','line_number':1784,'multiline':True]
+['text':'
+             * Clean up any previous backup file. The file would be present if we happen to crash
+             * during a backup, in which case, when we recover in the next step, WiredTiger would
+             * think that we are recovering from the backup instead of from the main database
+             * location. It would ignore the turtle file, and as a side effect, we would lose the
+             * information about incremental snapshots.
+             ','line_number':1792,'multiline':True]
+['text':'
+             * Recover and verify the database, and test all backups.
+             ','line_number':1806,'multiline':True]
+['text':' If we are just verifying, first recover the database and then verify. ','line_number':1814,'multiline':True]
+['text':' Go inside the home directory (typically WT_TEST). ','line_number':1816,'multiline':True]
+['text':' Copy the data to a separate folder for debugging purpose. ','line_number':1820,'multiline':True]
+['text':' Now do the actual recovery and verification. ','line_number':1823,'multiline':True]
+['text':'
+     * Clean up.
+     ','line_number':1827,'multiline':True]
+['text':' Clean up the test directory. ','line_number':1830,'multiline':True]
+['text':' At this point, we are inside `home`, which we intend to delete. cd to the parent dir. ','line_number':1834,'multiline':True]
+['text':' Clean up LazyFS. ','line_number':1838,'multiline':True]
+['text':' Delete the work directory. ','line_number':1842,'multiline':True]

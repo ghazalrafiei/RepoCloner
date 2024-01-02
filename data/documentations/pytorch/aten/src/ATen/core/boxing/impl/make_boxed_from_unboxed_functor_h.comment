@@ -1,0 +1,156 @@
+['text':' TODO Instead of this, move torch::jit::Stack to the c10 namespace.','line_number':15,'multiline':False]
+['text':'
+ * [Note: Argument forwarding in the dispatcher]
+ *
+ * The dispatcher uses a somewhat unusual way to forward arguments through several layers of
+ * wrapper functions. This can be confusing because an experienced C++ programmer would look at this
+ * and think "oh this is supposed to be forwarding a universal reference but the && is missing. This is a bug.".
+ * It is not a bug. The common way in C++ to forward arguments is to use universal references:
+ *
+ * > template<class T> void func(T&& arg) { func2(std::forward<T>(arg)); }
+ *
+ * but that relies on inferring the correct reference type (i.e. value vs & vs &&) from the argument.
+ * In our case, we cannot rely on the argument as supplied by the caller, because that could infer a
+ * different reference type than was used in the kernel function. The correct reference type
+ * is dictated by the kernel signature and must be identical since we cast function pointers
+ * through void* pointers and mismatches would be UB. So we need a forwarding pattern that determines
+ * the reference type to use by looking at the explicitly supplied operator signature, not by looking at
+ * the argument we're calling it with.
+ *
+ * What does std::forward do, exactly?
+ * ------------------------------------
+ * std::forward<T>(t) is a way to cast t to the reference type supplied in T.
+ * Let's assume decay_t<T> == U and T is either U or some reference of U.
+ *  - std::forward<T&>(t) will return U&, no matter what kind of reference t is.
+ *  - std::forward<T&&>(t) will return U&&, no matter what kind of reference t is.
+ *  - std::forward<T>(t) will return U&& (not U!), no matter what kind of reference t is.
+ *
+ * For universal references, that means that in the following function
+ * > template<class T> void func(T&& arg) { func2(std::forward<T>(arg)); }
+ *
+ *  - when called with arg being a rvalue reference or non-reference value, T gets inferred to be
+ *    a non-reference U, and std::forward<T>(t) will return U&&, correctly moving the argument.
+ *  - when called with arg behind a lvalue reference, T gets inferred to be U& because that's the only
+ *    way to match the signature (in C++, a type that is (T&)&& will collapse to T&).
+ *    That means std::forward<T>(t) will return U& and the value will not be moved but passed on as
+ *    a lvalue reference.
+ *
+ * How do we use that?
+ * ------------------------------------
+ * But std::forward can also be used outside of the common "universal forwarding" pattern to change
+ * reference types. So instead of following the common C++ pattern, we notice what
+ * std::forward<T>() actually does, and that is it takes a value and changes its reference to the
+ * type of reference passed in as T. If we don't infer T but explicitly specify it, we can use this
+ * to forward based on an explicitly specified reference type instead of the inferred argument type.
+ *
+ * This is why many of the dispatcher functions look like
+ * > template<class T> func(T t) { func2<T>(std::forward<T>(t)); }
+ * instead of the common
+ * > template<class T> func(T&& t) { func2(std::forward<T>(t)); }
+ *
+ * and are expected to be called by explicitly specifying the template parameters in a way that matches
+ * the expected operator signature at each call site.
+ ','line_number':18,'multiline':True]
+['text':' supported_primitive_arg_types defines which primitive types we allow in','line_number':72,'multiline':False]
+['text':' kernel functions as arguments or returns.','line_number':73,'multiline':False]
+['text':' Additionally, we support lists, dicts and optionals containing these types.','line_number':74,'multiline':False]
+['text':' We have an unboxed functor in hand that takes C++ arguments, and','line_number':91,'multiline':False]
+['text':' we're building a boxed functor wrapper for it that takes IValues.','line_number':92,'multiline':False]
+['text':' So "outside" is boxed and "inside" is unboxed.','line_number':93,'multiline':False]
+['text':'','line_number':94,'multiline':False]
+['text':' So a valid input type is one that our boxed functor wrapper can','line_number':95,'multiline':False]
+['text':' unbox from an IValue into a C++ value.','line_number':96,'multiline':False]
+['text':'','line_number':97,'multiline':False]
+['text':' Whereas a valid output type is one that our wrapper can recieve','line_number':98,'multiline':False]
+['text':' as a C++ value from the unboxed functor, and box into an IValue.','line_number':99,'multiline':False]
+['text':'','line_number':101,'multiline':False]
+['text':' assert_is_valid_input_type','line_number':102,'multiline':False]
+['text':' checks that T can be unboxed from an IValue into a C++ value.','line_number':103,'multiline':False]
+['text':'','line_number':104,'multiline':False]
+['text':' everything is ok, this is a primitive type ','line_number':110,'multiline':True]
+['text':' otherwise this must be an instance of a valid custom class, since it can only
+           have been created via IValue(x), which ensures this. ','line_number':112,'multiline':True]
+['text':' There is no reason to support float when we have double. Keep the API lean.','line_number':184,'multiline':False]
+['text':' TODO: it probably would be good to tighten this up quite a bit more with','line_number':209,'multiline':False]
+['text':' an explicit list for everything','line_number':210,'multiline':False]
+['text':'','line_number':212,'multiline':False]
+['text':' assert_is_valid_output_type','line_number':213,'multiline':False]
+['text':'','line_number':214,'multiline':False]
+['text':' everything is ok, this is a primitive type ','line_number':220,'multiline':True]
+['text':' otherwise T is verified to be a registered custom class in the IValue
+          constructor, so no benefit in double-checking here ','line_number':222,'multiline':True]
+['text':' TODO static_assert(AllowDeprecatedTypes, "You tried to register a kernel with an unsupported output type: std::vector<T>. Please use List<T> instead.");','line_number':268,'multiline':False]
+['text':' The following specialisations of assert_is_valid_output_type are technically not','line_number':278,'multiline':False]
+['text':' necessary since we would hit the base case and show an error message','line_number':279,'multiline':False]
+['text':' there if they didn't exist, but we can show a better error message','line_number':280,'multiline':False]
+['text':' in some common error scenarios.','line_number':281,'multiline':False]
+['text':' There is no reason to support float when we have double. Keep the API lean.','line_number':284,'multiline':False]
+['text':' ivalue_to_arg','line_number':304,'multiline':False]
+['text':' The following two specializations take advantage of specialized','line_number':329,'multiline':False]
+['text':' `toTensor()` overloads on IValue to avoid copying.','line_number':330,'multiline':False]
+['text':' We cannot use the default implementation if they asked for a','line_number':333,'multiline':False]
+['text':' `at::Tensor&` because it moves from the IValue, so it can't get','line_number':334,'multiline':False]
+['text':' an lvalue reference.','line_number':335,'multiline':False]
+['text':' Tensor& is valid, don't bother asserting','line_number':337,'multiline':False]
+['text':' We should not use the default implementation if they asked for','line_number':344,'multiline':False]
+['text':' a `const at::Tensor&` because it moves from the IValue and they','line_number':345,'multiline':False]
+['text':' didn't ask for that.','line_number':346,'multiline':False]
+['text':' const Tensor& is valid, don't bother asserting','line_number':348,'multiline':False]
+['text':' If an argument is ArrayRef<T>, convert the IValue to a std::vector<T> and pass that','line_number':362,'multiline':False]
+['text':' to the operator. std::vector<T> is implicitly convertible to ArrayRef<T>.','line_number':363,'multiline':False]
+['text':' If an argument is optional<ArrayRef<T>>, convert the IValue to an optional<std::vector<T>> and pass that','line_number':396,'multiline':False]
+['text':' to the operator. OptionalArray<T> is basically a optional<std::vector<T>> but implicitly convertible','line_number':397,'multiline':False]
+['text':' to optional<ArrayRef<T>>.','line_number':398,'multiline':False]
+['text':' If an argument is OptionalArrayRef<T>, convert the IValue to an','line_number':406,'multiline':False]
+['text':' optional<std::vector<T>> and pass that to the operator. OptionalArray<T>','line_number':407,'multiline':False]
+['text':' is basically a optional<std::vector<T>> but implicitly convertible to','line_number':408,'multiline':False]
+['text':' OptionalArrayRef<T>','line_number':409,'multiline':False]
+['text':' return_to_ivalue','line_number':415,'multiline':False]
+['text':' Special case to allow kernels to return `Tensor&`.','line_number':431,'multiline':False]
+['text':' TODO Delete this once kernels don't do that anymore','line_number':432,'multiline':False]
+['text':' wrap_kernel_functor_unboxed_','line_number':443,'multiline':False]
+['text':' This specialization is for kernels with a first argument that is NOT of type DispatchKeySet','line_number':448,'multiline':False]
+['text':' This includes kernels with 0 arguments.','line_number':449,'multiline':False]
+['text':' See [Note: Argument forwarding in the dispatcher] for why ParameterTypes doesn't use &&','line_number':457,'multiline':False]
+['text':' Note [Plumbing Keys Through The Dispatcher 2]','line_number':460,'multiline':False]
+['text':' See Note [Plumbing Keys Through The Dispatcher] for the background.','line_number':461,'multiline':False]
+['text':' This functor explicitly takes in a dispatchKeySet and drops it on the floor- it does not forward it to the registered kernel.','line_number':462,'multiline':False]
+['text':'','line_number':463,'multiline':False]
+['text':' This is due to the calling convention within the dispatcher, which expects all registered kernels to have a first argument of type','line_number':464,'multiline':False]
+['text':' DispatchKeySet.','line_number':465,'multiline':False]
+['text':' This is not the case for pretty much all manually written kernels, however- this functor serves to separate the calling convention','line_number':466,'multiline':False]
+['text':' of the dispatcher from the calling convention of manually written kernels.','line_number':467,'multiline':False]
+['text':' This specialization is for kernels with a first argument of type DispatchKeySet','line_number':472,'multiline':False]
+['text':' See [Note: Argument forwarding in the dispatcher] for why ParameterTypes doesn't use &&','line_number':480,'multiline':False]
+['text':' We're explicitly taking in a dispatchKeySet and forwarding it to the registered kernel.','line_number':483,'multiline':False]
+['text':' See Note [Plumbing Keys Through The Dispatcher 2] for details.','line_number':484,'multiline':False]
+['text':' call_functor_with_args_from_stack','line_number':492,'multiline':False]
+['text':' when sizeof...(ivalue_arg_indices) == 0, this argument would be unused and we have to silence the compiler warning.','line_number':497,'multiline':False]
+['text':' We're explicitly filtering out DispatchKeySet from the argument list.','line_number':499,'multiline':False]
+['text':' Some kernels take a DispatchKeySet as their first argument in order to plumb keys through the dispatcher.','line_number':500,'multiline':False]
+['text':' We don't want to expose the DispatchKeySet type to jit, so we don't include this argument on the stack.','line_number':501,'multiline':False]
+['text':' See Note [Plumbing Keys Through The Dispatcher] for the background.','line_number':502,'multiline':False]
+['text':' We're explicitly filtering out DispatchKeySet from the argument list.','line_number':512,'multiline':False]
+['text':' Some kernels take a DispatchKeySet as their first argument in order to plumb keys through the dispatcher.','line_number':513,'multiline':False]
+['text':' We don't want to expose the DispatchKeySet type to jit, so we don't include this argument on the stack.','line_number':514,'multiline':False]
+['text':' See Note [Plumbing Keys Through The Dispatcher] for the background.','line_number':515,'multiline':False]
+['text':' push_outputs','line_number':521,'multiline':False]
+['text':' Contrary to [Note: Argument forwarding in the dispatcher], we use OutputType&& here','line_number':525,'multiline':False]
+['text':' to avoid one extra call to the move constructor in this case. This is still not a','line_number':526,'multiline':False]
+['text':' universal reference though because OutputType is an explicitly specified class','line_number':527,'multiline':False]
+['text':' template parameter.','line_number':528,'multiline':False]
+['text':'dummy','line_number':557,'multiline':True]
+['text':'stack','line_number':557,'multiline':True]
+['text':'dummy','line_number':559,'multiline':True]
+['text':'stack','line_number':559,'multiline':True]
+['text':' make_boxed_from_unboxed_functor','line_number':563,'multiline':False]
+['text':' We're explicitly filtering out DispatchKeySet from the argument list.','line_number':572,'multiline':False]
+['text':' Some kernels take a DispatchKeySet as their first argument in order to plumb keys through the dispatcher.','line_number':573,'multiline':False]
+['text':' We don't want to expose the DispatchKeySet type to jit, so we don't include this argument on the stack.','line_number':574,'multiline':False]
+['text':' See Note [Plumbing Keys Through The Dispatcher] for the background.','line_number':575,'multiline':False]
+['text':' Decay ReturnType to ReturnType_ so that if a reference gets returned, we actually store it by value','line_number':580,'multiline':False]
+['text':' and don't get a dangling reference. This is only required because some kernels still return `Tensor&`.','line_number':581,'multiline':False]
+['text':' [Note: VC++ and 'std': ambiguous symbol]','line_number':582,'multiline':False]
+['text':' See note [ VC++ and 'std': ambiguous symbol]','line_number':586,'multiline':False]
+['text':' namespace impl','line_number':594,'multiline':False]
+['text':' namespace c10','line_number':596,'multiline':False]

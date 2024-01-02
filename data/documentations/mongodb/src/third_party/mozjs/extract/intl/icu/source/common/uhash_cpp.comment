@@ -1,0 +1,275 @@
+['text':' © 2016 and later: Unicode, Inc. and others.','line_number':1,'multiline':False]
+['text':' License & terms of use: http://www.unicode.org/copyright.html','line_number':2,'multiline':False]
+['text':'
+******************************************************************************
+*   Copyright (C) 1997-2016, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+******************************************************************************
+*   Date        Name        Description
+*   03/22/00    aliu        Adapted from original C++ ICU Hashtable.
+*   07/06/01    aliu        Modified to support int32_t keys on
+*                           platforms with sizeof(void*) < 32.
+******************************************************************************
+','line_number':3,'multiline':True]
+['text':' This hashtable is implemented as a double hash.  All elements are
+ * stored in a single array with no secondary storage for collision
+ * resolution (no linked list, etc.).  When there is a hash collision
+ * (when two unequal keys have the same hashcode) we resolve this by
+ * using a secondary hash.  The secondary hash is an increment
+ * computed as a hash function (a different one) of the primary
+ * hashcode.  This increment is added to the initial hash value to
+ * obtain further slots assigned to the same hash code.  For this to
+ * work, the length of the array and the increment must be relatively
+ * prime.  The easiest way to achieve this is to have the length of
+ * the array be prime, and the increment be any value from
+ * 1..length-1.
+ *
+ * Hashcodes are 32-bit integers.  We make sure all hashcodes are
+ * non-negative by masking off the top bit.  This has two effects: (1)
+ * modulo arithmetic is simplified.  If we allowed negative hashcodes,
+ * then when we computed hashcode % length, we could get a negative
+ * result, which we would then have to adjust back into range.  It's
+ * simpler to just make hashcodes non-negative. (2) It makes it easy
+ * to check for empty vs. occupied slots in the table.  We just mark
+ * empty or deleted slots with a negative hashcode.
+ *
+ * The central function is _uhash_find().  This function looks for a
+ * slot matching the given key and hashcode.  If one is found, it
+ * returns a pointer to that slot.  If the table is full, and no match
+ * is found, it returns NULL -- in theory.  This would make the code
+ * more complicated, since all callers of _uhash_find() would then
+ * have to check for a NULL result.  To keep this from happening, we
+ * don't allow the table to fill.  When there is only one
+ * empty/deleted slot left, uhash_put() will refuse to increase the
+ * count, and fail.  This simplifies the code.  In practice, one will
+ * seldom encounter this using default UHashtables.  However, if a
+ * hashtable is set to a U_FIXED resize policy, or if memory is
+ * exhausted, then the table may fill.
+ *
+ * High and low water ratios control rehashing.  They establish levels
+ * of fullness (from 0 to 1) outside of which the data array is
+ * reallocated and repopulated.  Setting the low water ratio to zero
+ * means the table will never shrink.  Setting the high water ratio to
+ * one means the table will never grow.  The ratios should be
+ * coordinated with the ratio between successive elements of the
+ * PRIMES table, so that when the primeIndex is incremented or
+ * decremented during rehashing, it brings the ratio of count / length
+ * back into the desired range (between low and high water ratios).
+ ','line_number':22,'multiline':True]
+['text':'*******************************************************************
+ * PRIVATE Constants, Macros
+ *******************************************************************','line_number':68,'multiline':True]
+['text':' This is a list of non-consecutive primes chosen such that
+ * PRIMES[i+1] ~ 2*PRIMES[i].  (Currently, the ratio ranges from 1.81
+ * to 2.18; the inverse ratio ranges from 0.459 to 0.552.)  If this
+ * ratio is changed, the low and high water ratios should also be
+ * adjusted to suit.
+ *
+ * These prime numbers were also chosen so that they are the largest
+ * prime number while being less than a power of two.
+ ','line_number':72,'multiline':True]
+['text':', 4294967291 ','line_number':85,'multiline':True]
+['text':' These ratios are tuned to the PRIMES array such that a resize
+ * places the table back into the zone of non-resizing.  That is,
+ * after a call to _uhash_rehash(), a subsequent call to
+ * _uhash_rehash() should do nothing (should not churn).  This is only
+ * a potential problem with U_GROW_AND_SHRINK.
+ ','line_number':91,'multiline':True]
+['text':' low, high water ratio ','line_number':98,'multiline':True]
+['text':' U_GROW: Grow on demand, do not shrink ','line_number':99,'multiline':True]
+['text':' U_GROW_AND_SHRINK: Grow and shrink on demand ','line_number':100,'multiline':True]
+['text':' U_FIXED: Never change size ','line_number':101,'multiline':True]
+['text':'
+  Invariants for hashcode values:
+
+  * DELETED < 0
+  * EMPTY < 0
+  * Real hashes >= 0
+
+  Hashcodes may not start out this way, but internally they are
+  adjusted so that they are always positive.  We assume 32-bit
+  hashcodes; adjust these constants for other hashcode sizes.
+','line_number':104,'multiline':True]
+['text':' This macro expects a UHashTok.pointer as its keypointer and
+   valuepointer parameters ','line_number':120,'multiline':True]
+['text':'
+ * Constants for hinting whether a key or value is an integer
+ * or a pointer.  If a hint bit is zero, then the associated
+ * token is assumed to be an integer.
+ ','line_number':131,'multiline':True]
+['text':'*******************************************************************
+ * PRIVATE Implementation
+ *******************************************************************','line_number':141,'multiline':True]
+['text':' Avoid double deletion ','line_number':152,'multiline':True]
+['text':' Avoid double deletion ','line_number':157,'multiline':True]
+['text':' Compilers should copy the UHashTok union correctly, but even if
+     * they do, memory heap tools (e.g. BoundsChecker) can get
+     * confused when a pointer is cloaked in a union and then copied.
+     * TO ALLEVIATE THIS, we use hints (based on what API the user is
+     * calling) to copy pointers when we know the user thinks
+     * something is a pointer. ','line_number':162,'multiline':True]
+['text':'*
+ * Assumes that the given element is not empty or deleted.
+ ','line_number':182,'multiline':True]
+['text':'*
+ * Allocate internal data array of a size determined by the given
+ * prime index.  If the index is out of range it is pinned into range.
+ * If the allocation fails the status is set to
+ * U_MEMORY_ALLOCATION_ERROR and all array storage is freed.  In
+ * either case the previous array pointer is overwritten.
+ *
+ * Caller must ensure primeIndex is in range 0..PRIME_LENGTH-1.
+ ','line_number':203,'multiline':True]
+['text':' Only one of these two is needed ','line_number':235,'multiline':True]
+['text':' but we don't know which one. ','line_number':236,'multiline':True]
+['text':'*
+ * Look for a key in the table, or if no such key exists, the first
+ * empty slot matching the given hashcode.  Keys are compared using
+ * the keyComparator function.
+ *
+ * First find the start position, which is the hashcode modulo
+ * the length.  Test it to see if it is:
+ *
+ * a. identical:  First check the hash values for a quick check,
+ *    then compare keys for equality using keyComparator.
+ * b. deleted
+ * c. empty
+ *
+ * Stop if it is identical or empty, otherwise continue by adding a
+ * "jump" value (moduloing by the length again to keep it within
+ * range) and retesting.  For efficiency, there need enough empty
+ * values so that the searchs stop within a reasonable amount of time.
+ * This can be changed by changing the high/low water marks.
+ *
+ * In theory, this function can return NULL, if it is full (no empty
+ * or deleted slots) and if no matching key is found.  In practice, we
+ * prevent this elsewhere (in uhash_put) by making sure the last slot
+ * in the table is never filled.
+ *
+ * The size of the table should be prime for this algorithm to work;
+ * otherwise we are not guaranteed that the jump value (the secondary
+ * hash) is relatively prime to the table length.
+ ','line_number':307,'multiline':True]
+['text':' assume invalid index ','line_number':339,'multiline':True]
+['text':' lazy evaluate ','line_number':341,'multiline':True]
+['text':' must be positive ','line_number':345,'multiline':True]
+['text':' quick check ','line_number':350,'multiline':True]
+['text':' We have hit a slot which contains a key-value pair,
+             * but for which the hash code does not match.  Keep
+             * looking.
+             ','line_number':355,'multiline':True]
+['text':' empty, end o' the line ','line_number':359,'multiline':True]
+['text':' remember first deleted ','line_number':361,'multiline':True]
+['text':' lazy compute jump ','line_number':364,'multiline':True]
+['text':' The jump value must be relatively prime to the table
+             * length.  As long as the length is prime, then any value
+             * 1..length-1 will be relatively prime to it.
+             ','line_number':365,'multiline':True]
+['text':' reset if had deleted slot ','line_number':375,'multiline':True]
+['text':' We get to this point if the hashtable is full (no empty or
+         * deleted slots), and we've failed to find a match.  THIS
+         * WILL NEVER HAPPEN as long as uhash_put() makes sure that
+         * count is always < length.
+         ','line_number':377,'multiline':True]
+['text':'*
+ * Attempt to grow or shrink the data arrays in order to make the
+ * count fit between the high and low water marks.  hash_put() and
+ * hash_remove() call this method when the count exceeds the high or
+ * low water marks.  This method may do nothing, if memory allocation
+ * fails, or if the count is already in range, or if the length is
+ * already at the low or high limit.  In any case, upon return the
+ * arrays will be valid.
+ ','line_number':387,'multiline':True]
+['text':' First find the position of the key in the table.  If the object
+     * has not been removed already, remove it.  If the user wanted
+     * keys deleted, then delete it also.  We have to put a special
+     * hashcode in that position that means that something has been
+     * deleted, since when we do a find, we have to continue PAST any
+     * deleted values.
+     ','line_number':442,'multiline':True]
+['text':' Put finds the position in the table for the new value.  If the
+     * key is already in the table, it is deleted, if there is a
+     * non-NULL keyDeleter.  Then the key, the hash and the value are
+     * all put at the position in their respective arrays.
+     ','line_number':471,'multiline':True]
+['text':' Disallow storage of NULL values, since NULL is returned by
+         * get() to indicate an absent key.  Storing NULL == removing.
+         ','line_number':487,'multiline':True]
+['text':' Important: We must never actually fill the table up.  If we
+         * do so, then _uhash_find() will return NULL, and we'll have
+         * to check for NULL after every call to _uhash_find().  To
+         * avoid this we make sure there is always at least one empty
+         * or deleted slot in the table.  This only is a problem if we
+         * are out of memory and rehash isn't working.
+         ','line_number':504,'multiline':True]
+['text':' Don't allow count to reach length ','line_number':513,'multiline':True]
+['text':' We must in all cases handle storage properly.  If there was an
+     * old key, then it must be deleted (if the deleter != NULL).
+     * Make hashcodes stored in table positive.
+     ','line_number':520,'multiline':True]
+['text':' If the deleters are non-NULL, this method adopts its key and/or
+     * value arguments, and we must be sure to delete the key and/or
+     * value in all cases, even upon failure.
+     ','line_number':527,'multiline':True]
+['text':'*******************************************************************
+ * PUBLIC API
+ *******************************************************************','line_number':537,'multiline':True]
+['text':' Find the smallest index i for which PRIMES[i] >= size. ','line_number':557,'multiline':True]
+['text':' Find the smallest index i for which PRIMES[i] >= size.','line_number':584,'multiline':False]
+['text':'*
+ * Returns true if the UHashtable contains an item with this integer key.
+ *
+ * @param hash The target UHashtable.
+ * @param key An integer key stored in a hashtable
+ * @return true if the key is found.
+ ','line_number':848,'multiline':True]
+['text':' Walk through the array until we find an element that is not
+     * EMPTY and not DELETED.
+     ','line_number':874,'multiline':True]
+['text':' No more elements ','line_number':886,'multiline':True]
+['text':'*******************************************************************
+ * UHashTok convenience
+ *******************************************************************','line_number':901,'multiline':True]
+['text':'*
+ * Return a UHashTok for an integer.
+ ','line_number':905,'multiline':True]
+['text':'U_CAPI UHashTok U_EXPORT2
+uhash_toki(int32_t i) {
+    UHashTok tok;
+    tok.integer = i;
+    return tok;
+}','line_number':908,'multiline':True]
+['text':'*
+ * Return a UHashTok for a pointer.
+ ','line_number':915,'multiline':True]
+['text':'U_CAPI UHashTok U_EXPORT2
+uhash_tokp(void* p) {
+    UHashTok tok;
+    tok.pointer = p;
+    return tok;
+}','line_number':918,'multiline':True]
+['text':'*******************************************************************
+ * PUBLIC Key Hash Functions
+ *******************************************************************','line_number':925,'multiline':True]
+['text':'
+     * Make sure that we are comparing 2 valid hashes of the same type
+     * with valid comparison functions.
+     * Without valid comparison functions, a binary comparison
+     * of the hash values will yield random results on machines
+     * with 64-bit pointers and 32-bit integer hashes.
+     * A valueComparator is normally optional.
+     ','line_number':955,'multiline':True]
+['text':'
+        Normally we would return an error here about incompatible hash tables,
+        but we return FALSE instead.
+        ','line_number':968,'multiline':True]
+['text':' here the keys are not compared, instead the key form hash1 is used to fetch
+         * value from hash2. If the hashes are equal then then both hashes should
+         * contain equal values for the same key!
+         ','line_number':986,'multiline':True]
+['text':'*******************************************************************
+ * PUBLIC Comparator Functions
+ *******************************************************************','line_number':999,'multiline':True]
+['text':'*******************************************************************
+ * PUBLIC int32_t Support Functions
+ *******************************************************************','line_number':1054,'multiline':True]

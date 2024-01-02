@@ -82,7 +82,10 @@ NOT_CODE_FILE_FORMATS = [
 
 DOC_FILE_FORMATS = ['.md', '.rst']
 
+# From ChatGPT TODO: Can be automated using chatgpt: asking the name of each folder from it.
+DOC_FOLDER_NAMES = ['docs/', 'doc/', 'documentation/','docstring/', 'docstrings/','manual/','guide/','help/','wiki/','tutorials/','resources/']
+
 DATA_DIR = './data/datasets/'
-DOCS_DIR = './data/documentations/'
+DOCS_DIR = 'data/documentations/'
 STATS_FILE_DIR = './stats.csv'
 GH_TOKEN_DIR = './token.txt'

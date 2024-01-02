@@ -1,0 +1,453 @@
+['text':'************************************************
+*      Perl-Compatible Regular Expressions       *
+************************************************','line_number':1,'multiline':True]
+['text':' PCRE is a library of functions to support regular expressions whose syntax
+and semantics are as close as possible to those of the Perl 5 language.
+
+                       Written by Philip Hazel
+     Original API code Copyright (c) 1997-2012 University of Cambridge
+          New API code Copyright (c) 2016-2021 University of Cambridge
+
+-----------------------------------------------------------------------------
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the name of the University of Cambridge nor the names of its
+      contributors may be used to endorse or promote products derived from
+      this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+-----------------------------------------------------------------------------
+','line_number':5,'multiline':True]
+['text':' This module contains functions for scanning a compiled pattern and
+collecting data (e.g. minimum matching length). ','line_number':41,'multiline':True]
+['text':' The maximum remembered capturing brackets minimum. ','line_number':51,'multiline':True]
+['text':' Set a bit in the starting code unit bit map. ','line_number':55,'multiline':True]
+['text':' Returns from set_start_bits() ','line_number':59,'multiline':True]
+['text':'************************************************
+*   Find the minimum subject length for a group  *
+************************************************','line_number':64,'multiline':True]
+['text':' Scan a parenthesized group and compute the minimum length of subject that
+is needed to match it. This is a lower bound; it does not mean there is a
+string of that length that matches. In UTF mode, the result is in characters
+rather than code units. The field in a compiled pattern for storing the minimum
+length is 16-bits long (on the grounds that anything longer than that is
+pathological), so we give up when we reach that amount. This also means that
+integer overflow for really crazy patterns cannot happen.
+
+Backreference minimum lengths are cached to speed up multiple references. This
+function is called only when the highest back reference in the pattern is less
+than or equal to MAX_CACHE_BACKREF, which is one less than the size of the
+caching vector. The zeroth element contains the number of the highest set
+value.
+
+Arguments:
+  re              compiled pattern block
+  code            pointer to start of group (the bracket)
+  startcode       pointer to start of the whole pattern's code
+  utf             UTF flag
+  recurses        chain of recurse_check to catch mutual recursion
+  countptr        pointer to call count (to catch over complexity)
+  backref_cache   vector for caching back references.
+
+This function is no longer called when the pattern contains (*ACCEPT); however,
+the old code for returning -1 is retained, just in case.
+
+Returns:   the minimum length
+           -1 \C in UTF-8 mode
+              or (*ACCEPT)
+              or pattern too complicated
+           -2 internal error (missing capturing bracket)
+           -3 internal error (opcode not listed)
+','line_number':68,'multiline':True]
+['text':' If this is a "could be empty" group, its minimum length is 0. ','line_number':120,'multiline':True]
+['text':' Skip over capturing bracket number ','line_number':124,'multiline':True]
+['text':' A large and/or complex regex can take too long to process. ','line_number':128,'multiline':True]
+['text':' Scan along the opcodes for this branch. If we get to the end of the branch,
+check the length against that of the other branches. If the accumulated length
+passes 16-bits, reset to that value and skip the rest of the branch. ','line_number':132,'multiline':True]
+['text':' If there is only one branch in a condition, the implied branch has zero
+    length, so we don't add anything. This covers the DEFINE "condition"
+    automatically. If there are two branches we can treat it the same as any
+    other non-capturing subpattern. ','line_number':153,'multiline':True]
+['text':' There's a special case of OP_BRA, when it is wrapped round a repeated
+    OP_RECURSE. We'd like to process the latter at this level so that
+    remembering the value works for repeated cases. So we do nothing, but
+    set a fudge value to skip over the OP_KET after the recurse. ','line_number':167,'multiline':True]
+['text':' Fall through ','line_number':178,'multiline':True]
+['text':' To save time for repeated capturing subpatterns, we remember the
+    length of the previous one. Unfortunately we can't do the same for
+    the unnumbered ones above. Nor can we do this if (?| is present in the
+    pattern because captures with the same number are not then identical. ','line_number':194,'multiline':True]
+['text':' ACCEPT makes things far too complicated; we have to give up. In fact,
+    from 10.34 onwards, if a pattern contains (*ACCEPT), this function is not
+    used. However, leave the code in place, just in case. ','line_number':216,'multiline':True]
+['text':' Reached end of a branch; if it's a ket it is the end of a nested
+    call. If it's ALT it is an alternation in a nested call. If it is END it's
+    the end of the outer call. All can be handled by the same code. If the
+    length of any branch is zero, there is no need to scan any subsequent
+    branches. ','line_number':224,'multiline':True]
+['text':' Skip over assertive subpatterns ','line_number':245,'multiline':True]
+['text':' Fall through ','line_number':254,'multiline':True]
+['text':' Skip over things that don't match chars ','line_number':256,'multiline':True]
+['text':' Skip over a subpattern that has a {0} or {0,x} quantifier ','line_number':283,'multiline':True]
+['text':' Handle literal characters and + repetitions ','line_number':294,'multiline':True]
+['text':' Handle exact repetitions. The count is already in characters, but we
+    may need to skip over a multibyte character in UTF mode.  ','line_number':326,'multiline':True]
+['text':' Handle single-char non-literal matchers ','line_number':346,'multiline':True]
+['text':' Fall through ','line_number':351,'multiline':True]
+['text':' "Any newline" might match two characters, but it also might match just
+    one. ','line_number':370,'multiline':True]
+['text':' The single-byte matcher means we can't proceed in UTF mode. (In
+    non-UTF mode \C will actually be turned into OP_ALLANY, so won't ever
+    appear, but leave the code, just in case.) ','line_number':378,'multiline':True]
+['text':' For repeated character types, we have to test for \p and \P, which have
+    an extra two bytes of parameters. ','line_number':390,'multiline':True]
+['text':' Check a class for variable quantification ','line_number':411,'multiline':True]
+['text':' The original code caused an unsigned overflow in 64 bit systems,
+    so now we use a conditional statement. ','line_number':417,'multiline':True]
+['text':' Fall through ','line_number':433,'multiline':True]
+['text':' Backreferences and subroutine calls (OP_RECURSE) are treated in the same
+    way: we find the minimum length for the subpattern. A recursion
+    (backreference or subroutine) causes an a flag to be set that causes the
+    length of this branch to be ignored. The logic is that a recursion can only
+    make sense if there is another alternative that stops the recursing. That
+    will provide the minimum length (when no recursion happens).
+
+    If PCRE2_MATCH_UNSET_BACKREF is set, a backreference to an unset bracket
+    matches an empty string (by default it causes a matching failure), so in
+    that case we must set the minimum length to zero.
+
+    For backreferenes, if duplicate numbers are present in the pattern we check
+    for a reference to a duplicate. If it is, we don't know which version will
+    be referenced, so we have to set the minimum length to zero. ','line_number':457,'multiline':True]
+['text':' Duplicate named pattern back reference. ','line_number':472,'multiline':True]
+['text':' Scan all groups with the same name; find the shortest. ','line_number':485,'multiline':True]
+['text':' Simple recursion ','line_number':504,'multiline':True]
+['text':' Mutual recursion ','line_number':513,'multiline':True]
+['text':' No recursion ','line_number':519,'multiline':True]
+['text':' No point looking at any more ','line_number':534,'multiline':True]
+['text':' Single back reference by number. References by name are converted to by
+    number when there is no duplication. ','line_number':542,'multiline':True]
+['text':' Simple recursion ','line_number':564,'multiline':True]
+['text':' Mutual recursion ','line_number':572,'multiline':True]
+['text':' No recursion ','line_number':576,'multiline':True]
+['text':' Handle repeated back references ','line_number':595,'multiline':True]
+['text':' Take care not to overflow: (1) min and d are ints, so check that their
+     product is not greater than INT_MAX. (2) branchlength is limited to
+     UINT16_MAX (checked at the top of the loop). ','line_number':629,'multiline':True]
+['text':' Recursion always refers to the first occurrence of a subpattern with a
+    given number. Therefore, we can always make use of caching, even when the
+    pattern contains multiple subpatterns with the same number. ','line_number':638,'multiline':True]
+['text':' Simple recursion ','line_number':652,'multiline':True]
+['text':' Mutual recursion ','line_number':658,'multiline':True]
+['text':' Anything else does not or need not match a character. We can get the
+    item's length from the table, but for those that can match zero occurrences
+    of a character, we must take special action for UTF-8 characters. As it
+    happens, the "NOT" versions of these opcodes are used at present only for
+    ASCII characters, so they could be omitted from this list. However, in
+    future that may change, so we include them here so as not to leave a
+    gotcha for a future maintainer. ','line_number':676,'multiline':True]
+['text':' Skip these, but we need to add in the name length. ','line_number':729,'multiline':True]
+['text':' The remaining opcodes are just skipped over. ','line_number':739,'multiline':True]
+['text':' This should not occur: we list all opcodes explicitly so that when
+    new ones get added they are properly considered. ','line_number':751,'multiline':True]
+['text':' Control never gets here ','line_number':758,'multiline':True]
+['text':'************************************************
+*      Set a bit and maybe its alternate case    *
+************************************************','line_number':763,'multiline':True]
+['text':' Given a character, set its first code unit's bit in the table, and also the
+corresponding bit for the other version of a letter if we are caseless.
+
+Arguments:
+  re            points to the regex block
+  p             points to the first code unit of the character
+  caseless      TRUE if caseless
+  utf           TRUE for UTF mode
+  ucp           TRUE for UCP mode
+
+Returns:        pointer after the character
+','line_number':767,'multiline':True]
+['text':' First code unit ','line_number':784,'multiline':True]
+['text':' Stop compiler warnings when UTF not supported ','line_number':786,'multiline':True]
+['text':' In 16-bit and 32-bit modes, code units greater than 0xff set the bit for
+0xff. ','line_number':789,'multiline':True]
+['text':' In UTF-8 or UTF-16 mode, pick up the remaining code units in order to find
+the end of the character, even when caseless. ','line_number':798,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':810,'multiline':True]
+['text':' If caseless, handle the other case of the character. ','line_number':812,'multiline':True]
+['text':' 16-bit or 32-bit mode ','line_number':828,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':834,'multiline':True]
+['text':' Not UTF or UCP ','line_number':836,'multiline':True]
+['text':'************************************************
+*     Set bits for a positive character type     *
+************************************************','line_number':846,'multiline':True]
+['text':' This function sets starting bits for a character type. In UTF-8 mode, we can
+only do a direct setting for bytes less than 128, as otherwise there can be
+confusion with bytes in the middle of UTF-8 characters. In a "traditional"
+environment, the tables will only recognize ASCII characters anyway, but in at
+least one Windows environment, some higher bytes bits were set in the tables.
+So we deal with that case by considering the UTF-8 encoding.
+
+Arguments:
+  re             the regex block
+  cbit type      the type of character wanted
+  table_limit    32 for non-UTF-8; 16 for UTF-8
+
+Returns:         nothing
+','line_number':850,'multiline':True]
+['text':' UTF-8 ','line_number':882,'multiline':True]
+['text':'************************************************
+*     Set bits for a negative character type     *
+************************************************','line_number':886,'multiline':True]
+['text':' This function sets starting bits for a negative character type such as \D.
+In UTF-8 mode, we can only do a direct setting for bytes less than 128, as
+otherwise there can be confusion with bytes in the middle of UTF-8 characters.
+Unlike in the positive case, where we can set appropriate starting bits for
+specific high-valued UTF-8 characters, in this case we have to set the bits for
+all high-valued characters. The lowest is 0xc2, but we overkill by starting at
+0xc0 (192) for simplicity.
+
+Arguments:
+  re             the regex block
+  cbit type      the type of character wanted
+  table_limit    32 for non-UTF-8; 16 for UTF-8
+
+Returns:         nothing
+','line_number':890,'multiline':True]
+['text':'************************************************
+*      Create bitmap of starting code units      *
+************************************************','line_number':919,'multiline':True]
+['text':' This function scans a compiled unanchored expression recursively and
+attempts to build a bitmap of the set of possible starting code units whose
+values are less than 256. In 16-bit and 32-bit mode, values above 255 all cause
+the 255 bit to be set. When calling set[_not]_type_bits() in UTF-8 (sic) mode
+we pass a value of 16 rather than 32 as the final argument. (See comments in
+those functions for the reason.)
+
+The SSB_CONTINUE return is useful for parenthesized groups in patterns such as
+(a*)b where the group provides some optional starting code units but scanning
+must continue at the outer level to find at least one mandatory code unit. At
+the outermost level, this function fails unless the result is SSB_DONE.
+
+We restrict recursion (for nested groups) to 1000 to avoid stack overflow
+issues.
+
+Arguments:
+  re           points to the compiled regex block
+  code         points to an expression
+  utf          TRUE if in UTF mode
+  ucp          TRUE if in UCP mode
+  depthptr     pointer to recurse depth
+
+Returns:       SSB_FAIL     => Failed to find any starting code units
+               SSB_DONE     => Found mandatory starting code units
+               SSB_CONTINUE => Found optional starting code units
+               SSB_UNKNOWN  => Hit an unrecognized opcode
+               SSB_TOODEEP  => Recursion is too deep
+','line_number':923,'multiline':True]
+['text':' Loop for items in this branch ','line_number':976,'multiline':True]
+['text':' If we reach something we don't understand, it means a new opcode has
+      been created that hasn't been added to this function. Hopefully this
+      problem will be discovered during testing. ','line_number':986,'multiline':True]
+['text':' Fail for a valid opcode that implies no starting bits. ','line_number':993,'multiline':True]
+['text':' OP_CIRC happens only at the start of an anchored branch (multiline ^
+      uses OP_CIRCM). Skip over it. ','line_number':1068,'multiline':True]
+['text':' A "real" property test implies no starting bits, but the fake property
+      PT_CLIST identifies a list of characters. These lists are short, as they
+      are used for characters with more than one "other case", so there is no
+      point in recognizing them for OP_NOTPROP. ','line_number':1075,'multiline':True]
+['text':' We can ignore word boundary tests. ','line_number':1100,'multiline':True]
+['text':' If we hit a bracket or a positive lookahead assertion, recurse to set
+      bits from within the subpattern. If it can't find anything, we have to
+      give up. If it finds some mandatory character(s), we are done for this
+      branch. Otherwise, carry on scanning after the subpattern. ','line_number':1107,'multiline':True]
+['text':' FAIL, UNKNOWN, or TOODEEP ','line_number':1134,'multiline':True]
+['text':' If we hit ALT or KET, it means we haven't found anything mandatory in
+      this branch, though we might have found something optional. For ALT, we
+      continue with the next alternative, but we have to arrange that the final
+      result from subpattern is SSB_CONTINUE rather than SSB_DONE. For KET,
+      return SSB_CONTINUE: if this is the top level, that indicates failure,
+      but after a nested subpattern, it causes scanning to continue. ','line_number':1137,'multiline':True]
+['text':' Skip over callout ','line_number':1155,'multiline':True]
+['text':' Skip over lookbehind and negative lookahead assertions ','line_number':1165,'multiline':True]
+['text':' BRAZERO does the bracket, but carries on. ','line_number':1175,'multiline':True]
+['text':' SKIPZERO skips the bracket. ','line_number':1186,'multiline':True]
+['text':' Single-char * or ? sets the bit and tries the next item ','line_number':1194,'multiline':True]
+['text':' Single-char upto sets the bit and tries the next ','line_number':1214,'multiline':True]
+['text':' At least one single char sets the bit and stops ','line_number':1228,'multiline':True]
+['text':' Fall through ','line_number':1232,'multiline':True]
+['text':' Fall through ','line_number':1243,'multiline':True]
+['text':' Special spacing and line-terminating items. These recognize specific
+      lists of characters. The difference between VSPACE and ANYNL is that the
+      latter can match the two-character CRLF sequence, but that is not
+      relevant for finding the first character, so their code here is
+      identical. ','line_number':1252,'multiline':True]
+['text':' For the 16-bit and 32-bit libraries (which can never be EBCDIC), set
+      the bits for 0xA0 and for code units >= 255, independently of UTF. ','line_number':1262,'multiline':True]
+['text':' For the 8-bit library in UTF-8 mode, set the bits for the first code
+      units of horizontal space characters. ','line_number':1269,'multiline':True]
+['text':' For U+00A0 ','line_number':1275,'multiline':True]
+['text':' For U+1680, U+180E ','line_number':1276,'multiline':True]
+['text':' For U+2000 - U+200A, U+202F, U+205F ','line_number':1277,'multiline':True]
+['text':' For U+3000 ','line_number':1278,'multiline':True]
+['text':' For the 8-bit library not in UTF-8 mode, set the bit for 0xA0, unless
+      the code is EBCDIC. ','line_number':1282,'multiline':True]
+['text':' Not EBCDIC ','line_number':1287,'multiline':True]
+['text':' 8-bit support ','line_number':1289,'multiline':True]
+['text':' For the 16-bit and 32-bit libraries (which can never be EBCDIC), set
+      the bits for NEL and for code units >= 255, independently of UTF. ','line_number':1301,'multiline':True]
+['text':' For the 8-bit library in UTF-8 mode, set the bits for the first code
+      units of vertical space characters. ','line_number':1308,'multiline':True]
+['text':' For U+0085 (NEL) ','line_number':1314,'multiline':True]
+['text':' For U+2028, U+2029 ','line_number':1315,'multiline':True]
+['text':' For the 8-bit library not in UTF-8 mode, set the bit for NEL. ','line_number':1319,'multiline':True]
+['text':' 8-bit support ','line_number':1323,'multiline':True]
+['text':' Single character types set the bits and stop. Note that if PCRE2_UCP
+      is set, we do not see these opcodes because \d etc are converted to
+      properties. Therefore, these apply in the case when only characters less
+      than 256 are recognized to match the types. ','line_number':1328,'multiline':True]
+['text':' One or more character type fudges the pointer and restarts, knowing
+      it will hit a single character type and stop there. ','line_number':1363,'multiline':True]
+['text':' Zero or more repeats of character types set the bits and then
+      try again. ','line_number':1376,'multiline':True]
+['text':' Fall through ','line_number':1382,'multiline':True]
+['text':' For the 16-bit and 32-bit libraries (which can never be EBCDIC), set
+        the bits for 0xA0 and for code units >= 255, independently of UTF. ','line_number':1401,'multiline':True]
+['text':' For the 8-bit library in UTF-8 mode, set the bits for the first code
+        units of horizontal space characters. ','line_number':1408,'multiline':True]
+['text':' For U+00A0 ','line_number':1414,'multiline':True]
+['text':' For U+1680, U+180E ','line_number':1415,'multiline':True]
+['text':' For U+2000 - U+200A, U+202F, U+205F ','line_number':1416,'multiline':True]
+['text':' For U+3000 ','line_number':1417,'multiline':True]
+['text':' For the 8-bit library not in UTF-8 mode, set the bit for 0xA0, unless
+        the code is EBCDIC. ','line_number':1421,'multiline':True]
+['text':' Not EBCDIC ','line_number':1426,'multiline':True]
+['text':' 8-bit support ','line_number':1428,'multiline':True]
+['text':' For the 16-bit and 32-bit libraries (which can never be EBCDIC), set
+        the bits for NEL and for code units >= 255, independently of UTF. ','line_number':1438,'multiline':True]
+['text':' For the 8-bit library in UTF-8 mode, set the bits for the first code
+        units of vertical space characters. ','line_number':1445,'multiline':True]
+['text':' For U+0085 (NEL) ','line_number':1451,'multiline':True]
+['text':' For U+2028, U+2029 ','line_number':1452,'multiline':True]
+['text':' For the 8-bit library not in UTF-8 mode, set the bit for NEL. ','line_number':1456,'multiline':True]
+['text':' 8-bit support ','line_number':1460,'multiline':True]
+['text':' Extended class: if there are any property checks, or if this is a
+      negative XCLASS without a map, give up. If there are no property checks,
+      there must be wide characters on the XCLASS list, because otherwise an
+      XCLASS would not have been created. This means that code points >= 255
+      are potential starters. In the UTF-8 case we can scan them and set bits
+      for the relevant leading bytes. ','line_number':1491,'multiline':True]
+['text':' We have a positive XCLASS or a negative one without a map. Set up the
+      map pointer if there is one, and fall through. ','line_number':1505,'multiline':True]
+['text':' In UTF-8 mode, scan the character list and set bits for leading bytes,
+      then jump to handle the map. ','line_number':1511,'multiline':True]
+['text':' Internal error, should not occur ','line_number':1542,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':1545,'multiline':True]
+['text':' SUPPORT_WIDE_CHARS ','line_number':1546,'multiline':True]
+['text':' It seems that the fall through comment must be outside the #ifdef if
+      it is to avoid the gcc compiler warning. ','line_number':1548,'multiline':True]
+['text':' Fall through ','line_number':1551,'multiline':True]
+['text':' Enter here for a negative non-XCLASS. In the 8-bit library, if we are
+      in UTF mode, any byte with a value >= 0xc4 is a potentially valid starter
+      because it starts a character with a value > 255. In 8-bit non-UTF mode,
+      there is no difference between CLASS and NCLASS. In all other wide
+      character modes, set the 0xFF bit to indicate code units >= 255. ','line_number':1553,'multiline':True]
+['text':' Bits for 0xc4 - 0xc8 ','line_number':1563,'multiline':True]
+['text':' Bits for 0xc9 - 0xff ','line_number':1564,'multiline':True]
+['text':' For characters >= 255 ','line_number':1567,'multiline':True]
+['text':' Fall through ','line_number':1569,'multiline':True]
+['text':' Enter here for a positive non-XCLASS. If we have fallen through from
+      an XCLASS, classmap will already be set; just advance the code pointer.
+      Otherwise, set up classmap for a a non-XCLASS and advance past it. ','line_number':1571,'multiline':True]
+['text':' When wide characters are supported, classmap may be NULL. In UTF-8
+      (sic) mode, the bits in a class bit map correspond to character values,
+      not to byte values. However, the bit map we are constructing is for byte
+      values. So we have to do a conversion for characters whose code point is
+      greater than 127. In fact, there are only two possible starting bytes for
+      characters in the range 128 - 255. ','line_number':1582,'multiline':True]
+['text':' Set bit for this starter ','line_number':1602,'multiline':True]
+['text':' and then skip on to the ','line_number':1603,'multiline':True]
+['text':' next relevant character. ','line_number':1604,'multiline':True]
+['text':' In all modes except UTF-8, the two bit maps are compatible. ','line_number':1610,'multiline':True]
+['text':' Act on what follows the class. For a zero minimum repeat, continue;
+      otherwise stop processing. ','line_number':1617,'multiline':True]
+['text':' End of class handling case ','line_number':1642,'multiline':True]
+['text':' End of switch for opcodes ','line_number':1643,'multiline':True]
+['text':' End of try_next loop ','line_number':1644,'multiline':True]
+['text':' Advance to next branch ','line_number':1646,'multiline':True]
+['text':'************************************************
+*          Study a compiled expression           *
+************************************************','line_number':1655,'multiline':True]
+['text':' This function is handed a compiled expression that it must study to produce
+information that will speed up the matching.
+
+Argument:
+  re       points to the compiled expression
+
+Returns:   0 normally; non-zero should never normally occur
+           1 unknown opcode in set_start_bits
+           2 missing capturing bracket
+           3 unknown opcode in find_minlength
+','line_number':1659,'multiline':True]
+['text':' Find start of compiled code ','line_number':1679,'multiline':True]
+['text':' For a pattern that has a first code unit, or a multiline pattern that
+matches only at "line start", there is no point in seeking a list of starting
+code units. ','line_number':1684,'multiline':True]
+['text':' If a list of starting code units was set up, scan the list to see if only
+  one or two were listed. Having only one listed is rare because usually a
+  single starting code unit will have been recognized and PCRE2_FIRSTSET set.
+  If two are listed, see if they are caseless versions of the same character;
+  if so we can replace the list with a caseless first code unit. This gives
+  better performance and is plausibly worth doing for patterns such as [Ww]ord
+  or (word|WORD). ','line_number':1694,'multiline':True]
+['text':' Least significant bit ','line_number':1716,'multiline':True]
+['text':' More than one bit set ','line_number':1717,'multiline':True]
+['text':' In the 16-bit and 32-bit libraries, the bit for 0xff means "0xff and
+        all wide characters", so we cannot use it here. ','line_number':1719,'multiline':True]
+['text':' Compute the character value ','line_number':1726,'multiline':True]
+['text':' c contains the code unit value, in the range 0-255. In 8-bit UTF
+        mode, only values < 128 can be used. In all the other cases, c is a
+        character value. ','line_number':1738,'multiline':True]
+['text':' First one found, save in a ','line_number':1745,'multiline':True]
+['text':' Second one found ','line_number':1746,'multiline':True]
+['text':' Multiple case set ','line_number':1753,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':1756,'multiline':True]
+['text':' Not the other case of a ','line_number':1758,'multiline':True]
+['text':' Save second in b ','line_number':1759,'multiline':True]
+['text':' More than two characters found ','line_number':1761,'multiline':True]
+['text':' Replace the start code unit bits with a first code unit, but only if it
+    is not the same as a required later code unit. This is because a search for
+    a required code unit starts after an explicit first code unit, but at a
+    code unit found from the bitmap. Patterns such as /a*a/ don't work
+    if both the start unit and required unit are the same. ','line_number':1765,'multiline':True]
+['text':' Find the minimum length of subject string. If the pattern can match an empty
+string, the minimum length is already known. If the pattern contains (*ACCEPT)
+all bets are off, and we don't even try to find a minimum length. If there are
+more back references than the size of the vector we are going to cache them in,
+do nothing. A pattern that complicated will probably take a long time to
+analyze and may in any case turn out to be too complicated. Note that back
+reference minima are held as 16-bit numbers. ','line_number':1790,'multiline':True]
+['text':' Highest one that is set ','line_number':1803,'multiline':True]
+['text':' \C in UTF mode or over-complex regex ','line_number':1807,'multiline':True]
+['text':' Leave minlength unchanged (will be zero) ','line_number':1808,'multiline':True]
+['text':' missing capturing bracket ','line_number':1811,'multiline':True]
+['text':' unrecognized opcode ','line_number':1814,'multiline':True]
+['text':' End of pcre2_study.c ','line_number':1825,'multiline':True]

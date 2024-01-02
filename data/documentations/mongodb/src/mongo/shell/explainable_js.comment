@@ -1,0 +1,156 @@
+['text':'','line_number':1,'multiline':False]
+['text':' A view of a collection against which operations are explained rather than executed','line_number':2,'multiline':False]
+['text':' normally.','line_number':3,'multiline':False]
+['text':'','line_number':4,'multiline':False]
+['text':' Truthy non-strings are interpreted as "allPlansExecution" verbosity.','line_number':8,'multiline':False]
+['text':' Falsy non-strings are interpreted as "queryPlanner" verbosity.','line_number':13,'multiline':False]
+['text':' All verbosity strings are passed through. Server validates if it is a known option.','line_number':18,'multiline':False]
+['text':' If "maxTimeMS" is set on innerCmd, it needs to be propagated to the top-level','line_number':33,'multiline':False]
+['text':' of explainCmd so that it has the intended effect.','line_number':34,'multiline':False]
+['text':'','line_number':42,'multiline':False]
+['text':' Private vars.','line_number':43,'multiline':False]
+['text':'','line_number':44,'multiline':False]
+['text':'','line_number':49,'multiline':False]
+['text':' Public methods.','line_number':50,'multiline':False]
+['text':'','line_number':51,'multiline':False]
+['text':'','line_number':83,'multiline':False]
+['text':' Pretty representations.','line_number':84,'multiline':False]
+['text':'','line_number':85,'multiline':False]
+['text':'','line_number':95,'multiline':False]
+['text':' Explainable operations.','line_number':96,'multiline':False]
+['text':'','line_number':97,'multiline':False]
+['text':' Support legacy varargs form. (Also handles db.foo.aggregate())','line_number':101,'multiline':False]
+['text':' Add the explain option.','line_number':106,'multiline':False]
+['text':' For compatibility with 3.4 and older versions, when the verbosity is "queryPlanner",','line_number':109,'multiline':False]
+['text':' we use the explain option to the aggregate command. Otherwise we issue an explain','line_number':110,'multiline':False]
+['text':' command wrapping the agg command, which is supported by newer versions of the server.','line_number':111,'multiline':False]
+['text':' The aggregate command requires a cursor field.','line_number':116,'multiline':False]
+['text':'*
+         * .explain().find() and .find().explain() mean the same thing. In both cases, we use
+         * the DBExplainQuery abstraction in order to construct the proper explain command to send
+         * to the server.
+         ','line_number':134,'multiline':True]
+['text':'','line_number':254,'multiline':False]
+['text':' Public static methods.','line_number':255,'multiline':False]
+['text':'','line_number':256,'multiline':False]
+['text':'*
+ * Provides a namespace for explain-related helper functions.
+ ','line_number':264,'multiline':True]
+['text':'*
+     * Given explain output from the server for a query that used the slot-based execution engine
+     * (SBE), presents this information in a more consumable format. This function requires that the
+     * explain output comes from a system where SBE is enabled on all nodes, and wil throw an
+     * exception if it observes explain output from the classic execution engine.
+     *
+     * Rather than an object, this function returns an array of information about each candidate
+     * plan. The first element of the array is always the winning plan. Each of the plans is
+     * represented by an object with the following schema:
+     *
+     *  {
+     *    planNumber: <number>,
+     *    queryPlan: <obj>,
+     *    summaryStats: <obj>,
+     *    trialSummaryStats: <obj>,
+     *    slotBasedPlan: <string>,
+     *    slotBasedPlanVerbose: <obj>,
+     *    trialSlotBasedPlanVerbose: <obj>,
+     *  }
+     *
+     * The meanings of the returned fields:
+     *   - 'planNumber': An integer giving the index of the plan in the array. The winning plan is
+     *   0, the first candidate is 1, and so on. Allows plans to be identified easily.
+     *   - 'queryPlan' - A description of the query plan, using a representation which should be
+     *   familiar to consumers of explains from versions before SBE. Importantly, each node in the
+     *   plan tree may be augmented with the following:
+     *     * A field called "execStats". These are derived execution stats for the node, obtained
+     *     based on the full SBE exec stats output. Only present for the winning plan.
+     *     * A field called "trialExecStats". This is identical in meaning to "execStats", but shows
+     *     stats from the multi-planner's trial execution period. These stats are derived from the
+     *     'allPlansExecution' section.
+     *   - 'summaryStats' - An object containing high-level execution stats for the plan as a whole
+     *     (e.g. "totalKeysExamined" and "totalDocsExamined"). Only present for the winning plan.
+     *   - 'trialSummaryStats' - Similar to "summaryStats", but describes execution stats from the
+     *   multi-planner's trial execution period. These stats are derived from the
+     *   'allPlansExecution' section.
+     *   - 'slotBasedPlan' - A string giving a concise representation of the SBE plan.
+     *   - 'slotBasedPlanVerbose' - The full SBE plan with execution stats associated with every
+     *   node. only present for the winning plan.
+     *   - 'trialSlotBasedPlanVerbose' - The SBE plans reported in the 'allPlansExecution' section,
+     *      whose runtime stats describe what happened during the multi-planner's trial execution
+     *      period.
+     *
+     * This function will work for find-style explain output as well as aggregate explain output. In
+     * the case of agg, it produces output in the same format by reformatting the contents of the
+     * $cursor stage.
+     *
+     * It is also designed to work for explain output from sharded find commands and sharded agg
+     * commands. In such cases, the output is an object with one key per shard:
+     *
+     *  {
+     *    <shardName1>: [...],
+     *    <shardName2>: [...],
+     *    ...
+     *  }
+     *
+     * Each shard reports information about its candidate plans in the same format as desgined
+     * above.
+     *
+     * The second argument, 'fieldsToKeep', is an array of field names from the above schema. For
+     * instance, a common use case would be to just see 'planNumber' and 'queryPlan', in which case
+     * the caller should pass a vlaue of ["planNumber", "queryPlan"]. This argument is optional, and
+     * defaults to generating the full verbose output.
+     *
+     * This may mutate 'explain'. Callers which want to leave 'explain' unmodified should create a
+     * deep copy prior to calling this function.
+     ','line_number':268,'multiline':True]
+['text':' Given either a query solution or an SBE tree represented by 'root', walks the tree and','line_number':366,'multiline':False]
+['text':' calls 'callbackFn()' for each node. This is done in a bottom-up manner so that the','line_number':367,'multiline':False]
+['text':' callback is executed last on the root.','line_number':368,'multiline':False]
+['text':' Construct a map from "planNodeId" to the object representing that plan node in the','line_number':414,'multiline':False]
+['text':' serialization of the query solution.','line_number':415,'multiline':False]
+['text':' This time walk the SBE plan and attribute stats to the corresponding node in the','line_number':421,'multiline':False]
+['text':' query solution tree.','line_number':422,'multiline':False]
+['text':' Find the QSN to which we should attribute this SBE stage's runtime stats.','line_number':424,'multiline':False]
+['text':' We generally only care about the common stats of the subtree as a whole','line_number':429,'multiline':False]
+['text':' associated with a query solution node, so use 'takeLatest()' to report the stats','line_number':430,'multiline':False]
+['text':' associated with the root node of this subtree.','line_number':431,'multiline':False]
+['text':' First, specially handle the full execution stats associated with the winning plan.','line_number':452,'multiline':False]
+['text':' This can happen if the user requested 'allPlansExecution' verbosity, but the','line_number':469,'multiline':False]
+['text':' query only had one solution (so there was no runtime planning).','line_number':470,'multiline':False]
+['text':' Part of this query did not use SBE.','line_number':502,'multiline':False]
+['text':' We will assign a number to each candidate plan, in order to make referring the plans','line_number':506,'multiline':False]
+['text':' easier.','line_number':507,'multiline':False]
+['text':' Only massage the execution stats for this particular piece of the explain output if','line_number':525,'multiline':False]
+['text':' this node used the slot-based execution engine for this query. The reformatting done','line_number':526,'multiline':False]
+['text':' here is tied to the SBE explain format.','line_number':527,'multiline':False]
+['text':' Return an object where the keys are the names of the shards, and the values is a','line_number':543,'multiline':False]
+['text':' reformatted array similar to what would be returned for an explain from a standalone','line_number':544,'multiline':False]
+['text':' or replica set node.','line_number':545,'multiline':False]
+['text':' We're just handling the "queryPlanner" section here, so we don't pass execution','line_number':560,'multiline':False]
+['text':' stats information.','line_number':561,'multiline':False]
+['text':' Next handle "executionStats", which is an entirely separate section from','line_number':570,'multiline':False]
+['text':' "queryPlanner" and shows execution-level information gathered from each shard.','line_number':571,'multiline':False]
+['text':' We may add more fields here, so re-apply the projection.','line_number':585,'multiline':False]
+['text':' The "executionStats" field may or may not be present.','line_number':598,'multiline':False]
+['text':' We are explaining an aggregate operation. Look for the $cursor stage and report','line_number':605,'multiline':False]
+['text':' information about that.','line_number':606,'multiline':False]
+['text':' The contents of the $cursor stage should be similarly formatted to an explain of a','line_number':615,'multiline':False]
+['text':' find operation, so reformat these inner contents.','line_number':616,'multiline':False]
+['text':' Sharded agg explain result reports the full explains from each of the shards. All we','line_number':624,'multiline':False]
+['text':' need to do is reformat the explains from the shards one-by-one.','line_number':625,'multiline':False]
+['text':'*
+         * Performs reformatting for an explain from a single mongod. Infers whether the explain is
+         * a find explain or an aggregate explain.
+         ','line_number':634,'multiline':True]
+['text':' The presence of a top-level "stages" array identifies that this is aggregation','line_number':639,'multiline':False]
+['text':' explain output from a mongod.','line_number':640,'multiline':False]
+['text':' If we are not in any of the other special cases, then assume that this is a find','line_number':645,'multiline':False]
+['text':' explain from a mongod.','line_number':646,'multiline':False]
+['text':' Bail out if the explain version indicates that the classic engine was used.','line_number':655,'multiline':False]
+['text':' Infer what kind of explain we're dealing with. Only sharded agg results will report a','line_number':660,'multiline':False]
+['text':' "shards" array at the top-level.','line_number':661,'multiline':False]
+['text':' We've handled the sharded cases already, so we now assume that the given explain output','line_number':672,'multiline':False]
+['text':' is from a single mongod.','line_number':673,'multiline':False]
+['text':'*
+ * This is the user-facing method for creating an Explainable from a collection.
+ ','line_number':708,'multiline':True]

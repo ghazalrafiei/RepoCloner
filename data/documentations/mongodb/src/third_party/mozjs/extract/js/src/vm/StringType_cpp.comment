@@ -1,0 +1,207 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' std::{all_of,copy_n,enable_if,is_const,move}','line_number':23,'multiline':False]
+['text':' std::size','line_number':24,'multiline':False]
+['text':' std::is_same, std::is_unsigned','line_number':25,'multiline':False]
+['text':' js::GetErrorMessage, JSMSG_*','line_number':35,'multiline':False]
+['text':' js::ValueToSource','line_number':42,'multiline':False]
+['text':' JSRope: do nothing, we'll count all children chars when we hit the leaf','line_number':70,'multiline':False]
+['text':' strings.','line_number':71,'multiline':False]
+['text':' JSDependentString: do nothing, we'll count the chars when we hit the base','line_number':78,'multiline':False]
+['text':' string.','line_number':79,'multiline':False]
+['text':' JSExternalString: Ask the embedding to tell us what's going on.','line_number':84,'multiline':False]
+['text':' Our callback isn't supposed to cause GC.','line_number':86,'multiline':False]
+['text':' JSExtensibleString: count the full capacity, not just the used space.','line_number':92,'multiline':False]
+['text':' JSInlineString, JSFatInlineString [JSInlineAtom, JSFatInlineAtom]: the','line_number':100,'multiline':False]
+['text':' chars are inline.','line_number':101,'multiline':False]
+['text':' Everything else: measure the space for the chars.','line_number':106,'multiline':False]
+['text':' U+0000 means no pending lead surrogate','line_number':139,'multiline':False]
+['text':' OOM','line_number':146,'multiline':False]
+['text':' pendingLeadSurrogate','line_number':163,'multiline':False]
+['text':' Got a surrogate pair','line_number':187,'multiline':False]
+['text':' both pendingLeadSurrogate and first!','line_number':198,'multiline':False]
+['text':' unpaired surrogate','line_number':201,'multiline':False]
+['text':' pendingLeadSurrogate','line_number':209,'multiline':False]
+['text':' No need to update buffer and pendingLeadSurrogate anymore','line_number':247,'multiline':False]
+['text':'static ','line_number':257,'multiline':True]
+['text':'static ','line_number':278,'multiline':True]
+['text':' Print the string's address as an actual C++ expression, to facilitate','line_number':381,'multiline':False]
+['text':' copy-and-paste into a debugger.','line_number':382,'multiline':False]
+['text':' This is DEBUG-only code.','line_number':414,'multiline':False]
+['text':' defined(DEBUG) || defined(JS_JITSPEW) ','line_number':421,'multiline':True]
+['text':'
+   * Grow by 12.5% if the buffer is very large. Otherwise, round up to the
+   * next power of 2. This is similar to what we do with arrays; see
+   * JSObject::ensureDenseArrayElements.
+   ','line_number':426,'multiline':True]
+['text':' Left-leaning ropes are far more common than right-leaning ropes, so','line_number':454,'multiline':False]
+['text':' perform a non-destructive traversal of the rope, right node first,','line_number':455,'multiline':False]
+['text':' splatting each node's characters into a contiguous buffer.','line_number':456,'multiline':False]
+['text':' It's tempting to use |HashString| instead of this loop, but that's','line_number':499,'multiline':False]
+['text':' slightly different than our existing implementation for non-ropes. We','line_number':500,'multiline':False]
+['text':' want to pretend we have a contiguous set of chars so we need to','line_number':501,'multiline':False]
+['text':' accumulate char by char rather than generate a new hash for substring','line_number':502,'multiline':False]
+['text':' and then accumulate that.','line_number':503,'multiline':False]
+['text':'
+     * When we flatten a TwoByte rope, we turn child ropes (including Latin1
+     * ropes) into TwoByte dependent strings. If one of these strings is
+     * also part of another Latin1 rope tree, we can have a Latin1 rope with
+     * a TwoByte descendent and we end up here when we flatten it. Although
+     * the chars are stored as TwoByte, we know they must be in the Latin1
+     * range, so we can safely deflate here.
+     ','line_number':574,'multiline':True]
+['text':' namespace js ','line_number':590,'multiline':True]
+['text':' Update the list of buffers associated with nursery cells when |buffer| is','line_number':604,'multiline':False]
+['text':' moved from string |from| to string |to|, depending on whether those strings','line_number':605,'multiline':False]
+['text':' are in the nursery or not.','line_number':606,'multiline':False]
+['text':' Tenured leftmost child is giving its chars buffer to the','line_number':609,'multiline':False]
+['text':' nursery-allocated root node.','line_number':610,'multiline':False]
+['text':' Leftmost child is giving its nursery-held chars buffer to a','line_number':615,'multiline':False]
+['text':' tenured string.','line_number':616,'multiline':False]
+['text':' static ','line_number':666,'multiline':True]
+['text':'
+   * Consider the DAG of JSRopes rooted at |root|, with non-JSRopes as
+   * its leaves. Mutate the root JSRope into a JSExtensibleString containing
+   * the full flattened text that the root represents, and mutate all other
+   * JSRopes in the interior of the DAG into JSDependentStrings that refer to
+   * this new JSExtensibleString.
+   *
+   * If the leftmost leaf of our DAG is a JSExtensibleString, consider
+   * stealing its buffer for use in our new root, and transforming it into a
+   * JSDependentString too. Do not mutate any of the other leaves.
+   *
+   * Perform a depth-first dag traversal, splatting each node's characters
+   * into a contiguous buffer. Visit each rope node three times:
+   *   1. record position in the buffer and recurse into left child;
+   *   2. recurse into the right child;
+   *   3. transform the node into a dependent string.
+   * To avoid maintaining a stack, tree nodes are mutated to indicate how many
+   * times they have been visited. Since ropes can be dags, a node may be
+   * encountered multiple times during traversal. However, step 3 above leaves
+   * a valid dependent string, so everything works out.
+   *
+   * While ropes avoid all sorts of quadratic cases with string concatenation,
+   * they can't help when ropes are immediately flattened. One idiomatic case
+   * that we'd like to keep linear (and has traditionally been linear in SM
+   * and other JS engines) is:
+   *
+   *   while (...) {
+   *     s += ...
+   *     s.flatten
+   *   }
+   *
+   * Two behaviors accomplish this:
+   *
+   * - When the leftmost non-rope in the DAG we're flattening is a
+   *   JSExtensibleString with sufficient capacity to hold the entire
+   *   flattened string, we just flatten the DAG into its buffer. Then, when
+   *   we transform the root of the DAG from a JSRope into a
+   *   JSExtensibleString, we steal that buffer, and change the victim from a
+   *   JSExtensibleString to a JSDependentString. In this case, the left-hand
+   *   side of the string never needs to be copied.
+   *
+   * - Otherwise, we round up the total flattened size and create a fresh
+   *   JSExtensibleString with that much capacity. If this in turn becomes the
+   *   leftmost leaf of a subsequent flatten, we will hopefully be able to
+   *   fill it, as in the case above.
+   *
+   * Note that, even though the code for creating JSDependentStrings avoids
+   * creating dependents of dependents, we can create that situation here: the
+   * JSExtensibleStrings we transform into JSDependentStrings might have
+   * JSDependentStrings pointing to them already. Stealing the buffer doesn't
+   * change its address, only its owning JSExtensibleString, so all chars()
+   * pointers in the JSDependentStrings are still valid.
+   ','line_number':668,'multiline':True]
+['text':' Find the left most string, containing the first string. ','line_number':729,'multiline':True]
+['text':' Nursery::registerMallocedBuffer is fallible, so attempt it first before','line_number':744,'multiline':False]
+['text':' doing anything irreversible.','line_number':745,'multiline':False]
+['text':' If we can't reuse the leftmost child's buffer, allocate a new one.','line_number':751,'multiline':False]
+['text':' Return to this node when 'left' done, then goto visit_right_child. ','line_number':784,'multiline':True]
+['text':' Return to this node when 'right' done, then goto finish_node. ','line_number':799,'multiline':True]
+['text':' This also clears the flags related to flattening.','line_number':824,'multiline':False]
+['text':' will be true on exit ','line_number':828,'multiline':True]
+['text':' Every interior (rope) node in the rope's tree will be visited during','line_number':830,'multiline':False]
+['text':' the traversal and post-barriered here, so earlier additions of','line_number':831,'multiline':False]
+['text':' dependent.base -> root pointers are handled by this barrier as well.','line_number':832,'multiline':False]
+['text':'','line_number':833,'multiline':False]
+['text':' The only time post-barriers need do anything is when the root is in','line_number':834,'multiline':False]
+['text':' the nursery. Note that the root was a rope but will be an extensible','line_number':835,'multiline':False]
+['text':' string when we return, so it will not point to any strings and need','line_number':836,'multiline':False]
+['text':' not be barriered.','line_number':837,'multiline':False]
+['text':' We traversed all the way back up to the root so we're finished.','line_number':851,'multiline':False]
+['text':' Remove memory association for left node we're about to make into a','line_number':862,'multiline':False]
+['text':' dependent string.','line_number':863,'multiline':False]
+['text':' leftmost child -> root is a tenured -> nursery edge.','line_number':874,'multiline':False]
+['text':' static ','line_number':883,'multiline':True]
+['text':' Don't report an exception if GC is not allowed, just return nullptr.','line_number':897,'multiline':False]
+['text':' Don't report an exception if GC is not allowed, just return nullptr.','line_number':924,'multiline':False]
+['text':' initialize to silence GCC warning','line_number':936,'multiline':False]
+['text':' initialize to silence GCC warning','line_number':937,'multiline':False]
+['text':'*
+ * Copy |src[0..length]| to |dest[0..length]| when copying doesn't narrow and
+ * therefore can't lose information.
+ ','line_number':988,'multiline':True]
+['text':'*
+ * Copy |src[0..length]| to |dest[0..length]| when copying *does* narrow, but
+ * the user guarantees every runtime |src[i]| value can be stored without change
+ * of value in |dest[i]|.
+ ','line_number':1018,'multiline':True]
+['text':' Consume remaining characters only if the first character isn't '0'.','line_number':1229,'multiline':False]
+['text':' It's not an integer index if there are characters after the number.','line_number':1238,'multiline':False]
+['text':' Look out for "4294967295" and larger-number strings that fit in','line_number':1243,'multiline':False]
+['text':' UINT32_CHAR_BUFFER_LENGTH: only unsigned 32-bit integers less than or equal','line_number':1244,'multiline':False]
+['text':' to MAX_ARRAY_INDEX shall pass.','line_number':1245,'multiline':False]
+['text':' Chars are known to be a valid index value (as determined by','line_number':1263,'multiline':False]
+['text':' CheckStringIsIndex) that didn't fit in the "index value" bits in the','line_number':1264,'multiline':False]
+['text':' header.','line_number':1265,'multiline':False]
+['text':' Static string initialization can not race, so allow even without the','line_number':1359,'multiline':False]
+['text':' lock.','line_number':1360,'multiline':False]
+['text':' These strings never change, so barriers are not needed. ','line_number':1373,'multiline':True]
+['text':' This may mark some strings more than once, but so be it. ','line_number':1383,'multiline':True]
+['text':' If the chars are inline then we need to copy them since they may be moved','line_number':1409,'multiline':False]
+['text':' by a compacting GC.','line_number':1410,'multiline':False]
+['text':' If the chars are inline then we need to copy them since they may be moved','line_number':1442,'multiline':False]
+['text':' by a compacting GC.','line_number':1443,'multiline':False]
+['text':' defined(DEBUG) || defined(JS_JITSPEW) ','line_number':1556,'multiline':True]
+['text':' |chars.get()| is safe because 1) |NewInlineString| necessarily *copies*,','line_number':1685,'multiline':False]
+['text':' and 2) |chars| frees its contents only when this function returns.','line_number':1686,'multiline':False]
+['text':' Deflating copies from |chars.get()| and lets |chars| be freed on','line_number':1717,'multiline':False]
+['text':' return.','line_number':1718,'multiline':False]
+['text':' Note that we don't need an incremental barrier here or below.','line_number':1915,'multiline':False]
+['text':' The cache is purged on GC so any string we get from the cache','line_number':1916,'multiline':False]
+['text':' must have been allocated after the GC started.','line_number':1917,'multiline':False]
+['text':' Compare the chars. Don't do this for long strings as it will be','line_number':1921,'multiline':False]
+['text':' faster to allocate a new external string.','line_number':1922,'multiline':False]
+['text':' namespace js ','line_number':1974,'multiline':True]
+['text':' Constant chars, nothing to do.','line_number':2006,'multiline':False]
+['text':' This string's buffer is not heap-allocated, so its malloc size is 0.','line_number':2010,'multiline':False]
+['text':' silence clang -Wunused-lambda-capture in opt builds','line_number':2025,'multiline':False]
+['text':' Normal atom.','line_number':2032,'multiline':False]
+['text':' Inline atom.','line_number':2039,'multiline':False]
+['text':' Fat inline atom.','line_number':2047,'multiline':False]
+['text':' Normal linear string.','line_number':2055,'multiline':False]
+['text':' Inline string.','line_number':2062,'multiline':False]
+['text':' Fat inline string.','line_number':2070,'multiline':False]
+['text':' Rope.','line_number':2079,'multiline':False]
+['text':' Dependent.','line_number':2086,'multiline':False]
+['text':' Extensible.','line_number':2093,'multiline':False]
+['text':' External. Note that we currently only support TwoByte external strings.','line_number':2107,'multiline':False]
+['text':' Assert the strings still have the types we expect after creating the','line_number':2125,'multiline':False]
+['text':' other strings.','line_number':2126,'multiline':False]
+['text':' static ','line_number':2148,'multiline':True]
+['text':' Append TwoByte strings.','line_number':2155,'multiline':False]
+['text':' Append Latin1 strings.','line_number':2164,'multiline':False]
+['text':' Now create forcibly-tenured versions of each of these string types. Note','line_number':2172,'multiline':False]
+['text':' that this is best-effort; if nursery strings are disabled, or we GC','line_number':2173,'multiline':False]
+['text':' midway through here, then we may end up with fewer nursery strings than','line_number':2174,'multiline':False]
+['text':' desired. Also, some types of strings are not nursery-allocatable, so','line_number':2175,'multiline':False]
+['text':' this will always produce some number of redundant strings.','line_number':2176,'multiline':False]
+['text':' Append TwoByte strings.','line_number':2179,'multiline':False]
+['text':' Append Latin1 strings.','line_number':2186,'multiline':False]
+['text':'** Conversions ***********************************************************','line_number':2198,'multiline':True]
+['text':' ToString(<symbol>) throws a TypeError, therefore require that callers','line_number':2237,'multiline':False]
+['text':' request source representation when |id| is a property key.','line_number':2238,'multiline':False]
+['text':' As with ToObjectSlow, callers must verify that |arg| isn't a string. ','line_number':2259,'multiline':True]

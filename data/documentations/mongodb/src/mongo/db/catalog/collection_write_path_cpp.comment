@@ -1,0 +1,140 @@
+['text':'*
+ *    Copyright (C) 2022-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' This failpoint throws a WriteConflictException after a successful call to','line_number':93,'multiline':False]
+['text':' insertDocumentForBulkLoader','line_number':94,'multiline':False]
+['text':'  This fail point injects insertion failures for all collections unless a collection name is','line_number':97,'multiline':False]
+['text':'  provided in the optional data object during configuration:','line_number':98,'multiline':False]
+['text':'  data: {','line_number':99,'multiline':False]
+['text':'      collectionNS: <fully-qualified collection namespace>,','line_number':100,'multiline':False]
+['text':'  }','line_number':101,'multiline':False]
+['text':' Used to pause after inserting collection data and calling the opObservers.  Inserts to','line_number':104,'multiline':False]
+['text':' replicated collections that are not part of a multi-statement transaction will have generated','line_number':105,'multiline':False]
+['text':' their OpTime and oplog entry. Supports parameters to limit pause by namespace and by _id','line_number':106,'multiline':False]
+['text':' of first data item in an insert (must be of type string):','line_number':107,'multiline':False]
+['text':'  data: {','line_number':108,'multiline':False]
+['text':'      collectionNS: <fully-qualified collection namespace>,','line_number':109,'multiline':False]
+['text':'      first_id: <string>','line_number':110,'multiline':False]
+['text':'  }','line_number':111,'multiline':False]
+['text':' This fail point introduces corruption to documents during insert.','line_number':114,'multiline':False]
+['text':' For retryable findAndModify running in a multi-document transaction, we will reserve the','line_number':129,'multiline':False]
+['text':' oplog entries when the transaction prepares or commits without prepare.','line_number':130,'multiline':False]
+['text':' We reserve oplog slots here, expecting the slot with the greatest timestmap (say TS) to be','line_number':135,'multiline':False]
+['text':' used as the oplog timestamp. Tenant migrations and resharding will forge no-op image oplog','line_number':136,'multiline':False]
+['text':' entries and set the timestamp for these synthetic entries to be TS - 1.','line_number':137,'multiline':False]
+['text':'*
+ * Returns an array of 'fromMigrate' values for a range of insert operations.
+ * The 'fromMigrate' oplog entry field is used to identify operations that are a result
+ * of chunk migration and should not generate change stream events.
+ * Accepts a default 'fromMigrate' value that determines if there is a need to check
+ * each insert operation individually.
+ * See SERVER-62581 and SERVER-65858.
+ ','line_number':144,'multiline':True]
+['text':' 'fromMigrate' is an oplog entry field. If we do not need to write this operation to','line_number':164,'multiline':False]
+['text':' the oplog, there is no reason to proceed with the orphan document check.','line_number':165,'multiline':False]
+['text':' Overriding the 'fromMigrate' flag makes sense only for requests coming from clients','line_number':170,'multiline':False]
+['text':' directly connected to shards.','line_number':171,'multiline':False]
+['text':' This is used to check whether the write should be performed, and if so, any other','line_number':176,'multiline':False]
+['text':' behavior that should be done as part of the write (e.g. skipping it because it affects an','line_number':177,'multiline':False]
+['text':' orphan document).','line_number':178,'multiline':False]
+['text':' We require that inserts to indexed capped collections be done one-at-a-time to avoid the','line_number':216,'multiline':False]
+['text':' possibility that a later document causes an earlier document to be deleted before it can','line_number':217,'multiline':False]
+['text':' be indexed.','line_number':218,'multiline':False]
+['text':' TODO SERVER-21512 It would be better to handle this here by just doing single inserts.','line_number':219,'multiline':False]
+['text':' X-lock the metadata resource for this replicated, non-clustered capped collection until','line_number':225,'multiline':False]
+['text':' the end of the WUOW. Non-clustered capped collections require writes to be serialized on','line_number':226,'multiline':False]
+['text':' the secondary in order to guarantee insertion order (SERVER-21483); this exclusive access','line_number':227,'multiline':False]
+['text':' to the metadata resource prevents the primary from executing with more concurrency than','line_number':228,'multiline':False]
+['text':' secondaries - thus helping secondaries keep up - and protects '_cappedFirstRecord'. See','line_number':229,'multiline':False]
+['text':' SERVER-21646. On the other hand, capped clustered collections with a monotonically','line_number':230,'multiline':False]
+['text':' increasing cluster key natively guarantee preservation of the insertion order, and don't','line_number':231,'multiline':False]
+['text':' need serialisation. We allow concurrent inserts for clustered capped collections.','line_number':232,'multiline':False]
+['text':' For capped collections requiring capped snapshots, usually RecordIds are reserved and','line_number':242,'multiline':False]
+['text':' registered here to handle visibility. If the RecordId is provided by the caller, it is','line_number':243,'multiline':False]
+['text':' assumed the caller already reserved and properly registered the inserts in the','line_number':244,'multiline':False]
+['text':' CappedVisibilityObserver.','line_number':245,'multiline':False]
+['text':' This case would only normally be called in a testing circumstance to avoid','line_number':262,'multiline':False]
+['text':' automatically generating record ids for capped collections.','line_number':263,'multiline':False]
+['text':' Insert a truncated record that is half the expected size of the source document.','line_number':270,'multiline':False]
+['text':' Generate a useful error message that is consistent with duplicate key error messages','line_number':285,'multiline':False]
+['text':' on indexes. This transforms the error from a duplicate clustered key error into a','line_number':286,'multiline':False]
+['text':' duplicate key error. We have to perform this in order to maintain compatibility with','line_number':287,'multiline':False]
+['text':' already existing user code.','line_number':288,'multiline':False]
+['text':' indexName ','line_number':297,'multiline':True]
+['text':' 'opDebug' may be deleted at rollback time in case of multi-document transaction.','line_number':328,'multiline':False]
+['text':'fromMigrate=','line_number':342,'multiline':True]
+['text':'defaultFromMigrate=','line_number':343,'multiline':True]
+['text':' namespace','line_number':351,'multiline':False]
+['text':' Using timestamp 0 for these inserts, which are non-oplog so we don't have an appropriate','line_number':379,'multiline':False]
+['text':' timestamp to use.','line_number':380,'multiline':False]
+['text':' Fetch a new optime now, if necessary.','line_number':400,'multiline':False]
+['text':'fromMigrate=','line_number':413,'multiline':True]
+['text':'defaultFromMigrate=','line_number':414,'multiline':True]
+['text':' Capture the recordStore here instead of the CollectionPtr object itself, because the record','line_number':418,'multiline':False]
+['text':' store's lifetime is controlled by the collection IX lock held on the write paths, whereas the','line_number':419,'multiline':False]
+['text':' CollectionPtr is just a front to the collection and its lifetime is shorter','line_number':420,'multiline':False]
+['text':' Should really be done in the collection object at creation and updated on index create.','line_number':442,'multiline':False]
+['text':' Capture the recordStore here instead of the CollectionPtr object itself, because the record','line_number':479,'multiline':False]
+['text':' store's lifetime is controlled by the collection IX lock held on the write paths, whereas the','line_number':480,'multiline':False]
+['text':' CollectionPtr is just a front to the collection and its lifetime is shorter','line_number':481,'multiline':False]
+['text':' If the failpoint specifies no collection or matches the existing one, hang.','line_number':505,'multiline':False]
+['text':' If the failpoint specifies no collection or matches the existing one, fail.','line_number':539,'multiline':False]
+['text':' moderate means we have to check the old doc','line_number':562,'multiline':False]
+['text':' transitioning from good -> bad is not ok','line_number':565,'multiline':False]
+['text':' bad -> bad is ok in moderate mode','line_number':568,'multiline':False]
+['text':' We accept equivalent _id according to the collation defined in the collection. 'foo' and','line_number':597,'multiline':False]
+['text':' 'Foo' could be equivalent but not byte-identical according to the collation of the','line_number':598,'multiline':False]
+['text':' collection.','line_number':599,'multiline':False]
+['text':' If the update is part of a retryable write and we expect to be storing the pre- or','line_number':614,'multiline':False]
+['text':' post-image in a side collection, then we must reserve oplog slots in advance. We','line_number':615,'multiline':False]
+['text':' expect to use the reserved oplog slots as follows, where TS is the greatest','line_number':616,'multiline':False]
+['text':' timestamp of 'oplogSlots':','line_number':617,'multiline':False]
+['text':' TS - 1: Tenant migrations and resharding will forge no-op image oplog entries and set','line_number':618,'multiline':False]
+['text':'         the entry timestamps to TS - 1.','line_number':619,'multiline':False]
+['text':' TS:     The timestamp given to the update oplog entry.','line_number':620,'multiline':False]
+['text':' Retryable findAndModify commands should not reserve oplog slots before entering this','line_number':623,'multiline':False]
+['text':' function since tenant migrations and resharding rely on always being able to set','line_number':624,'multiline':False]
+['text':' timestamps of forged pre- and post- image entries to timestamp of findAndModify - 1.','line_number':625,'multiline':False]
+['text':' don't update the indexes if kUpdateNoIndexes has been specified.','line_number':632,'multiline':False]
+['text':' 'opDebug' may be deleted at rollback time in case of multi-document transaction.','line_number':652,'multiline':False]
+['text':' If the update is part of a retryable write and we expect to be storing the pre- or','line_number':690,'multiline':False]
+['text':' post-image in a side collection, then we must reserve oplog slots in advance. We','line_number':691,'multiline':False]
+['text':' expect to use the reserved oplog slots as follows, where TS is the greatest','line_number':692,'multiline':False]
+['text':' timestamp of 'oplogSlots':','line_number':693,'multiline':False]
+['text':' TS - 1: Tenant migrations and resharding will forge no-op image oplog entries and set','line_number':694,'multiline':False]
+['text':'         the entry timestamps to TS - 1.','line_number':695,'multiline':False]
+['text':' TS:     The timestamp given to the update oplog entry.','line_number':696,'multiline':False]
+['text':' Retryable findAndModify commands should not reserve oplog slots before entering this','line_number':699,'multiline':False]
+['text':' function since tenant migrations and resharding rely on always being able to set','line_number':700,'multiline':False]
+['text':' timestamps of forged pre- and post- image entries to timestamp of findAndModify - 1.','line_number':701,'multiline':False]
+['text':' don't update the indexes if kUpdateNoIndexes has been specified.','line_number':716,'multiline':False]
+['text':' 'opDebug' may be deleted at rollback time in case of multi-document transaction.','line_number':736,'multiline':False]
+['text':' TODO(SERVER-80956): remove this call.','line_number':798,'multiline':False]
+['text':' 'opDebug' may be deleted at rollback time in case of multi-document transaction.','line_number':828,'multiline':False]
+['text':' namespace collection_internal','line_number':837,'multiline':False]
+['text':' namespace mongo','line_number':838,'multiline':False]

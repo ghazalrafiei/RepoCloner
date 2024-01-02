@@ -1,0 +1,749 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ *
+ * Copyright 2016 Mozilla Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ','line_number':1,'multiline':True]
+['text':' js::IdValuePair','line_number':28,'multiline':False]
+['text':' Assembler::HasSSE41','line_number':34,'multiline':False]
+['text':' js::GetErrorMessage, JSMSG_*','line_number':39,'multiline':False]
+['text':' JS_{PS,FN}{,_END}','line_number':41,'multiline':False]
+['text':' js::FunctionFlags','line_number':45,'multiline':False]
+['text':' js::GlobalObject','line_number':46,'multiline':False]
+['text':' js::PromiseHelperTask','line_number':47,'multiline':False]
+['text':' js::PlainObject','line_number':49,'multiline':False]
+['text':' js::PromiseObject','line_number':50,'multiline':False]
+['text':' js::WarnNumberASCII','line_number':52,'multiline':False]
+['text':' js_*_str','line_number':53,'multiline':False]
+['text':' About the fuzzer intercession points: If fuzzing has been selected and only a','line_number':79,'multiline':False]
+['text':' single compiler has been selected then we will disable features that are not','line_number':80,'multiline':False]
+['text':' supported by that single compiler.  This is strictly a concession to the','line_number':81,'multiline':False]
+['text':' fuzzer infrastructure.','line_number':82,'multiline':False]
+['text':' These functions read flags and apply fuzzing intercession policies.  Never go','line_number':94,'multiline':False]
+['text':' directly to the flags in code below, always go via these accessors.','line_number':95,'multiline':False]
+['text':'
+ * [SMDOC] Compiler and feature selection; compiler and feature availability.
+ *
+ * In order to make the computation of whether a wasm feature or wasm compiler
+ * is available predictable, we have established some rules, and implemented
+ * those rules.
+ *
+ * Code elsewhere should use the predicates below to test for features and
+ * compilers, it should never try to compute feature and compiler availability
+ * in other ways.
+ *
+ * At the outset, there is a set of selected compilers C containing at most one
+ * baseline compiler [*] and at most one optimizing compiler [**], and a set of
+ * selected features F.  These selections come from defaults and from overrides
+ * by command line switches in the shell and javascript.option.wasm_X in the
+ * browser.  Defaults for both features and compilers may be platform specific,
+ * for example, some compilers may not be available on some platforms because
+ * they do not support the architecture at all or they do not support features
+ * that must be enabled by default on the platform.
+ *
+ * [*] Currently we have only one, "baseline" aka "Rabaldr", but other
+ *     implementations have additional baseline translators, eg from wasm
+ *     bytecode to an internal code processed by an interpreter.
+ *
+ * [**] Currently we have two, "ion" aka "Baldr", and "Cranelift".
+ *
+ *
+ * Compiler availability:
+ *
+ * The set of features F induces a set of available compilers A: these are the
+ * compilers that all support all the features in F.  (Some of these compilers
+ * may not be in the set C.)
+ *
+ * The sets C and A are intersected, yielding a set of enabled compilers E.
+ * Notably, the set E may be empty, in which case wasm is effectively disabled
+ * (though the WebAssembly object is still present in the global environment).
+ *
+ * An important consequence is that selecting a feature that is not supported by
+ * a particular compiler disables that compiler completely -- there is no notion
+ * of a compiler being available but suddenly failing when an unsupported
+ * feature is used by a program.  If a compiler is available, it supports all
+ * the features that have been selected.
+ *
+ * Equally important, a feature cannot be enabled by default on a platform if
+ * the feature is not supported by all the compilers we wish to have enabled by
+ * default on the platform.  We MUST by-default disable features on a platform
+ * that are not supported by all the compilers on the platform.
+ *
+ * As an example:
+ *
+ *   On ARM64 the default compilers are Baseline and Cranelift.  Say Cranelift
+ *   does not support feature X.  Thus X cannot be enabled by default on ARM64.
+ *   However, X support can be compiled-in to SpiderMonkey, and the user can opt
+ *   to enable X.  Doing so will disable Cranelift.
+ *
+ *   In contrast, X can be enabled by default on x64, where the default
+ *   compilers are Baseline and Ion, both of which support X.
+ *
+ *   A subtlety is worth noting: on x64, enabling Cranelift (thus disabling Ion)
+ *   will not disable X.  Instead, the presence of X in the selected feature set
+ *   will disable Cranelift, leaving only Baseline.  This follows from the logic
+ *   described above.
+ *
+ * In a shell build, the testing functions wasmCompilersPresent,
+ * wasmCompileMode, wasmCraneliftDisabledByFeatures, and
+ * wasmIonDisabledByFeatures can be used to probe compiler availability and the
+ * reasons for a compiler being unavailable.
+ *
+ *
+ * Feature availability:
+ *
+ * A feature is available if it is selected and there is at least one available
+ * compiler that implements it.
+ *
+ * For example, --wasm-gc selects the GC feature, and if Baseline is available
+ * then the feature is available.
+ *
+ * In a shell build, there are per-feature testing functions (of the form
+ * wasmFeatureEnabled) to probe whether specific features are available.
+ ','line_number':125,'multiline':True]
+['text':' Compiler availability predicates.  These must be kept in sync with the','line_number':206,'multiline':False]
+['text':' feature predicates in the next section below.','line_number':207,'multiline':False]
+['text':'','line_number':208,'multiline':False]
+['text':' These can't call the feature predicates since the feature predicates call','line_number':209,'multiline':False]
+['text':' back to these predicates.  So there will be a small amount of duplicated','line_number':210,'multiline':False]
+['text':' logic here, but as compilers reach feature parity that duplication will go','line_number':211,'multiline':False]
+['text':' away.','line_number':212,'multiline':False]
+['text':'','line_number':213,'multiline':False]
+['text':' There's a static precedence order between the optimizing compilers.  This','line_number':214,'multiline':False]
+['text':' order currently ranks Cranelift over Ion on all platforms because Cranelift','line_number':215,'multiline':False]
+['text':' is disabled by default on all platforms: anyone who has enabled Cranelift','line_number':216,'multiline':False]
+['text':' will wish to use it instead of Ion.','line_number':217,'multiline':False]
+['text':'','line_number':218,'multiline':False]
+['text':' The precedence order is implemented by guards in IonAvailable() and','line_number':219,'multiline':False]
+['text':' CraneliftAvailable().  We expect that it will become more complex as the','line_number':220,'multiline':False]
+['text':' default settings change.  But it should remain static.','line_number':221,'multiline':False]
+['text':' Baseline supports every feature supported by any compiler.','line_number':224,'multiline':False]
+['text':' For now, restrict this to Ion - we have not tested Cranelift properly.','line_number':238,'multiline':False]
+['text':' Ion has no debugging support, no gc support.','line_number':254,'multiline':False]
+['text':' Cranelift has no debugging support, no gc support, no simd, and','line_number':289,'multiline':False]
+['text':' no exceptions support.','line_number':290,'multiline':False]
+['text':' Cranelift aarch64 has full SIMD support.','line_number':295,'multiline':False]
+['text':' Feature predicates.  These must be kept in sync with the predicates in the','line_number':328,'multiline':False]
+['text':' section above.','line_number':329,'multiline':False]
+['text':'','line_number':330,'multiline':False]
+['text':' The meaning of these predicates is tricky: A predicate is true for a feature','line_number':331,'multiline':False]
+['text':' if the feature is enabled and/or compiled-in *and* we have *at least one*','line_number':332,'multiline':False]
+['text':' compiler that can support the feature.  Subsequent compiler selection must','line_number':333,'multiline':False]
+['text':' ensure that only compilers that actually support the feature are used.','line_number':334,'multiline':False]
+['text':' This may be slightly more lenient than we want in an ideal world, but it','line_number':346,'multiline':False]
+['text':' remains safe.','line_number':347,'multiline':False]
+['text':' The #ifdef ensures that we only enable the wormhole on hardware that','line_number':355,'multiline':False]
+['text':' supports it and if SIMD support is compiled in.','line_number':356,'multiline':False]
+['text':'','line_number':357,'multiline':False]
+['text':' Next we must check that the CPU supports SIMD; it might not, even if SIMD','line_number':358,'multiline':False]
+['text':' is available.  Do this directly, not via WasmSimdFlag().','line_number':359,'multiline':False]
+['text':'','line_number':360,'multiline':False]
+['text':' Do not go via WasmSimdFlag() because we do not want to gate on','line_number':361,'multiline':False]
+['text':' j.o.wasm_simd.  If the wormhole is available, requesting it will','line_number':362,'multiline':False]
+['text':' force-enable SIMD.','line_number':363,'multiline':False]
+['text':' Wasm threads require 8-byte lock-free atomics.','line_number':401,'multiline':False]
+['text':' Lazily initialize the global type context','line_number':406,'multiline':False]
+['text':' Test only whether the compilers are supported on the hardware, not whether','line_number':411,'multiline':False]
+['text':' they are enabled.','line_number':412,'multiline':False]
+['text':' If the general wasm pref is on, it's on for everything.','line_number':418,'multiline':False]
+['text':' If the general pref is off, check trusted principals.','line_number':420,'multiline':False]
+['text':' Do not check for compiler availability, as that may be run-time variant.','line_number':426,'multiline':False]
+['text':' For HasSupport() we want a stable answer depending only on prefs.','line_number':427,'multiline':False]
+['text':' This should match EnsureStreamSupport().','line_number':432,'multiline':False]
+['text':' Fuzzilli breaks the out-of-process compilation mechanism,','line_number':440,'multiline':False]
+['text':' so we disable it permanently in those builds.','line_number':441,'multiline':False]
+['text':' At the moment, we require Ion support for code caching.  The main reason','line_number':446,'multiline':False]
+['text':' for this is that wasm::CompileAndSerialize() does not have access to','line_number':447,'multiline':False]
+['text':' information about which optimizing compiler it should use.  See comments in','line_number':448,'multiline':False]
+['text':' CompileAndSerialize(), below.','line_number':449,'multiline':False]
+['text':' ============================================================================','line_number':454,'multiline':False]
+['text':' Imports','line_number':455,'multiline':False]
+['text':' Checks whether the signature of the imported exception object matches','line_number':564,'multiline':False]
+['text':' the signature declared in the exception import's EventDesc.','line_number':565,'multiline':False]
+['text':' Note: JS::DescribeScriptedCaller returns whether a scripted caller was','line_number':652,'multiline':False]
+['text':' found, not whether an error was thrown. This wrapper function converts','line_number':653,'multiline':False]
+['text':' back to the more ordinary false-if-error form.','line_number':654,'multiline':False]
+['text':' Parse the options bag that is optionally passed to functions that compile','line_number':668,'multiline':False]
+['text':' wasm.  This is for internal experimentation purposes.  See comments about the','line_number':669,'multiline':False]
+['text':' SIMD wormhole in WasmConstants.h.','line_number':670,'multiline':False]
+['text':' ============================================================================','line_number':704,'multiline':False]
+['text':' Testing / Fuzzing support','line_number':705,'multiline':False]
+['text':' MOZ_STACK_CLASS means these can be nops.','line_number':754,'multiline':False]
+['text':' The caller has ensured CodeCachingAvailable(). Moreover, we want to ensure','line_number':778,'multiline':False]
+['text':' we go straight to tier-2 so that we synchronously call','line_number':779,'multiline':False]
+['text':' JS::OptimizedEncodingListener::storeOptimizedEncoding().','line_number':780,'multiline':False]
+['text':' We always pick Ion here, and we depend on CodeCachingAvailable() having','line_number':783,'multiline':False]
+['text':' determined that Ion is available, see comments at CodeCachingAvailable().','line_number':784,'multiline':False]
+['text':' To do better, we need to pass information about which compiler that should','line_number':785,'multiline':False]
+['text':' be used into CompileAndSerialize().','line_number':786,'multiline':False]
+['text':' The caller must ensure that huge memory support is configured the same in','line_number':789,'multiline':False]
+['text':' the receiving process of this serialized module.','line_number':790,'multiline':False]
+['text':' ============================================================================','line_number':822,'multiline':False]
+['text':' Common functions','line_number':823,'multiline':False]
+['text':' '[EnforceRange] unsigned long' types are coerced with','line_number':825,'multiline':False]
+['text':'    ConvertToInt(v, 32, 'unsigned')','line_number':826,'multiline':False]
+['text':' defined in Web IDL Section 3.2.4.9.','line_number':827,'multiline':False]
+['text':' Step 4.','line_number':830,'multiline':False]
+['text':' Step 5.','line_number':836,'multiline':False]
+['text':' Step 6.1.','line_number':841,'multiline':False]
+['text':' Step 6.2.','line_number':848,'multiline':False]
+['text':' Step 6.3.','line_number':851,'multiline':False]
+['text':' Get minimum parameter.','line_number':890,'multiline':False]
+['text':' Get maximum parameter.','line_number':912,'multiline':False]
+['text':' maxVal does not have a default value.','line_number':924,'multiline':False]
+['text':' shared's default value is false, which is already the value set above.','line_number':953,'multiline':False]
+['text':' Check both minimum and initial are not supplied.','line_number':977,'multiline':False]
+['text':' ============================================================================','line_number':1004,'multiline':False]
+['text':' WebAssembly.Module class and methods','line_number':1005,'multiline':False]
+['text':' addProperty','line_number':1008,'multiline':False]
+['text':' delProperty','line_number':1009,'multiline':False]
+['text':' enumerate','line_number':1010,'multiline':False]
+['text':' newEnumerate','line_number':1011,'multiline':False]
+['text':' resolve','line_number':1012,'multiline':False]
+['text':' mayResolve','line_number':1013,'multiline':False]
+['text':' finalize','line_number':1014,'multiline':False]
+['text':' call','line_number':1015,'multiline':False]
+['text':' hasInstance','line_number':1016,'multiline':False]
+['text':' construct','line_number':1017,'multiline':False]
+['text':' trace','line_number':1018,'multiline':False]
+['text':' static ','line_number':1057,'multiline':True]
+['text':' static ','line_number':1215,'multiline':True]
+['text':' static ','line_number':1295,'multiline':True]
+['text':' static ','line_number':1365,'multiline':True]
+['text':' static ','line_number':1426,'multiline':True]
+['text':' This accounts for module allocation size (excluding code which is handled','line_number':1435,'multiline':False]
+['text':' separately - see below). This assumes that the size of associated data','line_number':1436,'multiline':False]
+['text':' doesn't change for the life of the WasmModuleObject. The size is counted','line_number':1437,'multiline':False]
+['text':' once per WasmModuleObject referencing a Module.','line_number':1438,'multiline':False]
+['text':' Bug 1569888: We account for the first tier here; the second tier, if','line_number':1443,'multiline':False]
+['text':' different, also needs to be accounted for.','line_number':1444,'multiline':False]
+['text':' Avoid spamming the console.','line_number':1475,'multiline':False]
+['text':' static ','line_number':1494,'multiline':True]
+['text':' ============================================================================','line_number':1569,'multiline':False]
+['text':' WebAssembly.Instance class and methods','line_number':1570,'multiline':False]
+['text':' addProperty','line_number':1573,'multiline':False]
+['text':' delProperty','line_number':1574,'multiline':False]
+['text':' enumerate','line_number':1575,'multiline':False]
+['text':' newEnumerate','line_number':1576,'multiline':False]
+['text':' resolve','line_number':1577,'multiline':False]
+['text':' mayResolve','line_number':1578,'multiline':False]
+['text':' finalize','line_number':1579,'multiline':False]
+['text':' call','line_number':1580,'multiline':False]
+['text':' hasInstance','line_number':1581,'multiline':False]
+['text':' construct','line_number':1582,'multiline':False]
+['text':' trace','line_number':1583,'multiline':False]
+['text':' static ','line_number':1613,'multiline':True]
+['text':' static ','line_number':1621,'multiline':True]
+['text':' WeakScopeMap maps from function index to js::Scope. This maps is weak','line_number':1642,'multiline':False]
+['text':' to avoid holding scope objects alive. The scopes are normally created','line_number':1643,'multiline':False]
+['text':' during debugging.','line_number':1644,'multiline':False]
+['text':'','line_number':1645,'multiline':False]
+['text':' This is defined here in order to avoid recursive dependency between','line_number':1646,'multiline':False]
+['text':' WasmJS.h and Scope.h.','line_number':1647,'multiline':False]
+['text':' static ','line_number':1658,'multiline':True]
+['text':' static ','line_number':1674,'multiline':True]
+['text':' static ','line_number':1684,'multiline':True]
+['text':' We must delay creating metadata for this object until after all its','line_number':1734,'multiline':False]
+['text':' slots have been initialized. We must also create the metadata before','line_number':1735,'multiline':False]
+['text':' calling Instance::init as that may allocate new objects.','line_number':1736,'multiline':False]
+['text':' Finalization assumes these slots are always initialized:','line_number':1745,'multiline':False]
+['text':' The INSTANCE_SLOT may not be initialized if Instance allocation fails,','line_number':1757,'multiline':False]
+['text':' leading to an observable "newborn" state in tracing/finalization.','line_number':1758,'multiline':False]
+['text':' Root the Instance via WasmInstanceObject before any possible GC.','line_number':1761,'multiline':False]
+['text':' static ','line_number':1798,'multiline':True]
+['text':'
+ * [SMDOC] Exported wasm functions and the jit-entry stubs
+ *
+ * ## The kinds of exported functions
+ *
+ * There are several kinds of exported wasm functions.  /Explicitly/ exported
+ * functions are:
+ *
+ *  - any wasm function exported via the export section
+ *  - any asm.js export
+ *  - the module start function
+ *
+ * There are also /implicitly/ exported functions, these are the functions whose
+ * indices in the module are referenced outside the code segment, eg, in element
+ * segments and in global initializers.
+ *
+ * ## Wasm functions as JSFunctions
+ *
+ * Any exported function can be manipulated by JS and wasm code, and to both the
+ * exported function is represented as a JSFunction.  To JS, that means that the
+ * function can be called in the same way as any other JSFunction.  To Wasm, it
+ * means that the function is a reference with the same representation as
+ * externref.
+ *
+ * However, the JSFunction object is created only when the function value is
+ * actually exposed to JS the first time.  The creation is performed by
+ * getExportedFunction(), below, as follows:
+ *
+ *  - a function exported via the export section (or from asm.js) is created
+ *    when the export object is created, which happens at instantiation time.
+ *
+ *  - a function implicitly exported via a table is created when the table
+ *    element is read (by JS or wasm) and a function value is needed to
+ *    represent that value.  Functions stored in tables by initializers have a
+ *    special representation that does not require the function object to be
+ *    created.
+ *
+ *  - a function implicitly exported via a global initializer is created when
+ *    the global is initialized.
+ *
+ *  - a function referenced from a ref.func instruction in code is created when
+ *    that instruction is executed the first time.
+ *
+ * The JSFunction representing a wasm function never changes: every reference to
+ * the wasm function that exposes the JSFunction gets the same JSFunction.  In
+ * particular, imported functions already have a JSFunction representation (from
+ * JS or from their home module), and will be exposed using that representation.
+ *
+ * The mapping from a wasm function to its JSFunction is instance-specific, and
+ * held in a hashmap in the instance.  If a module is shared across multiple
+ * instances, possibly in multiple threads, each instance will have its own
+ * JSFunction representing the wasm function.
+ *
+ * ## Stubs -- interpreter, eager, lazy, provisional, and absent
+ *
+ * While a Wasm exported function is just a JSFunction, the internal wasm ABI is
+ * neither the C++ ABI nor the JS JIT ABI, so there needs to be an extra step
+ * when C++ or JS JIT code calls wasm code.  For this, execution passes through
+ * a stub that is adapted to both the JS caller and the wasm callee.
+ *
+ * ### Interpreter stubs and jit-entry stubs
+ *
+ * When JS interpreted code calls a wasm function, we end up in
+ * Instance::callExport() to execute the call.  This function must enter wasm,
+ * and to do this it uses a stub that is specific to the wasm function (see
+ * GenerateInterpEntry) that is callable with the C++ interpreter ABI and which
+ * will convert arguments as necessary and enter compiled wasm code.
+ *
+ * The interpreter stub is created eagerly, when the module is compiled.
+ *
+ * However, the interpreter call path is slow, and when JS jitted code calls
+ * wasm we want to do better.  In this case, there is a different, optimized
+ * stub that is to be invoked, and it uses the JIT ABI.  This is the jit-entry
+ * stub for the function.  Jitted code will call a wasm function's jit-entry
+ * stub to invoke the function with the JIT ABI.  The stub will adapt the call
+ * to the wasm ABI.
+ *
+ * Some jit-entry stubs are created eagerly and some are created lazily.
+ *
+ * ### Eager jit-entry stubs
+ *
+ * The explicitly exported functions have stubs created for them eagerly.  Eager
+ * stubs are created with their tier when the module is compiled, see
+ * ModuleGenerator::finishCodeTier(), which calls wasm::GenerateStubs(), which
+ * generates stubs for functions with eager stubs.
+ *
+ * An eager stub for tier-1 is upgraded to tier-2 if the module tiers up, see
+ * below.
+ *
+ * ### Lazy jit-entry stubs
+ *
+ * Stubs are created lazily for all implicitly exported functions.  These
+ * functions may flow out to JS, but will only need a stub if they are ever
+ * called from jitted code.  (That's true for explicitly exported functions too,
+ * but for them the presumption is that they will be called.)
+ *
+ * Lazy stubs are created only when they are needed, and they are /doubly/ lazy,
+ * see getExportedFunction(), below: A function implicitly exported via a table
+ * or global may be manipulated eagerly by host code without actually being
+ * called (maybe ever), so we do not generate a lazy stub when the function
+ * object escapes to JS, but instead delay stub generation until the function is
+ * actually called.
+ *
+ * ### The provisional lazy jit-entry stub
+ *
+ * However, JS baseline compilation needs to have a stub to start with in order
+ * to allow it to attach CacheIR data to the call (or it deoptimizes the call as
+ * a C++ call).  Thus when the JSFunction for the wasm export is retrieved by JS
+ * code, a /provisional/ lazy jit-entry stub is associated with the function.
+ * The stub will invoke the wasm function on the slow interpreter path via
+ * callExport - if the function is ever called - and will cause a fast jit-entry
+ * stub to be created at the time of the call.  The provisional lazy stub is
+ * shared globally, it contains no function-specific or context-specific data.
+ *
+ * Thus, the final lazy jit-entry stubs are eventually created by
+ * Instance::callExport, when a call is routed through it on the slow path for
+ * any of the reasons given above.
+ *
+ * ### Absent jit-entry stubs
+ *
+ * Some functions never get jit-entry stubs.  The predicate canHaveJitEntry()
+ * determines if a wasm function gets a stub, and it will deny this if the
+ * function's signature exposes non-JS-compatible types (such as v128) or if
+ * stub optimization has been disabled by a jit option.  Calls to these
+ * functions will continue to go via callExport and use the slow interpreter
+ * stub.
+ *
+ * ## The jit-entry jump table
+ *
+ * The mapping from the exported function to its jit-entry stub is implemented
+ * by the jit-entry jump table in the JumpTables object (see WasmCode.h).  The
+ * jit-entry jump table entry for a function holds a stub that the jit can call
+ * to perform fast calls.
+ *
+ * While there is a single contiguous jump table, it has two logical sections:
+ * one for eager stubs, and one for lazy stubs.  These sections are initialized
+ * and updated separately, using logic that is specific to each section.
+ *
+ * The value of the table element for an eager stub is a pointer to the stub
+ * code in the current tier.  The pointer is installed just after the creation
+ * of the stub, before any code in the module is executed.  If the module later
+ * tiers up, the eager jit-entry stub for tier-1 code is replaced by one for
+ * tier-2 code, see the next section.
+ *
+ * Initially the value of the jump table element for a lazy stub is null.
+ *
+ * If the function is retrieved by JS (by getExportedFunction()) and is not
+ * barred from having a jit-entry, then the stub is upgraded to the shared
+ * provisional lazy jit-entry stub.  This upgrade happens to be racy if the
+ * module is shared, and so the update is atomic and only happens if the entry
+ * is already null.  Since the provisional lazy stub is shared, this is fine; if
+ * several threads try to upgrade at the same time, it is to the same shared
+ * value.
+ *
+ * If the retrieved function is later invoked (via callExport()), the stub is
+ * upgraded to an actual jit-entry stub for the current code tier, again if the
+ * function is allowed to have a jit-entry.  This is not racy -- though multiple
+ * threads can be trying to create a jit-entry stub at the same time, they do so
+ * under a lock and only the first to take the lock will be allowed to create a
+ * stub, the others will reuse the first-installed stub.
+ *
+ * If the module later tiers up, the lazy jit-entry stub for tier-1 code (if it
+ * exists) is replaced by one for tier-2 code, see the next section.
+ *
+ * (Note, the InterpEntry stub is never stored in the jit-entry table, as it
+ * uses the C++ ABI, not the JIT ABI.  It is accessible through the
+ * FunctionEntry.)
+ *
+ * ### Interaction of the jit-entry jump table and tiering
+ *
+ * (For general info about tiering, see the comment in WasmCompile.cpp.)
+ *
+ * The jit-entry stub, whether eager or lazy, is specific to a code tier - a
+ * stub will invoke the code for its function for the tier.  When we tier up,
+ * new jit-entry stubs must be created that reference tier-2 code, and must then
+ * be patched into the jit-entry table.  The complication here is that, since
+ * the jump table is shared with its code between instances on multiple threads,
+ * tier-1 code is running on other threads and new tier-1 specific jit-entry
+ * stubs may be created concurrently with trying to create the tier-2 stubs on
+ * the thread that performs the tiering-up.  Indeed, there may also be
+ * concurrent attempts to upgrade null jit-entries to the provisional lazy stub.
+ *
+ * Eager stubs:
+ *
+ *  - Eager stubs for tier-2 code are patched in racily by Module::finishTier2()
+ *    along with code pointers for tiering; nothing conflicts with these writes.
+ *
+ * Lazy stubs:
+ *
+ *  - An upgrade from a null entry to a lazy provisional stub is atomic and can
+ *    only happen if the entry is null, and it only happens in
+ *    getExportedFunction().  No lazy provisional stub will be installed if
+ *    there's another stub present.
+ *
+ *  - The lazy tier-appropriate stub is installed by callExport() (really by
+ *    EnsureEntryStubs()) during the first invocation of the exported function
+ *    that reaches callExport().  That invocation must be from within JS, and so
+ *    the jit-entry element can't be null, because a prior getExportedFunction()
+ *    will have ensured that it is not: the lazy provisional stub will have been
+ *    installed.  Hence the installing of the lazy tier-appropriate stub does
+ *    not race with the installing of the lazy provisional stub.
+ *
+ *  - A lazy tier-1 stub is upgraded to a lazy tier-2 stub by
+ *    Module::finishTier2().  The upgrade needs to ensure that all tier-1 stubs
+ *    are upgraded, and that once the upgrade is finished, callExport() will
+ *    only create tier-2 lazy stubs.  (This upgrading does not upgrade lazy
+ *    provisional stubs or absent stubs.)
+ *
+ *    The locking protocol ensuring that all stubs are upgraded properly and
+ *    that the system switches to creating tier-2 stubs is implemented in
+ *    Module::finishTier2() and EnsureEntryStubs():
+ *
+ *    There are two locks, one per code tier.
+ *
+ *    EnsureEntryStubs() is attempting to create a tier-appropriate lazy stub,
+ *    so it takes the lock for the current best tier, checks to see if there is
+ *    a stub, and exits if there is.  If the tier changed racily it takes the
+ *    other lock too, since that is now the lock for the best tier.  Then it
+ *    creates the stub, installs it, and releases the locks.  Thus at most one
+ *    stub per tier can be created at a time.
+ *
+ *    Module::finishTier2() takes both locks (tier-1 before tier-2), thus
+ *    preventing EnsureEntryStubs() from creating stubs while stub upgrading is
+ *    going on, and itself waiting until EnsureEntryStubs() is not active.  Once
+ *    it has both locks, it upgrades all lazy stubs and makes tier-2 the new
+ *    best tier.  Should EnsureEntryStubs subsequently enter, it will find that
+ *    a stub already exists at tier-2 and will exit early.
+ *
+ * (It would seem that the locking protocol could be simplified a little by
+ * having only one lock, hanging off the Code object, or by unconditionally
+ * taking both locks in EnsureEntryStubs().  However, in some cases where we
+ * acquire a lock the Code object is not readily available, so plumbing would
+ * have to be added, and in EnsureEntryStubs(), there are sometimes not two code
+ * tiers.)
+ *
+ * ## Stub lifetimes and serialization
+ *
+ * Eager jit-entry stub code, along with stub code for import functions, is
+ * serialized along with the tier-2 code for the module.
+ *
+ * Lazy stub code and thunks for builtin functions (including the provisional
+ * lazy jit-entry stub) are never serialized.
+ ','line_number':1881,'multiline':True]
+['text':' static ','line_number':2125,'multiline':True]
+['text':' asm.js needs to act like a normal JS function which means having the','line_number':2140,'multiline':False]
+['text':' name from the original source and being callable as a constructor.','line_number':2141,'multiline':False]
+['text':' asm.js does not support jit entries.','line_number':2153,'multiline':False]
+['text':' Some applications eagerly access all table elements which currently','line_number':2168,'multiline':False]
+['text':' triggers worst-case behavior for lazy stubs, since each will allocate a','line_number':2169,'multiline':False]
+['text':' separate 4kb code page. Most eagerly-accessed functions are not called,','line_number':2170,'multiline':False]
+['text':' so use a shared, provisional (and slow) lazy stub as JitEntry and wait','line_number':2171,'multiline':False]
+['text':' until Instance::callExport() to create the fast entry stubs.','line_number':2172,'multiline':False]
+['text':' static ','line_number':2212,'multiline':True]
+['text':' static ','line_number':2232,'multiline':True]
+['text':' ============================================================================','line_number':2281,'multiline':False]
+['text':' WebAssembly.Memory class and methods','line_number':2282,'multiline':False]
+['text':' addProperty','line_number':2285,'multiline':False]
+['text':' delProperty','line_number':2286,'multiline':False]
+['text':' enumerate','line_number':2287,'multiline':False]
+['text':' newEnumerate','line_number':2288,'multiline':False]
+['text':' resolve','line_number':2289,'multiline':False]
+['text':' mayResolve','line_number':2290,'multiline':False]
+['text':' finalize','line_number':2291,'multiline':False]
+['text':' call','line_number':2292,'multiline':False]
+['text':' hasInstance','line_number':2293,'multiline':False]
+['text':' construct','line_number':2294,'multiline':False]
+['text':' trace','line_number':2295,'multiline':False]
+['text':' static ','line_number':2319,'multiline':True]
+['text':' static ','line_number':2327,'multiline':True]
+['text':' static ','line_number':2342,'multiline':True]
+['text':' static ','line_number':2402,'multiline':True]
+['text':' OK to addReference after we try to allocate because the memoryObj','line_number':2419,'multiline':False]
+['text':' keeps the rawBuffer alive.','line_number':2420,'multiline':False]
+['text':' static ','line_number':2435,'multiline':True]
+['text':' static ','line_number':2446,'multiline':True]
+['text':' static ','line_number':2472,'multiline':True]
+['text':' TODO: Turn this into a static_assert, if we are able to make','line_number':2592,'multiline':False]
+['text':' MaxMemory32Bytes() constexpr once the dust settles for the 4GB heaps.','line_number':2593,'multiline':False]
+['text':' See clamping performed in CreateSpecificWasmBuffer().  On 32-bit systems','line_number':2612,'multiline':False]
+['text':' and on 64-bit with Cranelift, we do not want to overflow a uint32_t.  For','line_number':2613,'multiline':False]
+['text':' the other 64-bit compilers, all constraints are implied by the largest','line_number':2614,'multiline':False]
+['text':' accepted value for a memory's max field.','line_number':2615,'multiline':False]
+['text':' static ','line_number':2643,'multiline':True]
+['text':' Always check against the max here, do not rely on the buffer resizers to','line_number':2655,'multiline':False]
+['text':' use the correct limit, they don't have enough context.','line_number':2656,'multiline':False]
+['text':' New buffer objects will be created lazily in all agents (including in','line_number':2668,'multiline':False]
+['text':' this agent) by bufferGetterImpl, above, so no more work to do here.','line_number':2669,'multiline':False]
+['text':' It is safe to cast to uint32_t, as oldNumPages was within our','line_number':2671,'multiline':False]
+['text':' implementation limits of MaxMemory32Pages(), which is within uint32_t.','line_number':2672,'multiline':False]
+['text':' static ','line_number':2676,'multiline':True]
+['text':' TODO (large ArrayBuffer): For Cranelift, limit the memory size to something','line_number':2686,'multiline':False]
+['text':' that fits in a uint32_t.  See more information at the definition of','line_number':2687,'multiline':False]
+['text':' MaxMemory32Bytes().','line_number':2688,'multiline':False]
+['text':'','line_number':2689,'multiline':False]
+['text':' TODO: Turn this into a static_assert, if we are able to make','line_number':2690,'multiline':False]
+['text':' MaxMemory32Bytes() constexpr once the dust settles for the 4GB heaps.','line_number':2691,'multiline':False]
+['text':' Always check against the max here, do not rely on the buffer resizers to','line_number':2701,'multiline':False]
+['text':' use the correct limit, they don't have enough context.','line_number':2702,'multiline':False]
+['text':' Only notify moving-grow-observers after the BUFFER_SLOT has been updated','line_number':2730,'multiline':False]
+['text':' since observers will call buffer().','line_number':2731,'multiline':False]
+['text':' It is safe to cast to uint32_t, as oldNumPages was within our','line_number':2739,'multiline':False]
+['text':' implementation limits of MaxMemory32Pages(), which is within uint32_t.','line_number':2740,'multiline':False]
+['text':' ============================================================================','line_number':2749,'multiline':False]
+['text':' WebAssembly.Table class and methods','line_number':2750,'multiline':False]
+['text':' addProperty','line_number':2753,'multiline':False]
+['text':' delProperty','line_number':2754,'multiline':False]
+['text':' enumerate','line_number':2755,'multiline':False]
+['text':' newEnumerate','line_number':2756,'multiline':False]
+['text':' resolve','line_number':2757,'multiline':False]
+['text':' mayResolve','line_number':2758,'multiline':False]
+['text':' finalize','line_number':2759,'multiline':False]
+['text':' call','line_number':2760,'multiline':False]
+['text':' hasInstance','line_number':2761,'multiline':False]
+['text':' construct','line_number':2762,'multiline':False]
+['text':' trace','line_number':2763,'multiline':False]
+['text':' static ','line_number':2792,'multiline':True]
+['text':' static ','line_number':2801,'multiline':True]
+['text':' Return the JS value to use when a parameter to a function requiring a table','line_number':2809,'multiline':False]
+['text':' value is omitted. An implementation of [1].','line_number':2810,'multiline':False]
+['text':'','line_number':2811,'multiline':False]
+['text':' [1]','line_number':2812,'multiline':False]
+['text':' https://webassembly.github.io/reference-types/js-api/index.html#defaultvalue','line_number':2813,'multiline':False]
+['text':' static ','line_number':2818,'multiline':True]
+['text':'isAsmJS','line_number':2832,'multiline':True]
+['text':'importedOrExported=','line_number':2833,'multiline':True]
+['text':' static ','line_number':2849,'multiline':True]
+['text':' The rest of the runtime expects table limits to be within a 32-bit range.','line_number':2932,'multiline':False]
+['text':' Initialize the table to a default value','line_number':2947,'multiline':False]
+['text':' Skip initializing the table if the fill value is null, as that is the','line_number':2951,'multiline':False]
+['text':' default value.','line_number':2952,'multiline':False]
+['text':' Assert that null is the default value of a new table.','line_number':2958,'multiline':False]
+['text':' static ','line_number':2972,'multiline':True]
+['text':' static ','line_number':2979,'multiline':True]
+['text':' static ','line_number':3006,'multiline':True]
+['text':' static ','line_number':3052,'multiline':True]
+['text':' static ','line_number':3059,'multiline':True]
+['text':' static ','line_number':3092,'multiline':True]
+['text':' static ','line_number':3098,'multiline':True]
+['text':' static ','line_number':3123,'multiline':True]
+['text':' static ','line_number':3129,'multiline':True]
+['text':' Fill the grown range of the table','line_number':3152,'multiline':False]
+['text':' Skip filling the grown range of the table if the fill value is null, as','line_number':3156,'multiline':False]
+['text':' that is the default value.','line_number':3157,'multiline':False]
+['text':' Assert that null is the default value of the grown range.','line_number':3163,'multiline':False]
+['text':' static ','line_number':3173,'multiline':True]
+['text':' All consumers are required to either bounds check or statically be in','line_number':3197,'multiline':False]
+['text':' bounds','line_number':3198,'multiline':False]
+['text':' ============================================================================','line_number':3236,'multiline':False]
+['text':' WebAssembly.global class and methods','line_number':3237,'multiline':False]
+['text':' addProperty','line_number':3240,'multiline':False]
+['text':' delProperty','line_number':3241,'multiline':False]
+['text':' enumerate','line_number':3242,'multiline':False]
+['text':' newEnumerate','line_number':3243,'multiline':False]
+['text':' resolve','line_number':3244,'multiline':False]
+['text':' mayResolve','line_number':3245,'multiline':False]
+['text':' finalize','line_number':3246,'multiline':False]
+['text':' call','line_number':3247,'multiline':False]
+['text':' hasInstance','line_number':3248,'multiline':False]
+['text':' construct','line_number':3249,'multiline':False]
+['text':' trace','line_number':3250,'multiline':False]
+['text':' static ','line_number':3273,'multiline':True]
+['text':' This can happen while we're allocating the object, in which case','line_number':3277,'multiline':False]
+['text':' every single slot of the object is not defined yet. In particular,','line_number':3278,'multiline':False]
+['text':' there's nothing to trace yet.','line_number':3279,'multiline':False]
+['text':' static ','line_number':3285,'multiline':True]
+['text':' static ','line_number':3293,'multiline':True]
+['text':' It's simpler to initialize the cell after the object has been created,','line_number':3314,'multiline':False]
+['text':' to avoid needing to root the cell before the object creation.','line_number':3315,'multiline':False]
+['text':' static ','line_number':3323,'multiline':True]
+['text':' Extract properties in lexicographic order per spec.','line_number':3343,'multiline':False]
+['text':' Extract the initial value, or provide a suitable default.','line_number':3362,'multiline':False]
+['text':' Override with non-undefined value, if provided.','line_number':3365,'multiline':False]
+['text':' static ','line_number':3397,'multiline':True]
+['text':' static ','line_number':3409,'multiline':True]
+['text':' static ','line_number':3415,'multiline':True]
+['text':' static ','line_number':3439,'multiline':True]
+['text':' static ','line_number':3471,'multiline':True]
+['text':' static ','line_number':3500,'multiline':True]
+['text':' ============================================================================','line_number':3507,'multiline':False]
+['text':' WebAssembly.Exception class and methods','line_number':3508,'multiline':False]
+['text':' addProperty','line_number':3511,'multiline':False]
+['text':' delProperty','line_number':3512,'multiline':False]
+['text':' enumerate','line_number':3513,'multiline':False]
+['text':' newEnumerate','line_number':3514,'multiline':False]
+['text':' resolve','line_number':3515,'multiline':False]
+['text':' mayResolve','line_number':3516,'multiline':False]
+['text':' finalize','line_number':3517,'multiline':False]
+['text':' call','line_number':3518,'multiline':False]
+['text':' hasInstance','line_number':3519,'multiline':False]
+['text':' construct','line_number':3520,'multiline':False]
+['text':' trace','line_number':3521,'multiline':False]
+['text':' static ','line_number':3544,'multiline':True]
+['text':' FIXME: The JS API is not finalized and may specify a different behavior','line_number':3560,'multiline':False]
+['text':' here.','line_number':3561,'multiline':False]
+['text':'        For now, we implement the same behavior as V8 and error when called.','line_number':3562,'multiline':False]
+['text':' static ','line_number':3569,'multiline':True]
+['text':' ============================================================================','line_number':3629,'multiline':False]
+['text':' WebAssembly.RuntimeException class and methods','line_number':3630,'multiline':False]
+['text':' addProperty','line_number':3633,'multiline':False]
+['text':' delProperty','line_number':3634,'multiline':False]
+['text':' enumerate','line_number':3635,'multiline':False]
+['text':' newEnumerate','line_number':3636,'multiline':False]
+['text':' resolve','line_number':3637,'multiline':False]
+['text':' mayResolve','line_number':3638,'multiline':False]
+['text':' finalize','line_number':3639,'multiline':False]
+['text':' call','line_number':3640,'multiline':False]
+['text':' hasInstance','line_number':3641,'multiline':False]
+['text':' construct','line_number':3642,'multiline':False]
+['text':' trace','line_number':3643,'multiline':False]
+['text':' static ','line_number':3667,'multiline':True]
+['text':' FIXME: When the JS API is finalized, it may be possible to construct','line_number':3683,'multiline':False]
+['text':' WebAssembly.RuntimeException instances from JS, but not for now.','line_number':3684,'multiline':False]
+['text':' static ','line_number':3692,'multiline':True]
+['text':' ============================================================================','line_number':3740,'multiline':False]
+['text':' WebAssembly class and static methods','line_number':3741,'multiline':False]
+['text':' Ideally we'd report a JSMSG_WASM_COMPILE_ERROR here, but there's no easy','line_number':3779,'multiline':False]
+['text':' way to create an ErrorObject for an arbitrary error code with multiple','line_number':3780,'multiline':False]
+['text':' replacements.','line_number':3781,'multiline':False]
+['text':' There's no error |cause| available here.','line_number':3793,'multiline':False]
+['text':' If the reason for validation failure was OOM (signalled by null error','line_number':4101,'multiline':False]
+['text':' message), report out-of-memory so that validate's return is always','line_number':4102,'multiline':False]
+['text':' correct.','line_number':4103,'multiline':False]
+['text':' This should match wasm::StreamingCompilationAvailable().','line_number':4119,'multiline':False]
+['text':' This value is chosen and asserted to be disjoint from any host error code.','line_number':4140,'multiline':False]
+['text':' The stream progresses monotonically through these states; the helper','line_number':4155,'multiline':False]
+['text':' thread wait()s for streamState_ to reach Closed.','line_number':4156,'multiline':False]
+['text':' Immutable:','line_number':4160,'multiline':False]
+['text':' Immutable after noteResponseURLs() which is called at most once before','line_number':4164,'multiline':False]
+['text':' first call on stream thread:','line_number':4165,'multiline':False]
+['text':' Immutable after Env state:','line_number':4168,'multiline':False]
+['text':' The code section vector is resized once during the Env state and filled','line_number':4172,'multiline':False]
+['text':' in chunk by chunk during the Code state, updating the end-pointer after','line_number':4173,'multiline':False]
+['text':' each chunk:','line_number':4174,'multiline':False]
+['text':' Immutable after Tail state:','line_number':4179,'multiline':False]
+['text':' Written once before Closed state and read in Closed state on main thread:','line_number':4183,'multiline':False]
+['text':' Set on stream thread and read racily on helper thread to abort compilation:','line_number':4189,'multiline':False]
+['text':' Called on some thread before consumeChunk(), streamEnd(), streamError()):','line_number':4192,'multiline':False]
+['text':' Called on a stream thread:','line_number':4204,'multiline':False]
+['text':' Until StartOffThreadPromiseHelperTask succeeds, we are responsible for','line_number':4206,'multiline':False]
+['text':' dispatching ourselves back to the JS thread.','line_number':4207,'multiline':False]
+['text':'','line_number':4208,'multiline':False]
+['text':' Warning: After this function returns, 'this' can be deleted at any time, so','line_number':4209,'multiline':False]
+['text':' the caller must immediately return from the stream callback.','line_number':4210,'multiline':False]
+['text':' See setClosedAndDestroyBeforeHelperThreadStarted() comment.','line_number':4216,'multiline':False]
+['text':' Once StartOffThreadPromiseHelperTask succeeds, the helper thread will','line_number':4225,'multiline':False]
+['text':' dispatchResolveAndDestroy() after execute() returns, but execute()','line_number':4226,'multiline':False]
+['text':' wait()s for state to be Closed.','line_number':4227,'multiline':False]
+['text':'','line_number':4228,'multiline':False]
+['text':' Warning: After this function returns, 'this' can be deleted at any time, so','line_number':4229,'multiline':False]
+['text':' the caller must immediately return from the stream callback.','line_number':4230,'multiline':False]
+['text':' stream closed ','line_number':4235,'multiline':True]
+['text':' See setClosedAndDestroyAfterHelperThreadStarted() comment.','line_number':4238,'multiline':False]
+['text':' Set the state to Code iff StartOffThreadPromiseHelperTask()','line_number':4281,'multiline':False]
+['text':' succeeds so that the state tells us whether we are before or','line_number':4282,'multiline':False]
+['text':' after the helper thread started.','line_number':4283,'multiline':False]
+['text':' Unlock exclusiveStreamEnd_ before locking streamState_.','line_number':4344,'multiline':False]
+['text':' Called on a helper thread:','line_number':4382,'multiline':False]
+['text':' When execute() returns, the CompileStreamTask will be dispatched','line_number':4389,'multiline':False]
+['text':' back to its JS thread to call resolve() and then be destroyed. We','line_number':4390,'multiline':False]
+['text':' can't let this happen until the stream has been closed lest','line_number':4391,'multiline':False]
+['text':' consumeChunk() or streamEnd() be called on a dead object.','line_number':4392,'multiline':False]
+['text':' stream closed ','line_number':4395,'multiline':True]
+['text':' Called on a JS thread after streaming compilation completes/errors:','line_number':4399,'multiline':False]
+['text':' A short-lived object that captures the arguments of a','line_number':4440,'multiline':False]
+['text':' WebAssembly.{compileStreaming,instantiateStreaming} while waiting for','line_number':4441,'multiline':False]
+['text':' the Promise<Response> to resolve to a (hopefully) Promise.','line_number':4442,'multiline':False]
+['text':' addProperty','line_number':4495,'multiline':False]
+['text':' delProperty','line_number':4496,'multiline':False]
+['text':' enumerate','line_number':4497,'multiline':False]
+['text':' newEnumerate','line_number':4498,'multiline':False]
+['text':' resolve','line_number':4499,'multiline':False]
+['text':' mayResolve','line_number':4500,'multiline':False]
+['text':' finalize','line_number':4501,'multiline':False]
+['text':' call','line_number':4502,'multiline':False]
+['text':' hasInstance','line_number':4503,'multiline':False]
+['text':' construct','line_number':4504,'multiline':False]
+['text':' trace','line_number':4505,'multiline':False]
+['text':' Sundry','line_number':4763,'multiline':False]
+['text':' TODO (large ArrayBuffer): Cranelift needs to be updated to use more than the','line_number':4767,'multiline':False]
+['text':' low 32 bits of the boundsCheckLimit, so for now we limit its heap size to','line_number':4768,'multiline':False]
+['text':' something that satisfies the 32-bit invariants.','line_number':4769,'multiline':False]
+['text':'','line_number':4770,'multiline':False]
+['text':' The "-2" here accounts for the !huge-memory case in CreateSpecificWasmBuffer,','line_number':4771,'multiline':False]
+['text':' which is guarding against an overflow.  Also see','line_number':4772,'multiline':False]
+['text':' WasmMemoryObject::boundsCheckLimit() for related assertions.','line_number':4773,'multiline':False]

@@ -1,0 +1,217 @@
+['text':' zip.c -- IO on .zip files using zlib
+   Version 1.1, February 14h, 2010
+   part of the MiniZip project - ( http://www.winimage.com/zLibDll/minizip.html )
+
+         Copyright (C) 1998-2010 Gilles Vollant (minizip) ( http://www.winimage.com/zLibDll/minizip.html )
+
+         Modifications for Zip64 support
+         Copyright (C) 2009-2010 Mathias Svensson ( http://result42.com )
+
+         For more info read MiniZip_info.txt
+
+         Changes
+   Oct-2009 - Mathias Svensson - Remove old C style function prototypes
+   Oct-2009 - Mathias Svensson - Added Zip64 Support when creating new file archives
+   Oct-2009 - Mathias Svensson - Did some code cleanup and refactoring to get better overview of some functions.
+   Oct-2009 - Mathias Svensson - Added zipRemoveExtraInfoBlock to strip extra field data from its ZIP64 data
+                                 It is used when recreting zip archive with RAW when deleting items from a zip.
+                                 ZIP64 data is automatically added to items that needs it, and existing ZIP64 data need to be removed.
+   Oct-2009 - Mathias Svensson - Added support for BZIP2 as compression mode (bzip2 lib is required)
+   Jan-2010 - back to unzip and minizip 1.0 name scheme, with compatibility layer
+
+','line_number':1,'multiline':True]
+['text':' compile with -Dlocal if your debugger can't find static symbols ','line_number':47,'multiline':True]
+['text':' platform depedent ','line_number':50,'multiline':True]
+['text':'(16384)','line_number':54,'multiline':False]
+['text':'
+#define SIZECENTRALDIRITEM (0x2e)
+#define SIZEZIPLOCALHEADER (0x1e)
+','line_number':68,'multiline':True]
+['text':' I've found an old Unix (a SunOS 4.1.3_U1) without all SEEK_* defined.... ','line_number':73,'multiline':True]
+['text':' NOT sure that this work on ALL platform','line_number':76,'multiline':False]
+['text':' 46 ','line_number':112,'multiline':True]
+['text':' for future use and alignment ','line_number':119,'multiline':True]
+['text':' zLib stream structure for inflate ','line_number':132,'multiline':True]
+['text':' bzLib stream structure for bziped ','line_number':134,'multiline':True]
+['text':' 1 is stream is initialised ','line_number':137,'multiline':True]
+['text':' last written byte in buffered_data ','line_number':138,'multiline':True]
+['text':' offset of the local header of the file
+                                     currenty writing ','line_number':140,'multiline':True]
+['text':' central header data for the current file ','line_number':142,'multiline':True]
+['text':' size of the central header for cur file ','line_number':144,'multiline':True]
+['text':' Extra bytes allocated to the centralheader but that are not used ','line_number':145,'multiline':True]
+['text':' flag of the file currently writing ','line_number':146,'multiline':True]
+['text':' compression method of file currenty wr.','line_number':148,'multiline':True]
+['text':' 1 for directly writing raw data ','line_number':149,'multiline':True]
+['text':' buffer contain compressed data to be writ','line_number':150,'multiline':True]
+['text':' Add ZIP64 extened information in the extra field ','line_number':154,'multiline':True]
+['text':' keys defining the pseudo-random sequence ','line_number':159,'multiline':True]
+['text':' io structore of the zipfile ','line_number':168,'multiline':True]
+['text':' datablock with central dir in construction','line_number':169,'multiline':True]
+['text':' 1 if a file in the zip is currently writ.','line_number':170,'multiline':True]
+['text':' info on the file curretly writing ','line_number':171,'multiline':True]
+['text':' position of the beginning of the zipfile ','line_number':173,'multiline':True]
+['text':'**************************************************************************','line_number':278,'multiline':True]
+['text':' ===========================================================================
+   Inputs a long in LSB order to the given file
+   nbByte == 1, 2 ,4 or 8 (byte, short or long, ZPOS64_T)
+','line_number':281,'multiline':True]
+['text':' data overflow - hack for ZIP64 (X Roche) ','line_number':297,'multiline':True]
+['text':' data overflow - hack for ZIP64 ','line_number':321,'multiline':True]
+['text':'**************************************************************************','line_number':329,'multiline':True]
+['text':'**************************************************************************','line_number':345,'multiline':True]
+['text':' ===========================================================================
+   Reads a long in LSB order from the given gz_stream. Sets
+','line_number':368,'multiline':True]
+['text':'
+  Locate the Central directory of a zipfile (at the end, just before
+    the global comment)
+','line_number':474,'multiline':True]
+['text':' maximum size of global comment ','line_number':485,'multiline':True]
+['text':'
+Locate the End of Zip64 Central directory locator and from there find the CD of a zipfile (at the end, just before
+the global comment)
+','line_number':536,'multiline':True]
+['text':' maximum size of global comment ','line_number':547,'multiline':True]
+['text':' Signature "0x07064b50" Zip64 end of central directory locater','line_number':586,'multiline':False]
+['text':' Zip64 end of central directory locator ','line_number':602,'multiline':True]
+['text':' the signature, already checked ','line_number':606,'multiline':True]
+['text':' number of the disk with the start of the zip64 end of  central directory ','line_number':610,'multiline':True]
+['text':' relative offset of the zip64 end of central directory record ','line_number':616,'multiline':True]
+['text':' total number of disks ','line_number':620,'multiline':True]
+['text':' Goto Zip64 end of central directory record ','line_number':626,'multiline':True]
+['text':' the signature ','line_number':630,'multiline':True]
+['text':' signature of 'Zip64 end of central directory'','line_number':634,'multiline':False]
+['text':' byte before the zipfile, (>0 for sfx)','line_number':643,'multiline':True]
+['text':' size of the central directory  ','line_number':645,'multiline':True]
+['text':' offset of start of central directory ','line_number':646,'multiline':True]
+['text':' number of the current dist, used for
+                              spaning ZIP, unsupported, always 0','line_number':650,'multiline':True]
+['text':' number the the disk with central dir, used
+                              for spaning ZIP, unsupported, always 0','line_number':652,'multiline':True]
+['text':' total number of entries in
+                                the central dir
+                                (same than number_entry on nospan) ','line_number':655,'multiline':True]
+['text':' check first if we find a ZIP64 record','line_number':664,'multiline':False]
+['text':' disable to allow appending to empty ZIP archive
+        if (central_pos==0)
+            err=ZIP_ERRNO;
+','line_number':675,'multiline':True]
+['text':' the signature, already checked ','line_number':686,'multiline':True]
+['text':' size of zip64 end of central directory record ','line_number':690,'multiline':True]
+['text':' version made by ','line_number':694,'multiline':True]
+['text':' version needed to extract ','line_number':698,'multiline':True]
+['text':' number of this disk ','line_number':702,'multiline':True]
+['text':' number of the disk with the start of the central directory ','line_number':706,'multiline':True]
+['text':' total number of entries in the central directory on this disk ','line_number':710,'multiline':True]
+['text':' total number of entries in the central directory ','line_number':714,'multiline':True]
+['text':' size of the central directory ','line_number':721,'multiline':True]
+['text':' offset of start of central directory with respect to the
+    starting disk number ','line_number':725,'multiline':True]
+['text':' TODO..','line_number':730,'multiline':False]
+['text':' read the comment from the standard central header.','line_number':731,'multiline':False]
+['text':' Read End of central Directory info','line_number':736,'multiline':False]
+['text':' the signature, already checked ','line_number':740,'multiline':True]
+['text':' number of this disk ','line_number':744,'multiline':True]
+['text':' number of the disk with the start of the central directory ','line_number':748,'multiline':True]
+['text':' total number of entries in the central dir on this disk ','line_number':752,'multiline':True]
+['text':' total number of entries in the central dir ','line_number':759,'multiline':True]
+['text':' size of the central directory ','line_number':769,'multiline':True]
+['text':' offset of start of central directory with respect to the starting disk number ','line_number':776,'multiline':True]
+['text':' zipfile global comment length ','line_number':784,'multiline':True]
+['text':' !NO_ADDFILEINEXISTINGZIP','line_number':845,'multiline':True]
+['text':'**********************************************************','line_number':848,'multiline':True]
+['text':' now we add file in a zipfile ','line_number':890,'multiline':True]
+['text':' Read and Cache Central Directory Records','line_number':895,'multiline':False]
+['text':' !NO_ADDFILEINEXISTINGZIP','line_number':903,'multiline':True]
+['text':' !NO_ADDFILEINEXISTINGZIP','line_number':909,'multiline':True]
+['text':' write the local header ','line_number':960,'multiline':True]
+['text':' version needed to extract ','line_number':970,'multiline':True]
+['text':' version needed to extract ','line_number':972,'multiline':True]
+['text':' CRC / Compressed size / Uncompressed size will be filled in later and rewritten later','line_number':984,'multiline':False]
+['text':' crc 32, unknown ','line_number':986,'multiline':True]
+['text':' compressed size, unknown ','line_number':990,'multiline':True]
+['text':' compressed size, unknown ','line_number':992,'multiline':True]
+['text':' uncompressed size, unknown ','line_number':997,'multiline':True]
+['text':' uncompressed size, unknown ','line_number':999,'multiline':True]
+['text':' write the Zip64 extended info','line_number':1028,'multiline':False]
+['text':' Remember position of Zip64 extended info for the local file header. (needed when we update size after done with file)','line_number':1034,'multiline':False]
+['text':'
+ NOTE.
+ When writing RAW the ZIP64 extended information in extrafield_local and extrafield_global needs to be stripped
+ before calling this function it can be done with zipRemoveExtraInfoBlock
+
+ It is not done here because then we need to realloc a new buffer since parameters are 'const' and I want to minimize
+ unnecessary allocations.
+ ','line_number':1047,'multiline':True]
+['text':' Extra space we have reserved in case we need to add ZIP64 extra info data','line_number':1134,'multiline':False]
+['text':' version info ','line_number':1140,'multiline':True]
+['text':'crc','line_number':1146,'multiline':True]
+['text':'compr size','line_number':1147,'multiline':True]
+['text':'uncompr size','line_number':1148,'multiline':True]
+['text':'disk nm start','line_number':1152,'multiline':True]
+['text':' Init BZip stuff here','line_number':1229,'multiline':False]
+['text':'init_keys(password,zi->ci.keys,zi->ci.pcrc_32_tab);','line_number':1250,'multiline':True]
+['text':'          uLong uTotalOutBefore_hi = zi->ci.bstream.total_out_hi32;','line_number':1440,'multiline':False]
+['text':' while(...)','line_number':1498,'multiline':False]
+['text':' this is normal ','line_number':1570,'multiline':True]
+['text':' update Current Item crc and sizes,','line_number':1606,'multiline':False]
+['text':'version Made by','line_number':1609,'multiline':True]
+['text':'version needed','line_number':1611,'multiline':True]
+['text':'crc','line_number':1616,'multiline':True]
+['text':'compr size','line_number':1620,'multiline':True]
+['text':'compr size','line_number':1622,'multiline':True]
+['text':'/ set internal file attributes field','line_number':1624,'multiline':False]
+['text':'uncompr size','line_number':1629,'multiline':True]
+['text':'uncompr size','line_number':1631,'multiline':True]
+['text':' Add ZIP64 extra info field for uncompressed size','line_number':1633,'multiline':False]
+['text':' Add ZIP64 extra info field for compressed size','line_number':1637,'multiline':False]
+['text':' Add ZIP64 extra info field for relative offset to local file header of current file','line_number':1641,'multiline':False]
+['text':' we can not write more data to the buffer that we have room for.','line_number':1651,'multiline':False]
+['text':' Add Extra Information Header for 'ZIP64 information'','line_number':1657,'multiline':False]
+['text':' HeaderID','line_number':1658,'multiline':False]
+['text':' DataSize','line_number':1660,'multiline':False]
+['text':' Update how much extra free space we got in the memory buffer','line_number':1681,'multiline':False]
+['text':' and increase the centralheader size so the new ZIP64 fields are included','line_number':1682,'multiline':False]
+['text':' ( 4 below is the size of HeaderID and DataSize field )','line_number':1683,'multiline':False]
+['text':' Update the extra info size field','line_number':1687,'multiline':False]
+['text':' Update the LocalFileHeader with the new values.','line_number':1699,'multiline':False]
+['text':' crc 32, unknown ','line_number':1707,'multiline':True]
+['text':' Update the size in the ZIP64 extended field.','line_number':1713,'multiline':False]
+['text':' compressed size, unknown ','line_number':1717,'multiline':True]
+['text':' uncompressed size, unknown ','line_number':1720,'multiline':True]
+['text':' Caller passed zip64 = 0, so no room for zip64 info -> fatal','line_number':1724,'multiline':False]
+['text':' compressed size, unknown ','line_number':1728,'multiline':True]
+['text':' uncompressed size, unknown ','line_number':1731,'multiline':True]
+['text':'num disks','line_number':1757,'multiline':True]
+['text':' number of the disk with the start of the central directory ','line_number':1758,'multiline':True]
+['text':'relative offset','line_number':1761,'multiline':True]
+['text':' Relative offset to the Zip64EndOfCentralDirectory ','line_number':1762,'multiline':True]
+['text':'total disks','line_number':1765,'multiline':True]
+['text':' Do not support spawning of disk so always say 1 here','line_number':1765,'multiline':True]
+['text':' number of the disk with the start of the central directory ','line_number':1766,'multiline':True]
+['text':' size of this 'zip64 end of central directory' ','line_number':1780,'multiline':True]
+['text':' why ZPOS64_T of this ?','line_number':1781,'multiline':False]
+['text':' version made by ','line_number':1783,'multiline':True]
+['text':' version needed ','line_number':1786,'multiline':True]
+['text':' number of this disk ','line_number':1789,'multiline':True]
+['text':' number of the disk with the start of the central directory ','line_number':1792,'multiline':True]
+['text':' total number of entries in the central dir on this disk ','line_number':1795,'multiline':True]
+['text':' total number of entries in the central dir ','line_number':1798,'multiline':True]
+['text':' size of the central directory ','line_number':1801,'multiline':True]
+['text':' offset of start of central directory with respect to the starting disk number ','line_number':1804,'multiline':True]
+['text':'signature','line_number':1815,'multiline':True]
+['text':' number of this disk ','line_number':1818,'multiline':True]
+['text':' number of the disk with the start of the central directory ','line_number':1821,'multiline':True]
+['text':' total number of entries in the central dir on this disk ','line_number':1824,'multiline':True]
+['text':' use value in ZIP64 record','line_number':1828,'multiline':False]
+['text':' total number of entries in the central dir ','line_number':1834,'multiline':True]
+['text':' use value in ZIP64 record','line_number':1837,'multiline':False]
+['text':' size of the central directory ','line_number':1842,'multiline':True]
+['text':' offset of start of central directory with respect to the starting disk number ','line_number':1845,'multiline':True]
+['text':' Header found.','line_number':1968,'multiline':False]
+['text':' skip it. do not copy to temp buffer','line_number':1970,'multiline':False]
+['text':' Extra Info block should not be removed, So copy it to the temp buffer.','line_number':1974,'multiline':False]
+['text':' clean old extra info block.','line_number':1984,'multiline':False]
+['text':' copy the new extra info block over the old','line_number':1987,'multiline':False]
+['text':' set the new extra info size','line_number':1991,'multiline':False]

@@ -1,0 +1,174 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * This header describes a mechanism for making "decorable" types.
+ *
+ * A decorable type is one to which various subsystems may attach subsystem-private data, so long as
+ * they declare what that data will be before any instances of the decorable type are created.
+ *
+ * For example, suppose you had a class Client, representing on a server a network connection to a
+ * client process.  Suppose that your server has an authentication module, that attaches data to the
+ * client about authentication.  If class Client looks something like this:
+ *
+ * class Client : public Decorable<Client>{
+ * ...
+ * };
+ *
+ * Then the authentication module, before the first client object is created, calls
+ *
+ *     const auto authDataDescriptor = Client::declareDecoration<AuthenticationPrivateData>();
+ *
+ * And stores authDataDescriptor in a module-global variable,
+ *
+ * And later, when it has a Client object, client, and wants to get at the per-client
+ * AuthenticationPrivateData object, it calls
+ *
+ *    authDataDescriptor(client)
+ *
+ * to get a reference to the AuthenticationPrivateData for that client object.
+ *
+ * With this approach, individual subsystems get to privately augment the client object via
+ * declarations local to the subsystem, rather than in the global client header.
+ ','line_number':30,'multiline':True]
+['text':' NOLINT','line_number':64,'multiline':False]
+['text':'*
+ * The allowLazy trait should be specialized to true for types known to have
+ * no side-effects in their nullary value-initialization. This knowledge allows
+ * some decorations to be initialized only on first use.
+ *
+ * About half of the decorations we use can be detected as allowLazy=true types.
+ * Anything that can be trivially initialized by a zero representation should
+ * not be lazy. They use a a different and faster optimization.
+ ','line_number':92,'multiline':True]
+['text':' Types with the 'is_lazy_decoration` typedef are lazy by default.','line_number':105,'multiline':False]
+['text':'* Zero-initializables are not lazy ','line_number':112,'multiline':True]
+['text':'* These wrappers are lazy if their wrapped type is. ','line_number':133,'multiline':True]
+['text':' NOLINT','line_number':137,'multiline':False]
+['text':'* BSONObj is lazy ','line_number':139,'multiline':True]
+['text':'*
+ * Can't use the usual mongo::SpinLock as we can't rely on the usual
+ * std::atomic_flag init being ok with all-zeros.
+ ','line_number':144,'multiline':True]
+['text':' zero fill == disengaged','line_number':150,'multiline':False]
+['text':'*
+     * Compete for the right to initialize the guarded object.
+     *
+     * - If true is returned, the caller has entered the "critical section". It
+     *   must initialize the guarded object and call `initFinish()`.
+     *
+     * - Otherwise, another caller has won, and false is returned. In that case,
+     *   this call doesn't return until the winning caller calls `initFinish()`.
+     ','line_number':154,'multiline':True]
+['text':' Lost. Reconsider from new state.','line_number':170,'multiline':False]
+['text':' Lost. Wait for the winner. This kind of race should be','line_number':174,'multiline':False]
+['text':' extremely unlikely in the first place. We're default','line_number':175,'multiline':False]
+['text':' constructing, so a quick spin should be sufficient most of','line_number':176,'multiline':False]
+['text':' the time. If we are still busy after this short number','line_number':177,'multiline':False]
+['text':' of spins, the loop becomes a core yield.','line_number':178,'multiline':False]
+['text':' Punt: macro broken on Windows.','line_number':200,'multiline':False]
+['text':' NOLINT','line_number':213,'multiline':False]
+['text':'*
+ * A wrapper that defers construction of its `value` until first access.
+ * Unlike `optional`, it is known to be empty if represented by all zeros.
+ * Like an "autovivifying" `optional`.
+ *
+ * The default constructor of `T` must not throw. For simplicity's sake, it
+ * should also have no side effects, as the lazy initialization time can be
+ * difficult to reason about.
+ ','line_number':216,'multiline':True]
+['text':'* Emplaces the value on first use. Optimized for happy path. ','line_number':264,'multiline':True]
+['text':' If a type <T> has the allowLazy=true trait, then it's boxed in a','line_number':345,'multiline':False]
+['text':' LazyInit<T>.','line_number':346,'multiline':False]
+['text':' Exploit the LazyInit property that doing nothing is a valid construction.','line_number':352,'multiline':False]
+['text':' Adl hook to make specializations easier to find.','line_number':369,'multiline':False]
+['text':'* null if trivial ','line_number':376,'multiline':True]
+['text':'* null if trivial ','line_number':377,'multiline':True]
+['text':'* null if no copy ','line_number':378,'multiline':True]
+['text':'* null if no assignment ','line_number':379,'multiline':True]
+['text':'*
+ * Encodes all of the properties and type-erased operations needed to work with
+ * a value in a DecorationBufffer.
+ ','line_number':391,'multiline':True]
+['text':' for gdb','line_number':445,'multiline':False]
+['text':'* Return registry position of new entry. ','line_number':454,'multiline':True]
+['text':' pad to alignment','line_number':461,'multiline':False]
+['text':' The owner pointer is always present.','line_number':487,'multiline':False]
+['text':'* Defined for gdb pretty-printer visibility only. ','line_number':490,'multiline':True]
+['text':'*
+ * A token that represents the 2-way link between Decorable D and a decoration
+ * of type T attached to it. Given a Decorable, identifies a Decoration. Going
+ * in the other direction, it can also be used to identify a decoration's owner.
+ ','line_number':504,'multiline':True]
+['text':'*
+     * Returns a reference to this decoration object in the specified `Decorable d`.
+     * Const and non-const overloads are provided for deep const semantics.
+     ','line_number':522,'multiline':True]
+['text':'*
+     * Returns the owner of decoration `t`, with deep const semantics.
+     * Decoration `t` can also be given as a pointer, in which case a pointer to
+     * its owner is returned.
+     ','line_number':533,'multiline':True]
+['text':' The decoration block starts with a backlink to the decorable.','line_number':539,'multiline':False]
+['text':'*
+     * Syntactic sugar, equivalent to decoration(d). As a convenience, overloads
+     * are provided so that a pointer `&d` can be given instead.
+     ','line_number':557,'multiline':True]
+['text':'*
+     * Translate the whole decorations buffer address into a `T*`.
+     * This means finding out where in `buf` the "box" is, and
+     * then where in the "box" the value `T*` is. A DecorationToken
+     * has access to all necessary information to do this.
+     ','line_number':578,'multiline':True]
+['text':' The decoration value is in a "box", and that box','line_number':585,'multiline':False]
+['text':' address needs to be converted into a `T*`.','line_number':586,'multiline':False]
+['text':' If DecoratedType has either of the copy operations, then T needs them both.','line_number':610,'multiline':False]
+['text':'* Used when copying, but we need the decorated's address. ','line_number':623,'multiline':True]
+['text':'* Only basic (not strong) exception safety for this copy-assign. ','line_number':643,'multiline':True]
+['text':' namespace decorable_detail','line_number':695,'multiline':False]
+['text':' CRTP','line_number':700,'multiline':False]
+['text':'*
+     * A `Decoration<T>` can be used as a maplike key.
+     * So `x[deco]` is syntactic sugar for `x.decoration(deco)`.
+     * Ex:
+     *    class X : Decorable<X> { ... };
+     *    auto deco = X::declareDecoration<int>();
+     *    ...
+     *        X x;
+     *        X* xp = &x;
+     *
+     *        x[deco] = 123;             // map-like syntax
+     *        x.decoration(deco) = 123;  // equivalent
+     *        deco(x) = 123;             // older deco as callable syntax
+     *
+     *        // pointer syntax
+     *        (*xp)[deco] = 123;           // map-like syntax
+     *        xp->decoration(deco) = 123;  // equivalent
+     *        deco(xp) = 123;              // older deco as callable syntax
+     ','line_number':741,'multiline':True]
+['text':' namespace mongo','line_number':773,'multiline':False]

@@ -1,0 +1,172 @@
+['text':'*
+ *    Copyright (C) 2022-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Validates that exactly one of 'sampleRate' and 'sampleSize' is specified.
+ ','line_number':161,'multiline':True]
+['text':'*
+ * Validates the metrics about the characteristics of a shard key.
+ ','line_number':170,'multiline':True]
+['text':'*
+ * Returns an aggregate command request for calculating the cardinality and frequency metrics for
+ * the given shard key.
+ *
+ * If the hint index is a hashed index and the shard key contains the hashed field, the aggregation
+ * will return documents of the following format, where 'doc' is a document whose shard key value
+ * has the attached 'frequency'.
+ *   {
+ *      doc: <object>
+ *      frequency: <integer>
+ *      numDocs: <integer>
+ *      numDistinctValues: <integer>
+ *   }
+ * Otherwise, the aggregation will return documents of the following format, where 'key' is the
+ * hint index value for the shard key value that has the attached 'frequency'.
+ *   {
+ *      key: <object>
+ *      frequency: <integer>
+ *      numDocs: <integer>
+ *      numDistinctValues: <integer>
+ *   }
+ * The former case involves an additional FETCH for every document returned since it needs to look
+ * up a document from the index value.
+ ','line_number':188,'multiline':True]
+['text':' Calculate the "frequency" of each original/hashed shard key value by doing a $group.','line_number':232,'multiline':False]
+['text':' Use a temporary field name since it is invalid to group by a field name that contains','line_number':239,'multiline':False]
+['text':' dots.','line_number':240,'multiline':False]
+['text':' Calculate the "numDocs", "numDistinctValues" and "mostCommonValues" by doing a $group with','line_number':256,'multiline':False]
+['text':' $topN.','line_number':257,'multiline':False]
+['text':' Unwind "mostCommonValues" to return each shard value in its own document.','line_number':268,'multiline':False]
+['text':' If the supporting index is hashed and the hashed field is one of the shard key fields, look','line_number':271,'multiline':False]
+['text':' up the corresponding values by doing a $lookup with $toHashedIndexKey. Replace "_id"','line_number':272,'multiline':False]
+['text':' with "doc" or "key" accordingly.','line_number':273,'multiline':False]
+['text':' (re)shardCollection by design uses simple collation for comparing shard key values.','line_number':317,'multiline':False]
+['text':' Use readConcern "available" to avoid shard filtering since it is expensive.','line_number':319,'multiline':False]
+['text':'*
+ * Runs the aggregate command 'aggRequest' locally and getMore commands for it if needed and
+ * applies 'callbackFn' to each returned document.
+ ','line_number':326,'multiline':True]
+['text':' secondaryOk ','line_number':335,'multiline':True]
+['text':' useExhaust','line_number':335,'multiline':True]
+['text':'*
+ * Runs the aggregate command 'aggRequest' on the shards that the query targets and getMore
+ * commands for it if needed, and applies 'callbackFn' to each returned document. On a sharded
+ * cluster, internally retries on shard versioning errors.
+ ','line_number':343,'multiline':True]
+['text':' explain ','line_number':381,'multiline':True]
+['text':' fromMongos ','line_number':382,'multiline':True]
+['text':' needsMerge ','line_number':383,'multiline':True]
+['text':' bypassDocumentValidation ','line_number':385,'multiline':True]
+['text':' isMapReduceCommand ','line_number':386,'multiline':True]
+['text':' runtimeConstants ','line_number':388,'multiline':True]
+['text':'*
+ * Runs the aggregate command 'aggRequest' and getMore commands for it if needed, and applies
+ * 'callbackFn' to each returned document. On a sharded cluster, internally retries on shard
+ * versioning errors.
+ ','line_number':405,'multiline':True]
+['text':'*
+ * To be used for finding the index that can be used as a hint for the aggregate command for
+ * calculating the cardinality and frequency metrics.
+ *
+ * Returns the IndexSpec for the index that has the given shard key as a prefix, ignoring the index
+ * type (i.e. hashed or range) since the grouping inside the aggregation works with both the
+ * original field values and the hashes of the field values. The index must meet the following
+ * requirements:
+ * - It must have simple collation since that is the only supported collation for shard key string
+ *   fields comparisons.
+ * - It must not be sparse since such an index omits documents that have null/missing index
+ *   key fields.
+ * - It must not be partial since such an index omits documents do not match the specified
+ *   filter.
+ * - It must not be multi-key since a shard key field cannot be an array.
+ ','line_number':424,'multiline':True]
+['text':' Go through the indexes in the index catalog to find the most compatible index.','line_number':453,'multiline':False]
+['text':' Give preference to indexes with fewer fields and unique indexes since they can help','line_number':483,'multiline':False]
+['text':' us infer if the shard key is unique.','line_number':484,'multiline':False]
+['text':' The size limit for the most common values. Leave some padding for other fields in the response.','line_number':499,'multiline':False]
+['text':'*
+ * Creates a BSONObj by appending the fields in 'obj' to it. Upon encoutering a field whose size
+ * exceeds the remaining size, truncates it by setting its value to a BSONObj with a "type" field
+ * and a "sizeBytes" field. If the field is of type of Object and the depth is 0, recurse to
+ * truncate the subfields instead.
+ ','line_number':502,'multiline':True]
+['text':'*
+ * Returns the cardinality and frequency metrics for a shard key given that the shard key is unique
+ * and the collection has the the given fast count of the number of documents.
+ ','line_number':540,'multiline':True]
+['text':'*
+ * Returns the cardinality and frequency metrics for the given shard key. Calculates the metrics by
+ * running aggregation against the collection. If the shard key is unique, please use the version
+ * above since the metrics can be determined without running any aggregations.
+ ','line_number':589,'multiline':True]
+['text':'*
+ * Returns the cardinality and frequency metrics for a shard key given that the shard key is unique
+ * and the collection has the the given fast count of the number of documents.
+ ','line_number':670,'multiline':True]
+['text':'*
+ * Returns the monotonicity metrics for the given shard key, i.e. whether the value of the given
+ * shard key is monotonically changing in insertion order and the RecordId correlation coefficient
+ * calculated by the monotonicity check. If the collection is clustered or the shard key does not
+ * have a supporting index, returns 'unknown' and none.
+ ','line_number':714,'multiline':True]
+['text':' The monotonicity cannot be inferred from the recordIds in the index since hashing','line_number':748,'multiline':False]
+['text':' introduces randomness.','line_number':749,'multiline':False]
+['text':'requireSingleKey=','line_number':758,'multiline':True]
+['text':' Non-clustered indexes always have an associated IndexDescriptor.','line_number':764,'multiline':False]
+['text':'*
+ * Returns $collStat metrics for the given collection, i.e. the number of documents, the average
+ * document size in bytes and the number of orphan documents if the collection is sharded.
+ ','line_number':885,'multiline':True]
+['text':'*
+ * Generates split points that partition the data for the given collection into N number of ranges
+ * with roughly equal number of documents, where N is equal to 'gNumShardKeyRanges', and then
+ * persists the split points to the config collection for storing split point documents. Returns
+ * the filter and the afterClusterTime to use when fetching the split point documents, where the
+ * latter corresponds to the 'operationTime' in the response for the last insert command.
+ ','line_number':946,'multiline':True]
+['text':' Perform best-effort validation that the collection has not been dropped and recreated.','line_number':962,'multiline':False]
+['text':'zones','line_number':980,'multiline':True]
+['text':'availableShardIds','line_number':981,'multiline':True]
+['text':' Performs best-effort validation again that the shard key does not contain an array field','line_number':1027,'multiline':False]
+['text':' by asserting that split point does not contain an array field.','line_number':1028,'multiline':False]
+['text':' splitPointId ','line_number':1041,'multiline':True]
+['text':' namespace','line_number':1064,'multiline':False]
+['text':' If both 'sampleRate' and 'sampleSize' are not specified, set 'sampleSize' to the default.','line_number':1075,'multiline':False]
+['text':' Perform best-effort validation that the collection has not been dropped and recreated.','line_number':1090,'multiline':False]
+['text':' Performs best-effort validation that the shard key does not contain an array field by','line_number':1097,'multiline':False]
+['text':' extracting the shard key value from a random document in the collection and asserting','line_number':1098,'multiline':False]
+['text':' that it does not contain an array field.','line_number':1099,'multiline':False]
+['text':' Save the original readConcern since the one on the opCtx will get overwritten as part','line_number':1101,'multiline':False]
+['text':' running a command via DBDirectClient below, and it is illegal to specify readConcern','line_number':1102,'multiline':False]
+['text':' to DBDirectClient::find().','line_number':1103,'multiline':False]
+['text':' Restore the original readConcern.','line_number':1116,'multiline':False]
+['text':' Use a tassert here since the IllegalOperation error should have been thrown while','line_number':1182,'multiline':False]
+['text':' calculating about the cardinality and frequency of the shard key.','line_number':1183,'multiline':False]
+['text':' Keep only the percentages.','line_number':1247,'multiline':False]
+['text':' namespace analyze_shard_key','line_number':1267,'multiline':False]
+['text':' namespace mongo','line_number':1268,'multiline':False]

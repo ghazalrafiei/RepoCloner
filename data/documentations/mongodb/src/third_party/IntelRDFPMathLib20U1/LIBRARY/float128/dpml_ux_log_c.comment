@@ -1,0 +1,152 @@
+['text':'*****************************************************************************
+  Copyright (c) 2007-2011, Intel Corp.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+  THE POSSIBILITY OF SUCH DAMAGE.
+*****************************************************************************','line_number':1,'multiline':True]
+['text':' The basic design of for the log functions relies on a common evaluation
+** routine.  The evaluation routine is based on the identities:
+** 
+** 	logb(x) = ln(x)/ln(b)					(1)
+** 	ln(2^n*f) = n*ln(2) + ln(f)				(2)
+** 	ln[(1+x)/(1-x)] = 2*sum{ k = 0,... | x^(2k+1)/(2k+1) }	(3)
+** 
+** Assuming that x = 2^n*f, where 1/2 <= f < 1, we define g and m as:
+** 
+** 	g = f;
+** 	m = n;
+** 	if (f < 1/sqrt(2))
+** 	    {
+** 	    g = 2*f;
+** 	    m = n - 1;
+** 	    }
+** 
+** Then x = 2^m*g where 1/sqrt(2) <= g < sqrt(2).  From (2) and (3) it follows
+** that
+** 		                                     g - 1
+** 		ln(x) = m*ln(2) + z*p(z^2) where z = -----
+** 		                                     g + 1
+** 
+** Then from (1) it follows that
+** 
+** 		logb(x) = m*ln(2)/ln(b) + z*p(z^2)/ln(b)
+**		        = [m + z*r(z^2)]*[1/ln(b)]
+**
+** UX_LOG_POLY is a convenience functions that allows for the evaluation of
+** the log polynomial without having to know the address of the coefficients
+** and automatically multiplies by ln2.
+','line_number':38,'multiline':True]
+['text':'
+    ** Compute z = (g - 1)/(g + 1).  Make sure to restore the input
+    ** argument to its original value in case the caller needs to use
+    ** it again.
+    ','line_number':91,'multiline':True]
+['text':'printf("UX_LOG:  tmp1=(%x %x) %llx %llx, tmp0=(%x %x) %llx %llx, r=(%x %x) %llx %llx\n",
+		  tmp[1].sign,tmp[1].exponent,tmp[1].fraction[0],tmp[1].fraction[1],
+		  tmp[0].sign,tmp[0].exponent,tmp[0].fraction[0],tmp[0].fraction[1],
+		  unpacked_result->sign,unpacked_result->exponent,unpacked_result->fraction[0],unpacked_result->fraction[1]);','line_number':105,'multiline':True]
+['text':' Evaluate z*p(z^2) ','line_number':110,'multiline':True]
+['text':' Get m as a packed value and add to polynomial ','line_number':120,'multiline':True]
+['text':'printf("UX_LOG:  tmp1=(%x %x) %llx %llx, tmp0=(%x %x) %llx %llx, u_res=(%x %x) %llx %llx\n",
+		  tmp[1].sign,tmp[1].exponent,tmp[1].fraction[0],tmp[1].fraction[1],
+		  tmp[0].sign,tmp[0].exponent,tmp[0].fraction[0],tmp[0].fraction[1],
+		  unpacked_result->sign,unpacked_result->exponent,unpacked_result->fraction[0],unpacked_result->fraction[1]);','line_number':122,'multiline':True]
+['text':'printf("m=%llx\n",(long long)m);','line_number':127,'multiline':False]
+['text':' multiply by scale ','line_number':131,'multiline':True]
+['text':'printf("u_res= (%x %x) %llx %llx\n",unpacked_result->sign,unpacked_result->exponent,unpacked_result->fraction[0],unpacked_result->fraction[1]);','line_number':133,'multiline':False]
+['text':'printf("UX_LOG:  packed arg=%llx %llx, unpacked_arg=(%x %x) %llx %llx\n",packed_argument->digit[0],packed_argument->digit[1],unpacked_argument.sign,unpacked_argument.exponent,unpacked_argument.fraction[0],unpacked_argument.fraction[1]);','line_number':160,'multiline':False]
+['text':'
+** If we compute log1p(x) as log(1+x), then for small arguments a loss of
+** significance will occur when computing the reduced argument for the generic
+** log evaluation.  Consequently we screen out x such that
+**
+**		 1/sqrt(2) <= 1 + x < sqrt(2),
+**
+** or equivalently,
+**
+**		1/sqrt(2) - 1 <= x < sqrt(2) - 1	(4)
+**
+** We do this comparison "approximately" and in several phases.  First we
+** screen x to lie in the interval (-1/2, 1/2) by looking at the exponent
+** field of x.  Then we eliminate arguments with |x| <= 1/4, since these are
+** known to satisfy (4).  At this point |x| = 2^(-1)*f and we can approximate
+** 1 + x using only the high fraction digit x, F1.  Letting
+** N = BITS_PER_DIGIT_TYPE:
+**
+**		1 + x = 2^(N-1)/2^(N-1) + 2^(-1)*F1/2^N
+**		      = 2^(N-1)/2^(N-1) + F1/2^(N+1)
+**		      = [2^(N-1) + F1/4]/2^(N-1)
+**
+** So we define an integer G such that G/2^(N-1) ~ 1 + x by,
+**
+**		G <-- F1 >> 2
+**		if (x < 0)
+**		    G <-- -G
+**		G <-- G + (1 << (N-1))
+**
+** At this point we define two other integers:
+**
+**		I_RECIP_SQRT_2 <-- nint[2^(N-1)/sqrt(2)]
+**		I_SQRT_2       <-- nint[2^(N-1)*sqrt(2)]
+**
+** Then the range check: 1/sqrt(2) < 1 + x < sqrt(2) is "equivalent" to
+**
+**		I_RECIP_SQRT_2 < G < I_SQRT_2.
+','line_number':228,'multiline':True]
+['text':'
+    ** Screen out negative values <= -1.  For values less than
+    ** -1, force "underflow".  For arguments equal to -1, force
+    ** "overflow".
+    ','line_number':291,'multiline':True]
+['text':' |arg| >= 1/2.  ','line_number':302,'multiline':True]
+['text':' |arg| >= 1.  Check for arg <= -1 ','line_number':305,'multiline':True]
+['text':' arg <= -1, start by forcing overflow ','line_number':307,'multiline':True]
+['text':' This is -1.  Force underflow ','line_number':315,'multiline':True]
+['text':' |arg| <= 1/4. ','line_number':324,'multiline':True]
+['text':'
+    ** If we get here, 1/4 < |arg| < 1/2.  We need to check see if
+    ** 1/sqrt(2) < 1 + x < sqrt(2)
+    ','line_number':327,'multiline':True]
+['text':'
+    ** If we get here, we know 1/sqrt(2) < 1 + x < sqrt(2).  To
+    ** avoid loss of significance, compute the reduced argument
+    ** as x/(2+x) and evaluate the log polynomial.
+    ','line_number':342,'multiline':True]
+['text':' If we get here, just compute 1 + x and call the log ','line_number':365,'multiline':True]
+['text':' data 1 ','line_number':407,'multiline':True]
+['text':' data 2 ','line_number':408,'multiline':True]
+['text':' data 1 ','line_number':424,'multiline':True]
+['text':' data 2 ','line_number':425,'multiline':True]
+['text':' data 1 ','line_number':442,'multiline':True]
+['text':' data 2 ','line_number':443,'multiline':True]
+['text':' data 1 ','line_number':459,'multiline':True]
+['text':'
+    ** NOTE: the fraction fields of 1/sqrt(2) and sqrt(2) are identical, so
+    ** that in the above code, the symbolic constants ONE_OVER_SQRT_2 and
+    ** I_SQRT_2 have the same numerical value.
+    ','line_number':461,'multiline':True]
+['text':'
+    ** Now generate coefficients for computing log.
+    ','line_number':473,'multiline':True]

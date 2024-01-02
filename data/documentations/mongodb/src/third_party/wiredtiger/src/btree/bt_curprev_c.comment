@@ -1,0 +1,341 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * Walking backwards through skip lists.
+ *
+ * The skip list stack is an array of pointers set up by a search. It points to the position a node
+ * should go in the skip list. In other words, the skip list search stack always points *after* the
+ * search item (that is, into the search item's next array).
+ *
+ * Helper macros to go from a stack pointer at level i, pointing into a next array, back to the
+ * insert node containing that next array.
+ ','line_number':11,'multiline':True]
+['text':'
+ * __cursor_skip_prev --
+ *     Move back one position in a skip list stack (aka "finger").
+ ','line_number':30,'multiline':True]
+['text':'
+     * If the search stack does not point at the current item, fill it in with a search.
+     ','line_number':46,'multiline':True]
+['text':'
+     * Find the first node up the search stack that does not move.
+     *
+     * The depth of the current item must be at least this level, since we
+     * see it in that many levels of the stack.
+     *
+     * !!! Watch these loops carefully: they all rely on the value of i,
+     * and the exit conditions to end up with the right values are
+     * non-trivial.
+     ','line_number':59,'multiline':True]
+['text':' -Wconditional-uninitialized ','line_number':69,'multiline':True]
+['text':'
+     * Find a starting point for the new search. That is either at the non-moving node if we found a
+     * valid node, or the beginning of the next list down that is not the current node.
+     *
+     * Since it is the beginning of a list, and we know the current node is has a skip depth at
+     * least this high, any node we find must sort before the current node.
+     ','line_number':74,'multiline':True]
+['text':'
+             * Compiler may replace the usage of the variable with another read in the following
+             * code. Here we don't need to worry about CPU reordering as we are reading a thread
+             * local value.
+             *
+             * Place a read barrier to avoid this issue.
+             ','line_number':85,'multiline':True]
+['text':' Walk any remaining levels until just before the current node. ','line_number':97,'multiline':True]
+['text':'
+         * If we get to the end of a list without finding the current item, we must have raced with
+         * an insert. Restart the search.
+         ','line_number':99,'multiline':True]
+['text':'
+         * CPUs with weak memory ordering may reorder the read and return a stale value. This can
+         * lead us to wrongly skip a value in the lower levels of the skip list.
+         *
+         * For example, if we have A -> C initially for both level 0 and level 1 and we concurrently
+         * insert B into both level 0 and level 1. If B is visible on level 1 to this thread, it
+         * must also be visible on level 0. Otherwise, we would record an inconsistent stack.
+         *
+         * Place a read barrier to avoid this issue.
+         ','line_number':108,'multiline':True]
+['text':' Stay at this level ','line_number':119,'multiline':True]
+['text':' Drop down a level ','line_number':121,'multiline':True]
+['text':' If we found a previous node, the next one must be current. ','line_number':128,'multiline':True]
+['text':'
+ * __cursor_fix_append_prev --
+ *     Return the previous fixed-length entry on the append list.
+ ','line_number':136,'multiline':True]
+['text':' If restarting after a prepare conflict, jump to the right spot. ','line_number':147,'multiline':True]
+['text':' Move to the previous record in the append list, if any. ','line_number':155,'multiline':True]
+['text':'
+         * Handle the special case of leading implicit records, that is,
+         * there aren't any records in the page not on the append list,
+         * and the append list's first record isn't the first record on
+         * the page. (Although implemented as a test of the page values,
+         * this is really a test for a tree where the first inserted
+         * record wasn't record 1, any other page with only an append
+         * list will have a first page record number matching the first
+         * record in the append list.)
+         *
+         * The "right" place to handle this is probably in our caller.
+         * The high-level cursor-previous routine would:
+         *    -- call this routine to walk the append list
+         *    -- call the routine to walk the standard page items
+         *    -- call the tree walk routine looking for a previous page
+         * Each of them returns WT_NOTFOUND, at which point our caller
+         * checks the cursor record number, and if it's larger than 1,
+         * returns the implicit records.  Instead, I'm trying to detect
+         * the case here, mostly because I don't want to put that code
+         * into our caller.  Anyway, if this code breaks for any reason,
+         * that's the way I'd go.
+         *
+         * If we're not pointing to a WT_INSERT entry (we didn't find a
+         * WT_INSERT record preceding our record name-space), check if
+         * we've reached the beginning of this page, a possibility if a
+         * page had a large number of items appended, and then split.
+         * If not, check if there are any records on the page. If there
+         * aren't, then we're in the magic zone, keep going until we get
+         * to a record number matching the first record on the page.
+         ','line_number':159,'multiline':True]
+['text':'
+     * This code looks different from the cursor-next code. The append list may be preceded by other
+     * rows. If we're iterating through the tree, starting at the last record in the tree, by
+     * definition we're starting a new iteration and we set the record number to the last record
+     * found on the page. Otherwise, decrement the record.
+     ','line_number':194,'multiline':True]
+['text':'
+     * Fixed-width column store appends are inherently non-transactional. Even a non-visible update
+     * by a concurrent or aborted transaction changes the effective end of the data. The effect is
+     * subtle because of the blurring between deleted and empty values, but ideally we would skip
+     * all uncommitted changes at the end of the data. This doesn't apply to variable-width column
+     * stores because the implicitly created records written by reconciliation are deleted and so
+     * can be never seen by a read.
+     ','line_number':208,'multiline':True]
+['text':'
+ * __cursor_fix_prev --
+ *     Move to the previous, fixed-length column-store item.
+ ','line_number':234,'multiline':True]
+['text':' If restarting after a prepare conflict, jump to the right spot. ','line_number':247,'multiline':True]
+['text':' Initialize for each new page. ','line_number':251,'multiline':True]
+['text':'
+         * Be paranoid and set the slot out of bounds when moving to a new page.
+         ','line_number':253,'multiline':True]
+['text':' Move to the previous entry and return the item. ','line_number':264,'multiline':True]
+['text':' We only have one slot. ','line_number':271,'multiline':True]
+['text':' Check any insert list for a matching record. ','line_number':274,'multiline':True]
+['text':' Check the update list. ','line_number':285,'multiline':True]
+['text':'
+         * Read the on-disk value and/or history. Pass an update list: the update list may contain
+         * the base update for a modify chain after rollback-to-stable, required for correctness.
+         ','line_number':288,'multiline':True]
+['text':'
+         * Deleted values read as 0.
+         *
+         * Getting an invalid update back means that there was no update, the on-disk value isn't
+         * visible, and there isn't anything in history either. This means this chunk of the tree
+         * didn't exist yet for us (given our read timestamp), so we can either return NOTFOUND or
+         * produce a zero value depending on the desired end-of-tree semantics. For now, we produce
+         * zero so as not to change the preexisting end-of-tree behavior.
+         ','line_number':294,'multiline':True]
+['text':'
+ * __cursor_var_append_prev --
+ *     Return the previous variable-length entry on the append list.
+ ','line_number':312,'multiline':True]
+['text':' If restarting after a prepare conflict, jump to the right spot. ','line_number':326,'multiline':True]
+['text':'
+         * If a lower bound has been set ensure that the key is within the range, otherwise early
+         * exit.
+         ','line_number':347,'multiline':True]
+['text':' NOTREACHED ','line_number':371,'multiline':True]
+['text':'
+ * __cursor_var_prev --
+ *     Move to the previous, variable-length column-store item.
+ ','line_number':374,'multiline':True]
+['text':' -Werror=maybe-uninitialized ','line_number':394,'multiline':True]
+['text':' If restarting after a prepare conflict, jump to the right spot. ','line_number':397,'multiline':True]
+['text':' Initialize for each new page. ','line_number':401,'multiline':True]
+['text':'
+         * Be paranoid and set the slot out of bounds when moving to a new page.
+         ','line_number':403,'multiline':True]
+['text':' Move to the previous entry and return the item. ','line_number':416,'multiline':True]
+['text':'
+         * If an lower bound has been set ensure that the key is within the range, otherwise early
+         * exit. In the case where there is a large set of RLE deleted records it is possible that
+         * calculated recno will be off the end of the page. We don't need to add an additional
+         * check for this case as the prev iteration, either on a page or append list will check the
+         * recno and early exit. It does present a potential optimization but to keep the bounded
+         * cursor logic simple we will forego it for now.
+         ','line_number':425,'multiline':True]
+['text':' Find the matching WT_COL slot. ','line_number':438,'multiline':True]
+['text':' Check any insert list for a matching record. ','line_number':443,'multiline':True]
+['text':'
+         * There's no matching insert list item. If we're on the same slot as the last reference,
+         * and the cell is cacheable (it might not be if it's not globally visible), reuse the
+         * previous return data to avoid repeatedly decoding items.
+         ','line_number':465,'multiline':True]
+['text':' Unpack the cell and build the return information. ','line_number':478,'multiline':True]
+['text':'
+             * There can be huge gaps in the variable-length column-store name space appearing as
+             * deleted records. If more than one deleted record, do the work of finding the next
+             * record to return instead of looping through the records.
+             *
+             * First, find the largest record in the update list that's smaller than the current
+             * record.
+             ','line_number':488,'multiline':True]
+['text':'
+             * Second, for records with RLEs greater than 1, the above call to __col_var_search
+             * located this record in the page's list of repeating records, and returned the
+             * starting record. The starting record - 1 is the record to which we could skip, if
+             * there was no larger record in the update list.
+             ','line_number':498,'multiline':True]
+['text':' Adjust for the outer loop decrement. ','line_number':508,'multiline':True]
+['text':'
+         * Read the on-disk value and/or history. Pass an update list: the update list may contain
+         * the base update for a modify chain after rollback-to-stable, required for correctness.
+         ','line_number':517,'multiline':True]
+['text':'
+         * It is only safe to cache the value for other keys in the same RLE cell if it is globally
+         * visible. Otherwise, there might be some older timestamp where the value isn't uniform
+         * across the cell. Always set cip_saved so it's easy to tell when we change cells.
+         *
+         * Note: it's important that we're checking the on-disk value for global visibility, and not
+         * whatever __wt_txn_read returned, which might be something else. (If it's something else,
+         * we can't cache it; but in that case the on-disk value cannot be globally visible.)
+         ','line_number':529,'multiline':True]
+['text':'
+             * Copy the value into cbt->tmp to cache it. This is perhaps unfortunate, because
+             * copying isn't free, but it's currently necessary. The memory we're copying might be
+             * on the disk page (which is safe because the page is pinned as long as the cursor is
+             * sitting on it) but if not it belongs to cbt->upd_value, and that (though it belongs
+             * to the cursor and won't disappear arbitrarily) might be invalidated or changed by
+             * other paths through this function on a subsequent call but before we are done with
+             * this RLE cell. In principle those paths could clear WT_CBT_CACHEABLE_RLE_CELL, but
+             * the code is currently structured in a way that makes that difficult.
+             ','line_number':541,'multiline':True]
+['text':' NOTREACHED ','line_number':557,'multiline':True]
+['text':'
+ * __cursor_row_prev --
+ *     Move to the previous row-store item.
+ ','line_number':560,'multiline':True]
+['text':' If restarting after a prepare conflict, jump to the right spot. ','line_number':581,'multiline':True]
+['text':'
+     * For row-store pages, we need a single item that tells us the part of the page we're walking
+     * (otherwise switching from next to prev and vice-versa is just too complicated), so we map the
+     * WT_ROW and WT_INSERT_HEAD insert array slots into a single name space: slot 1 is the
+     * "smallest key insert list", slot 2 is WT_ROW[0], slot 3 is WT_INSERT_HEAD[0], and so on. This
+     * means WT_INSERT lists are odd-numbered slots, and WT_ROW array slots are even-numbered slots.
+     *
+     * Initialize for each new page.
+     ','line_number':590,'multiline':True]
+['text':' Check if keys need to be instantiated before we walk the page. ','line_number':600,'multiline':True]
+['text':'
+         * Be paranoid and set the slot out of bounds when moving to a new page.
+         ','line_number':603,'multiline':True]
+['text':' Move to the previous entry and return the item. ','line_number':617,'multiline':True]
+['text':'
+         * Continue traversing any insert list. Maintain the reference to the current insert element
+         * in case we switch to a cursor next movement.
+         ','line_number':619,'multiline':True]
+['text':'
+             * If a lower bound has been set ensure that the key is within the range, otherwise
+             * early exit.
+             ','line_number':636,'multiline':True]
+['text':' Check for the beginning of the page. ','line_number':661,'multiline':True]
+['text':'
+         * Odd-numbered slots configure as WT_INSERT_HEAD entries, even-numbered slots configure as
+         * WT_ROW entries.
+         ','line_number':666,'multiline':True]
+['text':'
+         * The saved cursor key from the slot is used later to get the value from the history store
+         * if the on-disk data is not visible.
+         ','line_number':684,'multiline':True]
+['text':'
+         * If a lower bound has been set ensure that the key is within the range, otherwise early
+         * exit.
+         ','line_number':693,'multiline':True]
+['text':'
+         * Read the on-disk value and/or history. Pass an update list: the update list may contain
+         * the base update for a modify chain after rollback-to-stable, required for correctness.
+         ','line_number':702,'multiline':True]
+['text':' NOTREACHED ','line_number':722,'multiline':True]
+['text':'
+ * __wt_btcur_prev --
+ *     Move to the previous record in the tree.
+ ','line_number':725,'multiline':True]
+['text':' tree walk flags ','line_number':751,'multiline':True]
+['text':'
+     * If we have a bound set we should position our cursor appropriately if it isn't already
+     * positioned. It is possible that the positioning function can directly return the record. For
+     * that to happen, the cursor must be placed on a valid record and must be positioned on the
+     * first record within the bounds. If the record is not valid or is not positioned within the
+     * bounds, continue the prev traversal logic.
+     ','line_number':760,'multiline':True]
+['text':'
+     * If we aren't already iterating in the right direction, there's some setup to do.
+     ','line_number':776,'multiline':True]
+['text':'
+     * Walk any page we're holding until the underlying call returns not-found. Then, move to the
+     * previous page, until we reach the start of the file.
+     ','line_number':782,'multiline':True]
+['text':' Calls with key only flag should never restart. ','line_number':789,'multiline':True]
+['text':'
+         * Column-store pages may have appended entries. Handle it separately from the usual cursor
+         * code, it's in a simple format.
+         ','line_number':793,'multiline':True]
+['text':' The page cannot be NULL if the above flag is set. ','line_number':802,'multiline':True]
+['text':'
+         * If we are doing an operation with bounds set, we need to check if we have exited the prev
+         * function due to the key being out of bounds. If so, we break instead of walking onto the
+         * prev page. We're not directly returning here to allow the cursor to be reset first before
+         * we return WT_NOTFOUND.
+         ','line_number':842,'multiline':True]
+['text':'
+         * If we saw a lot of deleted records on this page, or we went all the way through a page
+         * and only saw deleted records, try to evict the page when we release it. Otherwise
+         * repeatedly deleting from the beginning of a tree can have quadratic performance. Take
+         * care not to force eviction of pages that are genuinely empty, in new trees.
+         *
+         * A visible stop timestamp could have been treated as a tombstone and accounted in the
+         * deleted count. Such a page might not have any new updates and be clean, but could benefit
+         * from reconciliation getting rid of the obsolete content. Hence mark the page dirty to
+         * force it through reconciliation.
+         ','line_number':851,'multiline':True]
+['text':'
+         * If we are running with snapshot isolation, and not interested in returning tombstones, we
+         * could potentially skip pages. The skip function looks at the aggregated timestamp
+         * information to determine if something is visible on the page. If nothing is, the page is
+         * skipped.
+         ','line_number':876,'multiline':True]
+['text':'
+         * Skip key order check, if next is called after a prev returned a prepare conflict error,
+         * i.e cursor has changed direction at a prepared update, hence current key returned could
+         * be same as earlier returned key.
+         *
+         * eg: Initial data set : (2,3,...10) insert key 1 in a prepare transaction. loop on prev
+         * will return 10,...3,2 and subsequent call to prev will return a prepare conflict. Now if
+         * we call next key 2 will be returned which will be same as earlier returned key.
+         *
+         * Additionally, reset the cursor check when we are using read uncommitted isolation mode
+         * and cross a page boundary. It's possible to see out-of-order keys when the earlier
+         * returned key is removed and new keys are inserted at the end of the page.
+         ','line_number':910,'multiline':True]
+['text':'
+             * The bounds positioning code relies on the assumption that if we had to walk then we
+             * can't possibly have walked to the upper bound. We check that assumption here by
+             * comparing the upper bound with our current key or recno. Force inclusive to be false
+             * so we don't consider the bound itself.
+             ','line_number':930,'multiline':True]
+['text':'
+         * If prepare conflict occurs, cursor should not be reset unless they have bounds and were
+         * being initially positioned, as the current cursor position will be reused in case of a
+         * retry from user.
+         *
+         * Bounded cursors don't lose their bounds if the reset call is internal, per the API.
+         * Additionally by resetting the cursor here we have a slightly different semantic to a
+         * traditional prepare conflict. We are giving up the page which may allow to be evicted but
+         * for the purposes of the bounded cursor this should be fine.
+         ','line_number':947,'multiline':True]

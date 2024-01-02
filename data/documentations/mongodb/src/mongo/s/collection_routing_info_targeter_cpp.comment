@@ -1,0 +1,174 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' Tracks the number of {multi:false} updates with an exact match on _id that are broadcasted to','line_number':102,'multiline':False]
+['text':' multiple shards.','line_number':103,'multiline':False]
+['text':'*
+ * Update expressions are bucketed into one of two types for the purposes of shard targeting:
+ *
+ * Replacement style: coll.update({ x : 1 }, { y : 2 })
+ * OpStyle: coll.update({ x : 1 }, { $set : { y : 2 } })
+ *            or
+ *          coll.update({x: 1}, [{$addFields: {y: 2}}])
+ ','line_number':107,'multiline':True]
+['text':' Make sure that the update expression does not mix $op and non-$op fields.','line_number':127,'multiline':False]
+['text':'*
+ * Obtain the update expression from the given update doc. If this is a replacement-style update,
+ * and the shard key includes _id but the replacement document does not, we attempt to find an exact
+ * _id match in the query component and add it to the doc. We do this because mongoD will propagate
+ * _id from the existing document if this is an update, and will extract _id from the query when
+ * generating the new document in the case of an upsert. It is therefore always correct to target
+ * the operation on the basis of the combined updateExpr and query.
+ ','line_number':144,'multiline':True]
+['text':' If this is not a replacement update, then the update expression remains unchanged.','line_number':156,'multiline':False]
+['text':' Extract the raw update expression from the request.','line_number':163,'multiline':False]
+['text':' Replace any non-existent shard key values with a null value.','line_number':166,'multiline':False]
+['text':' If we aren't missing _id, return the update expression as-is.','line_number':170,'multiline':False]
+['text':' We are missing _id, so attempt to extract it from an exact match in the update's query spec.','line_number':175,'multiline':False]
+['text':' This will guarantee that we can target a single shard, but it is not necessarily fatal if no','line_number':176,'multiline':False]
+['text':' exact _id can be found.','line_number':177,'multiline':False]
+['text':'*
+ * Returns true if the two CollectionRoutingInfo objects are different.
+ ','line_number':187,'multiline':True]
+['text':' Target the only shard that owns this collection.','line_number':212,'multiline':False]
+['text':' Target the db-primary shard. Attach 'dbVersion: X, shardVersion: UNSHARDED'.','line_number':220,'multiline':False]
+['text':' TODO (SERVER-51070): Remove the boost::none when the config server can support','line_number':221,'multiline':False]
+['text':' shardVersion in commands','line_number':222,'multiline':False]
+['text':' namespace','line_number':230,'multiline':False]
+['text':'*
+ * Initializes and returns the CollectionRoutingInfo which needs to be used for targeting.
+ * If 'refresh' is true, additionally fetches the latest routing info from the config servers.
+ *
+ * Note: For tracked time-series collections, we use the buckets collection for targeting. If the
+ * user request is on the view namespace, we implicitly transform the request to the buckets
+ * namespace.
+ ','line_number':245,'multiline':True]
+['text':' The maximum number of attempts has been reached, so the procedure fails as it','line_number':281,'multiline':False]
+['text':' could be a logical error. At this point, it is unlikely that the error is','line_number':282,'multiline':False]
+['text':' caused by concurrent drop database operations.','line_number':283,'multiline':False]
+['text':' For a tracked time-series collection, only the underlying buckets collection is stored on the','line_number':290,'multiline':False]
+['text':' config servers. If the user operation is on the time-series view namespace, we should check','line_number':291,'multiline':False]
+['text':' if the buckets namespace is tracked on the configsvr. There are a few cases that we need to','line_number':292,'multiline':False]
+['text':' take care of:','line_number':293,'multiline':False]
+['text':' 1. The request is on the view namespace. We check if the buckets collection is tracked. If it','line_number':294,'multiline':False]
+['text':'    is, we use the buckets collection namespace for the purpose of targeting. Additionally, we','line_number':295,'multiline':False]
+['text':'    set the '_isRequestOnTimeseriesViewNamespace' to true for this case.','line_number':296,'multiline':False]
+['text':' 2. If request is on the buckets namespace, we don't need to execute any additional','line_number':297,'multiline':False]
+['text':'    time-series logic. We can treat the request as though it was a request on a regular','line_number':298,'multiline':False]
+['text':'    collection.','line_number':299,'multiline':False]
+['text':' 3. During a cache refresh the buckets collection changes from tracked to untracked. In this','line_number':300,'multiline':False]
+['text':'    case, if the original request is on the view namespace, then we should reset the namespace','line_number':301,'multiline':False]
+['text':'    back to the view namespace and reset '_isRequestOnTimeseriesViewNamespace'.','line_number':302,'multiline':False]
+['text':' This can happen if a tracked time-series collection is dropped and re-created. Then we','line_number':318,'multiline':False]
+['text':' need to reset the namespace to the original namespace.','line_number':319,'multiline':False]
+['text':' The collation applies to the _id field, but the user specified a collation which doesn't','line_number':391,'multiline':False]
+['text':' match the collection default.','line_number':392,'multiline':False]
+['text':' Collection is sharded','line_number':426,'multiline':False]
+['text':' The shard key would only be empty after extraction if we encountered an error case, such','line_number':444,'multiline':False]
+['text':' as the shard key possessing an array value or array descendants. If the shard key','line_number':445,'multiline':False]
+['text':' presented to the targeter was empty, we would emplace the missing fields, and the','line_number':446,'multiline':False]
+['text':' extracted key here would *not* be empty.','line_number':447,'multiline':False]
+['text':' Target the shard key','line_number':455,'multiline':False]
+['text':' If the update is replacement-style:','line_number':465,'multiline':False]
+['text':' 1. Attempt to target using the query. If this fails, AND the query targets more than one','line_number':466,'multiline':False]
+['text':'    shard,','line_number':467,'multiline':False]
+['text':' 2. Fall back to targeting using the replacement document.','line_number':468,'multiline':False]
+['text':'','line_number':469,'multiline':False]
+['text':' If the update is an upsert:','line_number':470,'multiline':False]
+['text':' 1. Always attempt to target using the query. Upserts must have the full shard key in the','line_number':471,'multiline':False]
+['text':'    query.','line_number':472,'multiline':False]
+['text':'','line_number':473,'multiline':False]
+['text':' NOTE: A replacement document is allowed to have missing shard key values, because we target','line_number':474,'multiline':False]
+['text':' as if the shard key values are specified as NULL. A replacement document is also allowed','line_number':475,'multiline':False]
+['text':' to have a missing '_id', and if the '_id' exists in the query, it will be emplaced in the','line_number':476,'multiline':False]
+['text':' replacement document for targeting purposes.','line_number':477,'multiline':False]
+['text':' Collection is sharded','line_number':494,'multiline':False]
+['text':' explain','line_number':502,'multiline':False]
+['text':' Translate the update query on a timeseries collection into the bucket-level predicate','line_number':523,'multiline':False]
+['text':' so that we can target the request to the correct shard or broadcast the request if','line_number':524,'multiline':False]
+['text':' the bucket-level predicate is empty.','line_number':525,'multiline':False]
+['text':'','line_number':526,'multiline':False]
+['text':' Note: The query returned would match a super set of the documents matched by the','line_number':527,'multiline':False]
+['text':' original query.','line_number':528,'multiline':False]
+['text':' Utility function to target an update by shard key, and to handle any potential error results.','line_number':541,'multiline':False]
+['text':' Parse update query.','line_number':554,'multiline':False]
+['text':' With the introduction of PM-1632, we can use the two phase write protocol to successfully','line_number':559,'multiline':False]
+['text':' target an upsert without the full shard key. Else, the query must contain an exact match','line_number':560,'multiline':False]
+['text':' on the shard key. If we were to target based on the replacement doc, it could result in an','line_number':561,'multiline':False]
+['text':' insertion even if a document matching the query exists on another shard.','line_number':562,'multiline':False]
+['text':' We first try to target based on the update's query. It is always valid to forward any update','line_number':573,'multiline':False]
+['text':' or upsert to a single shard, so return immediately if we are able to target a single shard.','line_number':574,'multiline':False]
+['text':' The check is structured in this way to check if the query does not contain a shard key,','line_number':577,'multiline':False]
+['text':' but is still targetable to a single shard. We don't explicitly use the result of','line_number':578,'multiline':False]
+['text':' targetByShardKey(), and instead only see if we throw in that helper in order to determine','line_number':579,'multiline':False]
+['text':' if the two phase write protocol should be used (in the case of a query that does not have','line_number':580,'multiline':False]
+['text':' a shard key).','line_number':581,'multiline':False]
+['text':' Targeting by replacement document is no longer necessary when an updateOne without shard key','line_number':594,'multiline':False]
+['text':' is allowed, since we're able to decisively select a document to modify with the two phase','line_number':595,'multiline':False]
+['text':' write without shard key protocol.','line_number':596,'multiline':False]
+['text':' Replacement-style updates must always target a single shard. If we were unable to do so','line_number':600,'multiline':False]
+['text':' using the query, we attempt to extract the shard key from the replacement and target','line_number':601,'multiline':False]
+['text':' based on it.','line_number':602,'multiline':False]
+['text':' If we are here then this is an op-style update, and we were not able to target a single','line_number':612,'multiline':False]
+['text':' shard. Non-multi updates must target a single shard or an exact _id. Time-series single','line_number':613,'multiline':False]
+['text':' updates must target a single shard.','line_number':614,'multiline':False]
+['text':' If the request is {multi:false} and it's not a write without shard key, then this is a','line_number':632,'multiline':False]
+['text':' single op-style update which we are broadcasting to multiple shards by exact _id. Record','line_number':633,'multiline':False]
+['text':' this event in our serverStatus metrics. If the query requests an upsert, then we will use','line_number':634,'multiline':False]
+['text':' the two phase write protocol anyway.','line_number':635,'multiline':False]
+['text':' Collection is sharded','line_number':677,'multiline':False]
+['text':' explain','line_number':682,'multiline':False]
+['text':' Translate the delete query on a timeseries collection into the bucket-level predicate','line_number':698,'multiline':False]
+['text':' so that we can target the request to the correct shard or broadcast the request if','line_number':699,'multiline':False]
+['text':' the bucket-level predicate is empty.','line_number':700,'multiline':False]
+['text':'','line_number':701,'multiline':False]
+['text':' Note: The query returned would match a super set of the documents matched by the','line_number':702,'multiline':False]
+['text':' original query.','line_number':703,'multiline':False]
+['text':' Parse delete query.','line_number':712,'multiline':False]
+['text':' We first try to target based on the delete's query. It is always valid to forward any delete','line_number':717,'multiline':False]
+['text':' to a single shard, so return immediately if we are able to target a single shard.','line_number':718,'multiline':False]
+['text':' We failed to target a single shard.','line_number':727,'multiline':False]
+['text':' Regular single deletes must target a single shard or be exact-ID.','line_number':729,'multiline':False]
+['text':' Time-series single deletes must target a single shard.','line_number':730,'multiline':False]
+['text':' Parse query.','line_number':772,'multiline':False]
+['text':' This function is only called if doing a multi write that targets more than one shard. This','line_number':835,'multiline':False]
+['text':' implies the collection is sharded, so we should always have a chunk manager.','line_number':836,'multiline':False]
+['text':' This can happen when a time-series collection becomes sharded.','line_number':867,'multiline':False]
+['text':' TODO (SERVER-82939) Remove this check once the namespaces are guaranteed to match.','line_number':890,'multiline':False]
+['text':'','line_number':891,'multiline':False]
+['text':' In the case that a bulk write is performing operations on two different namespaces, a','line_number':892,'multiline':False]
+['text':' CannotImplicitlyCreateCollection error for one namespace can be duplicated to operations on','line_number':893,'multiline':False]
+['text':' the other namespace. In this case, we only need to create the collection for the namespace','line_number':894,'multiline':False]
+['text':' the error actually refers to.','line_number':895,'multiline':False]
+['text':' Did we have any stale config or targeting errors at all?','line_number':908,'multiline':False]
+['text':' Make sure that even in case of exception we will clear the last error.','line_number':913,'multiline':False]
+['text':' Get the latest metadata information from the cache if there were issues','line_number':923,'multiline':False]
+['text':' If we couldn't target, and we didn't already update the metadata we must force a refresh','line_number':929,'multiline':False]
+['text':' Ensure the routing info is refreshed before the command is retried to avoid StaleConfig','line_number':950,'multiline':False]
+['text':' Used for testing purposes to force that we always have a tracked timeseries bucket namespace.','line_number':964,'multiline':False]
+['text':' namespace mongo','line_number':980,'multiline':False]

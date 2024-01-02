@@ -1,0 +1,451 @@
+['text':'
+******************************************************************************
+* Copyright (C) 1997-2016, International Business Machines Corporation and
+* others. All Rights Reserved.
+******************************************************************************
+*
+* File uresbund.cpp
+*
+* Modification History:
+*
+*   Date        Name        Description
+*   04/01/97    aliu        Creation.
+*   06/14/99    stephen     Removed functions taking a filename suffix.
+*   07/20/99    stephen     Changed for UResourceBundle typedef'd to void*
+*   11/09/99    weiv            Added ures_getLocale()
+*   March 2000  weiv        Total overhaul - using data in DLLs
+*   06/20/2000  helena      OS/400 port changes; mostly typecast.
+*   06/24/02    weiv        Added support for resource sharing
+******************************************************************************
+','line_number':1,'multiline':True]
+['text':'
+Static cache for already opened resource bundles - mostly for keeping fallback info
+TODO: This cache should probably be removed when the deprecated code is
+      completely removed.
+','line_number':41,'multiline':True]
+['text':' INTERNAL: hashes an entry  ','line_number':51,'multiline':True]
+['text':' INTERNAL: compares two entries ','line_number':60,'multiline':True]
+['text':'*
+ *  Internal function, gets parts of locale name according 
+ *  to the position of '_' character
+ ','line_number':74,'multiline':True]
+['text':'*
+ *  Internal function
+ ','line_number':89,'multiline':True]
+['text':'*
+ *  Internal function. Tries to find a resource in given Resource 
+ *  Bundle, as well as in its parents
+ ','line_number':102,'multiline':True]
+['text':' if this resource is real, ','line_number':112,'multiline':True]
+['text':' try to get data from there ','line_number':113,'multiline':True]
+['text':' Otherwise, we'll look in parents ','line_number':117,'multiline':True]
+['text':' If the resource is found in parents, we need to adjust the error ','line_number':126,'multiline':True]
+['text':' If resource is not found, we need to give an error ','line_number':136,'multiline':True]
+['text':' Works just like ucnv_flushCache() ','line_number':169,'multiline':True]
+['text':'if shared data hasn't even been lazy evaluated yet
+    * return 0
+    ','line_number':178,'multiline':True]
+['text':'creates an enumeration to iterate through every element in the table ','line_number':189,'multiline':True]
+['text':' Deletes only if reference counter == 0
+             * Don't worry about the children of this node.
+             * Those will eventually get deleted too, if not already.
+             * Don't worry about the parents of this node.
+             * Those will eventually get deleted too, if not already.
+             ','line_number':194,'multiline':True]
+['text':' 04/05/2002 [weiv] fCountExisting should now be accurate. If it's not zero, that means that    ','line_number':200,'multiline':True]
+['text':' some resource bundles are still open somewhere. ','line_number':201,'multiline':True]
+['text':'
+         * Do it again to catch bundles (aliases, pool bundle) whose fCountExisting
+         * got decremented by free_entry().
+         ','line_number':210,'multiline':True]
+['text':'* INTERNAL: Initializes the cache for resources ','line_number':269,'multiline':True]
+['text':'* INTERNAL: sets the name (locale) of the resource bundle to given name ','line_number':280,'multiline':True]
+['text':'*
+ *  INTERNAL: Inits and opens an entry from a data DLL.
+ *    CAUTION:  resbMutex must be locked when calling this function.
+ ','line_number':303,'multiline':True]
+['text':'int32_t hashValue;','line_number':310,'multiline':True]
+['text':'UBool isAlias = FALSE;','line_number':314,'multiline':True]
+['text':'UHashTok hashkey; ','line_number':315,'multiline':True]
+['text':' here we try to deduce the right locale name ','line_number':321,'multiline':True]
+['text':' if localeID is NULL, we're trying to open default locale ','line_number':322,'multiline':True]
+['text':' if localeID is "" then we try to open root locale ','line_number':324,'multiline':True]
+['text':' otherwise, we'll open what we're given ','line_number':326,'multiline':True]
+['text':' calculate the hash value of the entry ','line_number':333,'multiline':True]
+['text':'hashkey.pointer = (void *)&find;','line_number':334,'multiline':True]
+['text':'hashValue = hashEntry(hashkey);','line_number':335,'multiline':True]
+['text':' check to see if we already have this entry ','line_number':337,'multiline':True]
+['text':' if the entry is not yet in the hash table, we'll try to construct a new one ','line_number':340,'multiline':True]
+['text':'r->fHashKey = hashValue;','line_number':348,'multiline':True]
+['text':' this is the actual loading ','line_number':365,'multiline':True]
+['text':' we have no such entry in dll, so it will always use fallback ','line_number':369,'multiline':True]
+['text':' if we have a regular entry ','line_number':372,'multiline':True]
+['text':' handle the alias by trying to get out the %%Alias tag.','line_number':389,'multiline':True]
+['text':' We'll try to get alias string from the bundle ','line_number':390,'multiline':True]
+['text':' if there is actual alias - unload and load new data ','line_number':394,'multiline':True]
+['text':' if the data is not cached ','line_number':404,'multiline':True]
+['text':' just insert it in the cache ','line_number':405,'multiline':True]
+['text':' somebody have already inserted it while we were working, discard newly opened data ','line_number':414,'multiline':True]
+['text':' Also, we could get here IF we opened an alias ','line_number':415,'multiline':True]
+['text':' return the real bundle ','line_number':423,'multiline':True]
+['text':' we increase its reference count ','line_number':427,'multiline':True]
+['text':' if the resource has a warning ','line_number':428,'multiline':True]
+['text':' we don't want to overwrite a status with no error ','line_number':429,'multiline':True]
+['text':' set the returning status ','line_number':431,'multiline':True]
+['text':' INTERNAL: ','line_number':448,'multiline':True]
+['text':'   CAUTION:  resbMutex must be locked when calling this function! ','line_number':449,'multiline':True]
+['text':' we're starting with a fresh name ','line_number':456,'multiline':True]
+['text':' Null pointer test ','line_number':460,'multiline':True]
+['text':' this entry is not real. We will discard it. ','line_number':467,'multiline':True]
+['text':' However, the parent line for this entry is  ','line_number':468,'multiline':True]
+['text':' not to be used - as there might be parent   ','line_number':469,'multiline':True]
+['text':' lines in cache from previous openings that  ','line_number':470,'multiline':True]
+['text':' are not updated yet. ','line_number':471,'multiline':True]
+['text':'entryCloseInt(r);','line_number':473,'multiline':True]
+['text':' this is needed for supporting aliases ','line_number':477,'multiline':True]
+['text':'Fallback data stuff','line_number':482,'multiline':True]
+['text':' returns U_SUCCESS(*status)','line_number':508,'multiline':False]
+['text':' An explicit parent was found.','line_number':517,'multiline':False]
+['text':' Insert regular parents.','line_number':527,'multiline':False]
+['text':' This code inserts user override data into the inheritance chain.','line_number':536,'multiline':False]
+['text':' The USR override data wasn't found, set it to be deleted.','line_number':546,'multiline':False]
+['text':' returns U_SUCCESS(*status)','line_number':556,'multiline':False]
+['text':'*
+     * Open a resource bundle for the locale;
+     * if there is not even a base language bundle, then fall back to the default locale;
+     * if there is no bundle for that either, then load the root bundle.
+     *
+     * This is the default bundle loading behavior.
+     ','line_number':571,'multiline':True]
+['text':' TODO: ICU ticket #11271 "consistent default locale across locale trees"','line_number':579,'multiline':False]
+['text':' Add an option to look at the main locale tree for whether to','line_number':580,'multiline':False]
+['text':' fall back to root directly (if the locale has main data) or','line_number':581,'multiline':False]
+['text':' fall back to the default locale first (if the locale does not even have main data).','line_number':582,'multiline':False]
+['text':'*
+     * Open a resource bundle for the locale;
+     * if there is not even a base language bundle, then load the root bundle;
+     * never fall back to the default locale.
+     *
+     * This is used for algorithms that have good pan-Unicode default behavior,
+     * such as case mappings, collation, and segmentation (BreakIterator).
+     ','line_number':583,'multiline':True]
+['text':'*
+     * Open a resource bundle for the exact bundle name as requested;
+     * no fallbacks, do not load parent bundles.
+     *
+     * This is used for supplemental (non-locale) data.
+     ','line_number':592,'multiline':True]
+['text':' umtx_lock ','line_number':639,'multiline':True]
+['text':' We're going to skip all the locales that do not have any data ','line_number':640,'multiline':True]
+['text':' if there is one real locale, we can look for parents. ','line_number':643,'multiline':True]
+['text':' This code inserts user override data into the inheritance chain ','line_number':646,'multiline':True]
+['text':' the USR override data wasn't found, set it to be deleted ','line_number':654,'multiline':True]
+['text':' we could have reached this point without having any real data ','line_number':666,'multiline':True]
+['text':' if that is the case, we need to chain in the default locale   ','line_number':667,'multiline':True]
+['text':' insert default locale ','line_number':669,'multiline':True]
+['text':' the default locale exists ','line_number':673,'multiline':True]
+['text':' TODO: Why not if (usingUSRData) { ... } like in the non-default-locale code path?','line_number':677,'multiline':False]
+['text':' we could still have r == NULL at this point - maybe even default locale is not ','line_number':686,'multiline':True]
+['text':' present ','line_number':687,'multiline':True]
+['text':' we don't even have the root locale ','line_number':695,'multiline':True]
+['text':' TODO: Does this ever loop?','line_number':709,'multiline':False]
+['text':' umtx_lock ','line_number':714,'multiline':True]
+['text':'*
+ * Version of entryOpen() and findFirstExisting() for ures_openDirect(),
+ * with no fallbacks.
+ * Parent and root locale bundles are loaded if
+ * the requested bundle does not have the "nofallback" flag.
+ ','line_number':728,'multiline':True]
+['text':' findFirstExisting() without fallbacks.','line_number':742,'multiline':False]
+['text':' Some code depends on the ures_openDirect() bundle to have a parent bundle chain,','line_number':753,'multiline':False]
+['text':' unless it is marked with "nofallback".','line_number':754,'multiline':False]
+['text':' not root','line_number':756,'multiline':False]
+['text':' TODO: Does this ever loop?','line_number':773,'multiline':False]
+['text':'*
+ * Functions to create and destroy resource bundles.
+ *     CAUTION:  resbMutex must be locked when calling this function.
+ ','line_number':783,'multiline':True]
+['text':' INTERNAL: ','line_number':787,'multiline':True]
+['text':' Entries are left in the cache. TODO: add ures_flushCache() to force a flush
+         of the cache. ','line_number':795,'multiline':True]
+['text':'
+        if(resB->fCountExisting <= 0) {
+            uhash_remove(cache, resB);
+            if(resB->fBogus == U_ZERO_ERROR) {
+                res_unload(&(resB->fData));
+            }
+            if(resB->fName != NULL) {
+                uprv_free(resB->fName);
+            }
+            if(resB->fPath != NULL) {
+                uprv_free(resB->fPath);
+            }
+            uprv_free(resB);
+        }
+','line_number':797,'multiline':True]
+['text':'* 
+ *  API: closes a resource bundle and cleans up.
+ ','line_number':817,'multiline':True]
+['text':'
+U_CFUNC void ures_setResPath(UResourceBundle *resB, const char* toAdd) {
+  if(resB->fResPath == NULL) {
+    resB->fResPath = resB->fResBuf;
+    *(resB->fResPath) = 0;
+  } 
+  resB->fResPathLen = uprv_strlen(toAdd);
+  if(RES_BUFSIZE <= resB->fResPathLen+1) {
+    if(resB->fResPath == resB->fResBuf) {
+      resB->fResPath = (char *)uprv_malloc((resB->fResPathLen+1)*sizeof(char));
+    } else {
+      resB->fResPath = (char *)uprv_realloc(resB->fResPath, (resB->fResPathLen+1)*sizeof(char));
+    }
+  }
+  uprv_strcpy(resB->fResPath, toAdd);
+}
+','line_number':827,'multiline':True]
+['text':' Check that memory was allocated correctly. ','line_number':855,'multiline':True]
+['text':' Check that memory was reallocated correctly. ','line_number':863,'multiline':True]
+['text':'U_DEBUG','line_number':897,'multiline':True]
+['text':' poison the data ','line_number':899,'multiline':True]
+['text':' This is an alias, need to exchange with real data ','line_number':924,'multiline':True]
+['text':' we have an alias, now let's cut it up ','line_number':929,'multiline':True]
+['text':'
+                * Allocate enough space for both the char * version
+                * of the alias and parent->fResPath.
+                *
+                * We do this so that res_findResource() can modify the path,
+                * which allows us to remove redundant _res_findResource() variants
+                * in uresdata.c.
+                * res_findResource() now NUL-terminates each segment so that table keys
+                * can always be compared with strcmp() instead of strncmp().
+                * Saves code there and simplifies testing and code coverage.
+                *
+                * markus 2003oct17
+                ','line_number':934,'multiline':True]
+['text':' count the terminating NUL ','line_number':947,'multiline':True]
+['text':' test for NULL ','line_number':961,'multiline':True]
+['text':' there is a path included ','line_number':970,'multiline':True]
+['text':' avoid locale == NULL to make code below work ','line_number':973,'multiline':True]
+['text':' this is an XPath alias, starting with "/LOCALE/" ','line_number':980,'multiline':True]
+['text':' it contains the path to a resource which should be looked up ','line_number':981,'multiline':True]
+['text':' starting in the requested locale ','line_number':982,'multiline':True]
+['text':' this is the requested locale's name ','line_number':984,'multiline':True]
+['text':' we will be looking in the same package ','line_number':985,'multiline':True]
+['text':' want ICU data ','line_number':987,'multiline':True]
+['text':' no path, start with a locale ','line_number':997,'multiline':True]
+['text':' got almost everything, let's try to open ','line_number':1009,'multiline':True]
+['text':' first, open the bundle with real data ','line_number':1010,'multiline':True]
+['text':' no key path. This means that we are going to 
+                            * to use the corresponding resource from
+                            * another bundle
+                            ','line_number':1017,'multiline':True]
+['text':' first, we are going to get a corresponding parent 
+                            * resource to the one we are searching.
+                            ','line_number':1021,'multiline':True]
+['text':' allocated large enough above ','line_number':1026,'multiline':True]
+['text':' we need to make keyPath from parent's fResPath and
+                                * current key, if there is a key associated
+                                ','line_number':1033,'multiline':True]
+['text':' if there is no key, but there is an index, try to get by the index ','line_number':1054,'multiline':True]
+['text':' here we have either a table or an array, so get the element ','line_number':1055,'multiline':True]
+['text':' array ','line_number':1059,'multiline':True]
+['text':' this one is a bit trickier. 
+                            * we start finding keys, but after we resolve one alias, the path might continue.
+                            * Consider: 
+                            *     aliastest:alias { "testtypes/anotheralias/Sequence" }
+                            *     anotheralias:alias { "/ICUDATA/sh/CollationElements" }
+                            * aliastest resource should finally have the sequence, not collation elements.
+                            ','line_number':1070,'multiline':True]
+['text':' now we have fallback following here ','line_number':1089,'multiline':True]
+['text':' this loop handles 'found' resources over several levels ','line_number':1092,'multiline':True]
+['text':' found a resource, but it might be an indirection ','line_number':1095,'multiline':True]
+['text':' switch to a new resource, possibly a new tree ','line_number':1099,'multiline':True]
+['text':' no resource found, we don't really want to look anymore on this level ','line_number':1102,'multiline':True]
+['text':' we failed to open the resource we're aliasing to ','line_number':1118,'multiline':True]
+['text':' bad alias, should be an error ','line_number':1130,'multiline':True]
+['text':' test for NULL ','line_number':1141,'multiline':True]
+['text':' 
+        weiv: if stack object was passed in, it doesn't really need to be reinited,
+        since the purpose of initing is to remove stack junk. However, at this point 
+        we would not do anything to an allocated object, so stack object should be
+        treated the same
+        ','line_number':1156,'multiline':True]
+['text':'
+        if(ures_isStackObject(resB) != FALSE) {
+        ures_initStackObject(resB);
+        }
+        ','line_number':1162,'multiline':True]
+['text':'resB->fParentRes = parent;','line_number':1177,'multiline':True]
+['text':' Make sure that Purify doesn't complain about uninitialized memory copies. ','line_number':1195,'multiline':True]
+['text':'resB->fParent = parent->fRes;','line_number':1203,'multiline':True]
+['text':' test for NULL ','line_number':1218,'multiline':True]
+['text':'*
+ * Functions to retrieve data from resource bundles.
+ ','line_number':1241,'multiline':True]
+['text':' empty string, return as read-only pointer ','line_number':1282,'multiline':True]
+['text':' We need to transform the string to the destination buffer. ','line_number':1293,'multiline':True]
+['text':' No chance for the string to fit. Pure preflighting. ','line_number':1295,'multiline':True]
+['text':'
+             * We know the string will fit into dest because each UChar turns
+             * into at most three UTF-8 bytes. Fill the latter part of dest
+             * so that callers do not expect to use dest as a string pointer,
+             * hopefully leading to more robust code for when resource bundles
+             * may store UTF-8 natively.
+             * (In which case dest would not be used at all.)
+             *
+             * We do not do this if forceCopy=TRUE because then the caller
+             * expects the string to start exactly at dest.
+             *
+             * The test above for <= 0x2aaaaaaa prevents overflows.
+             * The +1 is for the NUL terminator.
+             ','line_number':1299,'multiline':True]
+['text':' this function returns a signed integer ','line_number':1367,'multiline':True]
+['text':' it performs sign extension ','line_number':1368,'multiline':True]
+['text':' TODO: do the fallback ','line_number':1472,'multiline':True]
+['text':' TODO: do the fallback ','line_number':1479,'multiline':True]
+['text':'return NULL;','line_number':1502,'multiline':True]
+['text':'return NULL;','line_number':1507,'multiline':True]
+['text':'return NULL;','line_number':1513,'multiline':True]
+['text':' TODO: do the fallback ','line_number':1528,'multiline':True]
+['text':' TODO: do the fallback ','line_number':1535,'multiline':True]
+['text':'return NULL;','line_number':1539,'multiline':True]
+['text':'return NULL;','line_number':1543,'multiline':True]
+['text':'return NULL;','line_number':1552,'multiline':True]
+['text':'return NULL;','line_number':1557,'multiline':True]
+['text':' TODO: do the fallback ','line_number':1574,'multiline':True]
+['text':' TODO: do the fallback ','line_number':1581,'multiline':True]
+['text':'return NULL;','line_number':1585,'multiline':True]
+['text':'return NULL;','line_number':1591,'multiline':True]
+['text':' TODO: do the fallback ','line_number':1617,'multiline':True]
+['text':' TODO: do the fallback ','line_number':1624,'multiline':True]
+['text':' must not occur ','line_number':1635,'multiline':True]
+['text':'U_CAPI const char *ures_getResPath(UResourceBundle *resB) {
+  return resB->fResPath;
+}','line_number':1656,'multiline':True]
+['text':' test for NULL ','line_number':1676,'multiline':True]
+['text':' there is a path specification ','line_number':1684,'multiline':True]
+['text':' here we do looping and circular alias checking ','line_number':1726,'multiline':True]
+['text':' this loop is here because aliasing is resolved on this level, not on res level ','line_number':1727,'multiline':True]
+['text':' so, when we encounter an alias, it is not an aggregate resource, so we return ','line_number':1728,'multiline':True]
+['text':' there is more stuff in the path ','line_number':1738,'multiline':True]
+['text':'
+  Like res_getTableItemByKey but accepts full paths like "NumberElements/latn/patternsShort".
+','line_number':1769,'multiline':True]
+['text':' The current resource ','line_number':1773,'multiline':True]
+['text':' Path from current resource to desired resource ','line_number':1778,'multiline':True]
+['text':' the current resource type ','line_number':1779,'multiline':True]
+['text':' Terminating null for this part of path. ','line_number':1783,'multiline':True]
+['text':'UResourceDataEntry *realData = NULL;','line_number':1806,'multiline':True]
+['text':' Otherwise, we'll look in parents ','line_number':1827,'multiline':True]
+['text':' We hit an alias, but we didn't finish following the path. ','line_number':1846,'multiline':True]
+['text':'helper = init_resb_result(&(dataEntry->fData), res, inKey, -1, dataEntry, resB, 0, helper, status);','line_number':1848,'multiline':True]
+['text':' Continue until the whole path is consumed ','line_number':1859,'multiline':True]
+['text':'const ResourceData *rd = getFallbackData(resB, &key, &realData, &res, status);','line_number':1862,'multiline':True]
+['text':' check if resB->fResPath gives the right name here ','line_number':1864,'multiline':True]
+['text':' We recursively enumerate child-first,','line_number':1893,'multiline':False]
+['text':' only storing parent items in the absence of child items.','line_number':1894,'multiline':False]
+['text':' We store a placeholder value for the no-fallback/no-inheritance marker','line_number':1895,'multiline':False]
+['text':' to prevent a parent item from being stored.','line_number':1896,'multiline':False]
+['text':'','line_number':1897,'multiline':False]
+['text':' It would be possible to recursively enumerate parent-first,','line_number':1898,'multiline':False]
+['text':' overriding parent items with child items.','line_number':1899,'multiline':False]
+['text':' When we see the no-fallback/no-inheritance marker,','line_number':1900,'multiline':False]
+['text':' then we would remove the parent's item.','line_number':1901,'multiline':False]
+['text':' We would deserialize parent values even though they are overridden in a child bundle.','line_number':1902,'multiline':False]
+['text':' tableSink != NULL ','line_number':1908,'multiline':True]
+['text':' We might try to query the sink whether','line_number':1914,'multiline':False]
+['text':' any fallback from the parent bundle is still possible.','line_number':1915,'multiline':False]
+['text':' Turn the parent UResourceDataEntry into a UResourceBundle,','line_number':1917,'multiline':False]
+['text':' much like in ures_openWithType().','line_number':1918,'multiline':False]
+['text':' TODO: See if we can refactor ures_getByKeyWithFallback()','line_number':1919,'multiline':False]
+['text':' and pull out an inner function that takes and returns a UResourceDataEntry','line_number':1920,'multiline':False]
+['text':' so that we need not create UResourceBundle objects.','line_number':1921,'multiline':False]
+['text':' TODO: What is the difference between bundle fData and fTopLevelData?','line_number':1925,'multiline':False]
+['text':' TODO: Try to replace bundle.fResData with just using bundle.fData->fData.','line_number':1927,'multiline':False]
+['text':' Look up the container item in the parent bundle.','line_number':1935,'multiline':False]
+['text':' empty path','line_number':1967,'multiline':False]
+['text':' Get all table items with fallback.','line_number':1982,'multiline':False]
+['text':' namespace','line_number':1988,'multiline':False]
+['text':' check if resB->fResPath gives the right name here ','line_number':2024,'multiline':True]
+['text':' this is a kind of TODO item. If we have an array with an index table, we could do this. ','line_number':2037,'multiline':True]
+['text':' not currently ','line_number':2038,'multiline':True]
+['text':' here should go a first attempt to locate the key using index table ','line_number':2040,'multiline':True]
+['text':' this is a kind of TODO item. If we have an array with an index table, we could do this. ','line_number':2119,'multiline':True]
+['text':' not currently ','line_number':2120,'multiline':True]
+['text':' here should go a first attempt to locate the key using index table ','line_number':2122,'multiline':True]
+['text':' TODO: clean from here down ','line_number':2148,'multiline':True]
+['text':'*
+ *  INTERNAL: Get the name of the first real locale (not placeholder) 
+ *  that has resource bundle data.
+ ','line_number':2150,'multiline':True]
+['text':' first "canonicalize" the locale ID ','line_number':2227,'multiline':True]
+['text':' fill-in','line_number':2255,'multiline':False]
+['text':'*
+ *  Opens a resource bundle without "canonicalizing" the locale name. No fallback will be performed 
+ *  or sought. However, alias substitution will happen!
+ ','line_number':2283,'multiline':True]
+['text':'*
+ *  API: This function is used to open a resource bundle 
+ *  proper fallback chaining is executed while initialization. 
+ *  The result is stored in cache for later fallback search.
+ ','line_number':2292,'multiline':True]
+['text':'*
+ *  API: Counts members. For arrays and tables, returns number of resources.
+ *  For strings, returns 1.
+ ','line_number':2307,'multiline':True]
+['text':'*
+ * Internal function.
+ * Return the version number associated with this ResourceBundle as a string.
+ *
+ * @param resourceBundle The resource bundle for which the version is checked.
+ * @return  A version number string as specified in the resource bundle or its parent.
+ *          The caller does not own this string.
+ * @see ures_getVersion
+ * @internal
+ ','line_number':2338,'multiline':True]
+['text':' If the version ID has not been built yet, then do so.  Retrieve ','line_number':2355,'multiline':True]
+['text':' the minor version from the file. ','line_number':2356,'multiline':True]
+['text':' Determine the length of of the final version string.  This is ','line_number':2363,'multiline':True]
+['text':' the length of the major part + the length of the separator ','line_number':2364,'multiline':True]
+['text':' (==1) + the length of the minor part (+ 1 for the zero byte at ','line_number':2365,'multiline':True]
+['text':' the end). ','line_number':2366,'multiline':True]
+['text':' Allocate the string, and build it up. ','line_number':2370,'multiline':True]
+['text':' + 1 for zero byte ','line_number':2371,'multiline':True]
+['text':' Check for null pointer. ','line_number':2375,'multiline':True]
+['text':'* Tree support functions ******************************','line_number':2404,'multiline':True]
+['text':'status','line_number':2428,'multiline':True]
+['text':'status','line_number':2454,'multiline':True]
+['text':' value of keyword 'keyword' ','line_number':2531,'multiline':True]
+['text':' default value for given locale ','line_number':2532,'multiline':True]
+['text':' default value for given locale ','line_number':2533,'multiline':True]
+['text':' base locale ','line_number':2534,'multiline':True]
+['text':' only want to set this the first time around ','line_number':2581,'multiline':True]
+['text':' look for default item ','line_number':2593,'multiline':True]
+['text':' Now, see if we can find the kwVal collator.. start the search over.. ','line_number':2627,'multiline':True]
+['text':' only want to set this the first time around ','line_number':2637,'multiline':True]
+['text':'','line_number':2648,'multiline':True]
+['text':'','line_number':2653,'multiline':True]
+['text':' now, recalculate default kw if need be ','line_number':2664,'multiline':True]
+['text':' look for default item ','line_number':2668,'multiline':True]
+['text':' end of recalculate default KW ','line_number':2682,'multiline':True]
+['text':' search for 'default' named item ','line_number':2712,'multiline':True]
+['text':' only want to set this the first time around ','line_number':2718,'multiline':True]
+['text':' now, recalculate default kw if need be ','line_number':2740,'multiline':True]
+['text':' look for default item ','line_number':2744,'multiline':True]
+['text':' end of recalculate default KW ','line_number':2758,'multiline':True]
+['text':' found the keyword in a *child* of where the default tag was present. ','line_number':2786,'multiline':True]
+['text':' if the requested kw is default, ','line_number':2787,'multiline':True]
+['text':' and the default is in or in an ancestor of the current locale ','line_number':2788,'multiline':True]
+['text':' we found the default locale - no need to repeat it.','line_number':2809,'multiline':True]
+['text':' don't fail if a bundle is unopenable ','line_number':2866,'multiline':True]
+['text':' fprintf(stderr, "%s | %s | %s | %s\n", path?path:"<ICUDATA>", keyword, locale, k); ','line_number':2895,'multiline':True]
+['text':' empty or "default" or unlisted type','line_number':2899,'multiline':False]
+['text':' found duplicate ','line_number':2904,'multiline':True]
+['text':' no more space in list .. ','line_number':2910,'multiline':True]
+['text':' no more space in buffer (string + 2 nulls) ','line_number':2911,'multiline':True]
+['text':' out of space.. ','line_number':2912,'multiline':True]
+['text':' terminate ','line_number':2921,'multiline':True]
+['text':' terminate ','line_number':2927,'multiline':True]
+['text':' This code isn't needed, and given the documentation warnings the implementation is suspect ','line_number':2939,'multiline':True]
+['text':' pointer comparision ','line_number':2943,'multiline':True]
+['text':' eof ','line_number':3011,'multiline':True]

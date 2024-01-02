@@ -1,0 +1,72 @@
+['text':' Load vector from a smaller type (more elements) to a larger type (fewer elements),','line_number':15,'multiline':False]
+['text':' reducing neighboring elements until it fits into the vector size.','line_number':16,'multiline':False]
+['text':' When summing float16 or BFloat16, addition has to be performed in float since
+ * that's all the hardware supports. These cast-load policies ensure the entire sum
+ * loop is done in float which improves both performance and accuracy.
+ ','line_number':62,'multiline':True]
+['text':' For inner sum, load full vec_t then sum partials down to vacc_t size','line_number':84,'multiline':False]
+['text':' For outer sum, load a partial vec_t of size vacc_t then cast to vacc_t','line_number':124,'multiline':False]
+['text':' To implement nansum, augment the load operation to mask out nans before
+ * entering the normal sum loop.
+ ','line_number':171,'multiline':True]
+['text':'* Simultaneously sum over n rows at once
+
+This algorithm calculates the sum without loss of precision over large axes. It
+does this by chunking the sum into groups of 16 or more elements. The sums of
+these chunks are also summed in chunks and so on until there is just a single sum
+value remaining. This means only numbers of a similar order of magnitude are
+added together, thus minimising rounding errors.
+
+This is done in a single linear pass over the data and with O(1) extra storage.
+A simplified recursive implementation would look like this:
+
+  scalar_t row_sum(const scalar_t * data, int64_t n) {
+    // Note, in practice the chunk size can increase with n
+    // This allows the recursion depth to be limited to O(1).
+    constexpr int64_t min_chunk_size = 16;
+
+    scalar_t sum = 0;
+    if (n <= min_chunk_size) {
+      // Recursive base case, calculate a simple running sum
+      for (const auto i : c10::irange(n)) {
+        sum += data[i];
+      }
+      return sum;
+    }
+
+    // Recursively sum larger chunks of elements
+    const int64_t chunk_size = std::max(divup(n, min_chunk_size), min_chunk_size);
+    for (int64_t i = 0; i < n; i += chunk_size) {
+      sum += row_sum(data + i, std::min(chunk_size, n - i));
+    }
+    return sum;
+  }
+','line_number':298,'multiline':True]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':344,'multiline':False]
+['text':' NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)','line_number':395,'multiline':False]
+['text':' Interpret row as a (-1, ilp_factor) shaped array to find partial sums','line_number':408,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':426,'multiline':False]
+['text':' Input is contiguous over the first (reduced) dimension','line_number':435,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':456,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':468,'multiline':False]
+['text':' Input is contiguous over the second (non-reduced) dimension','line_number':476,'multiline':False]
+['text':' NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)','line_number':494,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':507,'multiline':False]
+['text':' Custom floating point sum for better accuracy','line_number':527,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':533,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':535,'multiline':False]
+['text':' Move reduction to be the 1st dim','line_number':538,'multiline':False]
+['text':' Special case? - not a true reduction','line_number':545,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':547,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':550,'multiline':False]
+['text':' NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)','line_number':552,'multiline':False]
+['text':' Contiguous inner reduction','line_number':581,'multiline':False]
+['text':' Contiguous outer reduction','line_number':589,'multiline':False]
+['text':'includeBool=','line_number':607,'multiline':True]
+['text':'ignore_nan=','line_number':619,'multiline':True]
+['text':'ignore_nan=','line_number':626,'multiline':True]
+['text':' namespace (anonymous)','line_number':630,'multiline':False]
+['text':' nansum on Float16 has poor accuracy with AVX2, and more so with AVX512.','line_number':632,'multiline':False]
+['text':' So until it's fixed, it won't be dispatched with AVX512. GH issue 59415.','line_number':633,'multiline':False]
+['text':' Besides, these kernels are slower with AVX512 than with AVX2.','line_number':634,'multiline':False]
+['text':' namespace at::native','line_number':638,'multiline':False]

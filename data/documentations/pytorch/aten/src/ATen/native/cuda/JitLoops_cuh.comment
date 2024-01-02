@@ -1,0 +1,74 @@
+['text':' Note [Jiterator]
+The "jiterator" simply just-in-time compiles the same kernels that
+Loops.cuh (and CUDALoops.cuh) usually build. This reduces build time,
+build size, and initial CUDA context size.
+
+By default on non-Windows systems, it also caches compiled kernels in ~/.cache/torch/kernels.
+This behavior is controlled with two environment variables:
+  - USE_PYTORCH_KERNEL_CACHE, if set to zero then this will disable all cache use
+  - PYTORCH_KERNEL_CACHE_PATH, if set specifies the folder to use for cached kernels
+
+The jiterator currently has some limitations, however. It cannot:
+  - handle math on complex datatypes
+  - handle kernels with scalar parameters
+
+These improvements will likely come soon.
+
+For examples of how to use the jiterator see the i1 and gcd kernel
+implementations, which pass jittable strings implementing their
+operations instead of the typical CUDA functors.
+
+To pass a runtime argument (similar to lambda captures in non-JIT kernels),
+we need to pass to additional arguments to `jitted_gpu_kernel` by value.
+Currently only primitive C++ types used for computation are valid.
+The order of these extra arguments should be same as the order they appear
+in kernel's function signature. (look at polygamma for example)
+
+NOTE: One big restriction being that these arguments should be after the
+arguments provided by TensorIterator. Eg. While capturing `n`, where
+`scalar_t x` and `scalar_t y` are provided by TensorIterator,
+* foo(scalar_t x, scalar_t y, int n) works!
+* foo(int n, scalar_t x, scalar_y) doesn't work
+* foo(scalar_t x, int n, scalar_y) doesn't work
+
+','line_number':20,'multiline':True]
+['text':' Entrypoint for jitted GPU kernels.','line_number':55,'multiline':False]
+['text':' Only handles elementwise unary and binary kernels with a','line_number':56,'multiline':False]
+['text':'   common dtype and a single output.','line_number':57,'multiline':False]
+['text':' NOTE: this assumes the op's iterator has a common_dtype.','line_number':58,'multiline':False]
+['text':' NOTE: We use std::tuple instead of parameter pack','line_number':59,'multiline':False]
+['text':'  for `extra_args` due to following','line_number':60,'multiline':False]
+['text':' bug on older versions of clang','line_number':61,'multiline':False]
+['text':' https://bugs.llvm.org/show_bug.cgi?id=23029','line_number':62,'multiline':False]
+['text':' TODO: much of preamble is common to both jitted_gpu_kernel and gpu_kernel','line_number':76,'multiline':False]
+['text':'   Maybe it could be refactored?','line_number':77,'multiline':False]
+['text':' Computes if dynamic casting is needed','line_number':97,'multiline':False]
+['text':' Dynamic casting is needed if an input's dtype differs from the common dtype','line_number':98,'multiline':False]
+['text':'   or if the result dtype differs from the output's dtype','line_number':99,'multiline':False]
+['text':' Note: this is intentionally divergent from calling needs_dynamic_casting,','line_number':100,'multiline':False]
+['text':'   which is more general and inspects a lambda to determine if dynamic','line_number':101,'multiline':False]
+['text':'   casting is needed.','line_number':102,'multiline':False]
+['text':' Checks output','line_number':105,'multiline':False]
+['text':' Checks input(s)','line_number':112,'multiline':False]
+['text':' NOTE: With `scalar_pos=NoScalar`,`scalar_val` is not used','line_number':122,'multiline':False]
+['text':' for computation in the generated code and hence we pass a dummy','line_number':123,'multiline':False]
+['text':' value of `0`.','line_number':124,'multiline':False]
+['text':'name','line_number':126,'multiline':True]
+['text':'return_type=','line_number':127,'multiline':True]
+['text':'f_inputs_type=','line_number':128,'multiline':True]
+['text':'scalar_val=','line_number':131,'multiline':True]
+['text':'name','line_number':134,'multiline':True]
+['text':'return_type=','line_number':135,'multiline':True]
+['text':'f_inputs_type=','line_number':136,'multiline':True]
+['text':'name','line_number':147,'multiline':True]
+['text':'return_type=','line_number':148,'multiline':True]
+['text':'f_inputs_type=','line_number':149,'multiline':True]
+['text':' TODO: support runtime state capture similar to `jitted_gpu_kernel`.','line_number':160,'multiline':False]
+['text':'currently jiterator only handles binary functions where both inputs are of the same type (f_inputs_type)','line_number':164,'multiline':False]
+['text':' TODO: When all kernels that use gpu_kernel_with_scalars are','line_number':169,'multiline':False]
+['text':' ported to structured, this device guard can be deleted.  This','line_number':170,'multiline':False]
+['text':' works around incorrect device guard generation for pre-structured','line_number':171,'multiline':False]
+['text':' kernels device guards, but structured kernels do it right and','line_number':172,'multiline':False]
+['text':' we can assume the device is already set correctly','line_number':173,'multiline':False]
+['text':' at::native','line_number':185,'multiline':False]
+['text':' AT_USE_JITERATOR()','line_number':187,'multiline':False]

@@ -1,0 +1,177 @@
+['text':' SPDX-License-Identifier: MIT OR Unlicense','line_number':1,'multiline':False]
+['text':' Both tokei and sloccount count this as 0 so lets follow suit','line_number':49,'multiline':False]
+['text':' cloc ignores the file itself because it is empty','line_number':50,'multiline':False]
+['text':' Interestingly this file would be 0 lines in "wc -l" because it only counts newlines','line_number':56,'multiline':False]
+['text':' all others count this as 1','line_number':57,'multiline':False]
+['text':' tokei counts this as 1 because its still on a single line unless something follows','line_number':72,'multiline':False]
+['text':' the newline its still 1 line','line_number':73,'multiline':False]
+['text':' Both tokei and sloccount count this as 0 so lets follow suit','line_number':113,'multiline':False]
+['text':' cloc ignores the file itself because it is empty','line_number':114,'multiline':False]
+['text':' Interestingly this file would be 0 lines in "wc -l" because it only counts newlines','line_number':120,'multiline':False]
+['text':' all others count this as 1','line_number':121,'multiline':False]
+['text':' tokei counts this as 1 because its still on a single line unless something follows','line_number':150,'multiline':False]
+['text':' the newline its still 1 line','line_number':151,'multiline':False]
+['text':' this is a comment','line_number':368,'multiline':False]
+['text':' this is a comment','line_number':397,'multiline':False]
+['text':' Edge case condition where if ending with comment it would be counted','line_number':410,'multiline':False]
+['text':' as code due to how internal state work.','line_number':411,'multiline':False]
+['text':'','line_number':418,'multiline':True]
+['text':' Turns out that some languages such as Rust support','line_number':432,'multiline':False]
+['text':' nested comments. Check that it works here','line_number':433,'multiline':False]
+['text':'/*','line_number':440,'multiline':True]
+['text':' Java does not support nested multiline comments','line_number':461,'multiline':False]
+['text':'/*','line_number':468,'multiline':True]
+['text':'/*','line_number':495,'multiline':True]
+['text':'
+";`)
+
+	CountStats(&fileJob)
+
+	if fileJob.Lines != 3 {
+		t.Errorf("Expected 3 lines got %d", fileJob.Lines)
+	}
+
+	if fileJob.Code != 3 {
+		t.Errorf("Expected 3 lines got %d", fileJob.Code)
+	}
+
+	if fileJob.Comment != 0 {
+		t.Errorf("Expected 0 lines got %d", fileJob.Comment)
+	}
+
+	if fileJob.Blank != 0 {
+		t.Errorf("Expected 0 lines got %d", fileJob.Blank)
+	}
+}
+
+func TestCountStatsStringCheck(t *testing.T) {
+	ProcessConstants()
+	fileJob := FileJob{
+		Language: "Rust",
+	}
+
+	fileJob.SetContent(`let does_not_start = // "
+"until here,
+test/*
+test"; // a quote: "`)
+
+	CountStats(&fileJob)
+
+	if fileJob.Lines != 4 {
+		t.Errorf("Expected 4 lines got %d", fileJob.Lines)
+	}
+
+	if fileJob.Code != 4 {
+		t.Errorf("Expected 4 code lines got %d", fileJob.Code)
+	}
+
+	if fileJob.Comment != 0 {
+		t.Errorf("Expected 0 comment lines got %d", fileJob.Comment)
+	}
+
+	if fileJob.Blank != 0 {
+		t.Errorf("Expected 0 blank lines got %d", fileJob.Blank)
+	}
+}
+
+func TestCountStatsBosque(t *testing.T) {
+	ProcessConstants()
+	fileJob := FileJob{
+		Language: "Bosque",
+	}
+
+	fileJob.SetContent(`//This is a bosque test
+method offsetMomentum(px: Float, py: Float, pz: Float): Body {
+      return this<~(vx=Float::div(px->negate(), Body::solar_mass), vy=Float::div(py->negate(), Body::solar_mass), vz=Float::div(pz->negate(), Body::solar_mass));
+}`)
+
+	CountStats(&fileJob)
+
+	if fileJob.Lines != 4 {
+		t.Errorf("Expected 4 lines got %d", fileJob.Lines)
+	}
+
+	if fileJob.Code != 3 {
+		t.Errorf("Expected 4 code lines got %d", fileJob.Code)
+	}
+
+	if fileJob.Comment != 1 {
+		t.Errorf("Expected 0 comment lines got %d", fileJob.Comment)
+	}
+
+	if fileJob.Blank != 0 {
+		t.Errorf("Expected 0 blank lines got %d", fileJob.Blank)
+	}
+}
+
+func TestCheckForMatchNoMatch(t *testing.T) {
+	ProcessConstants()
+
+	fileJob := FileJob{
+		Language: "Rust",
+		Content:  []byte("one does not simply walk into mordor"),
+	}
+
+	matches := &Trie{}
+	matches.Insert(TSlcomment, []byte("//"))
+	matches.Insert(TSlcomment, []byte("--"))
+
+	match, _, _ := matches.Match(fileJob.Content)
+
+	if match != 0 {
+		t.Errorf("Expected no match")
+	}
+}
+
+func TestCheckForMatchHasMatch(t *testing.T) {
+	ProcessConstants()
+
+	fileJob := FileJob{
+		Language: "Rust",
+		Content:  []byte("// one does not simply walk into mordor"),
+	}
+
+	matches := &Trie{}
+	matches.Insert(TSlcomment, []byte("//"))
+	matches.Insert(TSlcomment, []byte("--"))
+
+	match, _, _ := matches.Match(fileJob.Content)
+
+	if match != TSlcomment {
+		t.Errorf("Expected match")
+	}
+}
+
+func TestCheckForMatchSingleNoMatch(t *testing.T) {
+	ProcessConstants()
+
+	fileJob := FileJob{
+		Language: "Rust",
+		Content:  []byte("// one does not simply walk into mordor"),
+	}
+
+	matches := []byte("','line_number':523,'multiline':True]
+['text':' For C# we can enter a string using @" or " but if we do the former,','line_number':774,'multiline':False]
+['text':' and we don't skip over the full length we exit the string in this case','line_number':775,'multiline':False]
+['text':' which means we pick up the /* and the count is incorrect','line_number':776,'multiline':False]
+['text':' For C# we can enter a string using @" or " but if we do the former,','line_number':801,'multiline':False]
+['text':' and we don't skip over the full length we exit the string in this case','line_number':802,'multiline':False]
+['text':' which means we pick up the /* and the count is incorrect','line_number':803,'multiline':False]
+['text':'
+a ','line_number':804,'multiline':True]
+['text':' Arrange.','line_number':837,'multiline':False]
+['text':' Act.','line_number':840,'multiline':False]
+['text':' Assert.','line_number':843,'multiline':False]
+['text':' UTF-8 BOM','line_number':870,'multiline':False]
+['text':' Captures checking if a quote is prefixed by \ such as in','line_number':893,'multiline':False]
+['text':' a char which should otherwise trigger the string state which is incorrect','line_number':894,'multiline':False]
+['text':' Code generated by some tool, DO NOT EDIT.','line_number':988,'multiline':False]
+['text':' Package some contains something.','line_number':990,'multiline':False]
+['text':' this isnt a comment in pascal but is in delphi','line_number':1050,'multiline':False]
+['text':'////////////////////////////////////////////////','line_number':1068,'multiline':False]
+['text':' Benchmarks Below','line_number':1069,'multiline':False]
+['text':'////////////////////////////////////////////////','line_number':1070,'multiline':False]
+['text':' This appears to be faster than bytes.Equal because it does not need','line_number':1287,'multiline':False]
+['text':' to do length comparison checks at the start','line_number':1288,'multiline':False]
+['text':' Check if the 1 offset makes a difference, which it does by ~1 ns','line_number':1315,'multiline':False]
+['text':' Don't start at 1 like the above but 0 to do a full scan','line_number':1327,'multiline':False]

@@ -1,0 +1,485 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' ScopeKind','line_number':22,'multiline':False]
+['text':'
+ * Return a shape representing the static scope containing the variable
+ * accessed by the ALIASEDVAR op at 'pc'.
+ ','line_number':32,'multiline':True]
+['text':' Return the name being accessed by the given ALIASEDVAR op. This function is','line_number':39,'multiline':False]
+['text':' relatively slow so it should not be used on hot paths.','line_number':40,'multiline':False]
+['text':'** Environment objects ***************************************************','line_number':44,'multiline':True]
+['text':' clang-format off','line_number':46,'multiline':False]
+['text':'
+ * [SMDOC] Environment Objects
+ *
+ * About environments
+ * ------------------
+ *
+ * (See also: ecma262 rev c7952de (19 Aug 2016) 8.1 "Lexical Environments".)
+ *
+ * Scoping in ES is specified in terms of "Environment Records". There's a
+ * global Environment Record per realm, and a new Environment Record is created
+ * whenever control enters a function, block, or other scope.
+ *
+ * A "Lexical Environment" is a list of nested Environment Records, innermost
+ * first: everything that's in scope. Throughout SpiderMonkey, "environment"
+ * means a Lexical Environment.
+ *
+ * N.B.: "Scope" means something different: a static scope, the compile-time
+ * analogue of an environment. See Scope.h.
+ *
+ * How SpiderMonkey represents environments
+ * ----------------------------------------
+ *
+ * Some environments are stored as JSObjects. Several kinds of objects
+ * represent environments:
+ *
+ *   JSObject
+ *    |
+ *    +--NativeObject
+ *    |   |
+ *    |   +--EnvironmentObject             Engine-internal environment
+ *    |   |   |
+ *    |   |   +--CallObject                    Environment of entire function
+ *    |   |   |
+ *    |   |   +--ModuleEnvironmentObject       Module top-level environment
+ *    |   |   |
+ *    |   |   +--LexicalEnvironmentObject
+ *    |   |   |   |
+ *    |   |   |   +--BlockLexicalEnvironmentObject     Blocks and such: syntactic, non-extensible
+ *    |   |   |   |   |
+ *    |   |   |   |   +--NamedLambdaObject                 Environment for `(function f(){...})`
+ *    |   |   |   |                                        containing only a binding for `f`
+ *    |   |   |   +--ExtensibleLexicalEnvironmentObject
+ *    |   |   |       |
+ *    |   |   |       +--GlobalLexicalEnvironmentObject
+ *    |   |   |       |                                Top-level let/const/class in scripts
+ *    |   |   |       +--NonSyntacticLexicalEnvironmentObject
+ *    |   |   |                                        See "Non-syntactic environments" below
+ *    |   |   +--VarEnvironmentObject          See VarScope in Scope.h.
+ *    |   |   |
+ *    |   |   +--WithEnvironmentObject         Presents object properties as bindings
+ *    |   |   |
+ *    |   |   +--NonSyntacticVariablesObject   See "Non-syntactic environments" below
+ *    |   |
+ *    |   +--GlobalObject                  The global environment (dynamically presents its
+ *    |                                    properties as bindings)
+ *    +--ProxyObject
+ *        |
+ *        +--DebugEnvironmentProxy         Environment for debugger eval-in-frame
+ *
+ * EnvironmentObjects are technically real JSObjects but only belong on the
+ * environment chain (that is, fp->environmentChain() or fun->environment()).
+ * They are never exposed to scripts.
+ *
+ * Note that reserved slots in any base classes shown above are fixed for all
+ * derived classes. So e.g. EnvironmentObject::enclosingEnvironment() can
+ * simply access a fixed slot without further dynamic type information.
+ *
+ * When the current environment is represented by an object, the stack frame
+ * has a pointer to that object (see AbstractFramePtr::environmentChain()).
+ * However, that isn't always the case. Where possible, we store binding values
+ * in JS stack slots. For block and function scopes where all bindings can be
+ * stored in stack slots, nothing is allocated in the heap; there is no
+ * environment object.
+ *
+ * Full information about the environment chain is always recoverable:
+ * EnvironmentIter can do it, and we construct a fake environment for debugger
+ * eval-in-frame (see "Debug environment objects" below).
+ *
+ * Syntactic Environments
+ * ----------------------
+ *
+ * Environments may be syntactic, i.e., corresponding to source text, or
+ * non-syntactic, i.e., specially created by embedding. The distinction is
+ * necessary to maintain invariants about the environment chain: non-syntactic
+ * environments may not occur in arbitrary positions in the chain.
+ *
+ * CallObject, ModuleEnvironmentObject, BlockLexicalEnvironmentObject, and
+ * GlobalLexicalEnvironmentObject always represent syntactic
+ * environments. (CallObject is considered syntactic even when it's used as the
+ * scope of strict eval code.) WithEnvironmentObject is syntactic when it's
+ * used to represent the scope of a `with` block.
+ *
+ *
+ * Non-syntactic Environments
+ * --------------------------
+ *
+ * A non-syntactic environment is one that was not created due to JS source
+ * code. On the scope chain, a single NonSyntactic GlobalScope maps to 0+
+ * non-syntactic environment objects. This is contrasted with syntactic
+ * environments, where each scope corresponds to 0 or 1 environment object.
+ *
+ * There are 3 kinds of dynamic environment objects:
+ *
+ * 1. WithEnvironmentObject
+ *
+ *    When the embedding compiles or executes a script, it has the option to
+ *    pass in a vector of objects to be used as the initial env chain, ordered
+ *    from outermost env to innermost env. Each of those objects is wrapped by
+ *    a WithEnvironmentObject.
+ *
+ *    The innermost object passed in by the embedding becomes a qualified
+ *    variables object that captures 'var' bindings. That is, it wraps the
+ *    holder object of 'var' bindings.
+ *
+ *    Does not hold 'let' or 'const' bindings.
+ *
+ * 2. NonSyntacticVariablesObject
+ *
+ *    When the embedding wants qualified 'var' bindings and unqualified
+ *    bareword assignments to go on a different object than the global
+ *    object. While any object can be made into a qualified variables object,
+ *    only the GlobalObject and NonSyntacticVariablesObject are considered
+ *    unqualified variables objects.
+ *
+ *    Unlike WithEnvironmentObjects that delegate to the object they wrap,
+ *    this object is itself the holder of 'var' bindings.
+ *
+ *    Does not hold 'let' or 'const' bindings.
+ *
+ * 3. NonSyntacticLexicalEnvironmentObject
+ *
+ *    Each non-syntactic object used as a qualified variables object needs to
+ *    enclose a non-syntactic lexical environment to hold 'let' and 'const'
+ *    bindings. There is a bijection per realm between the non-syntactic
+ *    variables objects and their non-syntactic LexicalEnvironmentObjects.
+ *
+ *    Does not hold 'var' bindings.
+ *
+ * The embedding (Gecko) uses non-syntactic envs for various things, some of
+ * which are detailed below. All env chain listings below are, from top to
+ * bottom, outermost to innermost.
+ *
+ * A. Component loading
+ *
+ * Components may be loaded in a shared global mode where most JSMs share a
+ * single global in order to save on memory and avoid CCWs. To support this, a
+ * NonSyntacticVariablesObject is used for each JSM to provide a basic form of
+ * isolation. They have the following env chain:
+ *
+ *   BackstagePass global
+ *       |
+ *   GlobalLexicalEnvironmentObject[this=global]
+ *       |
+ *   NonSyntacticVariablesObject
+ *       |
+ *   NonSyntacticLexicalEnvironmentObject[this=nsvo]
+ *
+ * B.1 Subscript loading
+ *
+ * Subscripts may be loaded into a target object and it's associated global.
+ * They have the following env chain:
+ *
+ *   Target object's global
+ *       |
+ *   GlobalLexicalEnvironmentObject[this=global]
+ *       |
+ *   WithEnvironmentObject wrapping target
+ *       |
+ *   NonSyntacticLexicalEnvironmentObject[this=target]
+ *
+ * B.2 Subscript loading (Shared-global JSM)
+ *
+ * The target object of a subscript load may be in a JSM with a shared global,
+ * in which case we will also have the NonSyntacticVariablesObject on the
+ * chain.
+ *
+ *   Target object's global
+ *       |
+ *   GlobalLexicalEnvironmentObject[this=global]
+ *       |
+ *   NonSyntacticVariablesObject
+ *       |
+ *   NonSyntacticLexicalEnvironmentObject[this=nsvo]
+ *       |
+ *   WithEnvironmentObject wrapping target
+ *       |
+ *   NonSyntacticLexicalEnvironmentObject[this=target]
+ *
+ * C. Frame scripts
+ *
+ * XUL frame scripts are loaded in the same global as components, with a
+ * NonSyntacticVariablesObject as a "polluting global", and a with environment
+ * wrapping a message manager object. This is done exclusively in
+ * js::ExecuteInScopeChainAndReturnNewScope.
+ *
+ *   BackstagePass global
+ *       |
+ *   GlobalLexicalEnvironmentObject[this=global]
+ *       |
+ *   NonSyntacticVariablesObject
+ *       |
+ *   WithEnvironmentObject wrapping messageManager
+ *       |
+ *   NonSyntacticLexicalEnvironmentObject[this=messageManager]
+ *
+ * D. DOM event handlers
+ *
+ * DOM event handlers are compiled as functions with HTML elements on the
+ * environment chain. For a chain of elements e0,e1,...:
+ *
+ *      ...
+ *       |
+ *   WithEnvironmentObject wrapping e1
+ *       |
+ *   WithEnvironmentObject wrapping e0
+ *       |
+ *   NonSyntacticLexicalEnvironmentObject
+ *
+ ','line_number':47,'multiline':True]
+['text':' clang-format on','line_number':266,'multiline':False]
+['text':' The enclosing environment. Either another EnvironmentObject, a','line_number':270,'multiline':False]
+['text':' GlobalObject, or a non-syntactic environment object.','line_number':271,'multiline':False]
+['text':' Since every env chain terminates with a global object, whether','line_number':281,'multiline':False]
+['text':' GlobalObject or a non-syntactic one, and since those objects do not','line_number':282,'multiline':False]
+['text':' derive EnvironmentObject (they have completely different layouts), the','line_number':283,'multiline':False]
+['text':' enclosing environment of an EnvironmentObject is necessarily non-null.','line_number':284,'multiline':False]
+['text':' For non-extensible environment objects isFixedSlot(slot) is equivalent to','line_number':294,'multiline':False]
+['text':' slot < MAX_FIXED_SLOTS.','line_number':295,'multiline':False]
+['text':' Get or set a name contained in this environment.','line_number':303,'multiline':False]
+['text':' For JITs.','line_number':317,'multiline':False]
+['text':' defined(DEBUG) || defined(JS_JITSPEW) ','line_number':326,'multiline':True]
+['text':' These functions are internal and are exposed only for JITs. ','line_number':342,'multiline':True]
+['text':'
+   * Construct a bare-bones call object given a shape and a group.
+   * The call object must be further initialized to be usable.
+   ','line_number':344,'multiline':True]
+['text':' If `env` or any enclosing environment is a CallObject, return that','line_number':360,'multiline':False]
+['text':' CallObject; else null.','line_number':361,'multiline':False]
+['text':'','line_number':362,'multiline':False]
+['text':' `env` may be a DebugEnvironmentProxy, but not a hollow environment.','line_number':363,'multiline':False]
+['text':'
+   * When an aliased formal (var accessed by nested closures) is also
+   * aliased by the arguments object, it must of course exist in one
+   * canonical location and that location is always the CallObject. For this
+   * to work, the ArgumentsObject stores special MagicValue in its array for
+   * forwarded-to-CallObject variables. This MagicValue's payload is the
+   * slot of the CallObject to access.
+   ','line_number':366,'multiline':True]
+['text':' For jit access. ','line_number':384,'multiline':True]
+['text':' Currently WasmInstanceScopes do not use their scopes in a','line_number':478,'multiline':False]
+['text':' meaningful way. However, it is an invariant of DebugEnvironments that','line_number':479,'multiline':False]
+['text':' environments kept in those maps have live scopes, thus this strong','line_number':480,'multiline':False]
+['text':' reference.','line_number':481,'multiline':False]
+['text':' Currently WasmFunctionCallObjects do not use their scopes in a','line_number':500,'multiline':False]
+['text':' meaningful way. However, it is an invariant of DebugEnvironments that','line_number':501,'multiline':False]
+['text':' environments kept in those maps have live scopes, thus this strong','line_number':502,'multiline':False]
+['text':' reference.','line_number':503,'multiline':False]
+['text':' TODO Check what Debugger behavior should be when it evaluates a','line_number':509,'multiline':False]
+['text':' var declaration.','line_number':510,'multiline':False]
+['text':' Abstract base class for environments that can contain let/const bindings,','line_number':523,'multiline':False]
+['text':' plus a few other kinds of environments, such as `catch` blocks, that have','line_number':524,'multiline':False]
+['text':' similar behavior.','line_number':525,'multiline':False]
+['text':' Global and non-syntactic lexical environments need to store a 'this'','line_number':528,'multiline':False]
+['text':' object and all other lexical environments have a fixed shape and store a','line_number':529,'multiline':False]
+['text':' backpointer to the LexicalScope.','line_number':530,'multiline':False]
+['text':'','line_number':531,'multiline':False]
+['text':' Since the two sets are disjoint, we only use one slot to save space.','line_number':532,'multiline':False]
+['text':' Is this the global lexical scope?','line_number':547,'multiline':False]
+['text':' Global and non-syntactic lexical scopes are extensible. All other','line_number':550,'multiline':False]
+['text':' lexical scopes are not.','line_number':551,'multiline':False]
+['text':' Is this a syntactic (i.e. corresponds to a source text) lexical','line_number':554,'multiline':False]
+['text':' environment?','line_number':555,'multiline':False]
+['text':' A non-extensible lexical environment.','line_number':559,'multiline':False]
+['text':'','line_number':560,'multiline':False]
+['text':' Used for blocks (ScopeKind::Lexical) and several other scope kinds,','line_number':561,'multiline':False]
+['text':' including Catch, NamedLambda, FunctionLexical, and ClassBody.','line_number':562,'multiline':False]
+['text':' Create a new BlockLexicalEnvironmentObject with the same enclosing env and','line_number':595,'multiline':False]
+['text':' variable values as this.','line_number':596,'multiline':False]
+['text':' Create a new BlockLexicalEnvironmentObject with the same enclosing env as','line_number':600,'multiline':False]
+['text':' this, with all variables uninitialized.','line_number':601,'multiline':False]
+['text':' The LexicalScope that created this environment.','line_number':605,'multiline':False]
+['text':' For JITs.','line_number':624,'multiline':False]
+['text':' The ClassBodyScope that created this environment.','line_number':638,'multiline':False]
+['text':' Global and non-syntactic lexical environments are extensible.','line_number':646,'multiline':False]
+['text':' For a given global object or JSMEnvironment `obj`, return the associated','line_number':651,'multiline':False]
+['text':' global lexical or non-syntactic lexical environment, where top-level `let`','line_number':652,'multiline':False]
+['text':' bindings are added.','line_number':653,'multiline':False]
+['text':' The global lexical environment, where global let/const/class bindings are','line_number':664,'multiline':False]
+['text':' added.','line_number':665,'multiline':False]
+['text':' Non-standard. See "Non-syntactic Environments" above.','line_number':683,'multiline':False]
+['text':' A non-syntactic dynamic scope object that captures non-lexical','line_number':692,'multiline':False]
+['text':' bindings. That is, a scope object that captures both qualified var','line_number':693,'multiline':False]
+['text':' assignments and unqualified bareword assignments. Its parent is always the','line_number':694,'multiline':False]
+['text':' global lexical environment.','line_number':695,'multiline':False]
+['text':'','line_number':696,'multiline':False]
+['text':' This is used in ExecuteInGlobalAndReturnScope and sits in front of the','line_number':697,'multiline':False]
+['text':' global scope to store 'var' bindings, and to store fresh properties created','line_number':698,'multiline':False]
+['text':' by assignments to undeclared variables that otherwise would have gone on','line_number':699,'multiline':False]
+['text':' the global object.','line_number':700,'multiline':False]
+['text':' With environment objects on the run-time environment chain.','line_number':715,'multiline':False]
+['text':' Return the 'o' in 'with (o)'. ','line_number':734,'multiline':True]
+['text':' Return object for GetThisValue. ','line_number':737,'multiline':True]
+['text':'
+   * Return whether this object is a syntactic with object.  If not, this is
+   * a With object we inserted between the outermost syntactic scope and the
+   * global object to wrap the environment chain someone explicitly passed
+   * via JSAPI to CompileFunction or script evaluation.
+   ','line_number':740,'multiline':True]
+['text':' For syntactic with environment objects, the with scope.','line_number':748,'multiline':False]
+['text':' Internal scope object used by JSOp::BindName upon encountering an','line_number':756,'multiline':False]
+['text':' uninitialized lexical slot or an assignment to a 'const' binding.','line_number':757,'multiline':False]
+['text':'','line_number':758,'multiline':False]
+['text':' ES6 lexical bindings cannot be accessed in any way (throwing','line_number':759,'multiline':False]
+['text':' ReferenceErrors) until initialized. Normally, NAME operations','line_number':760,'multiline':False]
+['text':' unconditionally check for uninitialized lexical slots. When getting or','line_number':761,'multiline':False]
+['text':' looking up names, this can be done without slowing down normal operations','line_number':762,'multiline':False]
+['text':' on the return value. When setting names, however, we do not want to pollute','line_number':763,'multiline':False]
+['text':' all set-property paths with uninitialized lexical checks. For setting names','line_number':764,'multiline':False]
+['text':' (i.e. JSOp::SetName), we emit an accompanying, preceding JSOp::BindName which','line_number':765,'multiline':False]
+['text':' finds the right scope on which to set the name. Moreover, when the name on','line_number':766,'multiline':False]
+['text':' the scope is an uninitialized lexical, we cannot throw eagerly, as the spec','line_number':767,'multiline':False]
+['text':' demands that the error be thrown after evaluating the RHS of','line_number':768,'multiline':False]
+['text':' assignments. Instead, this sentinel scope object is pushed on the stack.','line_number':769,'multiline':False]
+['text':' Attempting to access anything on this scope throws the appropriate','line_number':770,'multiline':False]
+['text':' ReferenceError.','line_number':771,'multiline':False]
+['text':'','line_number':772,'multiline':False]
+['text':' ES6 'const' bindings induce a runtime error when assigned to outside','line_number':773,'multiline':False]
+['text':' of initialization, regardless of strictness.','line_number':774,'multiline':False]
+['text':'**************************************************************************','line_number':789,'multiline':True]
+['text':' A environment iterator describes the active environments starting from an','line_number':791,'multiline':False]
+['text':' environment, scope pair. This pair may be derived from the current point of','line_number':792,'multiline':False]
+['text':' execution in a frame. If derived in such a fashion, the EnvironmentIter','line_number':793,'multiline':False]
+['text':' tracks whether the current scope is within the extent of this initial','line_number':794,'multiline':False]
+['text':' frame.  Here, "frame" means a single activation of: a function, eval, or','line_number':795,'multiline':False]
+['text':' global code.','line_number':796,'multiline':False]
+['text':' No value semantics.','line_number':805,'multiline':False]
+['text':' Constructing from a copy of an existing EnvironmentIter.','line_number':809,'multiline':False]
+['text':' Constructing from an environment, scope pair. All environments','line_number':812,'multiline':False]
+['text':' considered not to be withinInitialFrame, since no frame is given.','line_number':813,'multiline':False]
+['text':' Constructing from a frame. Places the EnvironmentIter on the innermost','line_number':816,'multiline':False]
+['text':' environment at pc.','line_number':817,'multiline':False]
+['text':' Constructing from an environment, scope and frame. The frame is given','line_number':820,'multiline':False]
+['text':' to initialize to proper enclosing environment/scope.','line_number':821,'multiline':False]
+['text':' If done():','line_number':842,'multiline':False]
+['text':' If !done():','line_number':845,'multiline':False]
+['text':' The key in MissingEnvironmentMap. For live frames, maps live frames to','line_number':880,'multiline':False]
+['text':' their synthesized environments. For completely optimized-out environments,','line_number':881,'multiline':False]
+['text':' maps the Scope to their synthesized environments. The env we synthesize for','line_number':882,'multiline':False]
+['text':' Scopes are read-only, and we never use their parent links, so they don't','line_number':883,'multiline':False]
+['text':' need to be distinct.','line_number':884,'multiline':False]
+['text':'','line_number':885,'multiline':False]
+['text':' That is, completely optimized out environments can't be distinguished by','line_number':886,'multiline':False]
+['text':' frame. Note that even if the frame corresponding to the Scope is live on','line_number':887,'multiline':False]
+['text':' the stack, it is unsound to synthesize an environment from that live','line_number':888,'multiline':False]
+['text':' frame. In other words, the provenance of the environment chain is from','line_number':889,'multiline':False]
+['text':' allocated closures (i.e., allocation sites) and is irrecoverable from','line_number':890,'multiline':False]
+['text':' simple stack inspection (i.e., call sites).','line_number':891,'multiline':False]
+['text':' For use as hash policy.','line_number':911,'multiline':False]
+['text':' The value in LiveEnvironmentMap, mapped from by live environment objects.','line_number':924,'multiline':False]
+['text':'**************************************************************************','line_number':946,'multiline':True]
+['text':'
+ * [SMDOC] Debug environment objects
+ *
+ * The frontend optimizes unaliased variables into stack slots and can optimize
+ * away whole EnvironmentObjects. So when the debugger wants to perform an
+ * unexpected eval-in-frame (or otherwise access the environment),
+ * `fp->environmentChain` is often incomplete. This is a problem: a major use
+ * case for eval-in-frame is to access the local variables in debuggee code.
+ *
+ * Even when all EnvironmentObjects exist, giving complete information for all
+ * bindings, stack and heap, there's another issue: eval-in-frame code can
+ * create closures that capture stack locals. The variable slots go away when
+ * the frame is popped, but the closure, which uses them, may survive.
+ *
+ * To solve both problems, eval-in-frame code is compiled and run against a
+ * "debug environment chain" of DebugEnvironmentProxy objects rather than real
+ * EnvironmentObjects. The `GetDebugEnvironmentFor` functions below create
+ * these proxies, one to sit in front of each existing EnvironmentObject. They
+ * also create bogus "hollow" EnvironmentObjects to stand in for environments
+ * that were optimized away; and proxies for those. The frontend sees these
+ * environments as something like `with` scopes, and emits deoptimized bytecode
+ * instructions for all variable accesses.
+ *
+ * When eval-in-frame code runs, `fp->environmentChain` points to this chain of
+ * proxies. On each variable access, the proxy laboriously figures out what to
+ * do. See e.g. `DebuggerEnvironmentProxyHandler::handleUnaliasedAccess`.
+ *
+ * There's a limit to what the proxies can manage, since they're proxying
+ * environments that are already optimized. Some debugger operations, like
+ * redefining a lexical binding, can fail when a true direct eval would
+ * succeed. Even plain variable accesses can throw, if the variable has been
+ * optimized away.
+ *
+ * To support accessing stack variables after they've gone out of scope, we
+ * copy the variables to the heap as they leave scope. See
+ * `DebugEnvironments::onPopCall` and `onPopLexical`.
+ *
+ * `GetDebugEnvironmentFor*` guarantees that the same DebugEnvironmentProxy is
+ * always produced for the same underlying environment (optimized or not!).
+ * This is maintained by some bookkeeping information stored in
+ * `DebugEnvironments`.
+ ','line_number':948,'multiline':True]
+['text':' Provides debugger access to a environment. ','line_number':1004,'multiline':True]
+['text':'
+   * The enclosing environment on the dynamic environment chain. This slot is
+   * analogous to the ENCLOSING_ENV_SLOT of a EnvironmentObject.
+   ','line_number':1006,'multiline':True]
+['text':'
+   * NullValue or a dense array holding the unaliased variables of a function
+   * frame that has been popped.
+   ','line_number':1012,'multiline':True]
+['text':' NOTE: The environment may be a debug hollow with invalid','line_number':1022,'multiline':False]
+['text':' enclosingEnvironment. Always use the enclosingEnvironment accessor on','line_number':1023,'multiline':False]
+['text':' the DebugEnvironmentProxy in order to walk the environment chain.','line_number':1024,'multiline':False]
+['text':' May only be called for proxies to function call objects. ','line_number':1028,'multiline':True]
+['text':' Currently, the 'declarative' environments are function, module, and','line_number':1032,'multiline':False]
+['text':' lexical environments.','line_number':1033,'multiline':False]
+['text':' Get a property by 'id', but returns sentinel values instead of throwing','line_number':1036,'multiline':False]
+['text':' on exceptional cases.','line_number':1037,'multiline':False]
+['text':' Returns true iff this is a function environment with its own this-binding','line_number':1042,'multiline':False]
+['text':' (all functions except arrow functions).','line_number':1043,'multiline':False]
+['text':' Does this debug environment not have a real counterpart or was never','line_number':1046,'multiline':False]
+['text':' live (and thus does not have a synthesized EnvironmentObject or a','line_number':1047,'multiline':False]
+['text':' snapshot)?','line_number':1048,'multiline':False]
+['text':' defined(DEBUG) || defined(JS_JITSPEW) ','line_number':1053,'multiline':True]
+['text':' Maintains per-realm debug environment bookkeeping information. ','line_number':1056,'multiline':True]
+['text':' The map from (non-debug) environments to debug environments. ','line_number':1060,'multiline':True]
+['text':'
+   * The map from live frames which have optimized-away environments to the
+   * corresponding debug environments.
+   ','line_number':1063,'multiline':True]
+['text':'
+   * The map from environment objects of live frames to the live frame. This
+   * map updated lazily whenever the debugger needs the information. In
+   * between two lazy updates, liveEnvs becomes incomplete (but not invalid,
+   * onPop* removes environments as they are popped). Thus, two consecutive
+   * debugger lazy updates of liveEnvs need only fill in the new
+   * environments.
+   ','line_number':1072,'multiline':True]
+['text':' If a live frame has a synthesized entry in missingEnvs, make sure it's not','line_number':1105,'multiline':False]
+['text':' collected.','line_number':1106,'multiline':False]
+['text':' When a frame bails out from Ion to Baseline, there might be missing','line_number':1123,'multiline':False]
+['text':' envs keyed on, and live envs containing, the old','line_number':1124,'multiline':False]
+['text':' RematerializedFrame. Forward those values to the new BaselineFrame.','line_number':1125,'multiline':False]
+['text':' When an environment is popped, we store a snapshot of its bindings that','line_number':1129,'multiline':False]
+['text':' live on the frame.','line_number':1130,'multiline':False]
+['text':'','line_number':1131,'multiline':False]
+['text':' This is done during frame unwinding, which cannot handle errors','line_number':1132,'multiline':False]
+['text':' gracefully. Errors result in no snapshot being set on the','line_number':1133,'multiline':False]
+['text':' DebugEnvironmentProxy.','line_number':1134,'multiline':False]
+['text':' In debug-mode, these must be called whenever exiting a scope that might','line_number':1139,'multiline':False]
+['text':' have stack-allocated locals.','line_number':1140,'multiline':False]
+['text':' namespace js ','line_number':1151,'multiline':True]
+['text':' A frame's initial environment is the innermost environment','line_number':1257,'multiline':False]
+['text':' corresponding to the scope chain from frame.script()->bodyScope() to','line_number':1258,'multiline':False]
+['text':' frame.script()->outermostScope(). This environment must be on the chain','line_number':1259,'multiline':False]
+['text':' for the frame to be considered initialized. That is, it must be on the','line_number':1260,'multiline':False]
+['text':' chain for the environment chain to fully match the scope chain at the','line_number':1261,'multiline':False]
+['text':' start of execution in the frame.','line_number':1262,'multiline':False]
+['text':'','line_number':1263,'multiline':False]
+['text':' This logic must be in sync with the HAS_INITIAL_ENV logic in','line_number':1264,'multiline':False]
+['text':' BaselineStackBuilder::buildBaselineFrame.','line_number':1265,'multiline':False]
+['text':' A function frame's CallObject, if present, is always the initial','line_number':1267,'multiline':False]
+['text':' environment.','line_number':1268,'multiline':False]
+['text':' For an eval frame, the VarEnvironmentObject, if present, is always the','line_number':1273,'multiline':False]
+['text':' initial environment.','line_number':1274,'multiline':False]
+['text':' For named lambda frames without CallObjects (i.e., no binding in the','line_number':1281,'multiline':False]
+['text':' body of the function was closed over), the NamedLambdaObject','line_number':1282,'multiline':False]
+['text':' corresponding to the named lambda scope is the initial environment.','line_number':1283,'multiline':False]
+['text':' namespace js','line_number':1355,'multiline':False]
+['text':' vm_EnvironmentObject_h ','line_number':1357,'multiline':True]

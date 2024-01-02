@@ -1,0 +1,105 @@
+['text':'
+******************************************************************************
+*
+*   Copyright (C) 2001-2008, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+*
+******************************************************************************
+*   file name:  utrie2_impl.h
+*   encoding:   US-ASCII
+*   tab size:   8 (not used)
+*   indentation:4
+*
+*   created on: 2008sep26 (split off from utrie2.c)
+*   created by: Markus W. Scherer
+*
+*   Definitions needed for both runtime and builder code for UTrie2,
+*   used by utrie2.c and utrie2_builder.c.
+','line_number':1,'multiline':True]
+['text':' Public UTrie2 API implementation ----------------------------------------- ','line_number':25,'multiline':True]
+['text':'
+ * These definitions are mostly needed by utrie2.c,
+ * but also by utrie2_serialize() and utrie2_swap().
+ ','line_number':27,'multiline':True]
+['text':'
+ * UTrie and UTrie2 signature values,
+ * in platform endianness and opposite endianness.
+ ','line_number':32,'multiline':True]
+['text':'*
+ * Trie data structure in serialized form:
+ *
+ * UTrie2Header header;
+ * uint16_t index[header.index2Length];
+ * uint16_t data[header.shiftedDataLength<<2];  -- or uint32_t data[...]
+ * @internal
+ ','line_number':42,'multiline':True]
+['text':'* "Tri2" in big-endian US-ASCII (0x54726932) ','line_number':51,'multiline':True]
+['text':'*
+     * options bit field:
+     * 15.. 4   reserved (0)
+     *  3.. 0   UTrie2ValueBits valueBits
+     ','line_number':54,'multiline':True]
+['text':'* UTRIE2_INDEX_1_OFFSET..UTRIE2_MAX_INDEX_LENGTH ','line_number':61,'multiline':True]
+['text':'* (UTRIE2_DATA_START_OFFSET..UTRIE2_MAX_DATA_LENGTH)>>UTRIE2_INDEX_SHIFT ','line_number':64,'multiline':True]
+['text':'* Null index and data blocks, not shifted. ','line_number':67,'multiline':True]
+['text':'*
+     * First code point of the single-value range ending with U+10ffff,
+     * rounded up and then shifted right by UTRIE2_SHIFT_1.
+     ','line_number':70,'multiline':True]
+['text':'*
+ * Constants for use with UTrie2Header.options.
+ * @internal
+ ','line_number':77,'multiline':True]
+['text':'* Mask to get the UTrie2ValueBits valueBits from options. ','line_number':82,'multiline':True]
+['text':' Building a trie ---------------------------------------------------------- ','line_number':86,'multiline':True]
+['text':'
+ * These definitions are mostly needed by utrie2_builder.c, but also by
+ * utrie2_get32() and utrie2_enum().
+ ','line_number':88,'multiline':True]
+['text':'*
+     * At build time, leave a gap in the index-2 table,
+     * at least as long as the maximum lengths of the 2-byte UTF-8 index-2 table
+     * and the supplementary index-1 table.
+     * Round up to UTRIE2_INDEX_2_BLOCK_LENGTH for proper compacting.
+     ','line_number':94,'multiline':True]
+['text':'*
+     * Maximum length of the build-time index-2 array.
+     * Maximum number of Unicode code points (0x110000) shifted right by UTRIE2_SHIFT_2,
+     * plus the part of the index-2 table for lead surrogate code points,
+     * plus the build-time index gap,
+     * plus the null index-2 block.
+     ','line_number':105,'multiline':True]
+['text':'*
+ * Maximum length of the build-time data array.
+ * One entry per 0x110000 code points, plus the illegal-UTF-8 block and the null block,
+ * plus values for the 0x400 surrogate code units.
+ ','line_number':121,'multiline':True]
+['text':'
+ * Build-time trie structure.
+ *
+ * Just using a boolean flag for "repeat use" could lead to data array overflow
+ * because we would not be able to detect when a data block becomes unused.
+ * It also leads to orphan data blocks that are kept through serialization.
+ *
+ * Need to use reference counting for data blocks,
+ * and allocDataBlock() needs to look for a free block before increasing dataLength.
+ *
+ * This scheme seems like overkill for index-2 blocks since the whole index array is
+ * preallocated anyway (unlike the growable data array).
+ * Just allocating multiple index-2 blocks as needed.
+ ','line_number':128,'multiline':True]
+['text':'*
+     * Multi-purpose per-data-block table.
+     *
+     * Before compacting:
+     *
+     * Per-data-block reference counters/free-block list.
+     *  0: unused
+     * >0: reference counter (number of index-2 entries pointing here)
+     * <0: next free data block in free-block list
+     *
+     * While compacting:
+     *
+     * Map of adjusted indexes, used in compactData() and compactIndex2().
+     * Maps from original indexes to new ones.
+     ','line_number':154,'multiline':True]

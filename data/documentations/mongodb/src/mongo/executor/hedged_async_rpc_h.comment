@@ -1,0 +1,88 @@
+['text':'*
+ *    Copyright (C) 2022-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' Check if the caller has provided an operation key, and hedging is not enabled. If so,','line_number':92,'multiline':False]
+['text':' we will attach the caller-provided key to all remote commands sent to resolved','line_number':93,'multiline':False]
+['text':' targets. Note that doing so may have side-effects if the operation is retried:','line_number':94,'multiline':False]
+['text':' cancelling the Nth attempt may impact the (N + 1)th attempt as they share `opKey`.','line_number':95,'multiline':False]
+['text':' The caller has not provided an operation key or hedging is enabled, so we generate a','line_number':100,'multiline':False]
+['text':' new `clientOperationKey` for each attempt. The operationKey allows cancelling remote','line_number':101,'multiline':False]
+['text':' operations. A new one is generated here to ensure retry attempts are isolated:','line_number':102,'multiline':False]
+['text':' cancelling the Nth attempt does not impact the (N + 1)th attempt.','line_number':103,'multiline':False]
+['text':'*
+ * Schedules a remote `_killOperations` on `exec` (or `baton`) for all targets, aiming to kill any
+ * operations identified by `opKey`.
+ ','line_number':109,'multiline':True]
+['text':' namespace hedging_rpc_details','line_number':136,'multiline':False]
+['text':'*
+ * sendHedgedCommand is a hedged version of the sendCommand function. It asynchronously executes a
+ * hedged request by sending commands to multiple targets through sendCommand and then returns a
+ * SemiFuture with the first result to become ready.
+ *
+ * In order to hedge, the command must be eligible for hedging, the hedgingMode server parameter
+ * must be enabled, and multiple hosts must be provided by the targeter. If any of those conditions
+ * is false, then the function will not hedge, and instead will just target the first host in the
+ * vector provided by resolve.
+ *
+ * Accepts an optional UUID to be used as `clientOperationKey` for all remote requests.
+ ','line_number':138,'multiline':True]
+['text':' Set up cancellation token to cancel remaining hedged operations.','line_number':166,'multiline':False]
+['text':' Targeting error; rewrite it to a RemoteCommandExecutionError and skip','line_number':178,'multiline':False]
+['text':' command execution body. We'll retry if the policy indicates to.','line_number':179,'multiline':False]
+['text':' We'll send 1 authoritative command + however many hedges we can.','line_number':194,'multiline':False]
+['text':' We explicitly pass "NeverRetryPolicy" here because the retry mechanism','line_number':210,'multiline':False]
+['text':' is implemented at the hedged command runner level and not at the','line_number':211,'multiline':False]
+['text':' 'sendCommand' level.','line_number':212,'multiline':False]
+['text':' If the request is a hedged request, set maxTimeMSOpOnly to the smaller of','line_number':220,'multiline':False]
+['text':' the server parameter maxTimeMSForHedgedReads or remaining max time from the','line_number':221,'multiline':False]
+['text':' opCtx.','line_number':222,'multiline':False]
+['text':'*
+                 * When whenAnyThat is used in sendHedgedCommand, the shouldAccept function
+                 * always accepts the future with index 0, which we treat as the
+                 * "authoritative" request. This is the codepath followed when we are not
+                 * hedging or there is only 1 target provided.
+                 ','line_number':244,'multiline':True]
+['text':' We received a successful response, so we should try to clean state on','line_number':283,'multiline':False]
+['text':' other hosts. Note that there is no guarantee the clean-up happens after','line_number':284,'multiline':False]
+['text':' the target receives the original command.','line_number':285,'multiline':False]
+['text':' The hedged operation failed, so we should try to clean state on all','line_number':294,'multiline':False]
+['text':' targets. Note that this is just an attempt and does not guarantee no','line_number':295,'multiline':False]
+['text':' state is leaked, as the clean-up command may be received by a target','line_number':296,'multiline':False]
+['text':' before the original operaiton.','line_number':297,'multiline':False]
+['text':' We go inline here to intercept executor-shutdown errors and re-write them','line_number':310,'multiline':False]
+['text':' so that the API always returns RemoteCommandExecutionError. Additionally,','line_number':311,'multiline':False]
+['text':' we need to make sure we cancel outstanding requests.','line_number':312,'multiline':False]
+['text':' The API implementation guarantees that all errors are provided as','line_number':322,'multiline':False]
+['text':' RemoteCommandExecutionError, so if we've reached this code, it means that the API','line_number':323,'multiline':False]
+['text':' internals were unable to run due to executor shutdown. Today, the only guarantee','line_number':324,'multiline':False]
+['text':' we can make about an executor-shutdown error is that it is in the cancellation','line_number':325,'multiline':False]
+['text':' category. We dassert that this is the case to make it easy to find errors in the','line_number':326,'multiline':False]
+['text':' API implementation's error-handling while still ensuring that we always return','line_number':327,'multiline':False]
+['text':' the correct error code in production.','line_number':328,'multiline':False]
+['text':' namespace async_rpc','line_number':338,'multiline':False]
+['text':' namespace mongo','line_number':339,'multiline':False]

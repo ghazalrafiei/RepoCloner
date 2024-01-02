@@ -1,0 +1,393 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':'
+ * JavaScript bytecode interpreter.
+ ','line_number':7,'multiline':True]
+['text':' JSJitInfo','line_number':37,'multiline':False]
+['text':' js::GetErrorMessage, JSMSG_*','line_number':38,'multiline':False]
+['text':' js::AutoCheckRecursionLimit','line_number':39,'multiline':False]
+['text':' js::IsWindowProxy','line_number':40,'multiline':False]
+['text':' JSDVG_SEARCH_STACK','line_number':46,'multiline':False]
+['text':' js::StrictlyEqual','line_number':47,'multiline':False]
+['text':' js::FunctionFlags','line_number':48,'multiline':False]
+['text':' js::PlainObject','line_number':58,'multiline':False]
+['text':' GCThingIndex','line_number':62,'multiline':False]
+['text':' ThrowMsgKind','line_number':64,'multiline':False]
+['text':' js::CopyInitializerObject, js::CreateThis','line_number':76,'multiline':False]
+['text':' If there is a NSVO on environment chain, use it as basis for fallback','line_number':131,'multiline':False]
+['text':' global |this|. This gives a consistent definition of global lexical','line_number':132,'multiline':False]
+['text':' |this| between function and global contexts.','line_number':133,'multiline':False]
+['text':'','line_number':134,'multiline':False]
+['text':' NOTE: If only non-syntactic WithEnvironments are on the chain, we use the','line_number':135,'multiline':False]
+['text':' global lexical |this| value. This is for compatibility with the Subscript','line_number':136,'multiline':False]
+['text':' Loader.','line_number':137,'multiline':False]
+['text':' This can only happen in Debugger eval frames: in that case we','line_number':146,'multiline':False]
+['text':' don't always have a global lexical env, see EvaluateInEnv.','line_number':147,'multiline':False]
+['text':' This can only happen in Debugger eval frames: in that case we','line_number':174,'multiline':False]
+['text':' don't always have a global lexical env, see EvaluateInEnv.','line_number':175,'multiline':False]
+['text':' This is purely to police self-hosted code. There is no actual operation.','line_number':192,'multiline':False]
+['text':' Copy lval, because it might alias vp.','line_number':206,'multiline':False]
+['text':'
+   * Skip along the env chain to the enclosing global object. This is
+   * used for GNAME opcodes where the bytecode emitter has determined a
+   * name access must be on the global. It also insulates us from bugs
+   * in the emitter: type inference will assume that GNAME opcodes are
+   * accessing the global object, and the inferred behavior should match
+   * the actual behavior even if the id could be found on the env chain
+   * before the global object.
+   ','line_number':216,'multiline':True]
+['text':' Kludge to allow (typeof foo == "undefined") tests. ','line_number':229,'multiline':True]
+['text':' Ensure the callee still has a non-lazy script. We normally don't relazify','line_number':317,'multiline':False]
+['text':' in active compartments, but the .prototype lookup might have called the','line_number':318,'multiline':False]
+['text':' relazifyFunctions testing function that doesn't have this restriction.','line_number':319,'multiline':False]
+['text':' MSVC with PGO inlines a lot of functions in RunScript, resulting in large','line_number':342,'multiline':False]
+['text':' stack frames and stack overflow issues, see bug 1167883. Turn off PGO to','line_number':343,'multiline':False]
+['text':' avoid this.','line_number':344,'multiline':False]
+['text':' Since any script can conceivably GC, make sure it's safe to do so.','line_number':357,'multiline':False]
+['text':'
+   * Native constructors must return non-primitive values on success.
+   * Although it is legal, if a constructor returns the callee, there is a
+   * 99.9999% chance it is a bug. If any valid code actually wants the
+   * constructor to return the callee, the assertion can be removed or
+   * (another) conjunct can be added to the antecedent.
+   *
+   * Exception: (new Object(Object)) returns the callee.
+   ','line_number':446,'multiline':True]
+['text':'
+ * Find a function reference and its 'this' value implicit first parameter
+ * under argc arguments on cx's stack, and call the function.  Push missing
+ * required arguments, allocate declared local variables, and pop everything
+ * when done.  Then push the return value.
+ *
+ * Note: This function DOES NOT call GetThisValue to munge |args.thisv()| if
+ *       necessary.  The caller (usually the interpreter) must have performed
+ *       this step already!
+ ','line_number':462,'multiline':True]
+['text':' Invoke non-functions. ','line_number':481,'multiline':True]
+['text':' Invoke native functions. ','line_number':500,'multiline':True]
+['text':' Self-hosted builtins are considered native by the onNativeCall hook.','line_number':514,'multiline':False]
+['text':' Run function until JSOp::RetRval, JSOp::Return or error. ','line_number':526,'multiline':True]
+['text':' Create |this| if we're constructing. Switch to the callee's realm to','line_number':529,'multiline':False]
+['text':' ensure this object has the correct realm.','line_number':530,'multiline':False]
+['text':' Calling class constructors throws an error from the callee's realm.','line_number':536,'multiline':False]
+['text':' We must call the thisValue hook in case we are not called from the','line_number':555,'multiline':False]
+['text':' interpreter, where a prior bytecode has computed an appropriate','line_number':556,'multiline':False]
+['text':' |this| already.  But don't do that if fval is a DOM function.','line_number':557,'multiline':False]
+['text':' ES7 rev 0c1bd3004329336774cbc90de727cd0cf5f11e93','line_number':578,'multiline':False]
+['text':' 7.3.12 Call.','line_number':579,'multiline':False]
+['text':' Explicitly qualify these methods to bypass AnyInvokeArgs's deliberate','line_number':583,'multiline':False]
+['text':' shadowing.','line_number':584,'multiline':False]
+['text':' Callers are responsible for enforcing these preconditions.','line_number':601,'multiline':False]
+['text':' Check that |callee|, the callee in a |new| expression, is a constructor.','line_number':637,'multiline':False]
+['text':' Calls from the stack could have any old non-constructor callee.','line_number':641,'multiline':False]
+['text':' The new.target has already been vetted by previous calls, or is the callee.','line_number':648,'multiline':False]
+['text':' We can just assert that it's a constructor.','line_number':649,'multiline':False]
+['text':' Explicitly qualify to bypass AnyConstructArgs's deliberate shadowing.','line_number':669,'multiline':False]
+['text':' Invoke could result in another try to get or set the same id again, see','line_number':704,'multiline':False]
+['text':' bug 355497.','line_number':705,'multiline':False]
+['text':' The env chain is something we control, so we know it can't
+     have any outer objects on it. ','line_number':773,'multiline':True]
+['text':' Ensure the env chain is all same-compartment and terminates in a global. ','line_number':788,'multiline':True]
+['text':' evalInFrame ','line_number':798,'multiline':True]
+['text':'
+ * ES6 (4-25-16) 12.10.4 InstanceofOperator
+ ','line_number':801,'multiline':True]
+['text':' Step 1. is handled by caller. ','line_number':806,'multiline':True]
+['text':' Step 2. ','line_number':808,'multiline':True]
+['text':' Step 3. ','line_number':820,'multiline':True]
+['text':' Step 4. ','line_number':829,'multiline':True]
+['text':' Step 5. ','line_number':835,'multiline':True]
+['text':'
+ * Enter the new with environment using an object at sp[-1] and associate the
+ * depth of the with block with sp + stackIndex.
+ ','line_number':919,'multiline':True]
+['text':' Unwind environment chain and iterator to match the env corresponding to','line_number':1002,'multiline':False]
+['text':' the given bytecode position.','line_number':1003,'multiline':False]
+['text':' A frame's environment chain cannot be unwound to anything enclosing the','line_number':1012,'multiline':False]
+['text':' body scope of a script.  This includes the parameter defaults','line_number':1013,'multiline':False]
+['text':' environment and the decl env object. These environments, once pushed','line_number':1014,'multiline':False]
+['text':' onto the environment chain, are expected to be there for the duration','line_number':1015,'multiline':False]
+['text':' of the frame.','line_number':1016,'multiline':False]
+['text':'','line_number':1017,'multiline':False]
+['text':' Attempting to unwind to the parameter defaults code in a script is a','line_number':1018,'multiline':False]
+['text':' bug; that section of code has no try-catch blocks.','line_number':1019,'multiline':False]
+['text':' Unwind all environments. This is needed because block scopes may cover the','line_number':1031,'multiline':False]
+['text':' first bytecode at a script's main(). e.g.,','line_number':1032,'multiline':False]
+['text':'','line_number':1033,'multiline':False]
+['text':'     function f() { { let i = 0; } }','line_number':1034,'multiline':False]
+['text':'','line_number':1035,'multiline':False]
+['text':' will have no pc location distinguishing the first block scope from the','line_number':1036,'multiline':False]
+['text':' outermost function scope.','line_number':1037,'multiline':False]
+['text':' Compute the pc needed to unwind the environment to the beginning of a try','line_number':1044,'multiline':False]
+['text':' block. We cannot unwind to *after* the JSOp::Try, because that might be the','line_number':1045,'multiline':False]
+['text':' first opcode of an inner scope, with the same problem as above. e.g.,','line_number':1046,'multiline':False]
+['text':'','line_number':1047,'multiline':False]
+['text':' try { { let x; } }','line_number':1048,'multiline':False]
+['text':'','line_number':1049,'multiline':False]
+['text':' will have no pc location distinguishing the try block scope from the inner','line_number':1050,'multiline':False]
+['text':' let block scope.','line_number':1051,'multiline':False]
+['text':' Unwind the environment to the beginning of the JSOp::Try.','line_number':1066,'multiline':False]
+['text':' Set pc to the first bytecode after the the try note to point','line_number':1069,'multiline':False]
+['text':' to the beginning of catch or finally.','line_number':1070,'multiline':False]
+['text':' c.f. the regular (catchable) TryNoteIterInterpreter loop in','line_number':1095,'multiline':False]
+['text':' ProcessTryNotes.','line_number':1096,'multiline':False]
+['text':' Catch cannot intercept the closing of a generator. ','line_number':1126,'multiline':True]
+['text':' This is similar to JSOp::EndIter in the interpreter loop. ','line_number':1139,'multiline':True]
+['text':' Whether the destructuring iterator is done is at the top of the','line_number':1148,'multiline':False]
+['text':' stack. The iterator object is second from the top.','line_number':1149,'multiline':False]
+['text':' TryNoteKind::ForOfIterClose is handled internally by the try note','line_number':1169,'multiline':False]
+['text':' iterator.','line_number':1170,'multiline':False]
+['text':'
+   * Propagate the exception or error to the caller unless the exception
+   * is an asynchronous return from a generator.
+   ','line_number':1181,'multiline':True]
+['text':' If we failed to allocate, then skip the increment and continue to','line_number':1201,'multiline':False]
+['text':' handle the exception.','line_number':1202,'multiline':False]
+['text':' Call debugger throw hooks. ','line_number':1213,'multiline':True]
+['text':' Ensure that the debugger hasn't returned 'true' while clearing the','line_number':1220,'multiline':False]
+['text':' exception state.','line_number':1221,'multiline':False]
+['text':' No need to increment the PCCounts number of execution here, as','line_number':1233,'multiline':False]
+['text':' the interpreter increments any PCCounts if present.','line_number':1234,'multiline':False]
+['text':' We may be propagating a forced return from a debugger hook function.','line_number':1244,'multiline':False]
+['text':' After this point, we will pop the frame regardless. Settle the frame on','line_number':1253,'multiline':False]
+['text':' the end of the script.','line_number':1254,'multiline':False]
+['text':'
+ * Same for JSOp::SetName and JSOp::SetProp, which differ only slightly but
+ * remain distinct for the decompiler.
+ ','line_number':1293,'multiline':True]
+['text':' See TRY_BRANCH_AFTER_COND. ','line_number':1299,'multiline':True]
+['text':'
+ * Compute the implicit |this| value used by a call expression with an
+ * unqualified name reference. The environment the binding was found on is
+ * passed as argument, env.
+ *
+ * The implicit |this| is |undefined| for all environment types except
+ * WithEnvironmentObject. This is the case for |with(...) {...}| expressions or
+ * if the embedding uses a non-syntactic WithEnvironmentObject.
+ *
+ * NOTE: A non-syntactic WithEnvironmentObject may have a corresponding
+ * extensible LexicalEnviornmentObject, but it will not be considered as an
+ * implicit |this|. This is for compatibility with the Gecko subscript loader.
+ ','line_number':1303,'multiline':True]
+['text':' Fast-path for GlobalObject','line_number':1317,'multiline':False]
+['text':' WithEnvironmentObjects have an actual implicit |this|','line_number':1322,'multiline':False]
+['text':' Debugger environments need special casing, as despite being','line_number':1327,'multiline':False]
+['text':' non-syntactic, they wrap syntactic environments and should not be','line_number':1328,'multiline':False]
+['text':' treated like other embedding-specific non-syntactic environments.','line_number':1329,'multiline':False]
+['text':' Save/restore lstr in case of GC activity under ToString.','line_number':1375,'multiline':False]
+['text':' Signed left-shift is undefined on overflow, so |lhs << (rhs & 31)| won't','line_number':1570,'multiline':False]
+['text':' work.  Instead, convert to unsigned space (where overflow is treated','line_number':1571,'multiline':False]
+['text':' modularly), perform the operation there, then convert back.','line_number':1572,'multiline':False]
+['text':' BigInt proposal 3.2.4 Abstract Relational Comparison','line_number':1619,'multiline':False]
+['text':' Returns Nothing when at least one operand is a NaN, or when','line_number':1620,'multiline':False]
+['text':' ToNumeric or StringToBigInt can't interpret a string as a numeric','line_number':1621,'multiline':False]
+['text':' value. (These cases correspond to a NaN result in the spec.)','line_number':1622,'multiline':False]
+['text':' Otherwise, return a boolean to indicate whether lhs is less than','line_number':1623,'multiline':False]
+['text':' rhs. The operands must be primitives; the caller is responsible for','line_number':1624,'multiline':False]
+['text':' evaluating them in the correct order.','line_number':1625,'multiline':False]
+['text':' Steps 1 and 2 are performed by the caller.','line_number':1630,'multiline':False]
+['text':' Step 3.','line_number':1632,'multiline':False]
+['text':' Step 4a.','line_number':1644,'multiline':False]
+['text':' Step 4b.','line_number':1649,'multiline':False]
+['text':' Steps 4c and 4d.','line_number':1654,'multiline':False]
+['text':' Steps 4e-j.','line_number':1659,'multiline':False]
+['text':' Step 4e for Number operands.','line_number':1664,'multiline':False]
+['text':' The dense elements must have been initialized up to this index. The JIT','line_number':1790,'multiline':False]
+['text':' implementation also depends on this.','line_number':1791,'multiline':False]
+['text':' Bump the initialized length even for hole values to ensure the','line_number':1796,'multiline':False]
+['text':' index == initLength invariant holds for later InitElemArray ops.','line_number':1797,'multiline':False]
+['text':'
+ * As an optimization, the interpreter creates a handful of reserved Rooted<T>
+ * variables at the beginning, thus inserting them into the Rooted list once
+ * upon entry. ReservedRooted "borrows" a reserved Rooted variable and uses it
+ * within a local scope, resetting the value to nullptr (or the appropriate
+ * equivalent for T) at scope end. This avoids inserting/removing the Rooted
+ * from the rooter list, while preventing stale values from being kept alive
+ * unnecessarily.
+ ','line_number':1807,'multiline':True]
+['text':'
+ * Define macros for an interpreter loop. Opcode dispatch is done by
+ * indirect goto (aka a threaded interpreter), which is technically
+ * non-standard but is supported by many compilers.
+ ','line_number':1886,'multiline':True]
+['text':' Use addresses instead of offsets to optimize for runtime speed over','line_number':1900,'multiline':False]
+['text':' load-time relocation overhead.','line_number':1901,'multiline':False]
+['text':' End of case where computed goto is available.','line_number':1912,'multiline':False]
+['text':'
+ * Define macros for a switch-based interpreter loop. Using a switch statement
+ * for dispatch is usually not as fast as the "threaded" approach that uses
+ * indirect goto statements, but it does not require any language extensions
+ * and should work on any standard-compliant C++ compiler.
+ ','line_number':1913,'multiline':True]
+['text':' This variable is effectively a parameter to the switch.','line_number':1931,'multiline':False]
+['text':' End of case where computed goto is _not_ available.','line_number':1933,'multiline':False]
+['text':'
+   * Increment REGS.pc by N, load the opcode at that position,
+   * and jump to the code to execute it.
+   *
+   * When Debugger puts a script in single-step mode, all js::Interpret
+   * invocations that might be presently running that script must have
+   * interrupts enabled. It's not practical to simply check
+   * script->stepModeEnabled() at each point some callee could have changed
+   * it, because there are so many places js::Interpret could possibly cause
+   * JavaScript to run: each place an object might be coerced to a primitive
+   * or a number, for example. So instead, we expose a simple mechanism to
+   * let Debugger tweak the affected js::Interpret frames when an onStep
+   * handler is added: calling activation.enableInterruptsUnconditionally()
+   * will enable interrupts, and activation.opMask() is or'd with the opcode
+   * to implement a simple alternate dispatch.
+   ','line_number':1935,'multiline':True]
+['text':'
+   * Shorthand for the common sequence at the end of a fixed-size opcode.
+   ','line_number':1958,'multiline':True]
+['text':'
+   * Prepare to call a user-supplied branch handler, and abort the script
+   * if it returns false.
+   ','line_number':1963,'multiline':True]
+['text':'
+   * This is a simple wrapper around ADVANCE_AND_DISPATCH which also does
+   * a CHECK_BRANCH() if n is not positive, which possibly indicates that it
+   * is the backedge of a loop.
+   ','line_number':1972,'multiline':True]
+['text':'
+   * Initialize code coverage vectors.
+   ','line_number':1984,'multiline':True]
+['text':'
+   * Increment the code coverage counter associated with the given pc.
+   ','line_number':1996,'multiline':True]
+['text':' Verify that an uninitialized lexical is followed by a correct check op.','line_number':2034,'multiline':False]
+['text':' nothing ','line_number':2048,'multiline':True]
+['text':' The script is used frequently, so keep a local copy. ','line_number':2062,'multiline':True]
+['text':'
+   * Pool of rooters for use in this interpreter frame. References to these
+   * are used for local variables within interpreter cases. This avoids
+   * creating new rooters each time an interpreter case is entered, and also
+   * correctness pitfalls due to incorrect compilation of destructor calls
+   * around computed gotos.
+   ','line_number':2071,'multiline':True]
+['text':' State communicated between non-local jumps: ','line_number':2090,'multiline':True]
+['text':' Increment the coverage for the main entry point.','line_number':2102,'multiline':False]
+['text':' Enter the interpreter loop starting at the current pc.','line_number':2106,'multiline':False]
+['text':' Commence executing the actual opcode. ','line_number':2145,'multiline':True]
+['text':' Various 1-byte no-ops. ','line_number':2150,'multiline':True]
+['text':' Attempt on-stack replacement into the Baseline Interpreter.','line_number':2166,'multiline':False]
+['text':' We failed to call into baseline at all, so treat as an error.','line_number':2185,'multiline':False]
+['text':' Pop the profiler frame pushed by the interpreter.  (The compiled','line_number':2192,'multiline':False]
+['text':' version of the function popped a copy of the frame pushed by the','line_number':2193,'multiline':False]
+['text':' OSR trampoline.)','line_number':2194,'multiline':False]
+['text':' Ensure pattern matching still works.','line_number':2212,'multiline':False]
+['text':' If this ever changes, change what JSOp::GImplicitThis does too.','line_number':2218,'multiline':False]
+['text':' FALL THROUGH ','line_number':2264,'multiline':True]
+['text':'
+       * When the inlined frame exits with an exception or an error, ok will be
+       * false after the inline_return label.
+       ','line_number':2267,'multiline':True]
+['text':' Stop the engine. (No details about which engine exactly, could be','line_number':2282,'multiline':False]
+['text':' interpreter, Baseline or IonMonkey.)','line_number':2283,'multiline':False]
+['text':' Resume execution in the calling frame. ','line_number':2310,'multiline':True]
+['text':' Stack should be empty for the outer frame, unless we executed the','line_number':2322,'multiline':False]
+['text':' first |await| expression in an async function.','line_number':2323,'multiline':False]
+['text':' FALL THROUGH ','line_number':2333,'multiline':True]
+['text':' Load the object being initialized into lval/val. ','line_number':2437,'multiline':True]
+['text':' Assigning to an undeclared name adds a property to the global object.','line_number':2541,'multiline':False]
+['text':' Since we have asserted that obj has to be an object, it cannot be','line_number':3079,'multiline':False]
+['text':' either optimized arguments, or indeed any primitive. This simplifies','line_number':3080,'multiline':False]
+['text':' our task some.','line_number':3081,'multiline':False]
+['text':' FALL THROUGH ','line_number':3162,'multiline':True]
+['text':' Use the slow path if the callee is not an interpreted function, if we','line_number':3232,'multiline':False]
+['text':' have to throw an exception, or if we might have to invoke the','line_number':3233,'multiline':False]
+['text':' OnNativeCall hook for a self-hosted builtin.','line_number':3234,'multiline':False]
+['text':' Enter the callee's realm if this is a cross-realm call. Use','line_number':3268,'multiline':False]
+['text':' MakeScopeExit to leave this realm on all error/JIT-return paths','line_number':3269,'multiline':False]
+['text':' below.','line_number':3270,'multiline':False]
+['text':' We leave the callee's realm when we','line_number':3308,'multiline':False]
+['text':' call popInlineFrame.','line_number':3309,'multiline':False]
+['text':' Increment the coverage for the main entry point.','line_number':3328,'multiline':False]
+['text':' Load first op and dispatch it (safe since JSOp::RetRval). ','line_number':3332,'multiline':True]
+['text':' Treat it like JSOp::Undefined.','line_number':3370,'multiline':False]
+['text':'
+       * Push a regexp object cloned from the regexp literal object mapped by
+       * the bytecode at pc.
+       ','line_number':3464,'multiline':True]
+['text':'
+       * ECMAv2+ forbids conversion of discriminant, so we will skip to the
+       * default case if the discriminant isn't already an int jsval.  (This
+       * opcode is emitted only for dense int-domain switches.)
+       ','line_number':3496,'multiline':True]
+['text':' Use mozilla::NumberEqualsInt32 to treat -0 (double) as 0. ','line_number':3506,'multiline':True]
+['text':'
+       * Skip the same-compartment assertion if the local will be immediately
+       * popped. We do not guarantee sync for dead locals when coming in from
+       * the method JIT, and a GetLocal followed by Pop is not considered to
+       * be a use of the variable.
+       ','line_number':3660,'multiline':True]
+['text':' Load the specified function object literal. ','line_number':3692,'multiline':True]
+['text':' Load the specified function object literal. ','line_number':3706,'multiline':True]
+['text':' Load the property's initial value into rval. ','line_number':3902,'multiline':True]
+['text':' Load the object being initialized into lval/obj. ','line_number':3906,'multiline':True]
+['text':' Pop [exception or hole, retsub pc-index]. ','line_number':3968,'multiline':True]
+['text':'
+         * Exception was pending during finally, throw it *before* we adjust
+         * pc, because pc indexes into script->trynotes.  This turns out not
+         * to be necessary, but it seems clearer.  And it points out a FIXME:
+         * 350509, due to Igor Bukanov.
+         ','line_number':3974,'multiline':True]
+['text':' let the code at error try to catch the exception. ','line_number':4009,'multiline':True]
+['text':' Create block environment and push on scope chain.','line_number':4039,'multiline':False]
+['text':' Pop block from scope chain.','line_number':4061,'multiline':False]
+['text':' FIXME: This opcode should not be necessary.  The debugger shouldn't','line_number':4076,'multiline':False]
+['text':' need help from bytecode to do its job.  See bug 927782.','line_number':4077,'multiline':False]
+['text':' popInlineFrame expects there to be an additional value on the stack','line_number':4201,'multiline':False]
+['text':' to pop off, so leave "gen" on the stack.','line_number':4202,'multiline':False]
+['text':' as opposed to an async function','line_number':4226,'multiline':False]
+['text':' AbstractGeneratorObject::resume takes care of setting the frame's','line_number':4236,'multiline':False]
+['text':' debuggee flag.','line_number':4237,'multiline':False]
+['text':' Load the specified function object literal. ','line_number':4272,'multiline':True]
+['text':' Load the function to be initialized ','line_number':4299,'multiline':True]
+['text':' Load the home object ','line_number':4303,'multiline':True]
+['text':' interpreter loop ','line_number':4430,'multiline':True]
+['text':'
+       * Push (true, exception) pair for finally to indicate that [retsub]
+       * should rethrow the exception.
+       ','line_number':4447,'multiline':True]
+['text':'
+   * This path is used when it's guaranteed the method can be finished
+   * inside the JIT.
+   ','line_number':4478,'multiline':True]
+['text':' Fast path for strings, arrays and arguments.','line_number':4505,'multiline':False]
+['text':' Optimize common cases like (2).toString() or "foo".valueOf() to not','line_number':4511,'multiline':False]
+['text':' create a wrapper object.','line_number':4512,'multiline':False]
+['text':' Note: BindVarOperation has an unused cx argument because the JIT callVM','line_number':4595,'multiline':False]
+['text':' machinery requires this.','line_number':4596,'multiline':False]
+['text':' Allow interrupting deeply nested exception handling.','line_number':4624,'multiline':False]
+['text':' Return true for non-existent names.','line_number':4822,'multiline':False]
+['text':' Deleting a name from the global object removes it from [[VarNames]].','line_number':4837,'multiline':False]
+['text':' Non-enumerable, but writable and configurable','line_number':4868,'multiline':False]
+['text':' {Construct,Invoke}Args::init does this too, but this gives us a better','line_number':4926,'multiline':False]
+['text':' error message.','line_number':4927,'multiline':False]
+['text':' Do our own checks for the callee being a function, as Invoke uses the','line_number':4935,'multiline':False]
+['text':' expression decompiler to decompile the callee stack operand based on','line_number':4936,'multiline':False]
+['text':' the number of arguments. Spread operations have the callee at sp - 3','line_number':4937,'multiline':False]
+['text':' when not constructing, and sp - 4 when constructing.','line_number':4938,'multiline':False]
+['text':' The object must be an array with dense elements and no holes. Baseline's','line_number':4949,'multiline':False]
+['text':' optimized spread call stubs rely on this.','line_number':4950,'multiline':False]
+['text':' Optimize spread call by skipping spread operation when following','line_number':5002,'multiline':False]
+['text':' conditions are met:','line_number':5003,'multiline':False]
+['text':'   * the argument is an array','line_number':5004,'multiline':False]
+['text':'   * the array has no hole','line_number':5005,'multiline':False]
+['text':'   * array[@@iterator] is not modified','line_number':5006,'multiline':False]
+['text':'   * the array's prototype is Array.prototype','line_number':5007,'multiline':False]
+['text':'   * Array.prototype[@@iterator] is not modified','line_number':5008,'multiline':False]
+['text':'   * %ArrayIteratorPrototype%.next is not modified','line_number':5009,'multiline':False]
+['text':' = GenericObject ','line_number':5031,'multiline':True]
+['text':' Extract the template object, if one exists, and copy it.','line_number':5032,'multiline':False]
+['text':' = GenericObject ','line_number':5082,'multiline':True]
+['text':' It's important that we allocate an object with the alloc kind we were','line_number':5093,'multiline':False]
+['text':' expecting so that a new arena gets allocated if the current arena for that','line_number':5094,'multiline':False]
+['text':' kind is full.','line_number':5095,'multiline':False]
+['text':' It's important that we allocate an object with the alloc kind we were','line_number':5107,'multiline':False]
+['text':' expecting so that a new arena gets allocated if the current arena for that','line_number':5108,'multiline':False]
+['text':' kind is full.','line_number':5109,'multiline':False]

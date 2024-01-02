@@ -1,0 +1,111 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' js::GetErrorMessage, JSMSG_*','line_number':21,'multiline':False]
+['text':' namespace jit','line_number':36,'multiline':False]
+['text':'
+ * [SMDOC] Tracelogging overview.
+ *
+ * Tracelogging makes it possible to trace the occurrence of a single event
+ * and/or the start and stop of an event. This is implemented with as low
+ * overhead as possible to not interfere with running.
+ *
+ * Logging something is done in 3 stages.
+ * 1) Get the tracelogger of the current thread. cx may be omitted, in which
+ *    case it will be fetched from TLS.
+ *     - TraceLoggerForCurrentThread(cx);
+ *
+ * 2) Optionally create a TraceLoggerEvent for the text that needs to get
+ *    logged. This step takes some time, so try to do this beforehand, outside
+ *    the hot path and don't do unnecessary repetitions, since it will cripple
+ *    performance.
+ *     - TraceLoggerEvent event(logger, "foo");
+ *
+ *    There are also some predefined events. They are located in
+ *    TraceLoggerTextId. They don't require to create an TraceLoggerEvent and
+ *    can also be used as an argument to these functions.
+ *
+ * 3) Log the occurrence of a single event:
+ *    - TraceLogTimestamp(logger, TraceLoggerTextId);
+ *      Note: it is temporarily not supported to provide an TraceLoggerEvent as
+ *            argument to log the occurrence of a single event.
+ *
+ *    or log the start and stop of an event:
+ *    - TraceLogStartEvent(logger, TraceLoggerTextId);
+ *    - TraceLogStartEvent(logger, TraceLoggerEvent);
+ *    - TraceLogStopEvent(logger, TraceLoggerTextId);
+ *    - TraceLogStopEvent(logger, TraceLoggerEvent);
+ *
+ *    or the start/stop of an event with a RAII class:
+ *    - AutoTraceLog atl(logger, TraceLoggerTextId);
+ *    - AutoTraceLog atl(logger, TraceLoggerEvent);
+ ','line_number':38,'multiline':True]
+['text':'*
+ * An event that can be used to report start/stop events to TraceLogger. It
+ * prepares the given info by requesting a TraceLoggerEventPayload containing
+ * the string to report and an unique id. It also increases the useCount of
+ * this payload, so it cannot get removed.
+ ','line_number':80,'multiline':True]
+['text':'*
+     * Payload can be a pointer to a TraceLoggerEventPayload* or a
+     * TraceLoggerTextId. The last bit decides how to read the payload.
+     *
+     * payload_ = [                   | 0 ]
+     *             -----------------------
+     *             TraceLoggerEventPayload* (incl. last bit)
+     *
+     * payload_ = [                   | 1 ]
+     *             -------------------
+     *             TraceLoggerTextId (excl. last bit)
+     ','line_number':90,'multiline':True]
+['text':'*
+ * An internal class holding the string information to report, together with an
+ * unique id, and an useCount. Whenever this useCount reaches 0, this event
+ * cannot get started/stopped anymore. Consumers may still request the
+ * string information through maybeEventText below, but this may not succeed:
+ * when the use count becomes zero, a payload may be deleted by any thread
+ * holding the TraceLoggerThreadState lock, after that the pointers have been
+ * cleared out of the dictionaryVector.
+ ','line_number':172,'multiline':True]
+['text':' Payloads may have their use count change at any time, *except* the count','line_number':208,'multiline':False]
+['text':' can only go from zero to non-zero while the thread state lock is held.','line_number':209,'multiline':False]
+['text':' This should only happen under getOrCreateEventPayload below, and avoids','line_number':210,'multiline':False]
+['text':' races with purgeUnusedPayloads.','line_number':211,'multiline':False]
+['text':' Data structures used to collect per function statistics for spewing','line_number':226,'multiline':False]
+['text':' Per thread trace logger state.','line_number':259,'multiline':False]
+['text':' Every time the events get flushed, this count is increased by one.','line_number':276,'multiline':False]
+['text':' Together with events.lastEntryId(), this gives an unique id for every','line_number':277,'multiline':False]
+['text':' event.','line_number':278,'multiline':False]
+['text':' Given the previous iteration and size, return an array of events','line_number':314,'multiline':False]
+['text':' (there could be lost events). At the same time update the iteration and','line_number':315,'multiline':False]
+['text':' size and gives back how many events there are.','line_number':316,'multiline':False]
+['text':' If still logging in the same iteration, there are no lost events.','line_number':339,'multiline':False]
+['text':' If we are in the next consecutive iteration we are only sure we','line_number':345,'multiline':False]
+['text':' didn't lose any events when the lastSize equals the maximum size','line_number':346,'multiline':False]
+['text':' 'events' can get.','line_number':347,'multiline':False]
+['text':' Log an event (no start/stop, only the timestamp is recorded).','line_number':370,'multiline':False]
+['text':' Record timestamps for start and stop of an event.','line_number':373,'multiline':False]
+['text':' These functions are actually private and shouldn't be used in normal','line_number':379,'multiline':False]
+['text':' code. They are made public so they can be used in assembly.','line_number':380,'multiline':False]
+['text':' Process wide trace logger state.','line_number':396,'multiline':False]
+['text':' Any events that carry a payload are saved in this hash map.','line_number':412,'multiline':False]
+['text':' The key is the event textId, and the value is a pointer to','line_number':413,'multiline':False]
+['text':' the payload object.','line_number':414,'multiline':False]
+['text':' The dictionary vector is used to store all of the custom event strings','line_number':419,'multiline':False]
+['text':' that are referenced by the payload objects.','line_number':420,'multiline':False]
+['text':' All payload strings are hashed and saved as a key in the payloadDictionary','line_number':424,'multiline':False]
+['text':' hash table.  The values are indices to the dictionaryData vector where the','line_number':425,'multiline':False]
+['text':' actual string is stored.  The major benefit of having this hash map is for','line_number':426,'multiline':False]
+['text':' de-duplication of JS script filenames.','line_number':427,'multiline':False]
+['text':' Mutex to guard the data structures used to hold the payload data:','line_number':449,'multiline':False]
+['text':' textIdPayloads, payloadDictionary & dictionaryData.','line_number':450,'multiline':False]
+['text':' These functions map a unique input to a logger ID.','line_number':491,'multiline':False]
+['text':' This can be used to give start and stop events. Calls to these functions','line_number':492,'multiline':False]
+['text':' should be limited if possible, because of the overhead. Note: it is not','line_number':493,'multiline':False]
+['text':' allowed to use them in logTimestamp.','line_number':494,'multiline':False]
+['text':' Helper functions for assembly. May not be used otherwise.','line_number':613,'multiline':False]
+['text':' Automatic logging at the start and end of function call.','line_number':638,'multiline':False]
+['text':' namespace js','line_number':706,'multiline':False]
+['text':' TraceLogging_h ','line_number':708,'multiline':True]

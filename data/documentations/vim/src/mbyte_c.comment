@@ -1,0 +1,1108 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ * Multibyte extensions partly by Sung-Hoon Baek
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]
+['text':'
+ * mbyte.c: Code specifically for handling multi-byte characters.
+ *
+ * The encoding used in the core is set with 'encoding'.  When 'encoding' is
+ * changed, the following four variables are set (for speed).
+ * Currently these types of character encodings are supported:
+ *
+ * "enc_dbcs"	    When non-zero it tells the type of double byte character
+ *		    encoding (Chinese, Korean, Japanese, etc.).
+ *		    The cell width on the display is equal to the number of
+ *		    bytes.  (exception: DBCS_JPNU with first byte 0x8e)
+ *		    Recognizing the first or second byte is difficult, it
+ *		    requires checking a byte sequence from the start.
+ * "enc_utf8"	    When TRUE use Unicode characters in UTF-8 encoding.
+ *		    The cell width on the display needs to be determined from
+ *		    the character value.
+ *		    Recognizing bytes is easy: 0xxx.xxxx is a single-byte
+ *		    char, 10xx.xxxx is a trailing byte, 11xx.xxxx is a leading
+ *		    byte of a multi-byte character.
+ *		    To make things complicated, up to six composing characters
+ *		    are allowed.  These are drawn on top of the first char.
+ *		    For most editing the sequence of bytes with composing
+ *		    characters included is considered to be one character.
+ * "enc_unicode"    When 2 use 16-bit Unicode characters (or UTF-16).
+ *		    When 4 use 32-but Unicode characters.
+ *		    Internally characters are stored in UTF-8 encoding to
+ *		    avoid NUL bytes.  Conversion happens when doing I/O.
+ *		    "enc_utf8" will also be TRUE.
+ *
+ * "has_mbyte" is set when "enc_dbcs" or "enc_utf8" is non-zero.
+ *
+ * If none of these is TRUE, 8-bit bytes are used for a character.  The
+ * encoding isn't currently specified (TODO).
+ *
+ * 'encoding' specifies the encoding used in the core.  This is in registers,
+ * text manipulation, buffers, etc.  Conversion has to be done when characters
+ * in another encoding are received or send:
+ *
+ *		       clipboard
+ *			   ^
+ *			   | (2)
+ *			   V
+ *		   +---------------+
+ *	      (1)  |		   | (3)
+ *  keyboard ----->|	 core	   |-----> display
+ *		   |		   |
+ *		   +---------------+
+ *			   ^
+ *			   | (4)
+ *			   V
+ *			 file
+ *
+ * (1) Typed characters arrive in the current locale.  Conversion is to be
+ *     done when 'encoding' is different from 'termencoding'.
+ * (2) Text will be made available with the encoding specified with
+ *     'encoding'.  If this is not sufficient, system-specific conversion
+ *     might be required.
+ * (3) For the GUI the correct font must be selected, no conversion done.
+ *     Otherwise, conversion is to be done when 'encoding' differs from
+ *     'termencoding'.  (Different in the GTK+ 2 port -- 'termencoding'
+ *     is always used for both input and output and must always be set to
+ *     "utf-8".  gui_mch_init() does this automatically.)
+ * (4) The encoding of the file is specified with 'fileencoding'.  Conversion
+ *     is to be done when it's different from 'encoding'.
+ *
+ * The viminfo file is a special case: Only text is converted, not file names.
+ * Vim scripts may contain an ":encoding" command.  This has an effect for
+ * some commands, like ":menutrans"
+ ','line_number':10,'multiline':True]
+['text':' ControlMask from <X11/X.h> (included in "vim.h") is conflicting with','line_number':88,'multiline':False]
+['text':' <w32api/windows.h> (included in <X11/Xwindows.h>).','line_number':89,'multiline':False]
+['text':' Some windows.h define WIN32, we don't want that here.','line_number':99,'multiline':False]
+['text':' This has been disabled, because several people reported problems with the','line_number':124,'multiline':False]
+['text':' wcwidth() and iswprint() library functions, esp. for Hebrew.','line_number':125,'multiline':False]
+['text':'
+ * Lookup table to quickly get the length in bytes of a UTF-8 character from
+ * the first byte of a UTF-8 string.
+ * Bytes which are illegal when used as the first byte have a 1.
+ * The NUL byte has length 1.
+ ','line_number':144,'multiline':True]
+['text':'
+ * Like utf8len_tab above, but using a zero for illegal lead bytes.
+ ','line_number':162,'multiline':True]
+['text':'
+ * Canonical encoding names and their properties.
+ * "iso-8859-n" is handled by enc_canonize() directly.
+ ','line_number':178,'multiline':True]
+['text':' For debugging DBCS encoding on Unix.','line_number':233,'multiline':False]
+['text':' MS-DOS and MS-Windows codepages are included here, so that they can be','line_number':249,'multiline':False]
+['text':' used on Unix too.  Most of them are similar to ISO-8859 encodings, but','line_number':250,'multiline':False]
+['text':' not exactly the same.','line_number':251,'multiline':False]
+['text':' like iso-8859-1','line_number':253,'multiline':False]
+['text':' like iso-8859-7','line_number':255,'multiline':False]
+['text':' Baltic','line_number':257,'multiline':False]
+['text':' like iso-8859-4','line_number':259,'multiline':False]
+['text':' like iso-8859-1','line_number':261,'multiline':False]
+['text':' like iso-8859-2','line_number':263,'multiline':False]
+['text':' like iso-8859-5','line_number':265,'multiline':False]
+['text':' like iso-8859-9','line_number':267,'multiline':False]
+['text':' like iso-8859-1','line_number':269,'multiline':False]
+['text':' like iso-8859-1','line_number':271,'multiline':False]
+['text':' like iso-8859-8','line_number':273,'multiline':False]
+['text':' like iso-8859-1','line_number':275,'multiline':False]
+['text':' like iso-8859-5','line_number':277,'multiline':False]
+['text':' like iso-8859-7','line_number':279,'multiline':False]
+['text':' Thai','line_number':281,'multiline':False]
+['text':' Czech, Polish, etc.','line_number':291,'multiline':False]
+['text':' Cyrillic','line_number':293,'multiline':False]
+['text':' cp1252 is considered to be equal to latin1','line_number':294,'multiline':False]
+['text':' Greek','line_number':296,'multiline':False]
+['text':' Turkish','line_number':298,'multiline':False]
+['text':' Hebrew','line_number':300,'multiline':False]
+['text':' Arabic','line_number':302,'multiline':False]
+['text':' Baltic','line_number':304,'multiline':False]
+['text':' Vietnamese','line_number':306,'multiline':False]
+['text':' Mac OS','line_number':309,'multiline':False]
+['text':' DEC MCS','line_number':311,'multiline':False]
+['text':' HP Roman8','line_number':313,'multiline':False]
+['text':'
+ * Aliases for encoding names.
+ ','line_number':317,'multiline':True]
+['text':' ?','line_number':339,'multiline':False]
+['text':' ?','line_number':341,'multiline':False]
+['text':' ?','line_number':342,'multiline':False]
+['text':' Sun: PCK','line_number':375,'multiline':False]
+['text':' Sun: KS C 5601','line_number':377,'multiline':False]
+['text':' magic number from winnls.h','line_number':403,'multiline':False]
+['text':'
+ * Find encoding "name" in the list of canonical encoding names.
+ * Returns -1 if not found.
+ ','line_number':406,'multiline':True]
+['text':'
+ * Find canonical encoding "name" in the list and return its properties.
+ * Returns 0 if not found.
+ ','line_number':422,'multiline':True]
+['text':' Get info on this codepage to find out what it is.','line_number':439,'multiline':False]
+['text':' some single-byte encoding','line_number':442,'multiline':False]
+['text':' must be a DBCS encoding','line_number':446,'multiline':False]
+['text':'
+ * Set up for using multi-byte characters.
+ * Called in three cases:
+ * - by main() to initialize (p_enc == NULL)
+ * - by set_init_1() after 'encoding' was set to its default.
+ * - by do_set() when 'encoding' has been set.
+ * p_enc must have been passed through enc_canonize() already.
+ * Sets the "enc_unicode", "enc_utf8", "enc_dbcs" and "has_mbyte" flags.
+ * Fills mb_bytelen_tab[] and returns NULL when there are no problems.
+ * When there is something wrong: Returns an error message and doesn't change
+ * anything.
+ ','line_number':459,'multiline':True]
+['text':' Just starting up: set the whole table to one's.','line_number':487,'multiline':False]
+['text':' Get info on this codepage to find out what it is.','line_number':501,'multiline':False]
+['text':' some single-byte encoding','line_number':506,'multiline':False]
+['text':' must be a DBCS encoding, check below','line_number':513,'multiline':False]
+['text':' Accept any "8bit-" or "iso-8859-" name.','line_number':529,'multiline':False]
+['text':' Windows: accept only valid codepage numbers, check below.','line_number':536,'multiline':False]
+['text':' Unix: accept any "2byte-" name, assume current locale.','line_number':541,'multiline':False]
+['text':' Unicode','line_number':550,'multiline':False]
+['text':' 2byte, handle below','line_number':561,'multiline':False]
+['text':' Must be 8-bit.','line_number':566,'multiline':False]
+['text':' Don't know what encoding this is, reject it.','line_number':571,'multiline':False]
+['text':' Check if the DBCS code page is OK.','line_number':577,'multiline':False]
+['text':' Detect an encoding that uses latin1 characters.','line_number':592,'multiline':False]
+['text':'
+     * Set the function pointers.
+     ','line_number':596,'multiline':True]
+['text':'
+     * Fill the mb_bytelen_tab[] for MB_BYTE2LEN().
+     ','line_number':639,'multiline':True]
+['text':' When 'encoding' is different from the current locale mblen() won't','line_number':643,'multiline':False]
+['text':' work.  Use conversion to "utf-8" instead.','line_number':644,'multiline':False]
+['text':' Our own function to reliably check the length of UTF-8 characters,','line_number':660,'multiline':False]
+['text':' independent of mblen().','line_number':661,'multiline':False]
+['text':' enc_dbcs is set by setting 'fileencoding'.  It becomes a Windows','line_number':669,'multiline':False]
+['text':' CodePage identifier, which we can pass directly in to Windows','line_number':670,'multiline':False]
+['text':' API','line_number':671,'multiline':False]
+['text':'
+	     * if mblen() is not available, character which MSB is turned on
+	     * are treated as leading byte character. (note : This assumption
+	     * is not always true.)
+	     ','line_number':676,'multiline':True]
+['text':' just in case mblen() can't handle ""','line_number':685,'multiline':False]
+['text':'
+		     * string_convert() should fail when converting the first
+		     * byte of a double-byte character.
+		     ','line_number':694,'multiline':True]
+['text':'
+		     * mblen() should return -1 for invalid (means the leading
+		     * multibyte) character.  However there are some platforms
+		     * where mblen() returns 0 for invalid character.
+		     * Therefore, following condition includes 0.
+		     ','line_number':710,'multiline':True]
+['text':' First reset the state.','line_number':716,'multiline':False]
+['text':' The cell width depends on the type of multi-byte characters.','line_number':734,'multiline':False]
+['text':' When enc_utf8 is set or reset, (de)allocate ScreenLinesUC[]','line_number':737,'multiline':False]
+['text':' When using Unicode, set default for 'fileencodings'.','line_number':740,'multiline':False]
+['text':' GNU gettext 0.10.37 supports this feature: set the codeset used for','line_number':745,'multiline':False]
+['text':' translated messages independently from the current locale.','line_number':746,'multiline':False]
+['text':' When changing 'encoding' while starting up, then convert the command','line_number':752,'multiline':False]
+['text':' line arguments from the active codepage to 'encoding'.','line_number':753,'multiline':False]
+['text':' Fire an autocommand to let people do custom font setup. This must be','line_number':758,'multiline':False]
+['text':' after Vim has been setup for the new encoding.','line_number':759,'multiline':False]
+['text':' Need to reload spell dictionaries','line_number':763,'multiline':False]
+['text':'
+ * Return the size of the BOM for the current buffer:
+ * 0 - no BOM
+ * 2 - UCS-2 or UTF-16 BOM
+ * 4 - UCS-4 BOM
+ * 3 - UTF-8 BOM
+ ','line_number':770,'multiline':True]
+['text':'
+ * Remove all BOM from "s" by moving remaining text.
+ ','line_number':806,'multiline':True]
+['text':'
+ * Get class of pointer:
+ * 0 for blank or NUL
+ * 1 for punctuation
+ * 2 for an (ASCII) word character
+ * >2 for other word characters
+ ','line_number':827,'multiline':True]
+['text':'
+ * Get class of a double-byte character.  This always returns 3 or bigger.
+ * TODO: Should return 1 for punctuation.
+ ','line_number':858,'multiline':True]
+['text':' please add classify routine for your language in here','line_number':867,'multiline':False]
+['text':' ?','line_number':869,'multiline':False]
+['text':' JIS code classification','line_number':872,'multiline':False]
+['text':' convert process code to JIS','line_number':876,'multiline':False]
+['text':' process code is SJIS','line_number':878,'multiline':False]
+['text':'
+		 * XXX: Code page identification can not use with all
+		 *	    system! So, some other encoding information
+		 *	    will be needed.
+		 *	    In japanese: SJIS,EUC,UNICODE,(JIS)
+		 *	    Note that JIS-code system don't use as
+		 *	    process code in most system because it uses
+		 *	    escape sequences(JIS is context depend encoding).
+		 ','line_number':893,'multiline':True]
+['text':' assume process code is JAPANESE-EUC','line_number':902,'multiline':False]
+['text':' exceptions','line_number':906,'multiline':False]
+['text':' ZENKAKU space','line_number':909,'multiline':False]
+['text':' TOU-TEN (Japanese comma)','line_number':911,'multiline':False]
+['text':' KU-TEN (Japanese period)','line_number':912,'multiline':False]
+['text':' ZENKAKU comma','line_number':913,'multiline':False]
+['text':' ZENKAKU period','line_number':914,'multiline':False]
+['text':' prolongedsound handled as KATAKANA','line_number':916,'multiline':False]
+['text':' sieved by KU code','line_number':919,'multiline':False]
+['text':' special symbols','line_number':924,'multiline':False]
+['text':' alphanumeric','line_number':927,'multiline':False]
+['text':' hiragana','line_number':930,'multiline':False]
+['text':' katakana','line_number':933,'multiline':False]
+['text':' greek','line_number':936,'multiline':False]
+['text':' russian','line_number':939,'multiline':False]
+['text':' lines','line_number':942,'multiline':False]
+['text':' kanji','line_number':945,'multiline':False]
+['text':' ?','line_number':950,'multiline':False]
+['text':' KS code classification','line_number':953,'multiline':False]
+['text':'
+		 * 20 : Hangul
+		 * 21 : Hanja
+		 * 22 : Symbols
+		 * 23 : Alphanumeric/Roman Letter (Full width)
+		 * 24 : Hangul Letter(Alphabet)
+		 * 25 : Roman Numeral/Greek Letter
+		 * 26 : Box Drawings
+		 * 27 : Unit Symbols
+		 * 28 : Circled/Parenthesized Letter
+		 * 29 : Hiragana/Katakana
+		 * 30 : Cyrillic Letter
+		 ','line_number':957,'multiline':True]
+['text':' Hangul','line_number':972,'multiline':False]
+['text':' Extended Hangul Region : MS UHC(Unified Hangul Code)','line_number':976,'multiline':False]
+['text':' c1: 0x81-0xA0 with c2: 0x41-0x5A, 0x61-0x7A, 0x81-0xFE','line_number':977,'multiline':False]
+['text':' c1: 0xA1-0xC6 with c2: 0x41-0x5A, 0x61-0x7A, 0x81-0xA0','line_number':978,'multiline':False]
+['text':' Hanja','line_number':983,'multiline':False]
+['text':' Symbols','line_number':989,'multiline':False]
+['text':' Alphanumeric','line_number':992,'multiline':False]
+['text':' Hangul Letter(Alphabet)','line_number':995,'multiline':False]
+['text':' Roman Numeral/Greek Letter','line_number':998,'multiline':False]
+['text':' Box Drawings','line_number':1001,'multiline':False]
+['text':' Unit Symbols','line_number':1004,'multiline':False]
+['text':' Roman Letter','line_number':1009,'multiline':False]
+['text':' Symbols','line_number':1011,'multiline':False]
+['text':' Circled/Parenthesized Letter','line_number':1013,'multiline':False]
+['text':' Hiragana/Katakana','line_number':1017,'multiline':False]
+['text':' Cyrillic Letter','line_number':1020,'multiline':False]
+['text':'
+ * mb_char2len() function pointer.
+ * Return length in bytes of character "c".
+ * Returns 1 for a single-byte character.
+ ','line_number':1030,'multiline':True]
+['text':'
+ * mb_char2bytes() function pointer.
+ * Convert a character to its bytes.
+ * Returns the length in bytes.
+ ','line_number':1050,'multiline':True]
+['text':' Never use a NUL byte, it causes lots of trouble.  It's an invalid','line_number':1069,'multiline':False]
+['text':' character anyway.','line_number':1070,'multiline':False]
+['text':'
+ * Get byte length of character at "*p".  Returns zero when "*p" is NUL.
+ * Used for mb_ptr2len() when 'encoding' latin.
+ ','line_number':1079,'multiline':True]
+['text':'
+ * Get byte length of character at "*p".  Returns zero when "*p" is NUL.
+ * Used for mb_ptr2len() when 'encoding' DBCS.
+ ','line_number':1089,'multiline':True]
+['text':' if the second byte is missing the length is 1','line_number':1101,'multiline':False]
+['text':'
+ * mb_ptr2len_len() function pointer.
+ * Like mb_ptr2len(), but limit to read "size" bytes.
+ * Returns 0 for an empty string.
+ * Returns 1 for an illegal char or an incomplete byte sequence.
+ ','line_number':1108,'multiline':True]
+['text':' Check that second byte is not missing.','line_number':1131,'multiline':False]
+['text':'
+ * Return TRUE if "c" is in "table[size / sizeof(struct interval)]".
+ ','line_number':1144,'multiline':True]
+['text':' first quick check for Latin1 etc. characters','line_number':1152,'multiline':False]
+['text':' binary search in table','line_number':1156,'multiline':False]
+['text':' Sorted list of non-overlapping intervals of East Asian Ambiguous','line_number':1172,'multiline':False]
+['text':' characters, generated with ../runtime/tools/unicode.vim.','line_number':1173,'multiline':False]
+['text':'
+ * utf_char2cells() with different argument type for libvterm.
+ ','line_number':1358,'multiline':True]
+['text':'
+ * For UTF-8 character "c" return 2 for a double-width character, 1 for others.
+ * Returns 4 or 6 for an unprintable character.
+ * Is only correct for characters >= 0x80.
+ * When p_ambw is "double", return 2 for a character with East Asian Width
+ * class 'A'(mbiguous).
+ ','line_number':1370,'multiline':True]
+['text':' Sorted list of non-overlapping intervals of East Asian double width','line_number':1380,'multiline':False]
+['text':' characters, generated with ../runtime/tools/unicode.vim.','line_number':1381,'multiline':False]
+['text':' Sorted list of non-overlapping intervals of Emoji characters that don't','line_number':1506,'multiline':False]
+['text':' have ambiguous or double width,','line_number':1507,'multiline':False]
+['text':' based on http://unicode.org/emoji/charts/emoji-list.html','line_number':1508,'multiline':False]
+['text':' Include SF Symbols 4 characters, which should be rendered as','line_number':1567,'multiline':False]
+['text':' double-width.  SF Symbols is an Apple-specific set of symbols and','line_number':1568,'multiline':False]
+['text':' icons for use in Apple operating systems.  They are included as','line_number':1569,'multiline':False]
+['text':' glyphs as part of the default San Francisco fonts shipped with','line_number':1570,'multiline':False]
+['text':' macOS.  The current version is SF Symbols 4.','line_number':1571,'multiline':False]
+['text':'','line_number':1572,'multiline':False]
+['text':' These Apple-specific glyphs are not part of standard Unicode, and','line_number':1573,'multiline':False]
+['text':' all of them are in the Supplementary Private Use Area-B range. The','line_number':1574,'multiline':False]
+['text':' exact range was determined by downloading the 'SF Symbols 4' app','line_number':1575,'multiline':False]
+['text':' from Apple (https://developer.apple.com/sf-symbols/), and then','line_number':1576,'multiline':False]
+['text':' selecting all symbols, copying them out, and inspecting the unicode','line_number':1577,'multiline':False]
+['text':' values of them.','line_number':1578,'multiline':False]
+['text':'','line_number':1579,'multiline':False]
+['text':' Note that these symbols are of varying widths, as they are symbols','line_number':1580,'multiline':False]
+['text':' representing different things ranging from a simple gear icon to an','line_number':1581,'multiline':False]
+['text':' airplane. Some of them are in fact wider than double-width, but Vim','line_number':1582,'multiline':False]
+['text':' doesn't support non-fixed-width font, and tagging them as','line_number':1583,'multiline':False]
+['text':' double-width is the best way to handle them.','line_number':1584,'multiline':False]
+['text':'','line_number':1585,'multiline':False]
+['text':' Also see https://en.wikipedia.org/wiki/San_Francisco_(sans-serif_typeface)#SF_Symbols','line_number':1586,'multiline':False]
+['text':' Use the value from setcellwidths() at 0x80 and higher, unless the','line_number':1592,'multiline':False]
+['text':' character is not printable.','line_number':1593,'multiline':False]
+['text':'
+	 * Assume the library function wcwidth() works better than our own
+	 * stuff.  It should return 1 for ambiguous width chars!
+	 ','line_number':1611,'multiline':True]
+['text':' unprintable, displays <xxxx>','line_number':1618,'multiline':False]
+['text':' unprintable, displays <xxxx>','line_number':1623,'multiline':False]
+['text':' Characters below 0x100 are influenced by 'isprint' option','line_number':1631,'multiline':False]
+['text':' unprintable, displays <xx>','line_number':1633,'multiline':False]
+['text':'
+ * mb_ptr2cells() function pointer.
+ * Return the number of display cells character at "*p" occupies.
+ * This doesn't take care of unprintable characters, use ptr2cells() for that.
+ ','line_number':1641,'multiline':True]
+['text':' Need to convert to a character number.','line_number':1658,'multiline':False]
+['text':' An illegal byte is displayed as <xx>.','line_number':1662,'multiline':False]
+['text':' If the char is ASCII it must be an overlong sequence.','line_number':1665,'multiline':False]
+['text':' Number of cells is equal to number of bytes, except for euc-jp when','line_number':1676,'multiline':False]
+['text':' the first byte is 0x8e.','line_number':1677,'multiline':False]
+['text':'
+ * mb_ptr2cells_len() function pointer.
+ * Like mb_ptr2cells(), but limit string length to "size".
+ * For an empty string or truncated character returns 1.
+ ','line_number':1683,'multiline':True]
+['text':' Need to convert to a wide character.','line_number':1699,'multiline':False]
+['text':' truncated','line_number':1703,'multiline':False]
+['text':' An illegal byte is displayed as <xx>.','line_number':1705,'multiline':False]
+['text':' If the char is ASCII it must be an overlong sequence.','line_number':1708,'multiline':False]
+['text':' Number of cells is equal to number of bytes, except for euc-jp when','line_number':1719,'multiline':False]
+['text':' the first byte is 0x8e.','line_number':1720,'multiline':False]
+['text':'
+ * mb_char2cells() function pointer.
+ * Return the number of display cells character "c" occupies.
+ * Only takes care of multi-byte chars, not "^C" and such.
+ ','line_number':1726,'multiline':True]
+['text':' Number of cells is equal to number of bytes, except for euc-jp when','line_number':1740,'multiline':False]
+['text':' the first byte is 0x8e.','line_number':1741,'multiline':False]
+['text':' use the first byte','line_number':1744,'multiline':False]
+['text':'
+ * Return the number of cells occupied by string "p".
+ * Stop at a NUL character.  When "len" >= 0 stop at character "p[len]".
+ ','line_number':1748,'multiline':True]
+['text':'
+ * mb_off2cells() function pointer.
+ * Return number of display cells for char at ScreenLines[off].
+ * We make sure that the offset used is less than "max_off".
+ ','line_number':1763,'multiline':True]
+['text':' never check beyond end of the line','line_number':1777,'multiline':False]
+['text':' Number of cells is equal to number of bytes, except for euc-jp when','line_number':1781,'multiline':False]
+['text':' the first byte is 0x8e.','line_number':1782,'multiline':False]
+['text':'
+ * mb_ptr2char() function pointer.
+ * Convert a byte sequence into a character.
+ ','line_number':1794,'multiline':True]
+['text':'
+ * Convert a UTF-8 byte sequence to a character number.
+ * If the sequence is illegal or truncated by a NUL the first byte is
+ * returned.
+ * For an overlong sequence this may return zero.
+ * Does not include composing characters, of course.
+ ','line_number':1812,'multiline':True]
+['text':' be quick for ASCII','line_number':1824,'multiline':False]
+['text':' Illegal value, just return the first byte','line_number':1856,'multiline':False]
+['text':'
+ * Convert a UTF-8 byte sequence to a wide character.
+ * String is assumed to be terminated by NUL or after "n" bytes, whichever
+ * comes first.
+ * The function is safe in the sense that it never accesses memory beyond the
+ * first "n" bytes of "s".
+ *
+ * On success, returns decoded codepoint, advances "s" to the beginning of
+ * next character and decreases "n" accordingly.
+ *
+ * If end of string was reached, returns 0 and, if "n" > 0, advances "s" past
+ * NUL byte.
+ *
+ * If byte sequence is illegal or incomplete, returns -1 and does not advance
+ * "s".
+ ','line_number':1860,'multiline':True]
+['text':' end of buffer','line_number':1881,'multiline':False]
+['text':' ASCII character or NUL','line_number':1888,'multiline':False]
+['text':' We have a multibyte sequence and it isn't truncated by buffer','line_number':1895,'multiline':False]
+['text':' limits so utf_ptr2char() is safe to use. Or the first byte is','line_number':1896,'multiline':False]
+['text':' illegal (k=0), and it's also safe to use utf_ptr2char().','line_number':1897,'multiline':False]
+['text':' On failure, utf_ptr2char() returns the first byte, so here we','line_number':1900,'multiline':False]
+['text':' check equality with the first byte. The only non-ASCII character','line_number':1901,'multiline':False]
+['text':' which equals the first byte of its own UTF-8 representation is','line_number':1902,'multiline':False]
+['text':' U+00C3 (UTF-8: 0xC3 0x83), so need to check that special case too.','line_number':1903,'multiline':False]
+['text':' It's safe even if n=1, else we would have k=2 > n.','line_number':1904,'multiline':False]
+['text':' byte sequence was successfully decoded','line_number':1907,'multiline':False]
+['text':' byte sequence is incomplete or illegal','line_number':1914,'multiline':False]
+['text':'
+ * Get character at **pp and advance *pp to the next character.
+ * Note: composing characters are skipped!
+ ','line_number':1918,'multiline':True]
+['text':'
+ * Get character at **pp and advance *pp to the next character.
+ * Note: composing characters are returned as separate characters.
+ ','line_number':1932,'multiline':True]
+['text':'
+ * Check if the character pointed to by "p2" is a composing character when it
+ * comes after "p1".  For Arabic sometimes "ab" is replaced with "c", which
+ * behaves like a composing character.
+ ','line_number':1950,'multiline':True]
+['text':'
+ * Convert a UTF-8 byte string to a wide character.  Also get up to MAX_MCO
+ * composing characters.
+ ','line_number':1969,'multiline':True]
+['text':' return: composing chars, last one is 0','line_number':1976,'multiline':False]
+['text':' Only accept a composing char when the first char isn't illegal.','line_number':1986,'multiline':False]
+['text':' last composing char must be 0','line_number':2003,'multiline':False]
+['text':'
+ * Convert a UTF-8 byte string to a wide character.  Also get up to MAX_MCO
+ * composing characters.  Use no more than p[maxlen].
+ ','line_number':2009,'multiline':True]
+['text':' return: composing chars, last one is 0','line_number':2016,'multiline':False]
+['text':' Only accept a composing char when the first char isn't illegal.','line_number':2026,'multiline':False]
+['text':' last composing char must be 0','line_number':2046,'multiline':False]
+['text':'
+ * Convert the character at screen position "off" to a sequence of bytes.
+ * Includes the composing characters.
+ * "buf" must at least have the length MB_MAXBYTES + 1.
+ * Only to be used when ScreenLinesUC[off] != 0.
+ * Returns the produced number of bytes.
+ ','line_number':2052,'multiline':True]
+['text':'
+ * Get the length of a UTF-8 byte sequence, not including any following
+ * composing characters.
+ * Returns 0 for "".
+ * Returns 1 for an illegal byte sequence.
+ ','line_number':2075,'multiline':True]
+['text':'
+ * Return length of UTF-8 character, obtained from the first byte.
+ * "b" must be between 0 and 255!
+ * Returns 1 for an invalid first byte value.
+ ','line_number':2096,'multiline':True]
+['text':'
+ * Get the length of UTF-8 byte sequence "p[size]".  Does not include any
+ * following composing characters.
+ * Returns 1 for "".
+ * Returns 1 for an illegal byte sequence (also in incomplete byte seq.).
+ * Returns number > "size" for an incomplete byte sequence.
+ * Never returns zero.
+ ','line_number':2107,'multiline':True]
+['text':' NUL, ascii or illegal lead byte','line_number':2124,'multiline':False]
+['text':' incomplete byte sequence.','line_number':2126,'multiline':False]
+['text':'
+ * Return the number of bytes the UTF-8 encoding of the character at "p" takes.
+ * This includes following composing characters.
+ * Returns zero for NUL.
+ ','line_number':2135,'multiline':True]
+['text':' be quick for ASCII','line_number':2151,'multiline':False]
+['text':' Skip over first UTF-8 char, stopping at a NUL byte.','line_number':2154,'multiline':False]
+['text':' Check for illegal byte.','line_number':2157,'multiline':False]
+['text':'
+     * Check for composing characters.  We can handle only the first six, but
+     * skip all of them (otherwise the cursor would get stuck).
+     ','line_number':2161,'multiline':True]
+['text':' Skip over composing char','line_number':2173,'multiline':False]
+['text':'
+ * Return the number of bytes the UTF-8 encoding of the character at "p[size]"
+ * takes.  This includes following composing characters.
+ * Returns 0 for an empty string.
+ * Returns 1 for an illegal char or an incomplete byte sequence.
+ ','line_number':2181,'multiline':True]
+['text':' be quick for ASCII','line_number':2197,'multiline':False]
+['text':' Skip over first UTF-8 char, stopping at a NUL byte.','line_number':2200,'multiline':False]
+['text':' Check for illegal byte and incomplete byte sequence.','line_number':2203,'multiline':False]
+['text':'
+     * Check for composing characters.  We can handle only the first six, but
+     * skip all of them (otherwise the cursor would get stuck).
+     ','line_number':2207,'multiline':True]
+['text':'
+	 * Next character length should not go beyond size to ensure that
+	 * UTF_COMPOSINGLIKE(...) does not read beyond size.
+	 ','line_number':2221,'multiline':True]
+['text':' Skip over composing char','line_number':2232,'multiline':False]
+['text':'
+ * Return the number of bytes the UTF-8 encoding of character "c" takes.
+ * This does not include composing characters.
+ ','line_number':2241,'multiline':True]
+['text':'
+ * Convert Unicode character "c" to UTF-8 string in "buf[]".
+ * Returns the number of bytes.
+ ','line_number':2261,'multiline':True]
+['text':' 7 bits','line_number':2268,'multiline':False]
+['text':' 11 bits','line_number':2273,'multiline':False]
+['text':' 16 bits','line_number':2279,'multiline':False]
+['text':' 21 bits','line_number':2286,'multiline':False]
+['text':' 26 bits','line_number':2294,'multiline':False]
+['text':' 31 bits','line_number':2303,'multiline':False]
+['text':'
+ * utf_iscomposing() with different argument type for libvterm.
+ ','line_number':2314,'multiline':True]
+['text':'
+ * Return TRUE if "c" is a composing UTF-8 character.  This means it will be
+ * drawn on top of the preceding character.
+ * Based on code from Markus Kuhn.
+ ','line_number':2324,'multiline':True]
+['text':' Sorted list of non-overlapping intervals.','line_number':2332,'multiline':False]
+['text':' Generated by ../runtime/tools/unicode.vim.','line_number':2333,'multiline':False]
+['text':'
+ * Return TRUE for characters that can be displayed in a normal way.
+ * Only for characters of 0x100 and above!
+ ','line_number':2684,'multiline':True]
+['text':'
+     * Assume the iswprint() library function works better than our own stuff.
+     ','line_number':2692,'multiline':True]
+['text':' Sorted list of non-overlapping intervals.','line_number':2697,'multiline':False]
+['text':' 0xd800-0xdfff is reserved for UTF-16, actually illegal.','line_number':2698,'multiline':False]
+['text':' Sorted list of non-overlapping intervals of all Emoji characters,','line_number':2710,'multiline':False]
+['text':' based on http://unicode.org/emoji/charts/emoji-list.html','line_number':2711,'multiline':False]
+['text':' Generated by ../runtime/tools/unicode.vim.','line_number':2712,'multiline':False]
+['text':' Excludes 0x00a9 and 0x00ae because they are considered latin1.','line_number':2713,'multiline':False]
+['text':'
+ * Get class of a Unicode character.
+ * 0: white space
+ * 1: punctuation
+ * 2 or bigger: some class of word character.
+ ','line_number':2864,'multiline':True]
+['text':' sorted list of non-overlapping intervals','line_number':2879,'multiline':False]
+['text':' Greek question mark','line_number':2887,'multiline':False]
+['text':' Greek ano teleia','line_number':2888,'multiline':False]
+['text':' Armenian punctuation','line_number':2889,'multiline':False]
+['text':' Armenian full stop','line_number':2890,'multiline':False]
+['text':' Syriac punctuation','line_number':2900,'multiline':False]
+['text':' Myanmar punctuation','line_number':2909,'multiline':False]
+['text':' Georgian punctuation','line_number':2910,'multiline':False]
+['text':' Ethiopic punctuation','line_number':2911,'multiline':False]
+['text':' Canadian Syl. punctuation','line_number':2912,'multiline':False]
+['text':' Khmer punctuation','line_number':2917,'multiline':False]
+['text':' Mongolian punctuation','line_number':2918,'multiline':False]
+['text':' spaces','line_number':2919,'multiline':False]
+['text':' punctuation and symbols','line_number':2920,'multiline':False]
+['text':' punctuation and symbols','line_number':2922,'multiline':False]
+['text':' punctuation and symbols','line_number':2924,'multiline':False]
+['text':' punctuation and symbols','line_number':2926,'multiline':False]
+['text':' superscript','line_number':2927,'multiline':False]
+['text':' subscript','line_number':2928,'multiline':False]
+['text':' all kinds of symbols','line_number':2929,'multiline':False]
+['text':' braille','line_number':2930,'multiline':False]
+['text':' arrows, brackets, etc.','line_number':2931,'multiline':False]
+['text':' supplemental punctuation','line_number':2934,'multiline':False]
+['text':' ideographic space','line_number':2935,'multiline':False]
+['text':' ideographic punctuation','line_number':2936,'multiline':False]
+['text':' Hiragana','line_number':2939,'multiline':False]
+['text':' Katakana','line_number':2940,'multiline':False]
+['text':' CJK Ideographs','line_number':2941,'multiline':False]
+['text':' Hangul Syllables','line_number':2942,'multiline':False]
+['text':' CJK Ideographs','line_number':2943,'multiline':False]
+['text':' punctuation forms','line_number':2945,'multiline':False]
+['text':' half/fullwidth ASCII','line_number':2946,'multiline':False]
+['text':' half/fullwidth ASCII','line_number':2947,'multiline':False]
+['text':' half/fullwidth ASCII','line_number':2948,'multiline':False]
+['text':' half/fullwidth ASCII','line_number':2949,'multiline':False]
+['text':' Musical notation','line_number':2950,'multiline':False]
+['text':' Mathematical Alphanumeric Symbols','line_number':2951,'multiline':False]
+['text':' Game pieces; enclosed characters','line_number':2952,'multiline':False]
+['text':' Many symbol blocks','line_number':2953,'multiline':False]
+['text':' CJK Ideographs','line_number':2954,'multiline':False]
+['text':' CJK Ideographs','line_number':2955,'multiline':False]
+['text':' CJK Ideographs','line_number':2956,'multiline':False]
+['text':' CJK Ideographs','line_number':2957,'multiline':False]
+['text':' First quick check for Latin1 characters, use 'iskeyword'.','line_number':2964,'multiline':False]
+['text':' blank','line_number':2968,'multiline':False]
+['text':' word character','line_number':2970,'multiline':False]
+['text':' punctuation','line_number':2971,'multiline':False]
+['text':' emoji','line_number':2974,'multiline':False]
+['text':' binary search in table','line_number':2978,'multiline':False]
+['text':' most other characters are "word" characters','line_number':2990,'multiline':False]
+['text':'
+ * Code for Unicode case-dependent operations.  Based on notes in
+ * http://www.unicode.org/Public/UNIDATA/CaseFolding.txt
+ * This code uses simple case folding, not full case folding.
+ * Last updated for Unicode 5.2.
+ ','line_number':3001,'multiline':True]
+['text':'
+ * The following tables are built by ../runtime/tools/unicode.vim.
+ * They must be in numeric order, because we use binary search.
+ * An entry such as {0x41,0x5a,1,32} means that Unicode characters in the
+ * range from 0x41 to 0x5a inclusive, stepping by 1, are changed to
+ * folded/upper/lower by adding 32.
+ ','line_number':3008,'multiline':True]
+['text':'
+ * Generic conversion function for case operations.
+ * Return the converted equivalent of "a", which is a UCS-4 character.  Use
+ * the given conversion "table".  Uses binary search on "table".
+ ','line_number':3228,'multiline':True]
+['text':' indices into table','line_number':3239,'multiline':False]
+['text':' need to search further','line_number':3246,'multiline':False]
+['text':'
+ * Return the folded-case equivalent of "a", which is a UCS-4 character.  Uses
+ * simple case folding.
+ ','line_number':3262,'multiline':True]
+['text':' be fast for ASCII','line_number':3270,'multiline':False]
+['text':'
+ * Return the upper-case equivalent of "a", which is a UCS-4 character.  Use
+ * simple case folding.
+ ','line_number':3654,'multiline':True]
+['text':' If 'casemap' contains "keepascii" use ASCII style toupper().','line_number':3661,'multiline':False]
+['text':' If towupper() is available and handles Unicode, use it.','line_number':3666,'multiline':False]
+['text':' For characters below 128 use locale sensitive toupper().','line_number':3671,'multiline':False]
+['text':' For any other characters use the above mapping table.','line_number':3675,'multiline':False]
+['text':' German sharp s is lower case but has no upper case equivalent.','line_number':3682,'multiline':False]
+['text':'
+ * Return the lower-case equivalent of "a", which is a UCS-4 character.  Use
+ * simple case folding.
+ ','line_number':3686,'multiline':True]
+['text':' If 'casemap' contains "keepascii" use ASCII style tolower().','line_number':3693,'multiline':False]
+['text':' If towlower() is available and handles Unicode, use it.','line_number':3698,'multiline':False]
+['text':' For characters below 128 use locale sensitive tolower().','line_number':3703,'multiline':False]
+['text':' For any other characters use the above mapping table.','line_number':3707,'multiline':False]
+['text':' some string ended or has an incomplete/illegal character sequence','line_number':3743,'multiline':False]
+['text':' some string ended. shorter string is smaller','line_number':3747,'multiline':False]
+['text':' Continue with bytewise comparison to produce some result that','line_number':3753,'multiline':False]
+['text':' would make comparison operations involving this function transitive.','line_number':3754,'multiline':False]
+['text':'','line_number':3755,'multiline':False]
+['text':' If only one string had an error, comparison should be made with','line_number':3756,'multiline':False]
+['text':' folded version of the other string. In this case it is enough','line_number':3757,'multiline':False]
+['text':' to fold just one character to determine the result of comparison.','line_number':3758,'multiline':False]
+['text':'
+ * Version of strnicmp() that handles multi-byte characters.
+ * Needed for Big5, Shift-JIS and UTF-8 encoding.  Other DBCS encodings can
+ * probably use strnicmp(), because there are no ASCII characters in the
+ * second byte.
+ * Returns zero if s1 and s2 are equal (ignoring case), the difference between
+ * two characters otherwise.
+ ','line_number':3793,'multiline':True]
+['text':' both strings end','line_number':3816,'multiline':False]
+['text':' Single byte: first check normally, then with ignore case.','line_number':3822,'multiline':False]
+['text':' For non-Unicode multi-byte don't ignore case.','line_number':3832,'multiline':False]
+['text':'
+ * "g8": show bytes of the UTF-8 char under the cursor.  Doesn't matter what
+ * 'encoding' has been set to.
+ ','line_number':3844,'multiline':True]
+['text':' Get the byte length of the char under the cursor, including composing','line_number':3857,'multiline':False]
+['text':' characters.','line_number':3858,'multiline':False]
+['text':' start of (composing) character, get its length','line_number':3872,'multiline':False]
+['text':' NUL is stored as NL','line_number':3881,'multiline':False]
+['text':'
+ * mb_head_off() function pointer.
+ * Return offset from "p" to the first byte of the character it points into.
+ * If "p" points to the NUL at the end of the string return 0.
+ * Returns 0 when already at the first byte of a character.
+ ','line_number':3891,'multiline':True]
+['text':' It can't be a trailing byte when not using DBCS, at the start of the','line_number':3908,'multiline':False]
+['text':' string or the previous byte can't start a double-byte.','line_number':3909,'multiline':False]
+['text':' This is slow: need to start at the base and go forward until the','line_number':3913,'multiline':False]
+['text':' byte we are looking for.  Return 1 when we went past it, 0 otherwise.','line_number':3914,'multiline':False]
+['text':'
+ * Special version of dbcs_head_off() that works for ScreenLines[], where
+ * single-width DBCS_JPNU characters are stored separately.
+ ','line_number':3921,'multiline':True]
+['text':' It can't be a trailing byte when not using DBCS, at the start of the','line_number':3930,'multiline':False]
+['text':' string or the previous byte can't start a double-byte.','line_number':3931,'multiline':False]
+['text':' For euc-jp an 0x8e byte in the previous cell always means we have a','line_number':3932,'multiline':False]
+['text':' lead byte in the current cell.','line_number':3933,'multiline':False]
+['text':' This is slow: need to start at the base and go forward until the','line_number':3940,'multiline':False]
+['text':' byte we are looking for.  Return 1 when we went past it, 0 otherwise.','line_number':3941,'multiline':False]
+['text':' For DBCS_JPNU look out for 0x8e, which means the second byte is not','line_number':3942,'multiline':False]
+['text':' stored as the next byte.','line_number':3943,'multiline':False]
+['text':'
+ * Return offset from "p" to the start of a character, including composing
+ * characters.  "base" must be the start of the string, which must be NUL
+ * terminated.
+ ','line_number':3955,'multiline':True]
+['text':' be quick for ASCII','line_number':3971,'multiline':False]
+['text':' Skip backwards over trailing bytes: 10xx.xxxx','line_number':3974,'multiline':False]
+['text':' Skip backwards again if on a composing char.','line_number':3975,'multiline':False]
+['text':' Move s to the last byte of this char.','line_number':3978,'multiline':False]
+['text':' Move q to the first byte of this char.','line_number':3981,'multiline':False]
+['text':' Check for illegal sequence. Do allow an illegal byte after where we','line_number':3984,'multiline':False]
+['text':' started.','line_number':3985,'multiline':False]
+['text':' Advance to get a sneak-peak at the next char','line_number':4000,'multiline':False]
+['text':' Move j to the first byte of this char.','line_number':4003,'multiline':False]
+['text':'
+ * Whether space is NOT allowed before/after 'c'.
+ ','line_number':4016,'multiline':True]
+['text':' General punctuations','line_number':4022,'multiline':False]
+['text':' Supplemental punctuations','line_number':4023,'multiline':False]
+['text':' CJK symbols and punctuations','line_number':4024,'multiline':False]
+['text':' Full width ASCII punctuations','line_number':4025,'multiline':False]
+['text':' ..','line_number':4026,'multiline':False]
+['text':' ..','line_number':4027,'multiline':False]
+['text':' ..','line_number':4028,'multiline':False]
+['text':'
+ * Whether line break is allowed before "cc".
+ ','line_number':4031,'multiline':True]
+['text':' ’ right single quotation mark','line_number':4049,'multiline':False]
+['text':' ” right double quotation mark','line_number':4050,'multiline':False]
+['text':' † dagger','line_number':4051,'multiline':False]
+['text':' ‡ double dagger','line_number':4052,'multiline':False]
+['text':' … horizontal ellipsis','line_number':4053,'multiline':False]
+['text':' ‰ per mille sign','line_number':4054,'multiline':False]
+['text':' ‱ per ten thousand sign','line_number':4055,'multiline':False]
+['text':' ‼ double exclamation mark','line_number':4056,'multiline':False]
+['text':' ⁇ double question mark','line_number':4057,'multiline':False]
+['text':' ⁈ question exclamation mark','line_number':4058,'multiline':False]
+['text':' ⁉ exclamation question mark','line_number':4059,'multiline':False]
+['text':' ℃ degree celsius','line_number':4060,'multiline':False]
+['text':' ℉ degree fahrenheit','line_number':4061,'multiline':False]
+['text':' 、 ideographic comma','line_number':4062,'multiline':False]
+['text':' 。 ideographic full stop','line_number':4063,'multiline':False]
+['text':' 〉 right angle bracket','line_number':4064,'multiline':False]
+['text':' 》 right double angle bracket','line_number':4065,'multiline':False]
+['text':' 」 right corner bracket','line_number':4066,'multiline':False]
+['text':' 』 right white corner bracket','line_number':4067,'multiline':False]
+['text':' 】 right black lenticular bracket','line_number':4068,'multiline':False]
+['text':' 〕 right tortoise shell bracket','line_number':4069,'multiline':False]
+['text':' 〗 right white lenticular bracket','line_number':4070,'multiline':False]
+['text':' 〙 right white tortoise shell bracket','line_number':4071,'multiline':False]
+['text':' 〛 right white square bracket','line_number':4072,'multiline':False]
+['text':' ！ fullwidth exclamation mark','line_number':4073,'multiline':False]
+['text':' ） fullwidth right parenthesis','line_number':4074,'multiline':False]
+['text':' ， fullwidth comma','line_number':4075,'multiline':False]
+['text':' ． fullwidth full stop','line_number':4076,'multiline':False]
+['text':' ： fullwidth colon','line_number':4077,'multiline':False]
+['text':' ； fullwidth semicolon','line_number':4078,'multiline':False]
+['text':' ？ fullwidth question mark','line_number':4079,'multiline':False]
+['text':' ］ fullwidth right square bracket','line_number':4080,'multiline':False]
+['text':' ｝ fullwidth right curly bracket','line_number':4081,'multiline':False]
+['text':'
+ * Whether line break is allowed after "cc".
+ ','line_number':4103,'multiline':True]
+['text':'0x2014, // — em dash','line_number':4116,'multiline':False]
+['text':' ‘ left single quotation mark','line_number':4117,'multiline':False]
+['text':' “ left double quotation mark','line_number':4118,'multiline':False]
+['text':'0x2053, // ～ swung dash','line_number':4119,'multiline':False]
+['text':' 〈 left angle bracket','line_number':4120,'multiline':False]
+['text':' 《 left double angle bracket','line_number':4121,'multiline':False]
+['text':' 「 left corner bracket','line_number':4122,'multiline':False]
+['text':' 『 left white corner bracket','line_number':4123,'multiline':False]
+['text':' 【 left black lenticular bracket','line_number':4124,'multiline':False]
+['text':' 〔 left tortoise shell bracket','line_number':4125,'multiline':False]
+['text':' 〖 left white lenticular bracket','line_number':4126,'multiline':False]
+['text':' 〘 left white tortoise shell bracket','line_number':4127,'multiline':False]
+['text':' 〚 left white square bracket','line_number':4128,'multiline':False]
+['text':' （ fullwidth left parenthesis','line_number':4129,'multiline':False]
+['text':' ［ fullwidth left square bracket','line_number':4130,'multiline':False]
+['text':' ｛ fullwidth left curly bracket','line_number':4131,'multiline':False]
+['text':'
+ * Whether line break is allowed between "cc" and "ncc".
+ ','line_number':4153,'multiline':True]
+['text':' don't break between two-letter punctuations','line_number':4159,'multiline':False]
+['text':' em dash','line_number':4161,'multiline':False]
+['text':' horizontal ellipsis','line_number':4162,'multiline':False]
+['text':'
+ * Copy a character from "*fp" to "*tp" and advance the pointers.
+ ','line_number':4168,'multiline':True]
+['text':'
+ * Return the offset from "p" to the first byte of a character.  When "p" is
+ * at the start of a character 0 is returned, otherwise the offset to the next
+ * character.  Can start anywhere in a stream of bytes.
+ ','line_number':4181,'multiline':True]
+['text':' be quick for ASCII','line_number':4194,'multiline':False]
+['text':' Find the next character that isn't 10xx.xxxx','line_number':4197,'multiline':False]
+['text':' Check for illegal sequence.','line_number':4202,'multiline':False]
+['text':' Only need to check if we're on a trail byte, it doesn't matter if we','line_number':4212,'multiline':False]
+['text':' want the offset to the next or current character.','line_number':4213,'multiline':False]
+['text':'
+ * Return the offset from "p" to the last byte of the character it points
+ * into.  Can start anywhere in a stream of bytes.
+ * Composing characters are not included.
+ ','line_number':4217,'multiline':True]
+['text':' Find the last character that is 10xx.xxxx','line_number':4233,'multiline':False]
+['text':' Check for illegal sequence.','line_number':4236,'multiline':False]
+['text':' It can't be the first byte if a double-byte when not using DBCS, at the','line_number':4245,'multiline':False]
+['text':' end of the string or the byte can't start a double-byte.','line_number':4246,'multiline':False]
+['text':' Return 1 when on the lead byte, 0 when on the tail byte.','line_number':4250,'multiline':False]
+['text':'
+ * Find the next illegal byte sequence.
+ ','line_number':4254,'multiline':True]
+['text':' 'encoding' is "utf-8" but we are editing a 8-bit encoded file,','line_number':4269,'multiline':False]
+['text':' possibly a utf-8 file with illegal bytes.  Setup for conversion','line_number':4270,'multiline':False]
+['text':' from utf-8 to 'fileencoding'.','line_number':4271,'multiline':False]
+['text':' Illegal means that there are not enough trail bytes (checked by','line_number':4290,'multiline':False]
+['text':' utf_ptr2len()) or too many of them (overlong sequence).','line_number':4291,'multiline':False]
+['text':' didn't find it: don't move and beep','line_number':4319,'multiline':False]
+['text':'
+ * Return TRUE if string "s" is a valid utf-8 string.
+ * When "end" is NULL stop at the first NUL.  Otherwise stop at "end".
+ ','line_number':4329,'multiline':True]
+['text':' invalid lead byte','line_number':4343,'multiline':False]
+['text':' incomplete byte sequence','line_number':4345,'multiline':False]
+['text':' invalid trail byte','line_number':4349,'multiline':False]
+['text':'
+ * Special version of mb_tail_off() for use in ScreenLines[].
+ ','line_number':4356,'multiline':True]
+['text':' It can't be the first byte if a double-byte when not using DBCS, at the','line_number':4362,'multiline':False]
+['text':' end of the string or the byte can't start a double-byte.','line_number':4363,'multiline':False]
+['text':' For euc-jp an 0x8e byte always means we have a lead byte in the current','line_number':4364,'multiline':False]
+['text':' cell.','line_number':4365,'multiline':False]
+['text':' Return 1 when on the lead byte, 0 when on the tail byte.','line_number':4371,'multiline':False]
+['text':'
+ * If the cursor moves on an trail byte, set the cursor on the lead byte.
+ * Thus it moves left if necessary.
+ * Return TRUE when the cursor was adjusted.
+ ','line_number':4376,'multiline':True]
+['text':'
+ * Adjust position "*lp" to point to the first byte of a multi-byte character.
+ * If it points to a tail byte it's moved backwards to the head byte.
+ ','line_number':4387,'multiline':True]
+['text':' Reset "coladd" when the cursor would be on the right half of a','line_number':4403,'multiline':False]
+['text':' double-wide character.','line_number':4404,'multiline':False]
+['text':'
+ * Return a pointer to the character before "*p", if there is one.
+ ','line_number':4413,'multiline':True]
+['text':' start of the string','line_number':4418,'multiline':False]
+['text':'
+ * Return the character length of "str".  Each multi-byte character (with
+ * following composing characters) counts as one.
+ ','line_number':4426,'multiline':True]
+['text':'
+ * Like mb_charlen() but for a string with specified length.
+ ','line_number':4445,'multiline':True]
+['text':'
+ * Try to un-escape a multi-byte character.
+ * Used for the "to" and "from" part of a mapping.
+ * Return the un-escaped string if it is a multi-byte character, and advance
+ * "pp" to just after the bytes that formed it.
+ * Return NULL if no multi-byte char was found.
+ ','line_number':4460,'multiline':True]
+['text':' Must translate K_SPECIAL KS_SPECIAL KE_FILLER to K_SPECIAL and CSI','line_number':4475,'multiline':False]
+['text':' KS_EXTRA KE_CSI to CSI.','line_number':4476,'multiline':False]
+['text':' Maximum length of a utf-8 character is 4 bytes.','line_number':4477,'multiline':False]
+['text':' a special key can't be a multibyte char','line_number':4503,'multiline':False]
+['text':' Return a multi-byte character if it's found.  An illegal sequence','line_number':4508,'multiline':False]
+['text':' will result in a 1 here.','line_number':4509,'multiline':False]
+['text':' Bail out quickly for ASCII.','line_number':4516,'multiline':False]
+['text':'
+ * Return TRUE if the character at "row"/"col" on the screen is the left side
+ * of a double-width character.
+ * Caller must make sure "row" and "col" are not invalid!
+ ','line_number':4523,'multiline':True]
+['text':'
+ * Correct a position on the screen, if it's the right half of a double-wide
+ * char move it to the left half.  Returns the corrected column.
+ ','line_number':4535,'multiline':True]
+['text':'
+ * Skip the Vim specific head of a 'encoding' name.
+ ','line_number':4560,'multiline':True]
+['text':'
+ * Find the canonical name for encoding "enc".
+ * When the name isn't recognized, returns "enc" itself, but with all lower
+ * case characters and '_' replaced with '-'.
+ * Returns an allocated string.  NULL for out-of-memory.
+ ','line_number':4573,'multiline':True]
+['text':' Use the system encoding, the default is always utf-8.','line_number':4589,'multiline':False]
+['text':' Use the default encoding as it's found by set_init_1().','line_number':4592,'multiline':False]
+['text':' copy "enc" to allocated memory, with room for two '-'','line_number':4600,'multiline':False]
+['text':' Make it all lower case and replace '_' with '-'.','line_number':4605,'multiline':False]
+['text':' Skip "2byte-" and "8bit-".','line_number':4616,'multiline':False]
+['text':' Change "microsoft-cp" to "cp".  Used in some spell files.','line_number':4619,'multiline':False]
+['text':' "iso8859" -> "iso-8859"','line_number':4623,'multiline':False]
+['text':' "iso-8859n" -> "iso-8859-n"','line_number':4630,'multiline':False]
+['text':' "latin-N" -> "latinN"','line_number':4637,'multiline':False]
+['text':' canonical name can be used unmodified','line_number':4643,'multiline':False]
+['text':' alias recognized, get canonical name','line_number':4649,'multiline':False]
+['text':'
+ * Search for an encoding alias of "name".
+ * Returns -1 when not found.
+ ','line_number':4656,'multiline':True]
+['text':'
+ * Get the canonicalized encoding from the specified locale string "locale"
+ * or from the environment variables LC_ALL, LC_CTYPE and LANG.
+ * Returns an allocated string when successful, NULL when not.
+ ','line_number':4677,'multiline':True]
+['text':' The most generic locale format is:','line_number':4698,'multiline':False]
+['text':' language[_territory][.codeset][@modifier][+special][,[sponsor][_revision]]','line_number':4699,'multiline':False]
+['text':' If there is a '.' remove the part before it.','line_number':4700,'multiline':False]
+['text':' if there is something after the codeset, remove it.','line_number':4701,'multiline':False]
+['text':' Make the name lowercase and replace '_' with '-'.','line_number':4702,'multiline':False]
+['text':' Exception: "ja_JP.EUC" == "euc-jp", "zh_CN.EUC" = "euc-cn",','line_number':4703,'multiline':False]
+['text':' "ko_KR.EUC" == "euc-kr"','line_number':4704,'multiline':False]
+['text':' copy "XY.EUC" to "euc-XY" to buf[10]','line_number':4710,'multiline':False]
+['text':'
+ * Get the canonicalized encoding of the current locale.
+ * Returns an allocated string when successful, NULL when not.
+ ','line_number':4735,'multiline':True]
+['text':' cp1252 is used as latin1','line_number':4748,'multiline':False]
+['text':'
+ * Convert an encoding name to an MS-Windows codepage.
+ * Returns zero if no codepage can be figured out.
+ ','line_number':4772,'multiline':True]
+['text':'
+ * Call iconv_open() with a check if iconv() works properly (there are broken
+ * versions).
+ * Returns (void *)-1 if failed.
+ * (should return iconv_t, but that causes problems with prototypes).
+ ','line_number':4802,'multiline':True]
+['text':' detected a broken iconv() previously','line_number':4819,'multiline':False]
+['text':' Check if the iconv.dll can be found.','line_number':4822,'multiline':False]
+['text':'
+	 * Do a dummy iconv() call to check if it actually works.  There is a
+	 * version of iconv() on Linux that is broken.  We can't ignore it,
+	 * because it's wide-spread.  The symptoms are that after outputting
+	 * the initial shift state the "to" pointer is NULL and conversion
+	 * stops for no apparent reason after about 8160 characters.
+	 ','line_number':4831,'multiline':True]
+['text':'
+ * Convert the string "str[slen]" with iconv().
+ * If "unconvlenp" is not NULL handle the string ending in an incomplete
+ * sequence and set "*unconvlenp" to the length of it.
+ * Returns the converted string in allocated memory.  NULL for an error.
+ * If resultlenp is not NULL, sets it to the result length in bytes.
+ ','line_number':4854,'multiline':True]
+['text':' Allocate enough room for most conversions.  When re-allocating','line_number':4885,'multiline':False]
+['text':' increase the buffer size.','line_number':4886,'multiline':False]
+['text':' out of memory','line_number':4893,'multiline':False]
+['text':' Avoid a warning for systems with a wrong iconv() prototype by','line_number':4899,'multiline':False]
+['text':' casting the second argument to void *.','line_number':4900,'multiline':False]
+['text':' Finished, append a NUL.','line_number':4904,'multiline':False]
+['text':' Check both ICONV_EINVAL and EINVAL, because the dynamically loaded','line_number':4909,'multiline':False]
+['text':' iconv library may use one of them.','line_number':4910,'multiline':False]
+['text':' Handle an incomplete sequence at the end.','line_number':4914,'multiline':False]
+['text':' Check both ICONV_EILSEQ and EILSEQ, because the dynamically loaded','line_number':4920,'multiline':False]
+['text':' iconv library may use one of them.','line_number':4921,'multiline':False]
+['text':' Can't convert: insert a '?' and skip a character.  This assumes','line_number':4926,'multiline':False]
+['text':' conversion from 'encoding' to something else.  In other','line_number':4927,'multiline':False]
+['text':' situations we don't know what to skip anyway.','line_number':4928,'multiline':False]
+['text':' conversion failed','line_number':4945,'multiline':False]
+['text':' Not enough room or skipping illegal sequence.','line_number':4949,'multiline':False]
+['text':'
+ * Dynamically load the "iconv.dll" on Win32.
+ ','line_number':4959,'multiline':True]
+['text':' must be generating prototypes','line_number':4963,'multiline':False]
+['text':'
+ * Try opening the iconv.dll and return TRUE if iconv() can be used.
+ ','line_number':4979,'multiline':True]
+['text':' The iconv DLL file goes under different names, try them all.','line_number':4988,'multiline':False]
+['text':' Do the "2" version first, it's newer.','line_number':4989,'multiline':False]
+['text':' Only give the message when 'verbose' is set, otherwise it might be','line_number':5009,'multiline':False]
+['text':' done whenever a conversion is attempted.','line_number':5010,'multiline':False]
+['text':' Don't use iconv() when inputting or outputting characters.','line_number':5053,'multiline':False]
+['text':' DYNAMIC_ICONV','line_number':5066,'multiline':False]
+['text':' USE_ICONV','line_number':5067,'multiline':False]
+['text':'
+ * "getimstatus()" function
+ ','line_number':5070,'multiline':True]
+['text':'
+ * iconv() function
+ ','line_number':5081,'multiline':True]
+['text':' If the encodings are equal, no conversion needed.','line_number':5107,'multiline':False]
+['text':'
+ * Setup "vcp" for conversion from "from" to "to".
+ * The names must have been made canonical with enc_canonize().
+ * vcp->vc_type must have been initialized to CONV_NONE.
+ * Note: cannot be used for conversion from/to ucs-2 and ucs-4 (will use utf-8
+ * instead).
+ * Afterwards invoke with "from" and "to" equal to NULL to cleanup.
+ * Return FAIL when conversion is not supported, OK otherwise.
+ ','line_number':5119,'multiline':True]
+['text':'
+ * As convert_setup(), but only when from_unicode_is_utf8 is TRUE will all
+ * "from" unicode charsets be considered utf-8.  Same for "to".
+ ','line_number':5134,'multiline':True]
+['text':' Reset to no conversion.','line_number':5151,'multiline':False]
+['text':' No conversion when one of the names is empty or they are equal.','line_number':5160,'multiline':False]
+['text':' Internal latin1 -> utf-8 conversion.','line_number':5178,'multiline':False]
+['text':' up to twice as long','line_number':5180,'multiline':False]
+['text':' Internal latin9 -> utf-8 conversion.','line_number':5184,'multiline':False]
+['text':' up to three as long (euro sign)','line_number':5186,'multiline':False]
+['text':' Internal utf-8 -> latin1 conversion.','line_number':5190,'multiline':False]
+['text':' Internal utf-8 -> latin9 conversion.','line_number':5195,'multiline':False]
+['text':' Win32-specific codepage <-> codepage conversion without iconv.','line_number':5199,'multiline':False]
+['text':' up to twice as long','line_number':5204,'multiline':False]
+['text':' up to twice as long','line_number':5217,'multiline':False]
+['text':' Use iconv() for conversion.','line_number':5231,'multiline':False]
+['text':' could be longer too...','line_number':5238,'multiline':False]
+['text':'
+ * Do conversion on typed input characters in-place.
+ * The input and output are not NUL terminated!
+ * Returns the length after conversion.
+ ','line_number':5250,'multiline':True]
+['text':'
+ * Like convert_input(), but when there is an incomplete byte sequence at the
+ * end return that as an allocated string in "restp" and set "*restlenp" to
+ * the length.  If "restp" is NULL it is not used.
+ ','line_number':5262,'multiline':True]
+['text':' Move the unconverted characters to allocated memory.','line_number':5288,'multiline':False]
+['text':' result is too long, keep the unconverted text (the caller must','line_number':5297,'multiline':False]
+['text':' have done something wrong!)','line_number':5298,'multiline':False]
+['text':'
+ * Convert text "ptr[*lenp]" according to "vcp".
+ * Returns the result in allocated memory and sets "*lenp".
+ * When "lenp" is NULL, use NUL terminated strings.
+ * Illegal chars are often changed to "?", unless vcp->vc_fail is set.
+ * When something goes wrong, NULL is returned and "*lenp" is unchanged.
+ ','line_number':5304,'multiline':True]
+['text':'
+ * Like string_convert(), but when "unconvlenp" is not NULL and there are is
+ * an incomplete sequence at the end it is not converted and "*unconvlenp" is
+ * set to the number of remaining bytes.
+ ','line_number':5320,'multiline':True]
+['text':' latin1 to utf-8 conversion','line_number':5348,'multiline':False]
+['text':' latin9 to utf-8 conversion','line_number':5369,'multiline':False]
+['text':' euro','line_number':5379,'multiline':False]
+['text':' S hat','line_number':5380,'multiline':False]
+['text':' S -hat','line_number':5381,'multiline':False]
+['text':' Z hat','line_number':5382,'multiline':False]
+['text':' Z -hat','line_number':5383,'multiline':False]
+['text':' OE','line_number':5384,'multiline':False]
+['text':' oe','line_number':5385,'multiline':False]
+['text':' Y','line_number':5386,'multiline':False]
+['text':' utf-8 to latin1 conversion','line_number':5395,'multiline':False]
+['text':' utf-8 to latin9 conversion','line_number':5396,'multiline':False]
+['text':' Illegal utf-8 byte cannot be converted','line_number':5412,'multiline':False]
+['text':' Incomplete sequence at the end.','line_number':5418,'multiline':False]
+['text':' euro','line_number':5430,'multiline':False]
+['text':' S hat','line_number':5431,'multiline':False]
+['text':' S -hat','line_number':5432,'multiline':False]
+['text':' Z hat','line_number':5433,'multiline':False]
+['text':' Z -hat','line_number':5434,'multiline':False]
+['text':' OE','line_number':5435,'multiline':False]
+['text':' oe','line_number':5436,'multiline':False]
+['text':' Y','line_number':5437,'multiline':False]
+['text':' not in latin9','line_number':5445,'multiline':False]
+['text':' skip composing chars','line_number':5447,'multiline':False]
+['text':' conversion with output_conv.vc_fd','line_number':5494,'multiline':False]
+['text':' codepage -> codepage','line_number':5499,'multiline':False]
+['text':' 1. codepage/UTF-8  ->  ucs-2.','line_number':5505,'multiline':False]
+['text':' 2. ucs-2  ->  codepage/UTF-8.','line_number':5535,'multiline':False]
+['text':'
+ * Table set by setcellwidths().
+ ','line_number':5565,'multiline':True]
+['text':'
+ * Return 1 or 2 when "c" is in the cellwidth table.
+ * Return 0 if not.
+ ','line_number':5578,'multiline':True]
+['text':' first quick check for Latin1 etc. characters','line_number':5590,'multiline':False]
+['text':' binary search in table','line_number':5594,'multiline':False]
+['text':' Clearing the table.','line_number':5638,'multiline':False]
+['text':' Check that all entries are a list with three numbers, the range is','line_number':5648,'multiline':False]
+['text':' valid and the cell width is valid.','line_number':5649,'multiline':False]
+['text':' Sort the list on the first number.','line_number':5702,'multiline':False]
+['text':' Store the items in the new table.','line_number':5712,'multiline':False]
+['text':' Check that the new value does not conflict with 'listchars' or','line_number':5740,'multiline':False]
+['text':' 'fillchars'.','line_number':5741,'multiline':False]
+['text':'
+ * Function given to ExpandGeneric() to obtain the possible arguments of the
+ * encoding options.
+ ','line_number':5788,'multiline':True]

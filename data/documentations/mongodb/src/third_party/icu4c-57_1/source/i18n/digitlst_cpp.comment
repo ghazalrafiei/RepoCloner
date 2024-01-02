@@ -1,0 +1,285 @@
+['text':'
+**********************************************************************
+*   Copyright (C) 1997-2015, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+**********************************************************************
+*
+* File DIGITLST.CPP
+*
+* Modification History:
+*
+*   Date        Name        Description
+*   03/21/97    clhuang     Converted from java.
+*   03/21/97    clhuang     Implemented with new APIs.
+*   03/27/97    helena      Updated to pass the simple test after code review.
+*   03/31/97    aliu        Moved isLONG_MIN to here, and fixed it.
+*   04/15/97    aliu        Changed MAX_COUNT to DBL_DIG.  Changed Digit to char.
+*                           Reworked representation by replacing fDecimalAt
+*                           with fExponent.
+*   04/16/97    aliu        Rewrote set() and getDouble() to use sprintf/atof
+*                           to do digit conversion.
+*   09/09/97    aliu        Modified for exponential notation support.
+*   08/02/98    stephen     Added nearest/even rounding
+*                            Fixed bug in fitsIntoLong
+******************************************************************************
+','line_number':1,'multiline':True]
+['text':' ***************************************************************************','line_number':44,'multiline':False]
+['text':' class DigitList','line_number':45,'multiline':False]
+['text':'    A wrapper onto decNumber.','line_number':46,'multiline':False]
+['text':'    Used to be standalone.','line_number':47,'multiline':False]
+['text':' ***************************************************************************','line_number':48,'multiline':False]
+['text':'*
+ * This is the zero digit.  The base for the digits returned by getDigit()
+ * Note that it is the platform invariant digit, and is not Unicode.
+ ','line_number':50,'multiline':True]
+['text':' Only for 32 bit numbers. Ignore the negative sign. ','line_number':57,'multiline':True]
+['text':'static const char LONG_MIN_REP[] = "2147483648";','line_number':58,'multiline':False]
+['text':'static const char I64_MIN_REP[] = "9223372036854775808";','line_number':59,'multiline':False]
+['text':' -------------------------------------','line_number':64,'multiline':False]
+['text':' default constructor','line_number':65,'multiline':False]
+['text':' -------------------------------------','line_number':80,'multiline':False]
+['text':' -------------------------------------','line_number':86,'multiline':False]
+['text':' copy constructor','line_number':87,'multiline':False]
+['text':' -------------------------------------','line_number':96,'multiline':False]
+['text':' assignment operator','line_number':97,'multiline':False]
+['text':' Always reset the fContext.digits, even if fDecNumber was not reallocated,','line_number':109,'multiline':False]
+['text':' because above we copied fContext from other.fContext.','line_number':110,'multiline':False]
+['text':' fDouble is lazily created and cached.','line_number':115,'multiline':False]
+['text':' Avoid potential races with that happening with other.fDouble','line_number':116,'multiline':False]
+['text':' while we are doing the assignment.','line_number':117,'multiline':False]
+['text':' -------------------------------------','line_number':129,'multiline':False]
+['text':'    operator ==  (does not exactly match the old DigitList function)','line_number':130,'multiline':False]
+['text':' Has space for only a none digit value.','line_number':138,'multiline':False]
+['text':' -------------------------------------','line_number':149,'multiline':False]
+['text':'      comparison function.   Returns ','line_number':150,'multiline':False]
+['text':'         Not Comparable :  -2','line_number':151,'multiline':False]
+['text':'                      < :  -1','line_number':152,'multiline':False]
+['text':'                     == :   0','line_number':153,'multiline':False]
+['text':'                      > :  +1','line_number':154,'multiline':False]
+['text':' -------------------------------------','line_number':173,'multiline':False]
+['text':'  Reduce - remove trailing zero digits.','line_number':174,'multiline':False]
+['text':' -------------------------------------','line_number':181,'multiline':False]
+['text':'  trim - remove trailing fraction zero digits.','line_number':182,'multiline':False]
+['text':' -------------------------------------','line_number':188,'multiline':False]
+['text':' Resets the digit list; sets all the digits to zero.','line_number':189,'multiline':False]
+['text':'*
+ * Formats a int64_t number into a base 10 string representation, and NULL terminates it.
+ * @param number The number to format
+ * @param outputStr The string to output to.  Must be at least MAX_DIGITS+2 in length (21),
+ *                  to hold the longest int64_t value.
+ * @return the number of digits written, not including the sign.
+ ','line_number':200,'multiline':True]
+['text':' The number is output backwards, starting with the LSD.','line_number':209,'multiline':False]
+['text':' Fill the buffer from the far end.  After the number is complete,','line_number':210,'multiline':False]
+['text':' slide the string contents to the front.','line_number':211,'multiline':False]
+['text':' Negative numbers are slightly larger than a postive','line_number':218,'multiline':False]
+['text':' Slide the number to the start of the output str','line_number':231,'multiline':False]
+['text':' -------------------------------------','line_number':240,'multiline':False]
+['text':'','line_number':241,'multiline':False]
+['text':'  setRoundingMode()','line_number':242,'multiline':False]
+['text':'    For most modes, the meaning and names are the same between the decNumber library','line_number':243,'multiline':False]
+['text':'      (which DigitList follows) and the ICU Formatting Rounding Mode values.','line_number':244,'multiline':False]
+['text':'      The flag constants are different, however.','line_number':245,'multiline':False]
+['text':'','line_number':246,'multiline':False]
+['text':'     Note that ICU's kRoundingUnnecessary is not implemented directly by DigitList.','line_number':247,'multiline':False]
+['text':'     This mode, inherited from Java, means that numbers that would not format exactly','line_number':248,'multiline':False]
+['text':'     will return an error when formatting is attempted.','line_number':249,'multiline':False]
+['text':' TODO: how to report the problem?','line_number':265,'multiline':False]
+['text':' Leave existing mode unchanged.','line_number':266,'multiline':False]
+['text':' -------------------------------------','line_number':274,'multiline':False]
+['text':' -------------------------------------','line_number':285,'multiline':False]
+['text':' Not Infinity or NaN','line_number':289,'multiline':False]
+['text':' Account for difference in how zero is represented between DigitList & decNumber.','line_number':294,'multiline':False]
+['text':' Not Infinity or NaN','line_number':303,'multiline':False]
+['text':' Exponent should be zero for these cases.','line_number':305,'multiline':False]
+['text':' For a value of zero, DigitList sets all fields to zero, while','line_number':314,'multiline':False]
+['text':' decNumber keeps one digit (with that digit being a zero)','line_number':315,'multiline':False]
+['text':' The extra test for exponent==0 is needed because parsing sometimes appends','line_number':326,'multiline':False]
+['text':' zero digits.  It's bogus, decimalFormatter parsing needs to be cleaned up.','line_number':327,'multiline':False]
+['text':' copied from DigitList::getDigit()','line_number':351,'multiline':False]
+['text':' -------------------------------------','line_number':359,'multiline':False]
+['text':' Appends the digit to the digit list if it's not out of scope.','line_number':360,'multiline':False]
+['text':' Ignores the digit, otherwise.','line_number':361,'multiline':False]
+['text':' ','line_number':362,'multiline':False]
+['text':' This function is horribly inefficient to implement with decNumber because','line_number':363,'multiline':False]
+['text':' the digits are stored least significant first, which requires moving all','line_number':364,'multiline':False]
+['text':' existing digits down one to make space for the new one to be appended.','line_number':365,'multiline':False]
+['text':'','line_number':366,'multiline':False]
+['text':' Ignore digits which exceed the precision we can represent','line_number':371,'multiline':False]
+['text':'    And don't fix for larger precision.  Fix callers instead.','line_number':372,'multiline':False]
+['text':' Zero needs to be special cased because of the difference in the way','line_number':374,'multiline':False]
+['text':' that the old DigitList and decNumber represent it.','line_number':375,'multiline':False]
+['text':' digit cout was zero for digitList, is one for decNumber','line_number':376,'multiline':False]
+['text':' To match the old digit list implementation.','line_number':379,'multiline':False]
+['text':' DigitList emulation - appending doesn't change the magnitude of existing','line_number':389,'multiline':False]
+['text':'                       digits.  With decNumber's decimal being after the','line_number':390,'multiline':False]
+['text':'                       least signficant digit, we need to adjust the exponent.','line_number':391,'multiline':False]
+['text':' TODO: maybe use andy's pthread once.','line_number':399,'multiline':False]
+['text':' We need to know the decimal separator character that will be used with strtod().','line_number':406,'multiline':False]
+['text':' Depends on the C runtime global locale.','line_number':407,'multiline':False]
+['text':' Most commonly is '.'','line_number':408,'multiline':False]
+['text':' TODO: caching could fail if the global locale is changed on the fly.','line_number':409,'multiline':False]
+['text':' -------------------------------------','line_number':419,'multiline':False]
+['text':'*
+ * Currently, getDouble() depends on strtod() to do its conversion.
+ *
+ * WARNING!!
+ * This is an extremely costly function. ~1/2 of the conversion time
+ * can be linked to this function.
+ ','line_number':421,'multiline':True]
+['text':' We need to know the decimal separator character that will be used with strtod().','line_number':442,'multiline':False]
+['text':' Depends on the C runtime global locale.','line_number':443,'multiline':False]
+['text':' Most commonly is '.'','line_number':444,'multiline':False]
+['text':' TODO: caching could fail if the global locale is changed on the fly.','line_number':445,'multiline':False]
+['text':'this was incorrectly "-fDouble" originally.','line_number':464,'multiline':False]
+['text':' Note:  14 is a  magic constant from the decNumber library documentation,','line_number':468,'multiline':False]
+['text':'        the max number of extra characters beyond the number of digits ','line_number':469,'multiline':False]
+['text':'        needed to represent the number in string form.  Add a few more','line_number':470,'multiline':False]
+['text':'        for the additional digits we retain.','line_number':471,'multiline':False]
+['text':' Round down to appx. double precision, if the number is longer than that.','line_number':473,'multiline':False]
+['text':' Copy the number first, so that we don't modify the original.','line_number':474,'multiline':False]
+['text':' Removes any trailing zeros, so that digit count is good.','line_number':477,'multiline':False]
+['text':' TODO:  how many extra digits should be included for an accurate conversion?','line_number':480,'multiline':False]
+['text':' -------------------------------------','line_number':504,'multiline':False]
+['text':'*
+ *  convert this number to an int32_t.   Round if there is a fractional part.
+ *  Return zero if the number cannot be represented.
+ ','line_number':506,'multiline':True]
+['text':'const','line_number':510,'multiline':True]
+['text':' Overflow, absolute value too big.','line_number':514,'multiline':False]
+['text':' Force to an integer, with zero exponent, rounding if necessary.','line_number':518,'multiline':False]
+['text':'   (decNumberToInt32 will only work if the exponent is exactly zero.)','line_number':519,'multiline':False]
+['text':'*
+ *  convert this number to an int64_t.   Truncate if there is a fractional part.
+ *  Return zero if the number cannot be represented.
+ ','line_number':531,'multiline':True]
+['text':'const','line_number':535,'multiline':True]
+['text':' TODO: fast conversion if fHave == fDouble','line_number':536,'multiline':False]
+['text':' Truncate if non-integer.','line_number':538,'multiline':False]
+['text':' Return 0 if out of range.','line_number':539,'multiline':False]
+['text':' Range of in64_t is -9223372036854775808 to 9223372036854775807  (19 digits)','line_number':540,'multiline':False]
+['text':'','line_number':541,'multiline':False]
+['text':' Overflow, absolute value too big.','line_number':543,'multiline':False]
+['text':' The number of integer digits may differ from the number of digits stored','line_number':547,'multiline':False]
+['text':'   in the decimal number.','line_number':548,'multiline':False]
+['text':'     for 12.345  numIntDigits = 2, number->digits = 5','line_number':549,'multiline':False]
+['text':'     for 12E4    numIntDigits = 6, number->digits = 2','line_number':550,'multiline':False]
+['text':' The conversion ignores the fraction digits in the first case,','line_number':551,'multiline':False]
+['text':' and fakes up extra zero digits in the second.','line_number':552,'multiline':False]
+['text':' TODO:  It would be faster to store a table of powers of ten to multiply by','line_number':553,'multiline':False]
+['text':'        instead of looping over zero digits, multiplying each time.','line_number':554,'multiline':False]
+['text':' Loop is iterating over digits starting with the most significant.','line_number':559,'multiline':False]
+['text':' Numbers are stored with the least significant digit at index zero.','line_number':560,'multiline':False]
+['text':' Check overflow.  It's convenient that the MSD is 9 only on overflow, the amount of','line_number':572,'multiline':False]
+['text':'                  overflow can't wrap too far.  The test will also fail -0, but','line_number':573,'multiline':False]
+['text':'                  that does no harm; the right answer is 0.','line_number':574,'multiline':False]
+['text':'*
+ *  Return a string form of this number.
+ *     Format is as defined by the decNumber library, for interchange of
+ *     decimal numbers.
+ ','line_number':586,'multiline':True]
+['text':' A decimal number in string form can, worst case, be 14 characters longer','line_number':596,'multiline':False]
+['text':'  than the number of digits.  So says the decNumber library doc.','line_number':597,'multiline':False]
+['text':' Memory allocation error on growing the string.','line_number':602,'multiline':False]
+['text':'*
+ * Return true if this is an integer value that can be held
+ * by an int32_t type.
+ ','line_number':610,'multiline':True]
+['text':'const','line_number':615,'multiline':True]
+['text':' NaN or Infinity.  Does not fit in int32.','line_number':618,'multiline':False]
+['text':' Number contains fraction digits.','line_number':623,'multiline':False]
+['text':' Negative Zero, not ingored.  Cannot represent as a long.','line_number':628,'multiline':False]
+['text':' The number is 9 or fewer digits.','line_number':632,'multiline':False]
+['text':' The max and min int32 are 10 digts, so this number fits.','line_number':633,'multiline':False]
+['text':' This is the common case.','line_number':634,'multiline':False]
+['text':' TODO:  Should cache these constants; construction is relatively costly.','line_number':638,'multiline':False]
+['text':'        But not of huge consequence; they're only needed for 10 digit ints.','line_number':639,'multiline':False]
+['text':'*
+ * Return true if the number represented by this object can fit into
+ * a long.
+ ','line_number':657,'multiline':True]
+['text':'const','line_number':662,'multiline':True]
+['text':' NaN or Infinity.  Does not fit in int32.','line_number':665,'multiline':False]
+['text':' Number contains fraction digits.','line_number':670,'multiline':False]
+['text':' Negative Zero, not ingored.  Cannot represent as a long.','line_number':675,'multiline':False]
+['text':' The number is 18 or fewer digits.','line_number':679,'multiline':False]
+['text':' The max and min int64 are 19 digts, so this number fits.','line_number':680,'multiline':False]
+['text':' This is the common case.','line_number':681,'multiline':False]
+['text':' TODO:  Should cache these constants; construction is relatively costly.','line_number':685,'multiline':False]
+['text':'        But not of huge consequence; they're only needed for 19 digit ints.','line_number':686,'multiline':False]
+['text':' -------------------------------------','line_number':703,'multiline':False]
+['text':' -------------------------------------','line_number':712,'multiline':False]
+['text':'*
+ * Set an int64, via decnumber
+ ','line_number':713,'multiline':True]
+['text':' Leave room for sign and trailing nul.','line_number':719,'multiline':False]
+['text':' -------------------------------------','line_number':727,'multiline':False]
+['text':'*
+ * Set the DigitList from a decimal number string.
+ *
+ * The incoming string _must_ be nul terminated, even though it is arriving
+ * as a StringPiece because that is what the decNumber library wants.
+ * We can get away with this for an internal function; it would not
+ * be acceptable for a public API.
+ ','line_number':728,'multiline':True]
+['text':'fastpathBits','line_number':737,'multiline':True]
+['text':' fast parse','line_number':748,'multiline':False]
+['text':'printf("CH[%d]=%c, %d, *=%d\n", size,ch, (int)d, (int)m);','line_number':758,'multiline':False]
+['text':'printf("R=%d\n", r);','line_number':763,'multiline':False]
+['text':' Figure out a max number of digits to use during the conversion, and','line_number':768,'multiline':False]
+['text':' resize the number up if necessary.','line_number':769,'multiline':False]
+['text':' fContext.digits == fStorage.getCapacity()','line_number':772,'multiline':False]
+['text':'*
+ * Set the digit list to a representation of the given double value.
+ * This method supports both fixed-point and exponential notation.
+ * @param source Value to be converted.
+ ','line_number':791,'multiline':True]
+['text':' for now, simple implementation; later, do proper IEEE stuff','line_number':799,'multiline':False]
+['text':' Extra space for '+', '.', e+NNN, and '\0' (actually +8 is enough)','line_number':800,'multiline':False]
+['text':' Generate a representation of the form /[+-][0-9].[0-9]+e[+-][0-9]+/','line_number':802,'multiline':False]
+['text':' Can also generate /[+-]nan/ or /[+-]inf/','line_number':803,'multiline':False]
+['text':' TODO: Use something other than sprintf() here, since it's behavior is somewhat platform specific.','line_number':804,'multiline':False]
+['text':'       That is why infinity is special cased here.','line_number':805,'multiline':False]
+['text':' Handle negative infinity','line_number':808,'multiline':False]
+['text':' uprv_decNumberFromString() will parse the string expecting '.' as a','line_number':817,'multiline':False]
+['text':' decimal separator, however sprintf() can use ',' in certain locales.','line_number':818,'multiline':False]
+['text':' Overwrite a ',' with '.' here before proceeding.','line_number':819,'multiline':False]
+['text':' Create a decNumber from the string.','line_number':825,'multiline':False]
+['text':' -------------------------------------','line_number':831,'multiline':False]
+['text':'
+ * Multiply
+ *      The number will be expanded if need be to retain full precision.
+ *      In practice, for formatting, multiply is by 10, 100 or 1000, so more digits
+ *      will not be required for this use.
+ ','line_number':833,'multiline':True]
+['text':' Remove any trailing zeros','line_number':847,'multiline':False]
+['text':' -------------------------------------','line_number':855,'multiline':False]
+['text':'
+ * Divide
+ *      The number will _not_ be expanded for inexact results.
+ *      TODO:  probably should expand some, for rounding increments that
+ *             could add a few digits, e.g. .25, but not expand arbitrarily.
+ ','line_number':857,'multiline':True]
+['text':' -------------------------------------','line_number':872,'multiline':False]
+['text':'
+ * ensureCapacity.   Grow the digit storage for the number if it's less than the requested
+ *         amount.  Never reduce it.  Available size is kept in fContext.digits.
+ ','line_number':874,'multiline':True]
+['text':' Don't report an error for requesting too much.','line_number':888,'multiline':False]
+['text':' Arithemetic Results will be rounded to what can be supported.','line_number':889,'multiline':False]
+['text':'   At 999,999,999 max digits, exceeding the limit is not too likely!','line_number':890,'multiline':False]
+['text':' -------------------------------------','line_number':904,'multiline':False]
+['text':'*
+ * Round the representation to the given number of digits.
+ * @param maximumDigits The maximum number of digits to be shown.
+ * Upon return, count will be less than or equal to maximumDigits.
+ ','line_number':906,'multiline':True]
+['text':' Remove trailing zeros. ','line_number':930,'multiline':False]
+['text':' Dummy decimal number, but with the desired number of','line_number':934,'multiline':False]
+['text':'    fraction digits.','line_number':935,'multiline':False]
+['text':' -------------------------------------','line_number':944,'multiline':False]
+['text':' -------------------------------------','line_number':952,'multiline':False]
+['text':' -------------------------------------','line_number':959,'multiline':False]
+['text':' The exponent for zero is always zero.','line_number':1020,'multiline':False]
+['text':' #if !UCONFIG_NO_FORMATTING','line_number':1052,'multiline':False]
+['text':'eof','line_number':1054,'multiline':False]

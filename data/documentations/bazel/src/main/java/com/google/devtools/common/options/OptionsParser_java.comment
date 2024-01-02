@@ -1,0 +1,296 @@
+['text':' Copyright 2014 The Bazel Authors. All rights reserved.','line_number':1,'multiline':False]
+['text':'','line_number':2,'multiline':False]
+['text':' Licensed under the Apache License, Version 2.0 (the "License");','line_number':3,'multiline':False]
+['text':' you may not use this file except in compliance with the License.','line_number':4,'multiline':False]
+['text':' You may obtain a copy of the License at','line_number':5,'multiline':False]
+['text':'','line_number':6,'multiline':False]
+['text':'    http://www.apache.org/licenses/LICENSE-2.0','line_number':7,'multiline':False]
+['text':'','line_number':8,'multiline':False]
+['text':' Unless required by applicable law or agreed to in writing, software','line_number':9,'multiline':False]
+['text':' distributed under the License is distributed on an "AS IS" BASIS,','line_number':10,'multiline':False]
+['text':' WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.','line_number':11,'multiline':False]
+['text':' See the License for the specific language governing permissions and','line_number':12,'multiline':False]
+['text':' limitations under the License.','line_number':13,'multiline':False]
+['text':'*
+ * A parser for options. Typical use case in a main method:
+ *
+ * <pre>
+ * OptionsParser parser = OptionsParser.newOptionsParser(FooOptions.class, BarOptions.class);
+ * parser.parseAndExitUponError(args);
+ * FooOptions foo = parser.getOptions(FooOptions.class);
+ * BarOptions bar = parser.getOptions(BarOptions.class);
+ * List&lt;String&gt; otherArguments = parser.getResidue();
+ * </pre>
+ *
+ * <p>FooOptions and BarOptions would be options specification classes, derived from OptionsBase,
+ * that contain fields annotated with @Option(...).
+ *
+ * <p>Alternatively, rather than calling {@link
+ * #parseAndExitUponError(OptionPriority.PriorityCategory, String, String[])}, client code may call
+ * {@link #parse(OptionPriority.PriorityCategory,String,List)}, and handle parser exceptions usage
+ * messages themselves.
+ *
+ * <p>This options parsing implementation has (at least) one design flaw. It allows both '--foo=baz'
+ * and '--foo baz' for all options except void, boolean and tristate options. For these, the 'baz'
+ * in '--foo baz' is not treated as a parameter to the option, making it is impossible to switch
+ * options between void/boolean/tristate and everything else without breaking backwards
+ * compatibility.
+ *
+ * @see Options a simpler class which you can use if you only have one options specification class
+ ','line_number':48,'multiline':True]
+['text':' TODO(b/65049598) make ConstructionException checked.','line_number':77,'multiline':False]
+['text':'*
+   * An unchecked exception thrown when there is a problem constructing a parser, e.g. an error
+   * while validating an {@link OptionDefinition} in one of its {@link OptionsBase} subclasses.
+   *
+   * <p>This exception is unchecked because it generally indicates an internal error affecting all
+   * invocations of the program. I.e., any such error should be immediately obvious to the
+   * developer. Although unchecked, we explicitly mark some methods as throwing it as a reminder in
+   * the API.
+   ','line_number':78,'multiline':True]
+['text':'*
+   * A cache for the parsed options data. Both keys and values are immutable, so this is always
+   * safe. Only access this field through the {@link #getOptionsData} method for thread-safety! The
+   * cache is very unlikely to grow to a significant amount of memory, because there's only a fixed
+   * set of options classes on the classpath.
+   ','line_number':101,'multiline':True]
+['text':'* Skipped prefixes for starlark options. ','line_number':110,'multiline':True]
+['text':'*
+   * Returns {@link OpaqueOptionsData} suitable for passing along to {@link
+   * Builder#optionsData(OpaqueOptionsData optionsData)}.
+   *
+   * <p>This is useful when you want to do the work of analyzing the given {@code optionsClasses}
+   * exactly once, but you want to parse lots of different lists of strings (and thus need to
+   * construct lots of different {@link OptionsParser} instances).
+   ','line_number':114,'multiline':True]
+['text':'* Returns the {@link OptionsData} associated with the given list of options classes. ','line_number':132,'multiline':True]
+['text':'* Returns the {@link OptionsData} associated with the given options class. ','line_number':153,'multiline':True]
+['text':'* A helper class to create new instances of {@link OptionsParser}. ','line_number':158,'multiline':True]
+['text':'* Directly sets the {@link OptionsData} used by this parser. ','line_number':167,'multiline':True]
+['text':'* Directly sets the {@link OpaqueOptionsData} used by this parser. ','line_number':175,'multiline':True]
+['text':'*
+     * Sets the {@link OptionsData} used by this parser, based on the given {@code optionsClasses}.
+     ','line_number':180,'multiline':True]
+['text':'*
+     * Sets the {@link OptionsData} used by this parser, based on the given {@code optionsClasses}.
+     ','line_number':189,'multiline':True]
+['text':'*
+     * Enables the Parser to handle params files using the provided {@link ParamsFilePreProcessor}.
+     ','line_number':197,'multiline':True]
+['text':'* Skip all the prefixes associated with Starlark options ','line_number':206,'multiline':True]
+['text':'*
+     * Indicates whether or not the parser will allow a non-empty residue; that is, iff this value
+     * is true then a call to one of the {@code parse} methods will throw {@link
+     * OptionsParsingException} unless {@link #getResidue()} is empty after parsing.
+     ','line_number':216,'multiline':True]
+['text':'* Sets whether the parser should ignore internal-only options. ','line_number':227,'multiline':True]
+['text':'* Sets the string the parser should look for as an identifier for flag aliases. ','line_number':234,'multiline':True]
+['text':'*
+     * Adds a map of flag aliases for the OptionsParser to reference. The keys are the aliases and
+     * the values are the actual options.
+     ','line_number':241,'multiline':True]
+['text':'* Returns a new {@link OptionsParser}. ','line_number':256,'multiline':True]
+['text':'* Returns a new {@link Builder} to create {@link OptionsParser} instances. ','line_number':262,'multiline':True]
+['text':' Since this was passed from OptionsParserImpl unparsed, it still appears in its raw','line_number':299,'multiline':False]
+['text':' form "--//foo=bar". Do some more string manipulation to reduce it to "//foo". By','line_number':300,'multiline':False]
+['text':' contract, getStarlarkOptions(), which we compare against below, contains options that','line_number':301,'multiline':False]
+['text':' were fully parsed by StarlarkOptionsParser. So the keys of that method are already in','line_number':302,'multiline':False]
+['text':' "//foo" form.','line_number':303,'multiline':False]
+['text':' TODO(https://github.com/bazelbuild/bazel/issues/17414): integrate Starlark and native','line_number':304,'multiline':False]
+['text':' options parsing more tightly together in the options parsing logic. The complication','line_number':305,'multiline':False]
+['text':' is that getSkippedOptions, which comes from OptionsParserImpl, has the','line_number':306,'multiline':False]
+['text':' ParsedOptionsDescription structure which includes where the option comes from (i.e.','line_number':307,'multiline':False]
+['text':' from a blazerc). But it doesn't have the <String, Object> map of the actually parsed','line_number':308,'multiline':False]
+['text':' Starlark option. StarlarkOptionsParser is the exact converse. It'd be nice to have','line_number':309,'multiline':False]
+['text':' common logic that could store both pieces of information so we don't have to','line_number':310,'multiline':False]
+['text':' awkwardly synthesize the data we need from both sources here.','line_number':311,'multiline':False]
+['text':' getSkippedOptions() doesn't necessarily *only* have Starlark options. By comparing here we','line_number':317,'multiline':False]
+['text':' filter to just Starlark options.','line_number':318,'multiline':False]
+['text':'*
+   * A convenience function for use in main methods. Parses the command line parameters, and exits
+   * upon error. Also, prints out the usage message if "--help" appears anywhere within {@code
+   * args}.
+   ','line_number':334,'multiline':True]
+['text':'* The metadata about an option, in the context of this options parser. ','line_number':358,'multiline':True]
+['text':'* Return a list of flags that this option expands to. ','line_number':376,'multiline':True]
+['text':' Check that the option is the same, with the same expansion.','line_number':385,'multiline':False]
+['text':'*
+   * The verbosity with which option help messages are displayed: short (just the name), medium
+   * (name, type, default, abbreviation), and long (full description).
+   ','line_number':398,'multiline':True]
+['text':'*
+   * Returns a description of all the options this parser can digest. In addition to {@link Option}
+   * annotations, this method also interprets {@link OptionsUsage} annotations which give an
+   * intuitive short description for the options. Options of the same category (see {@link
+   * OptionDocumentationCategory}) will be grouped together.
+   *
+   * @param productName the name of this product (blaze, bazel)
+   * @param helpVerbosity if {@code long}, the options will be described verbosely, including their
+   *     types, defaults and descriptions. If {@code medium}, the descriptions are omitted, and if
+   *     {@code short}, the options are just enumerated.
+   ','line_number':408,'multiline':True]
+['text':' Describe the category if we're going to end up using it at all.','line_number':430,'multiline':False]
+['text':' Describe the options in this category.','line_number':434,'multiline':False]
+['text':'*
+   * @return all documented options loaded in this parser, grouped by categories in display order.
+   ','line_number':443,'multiline':True]
+['text':' Get the documented options grouped by category.','line_number':453,'multiline':False]
+['text':' Only track documented options.','line_number':459,'multiline':False]
+['text':' Put the categories into display order and sort the options in each category.','line_number':467,'multiline':False]
+['text':'*
+   * Returns a description of all the options this parser can digest. In addition to {@link Option}
+   * annotations, this method also interprets {@link OptionsUsage} annotations which give an
+   * intuitive short description for the options. Options of the same category (see {@link
+   * Option#category}) will be grouped together.
+   *
+   * @param categoryDescriptions a mapping from category names to category descriptions.
+   *     Descriptions are optional; if omitted, a string based on the category name will be used.
+   * @param helpVerbosity if {@code long}, the options will be described verbosely, including their
+   *     types, defaults and descriptions. If {@code medium}, the descriptions are omitted, and if
+   *     {@code short}, the options are just enumerated.
+   ','line_number':480,'multiline':True]
+['text':'*
+   * Returns a description of all the options this parser can digest. In addition to {@link Option}
+   * annotations, this method also interprets {@link OptionsUsage} annotations which give an
+   * intuitive short description for the options.
+   *
+   * @param categoryDescriptions a mapping from category names to category descriptions. Options of
+   *     the same category (see {@link Option#category}) will be grouped together, preceded by the
+   *     description of the category.
+   ','line_number':528,'multiline':True]
+['text':'*
+   * Returns a description of all the options this parser can digest. In addition to {@link Option}
+   * annotations, this method also interprets {@link OptionsUsage} annotations which give an
+   * intuitive short description for the options.
+   ','line_number':577,'multiline':True]
+['text':' Describe the category if we're going to end up using it at all.','line_number':595,'multiline':False]
+['text':' Describe the options in this category.','line_number':599,'multiline':False]
+['text':'*
+   * Returns a string listing the possible flag completion for this command along with the command
+   * completion if any. See {@link OptionsUsage#getCompletion(OptionDefinition, StringBuilder)} for
+   * more details on the format for the flag completion.
+   ','line_number':608,'multiline':True]
+['text':' List all options','line_number':632,'multiline':False]
+['text':' Sort field for deterministic ordering','line_number':635,'multiline':False]
+['text':'*
+   * Returns a description of the option.
+   *
+   * @return The {@link OptionDescription} for the option, or null if there is no option by the
+   *     given name.
+   ','line_number':641,'multiline':True]
+['text':'*
+   * Returns the parsed options that get expanded from this option, whether it expands due to an
+   * implicit requirement or expansion.
+   *
+   * @param expansionOption the option that might need to be expanded. If this option does not
+   *     expand to other options, the empty list will be returned.
+   * @param originOfExpansionOption the origin of the option that's being expanded. This function
+   *     will take care of adjusting the source messages as necessary.
+   ','line_number':651,'multiline':True]
+['text':'*
+   * {@inheritDoc}
+   *
+   * <p>Returns the value set by the last previous call to {@link
+   * #parse(OptionPriority.PriorityCategory, String, List)} that successfully set the given option.
+   * If the option is of type {@link List}, the description will correspond to any one of the calls,
+   * but not necessarily the last.
+   ','line_number':666,'multiline':True]
+['text':'*
+   * A convenience method, equivalent to {@code parse(PriorityCategory.COMMAND_LINE, null,
+   * Arrays.asList(args))}.
+   ','line_number':679,'multiline':True]
+['text':'*
+   * A convenience method, equivalent to {@code parse(PriorityCategory.COMMAND_LINE, null, args)}.
+   ','line_number':687,'multiline':True]
+['text':'*
+   * Parses {@code args}, using the classes registered with this parser, at the given priority.
+   *
+   * <p>May be called multiple times; later options override existing ones if they have equal or
+   * higher priority. Strings that cannot be parsed as options are accumulated as residue, if this
+   * parser allows it.
+   *
+   * <p>{@link #getOptions(Class)} and {@link #getResidue()} will return the results.
+   *
+   * @param priority the priority at which to parse these options. Within this priority category,
+   *     each option will be given an index to track its position. If parse() has already been
+   *     called at this priority, the indexing will continue where it left off, to keep ordering.
+   * @param source the source to track for each option parsed.
+   * @param args the arg list to parse. Each element might be an option, a value linked to an
+   *     option, or residue.
+   ','line_number':694,'multiline':True]
+['text':'*
+   * Parses {@code args}, using the classes registered with this parser, at the given priority.
+   *
+   * <p>May be called multiple times; later options override existing ones if they have equal or
+   * higher priority. Strings that cannot be parsed as options are accumulated as residue, if this
+   * parser allows it.
+   *
+   * <p>{@link #getOptions(Class)} and {@link #getResidue()} will return the results.
+   *
+   * @param priority the priority at which to parse these options. Within this priority category,
+   *     each option will be given an index to track its position. If parse() has already been
+   *     called at this priority, the indexing will continue where it left off, to keep ordering.
+   * @param sourceFunction a function that maps option names to the source of the option.
+   * @param fallbackData if provided, the full collection of options that should be parsed and
+   *     ignored without raising an error if they are not recognized by the options classes
+   *     registered with this parser.
+   * @param args the arg list to parse. Each element might be an option, a value linked to an
+   *     option, or residue.
+   * @return a list of options and values that were parsed but ignored due to only resolving against
+   *     the fallback data
+   ','line_number':715,'multiline':True]
+['text':'*
+   * Parses the args at the priority of the provided option. This is useful for after-the-fact
+   * expansion.
+   *
+   * @param optionToExpand the option that is being "expanded" after the fact. The provided args
+   *     will have the same priority as this option.
+   * @param source a description of where the expansion arguments came from.
+   * @param args the arguments to parse as the expansion. Order matters, as the value of a flag may
+   *     be in the following argument.
+   * @param fallbackData if provided, the full collection of options that should be parsed and
+   *     ignored without raising an error if they are not recognized by the options classes
+   *     registered with this parser.
+   * @return a list of options and values that were parsed but ignored due to only resolving against
+   *     the fallback data
+   ','line_number':752,'multiline':True]
+['text':'*
+   * Sets provided value for a flag with a particular priority. This only sets the value of the flag
+   * itself and does not affect any of its implicit requirements or expansions.
+   *
+   * @param origin the origin of this option instance, it includes the priority of the value. If
+   *     other values have already been or will be parsed at a higher priority, they might override
+   *     the provided value. If this option already has a value at this priority, this value will
+   *     have precedence, but this should be avoided, as it breaks order tracking.
+   * @param option the option to add the value for.
+   * @param value the value to add at the given priority.
+   ','line_number':797,'multiline':True]
+['text':'*
+   * Clears the given option.
+   *
+   * <p>This will not affect options objects that have already been retrieved from this parser
+   * through {@link #getOptions(Class)}.
+   *
+   * @param option The option to clear.
+   * @return The old value of the option that was cleared.
+   * @throws IllegalArgumentException If the flag does not exist.
+   ','line_number':814,'multiline':True]
+['text':' Sets the residue (all elements parsed as non-options) to {@code residue}, as well as the part
+   * of the residue that follows the double-dash on the command line, {@code postDoubleDashResidue}.
+   * {@code postDoubleDashResidue} must be a subset of {@code residue}. ','line_number':856,'multiline':True]
+['text':'* Returns a list of warnings about problems encountered by previous parse calls. ','line_number':867,'multiline':True]
+['text':'* Returns all options fields of the given options class, in alphabetic order. ','line_number':907,'multiline':True]
+['text':'*
+   * Returns the option with the given name from the given class.
+   *
+   * <p>The preferred way of using this method is as the initializer for a static final field in the
+   * options class which defines the option. This reduces the possibility that another contributor
+   * might change the name of the option without realizing it's used by name elsewhere.
+   *
+   * @throws IllegalArgumentException if there are two or more options with that name.
+   * @throws java.util.NoSuchElementException if there are no options with that name.
+   ','line_number':913,'multiline':True]
+['text':'*
+   * Returns whether the given options class uses only the core types listed in {@link
+   * UsesOnlyCoreTypes#CORE_TYPES}. These are guaranteed to be deeply immutable and serializable.
+   ','line_number':930,'multiline':True]

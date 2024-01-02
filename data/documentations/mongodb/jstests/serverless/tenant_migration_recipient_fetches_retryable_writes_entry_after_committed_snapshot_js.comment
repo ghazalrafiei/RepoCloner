@@ -1,0 +1,59 @@
+['text':'*
+ * Tests that the tenant migration recipient correctly reads 'config.transactions' entries from a
+ * donor secondary. During secondary oplog application, updates to the same 'config.transactions'
+ * entry are coalesced in a single update of the most recent retryable write statement. If the
+ * majority committed snapshot of a secondary exists in the middle of a completed batch, then a
+ * recipient's majority read on 'config.transactions' can miss committed retryable writes at that
+ * majority commit point.
+ *
+ * @tags: [
+ *   incompatible_with_macos,
+ *   # Shard merge recipient only reads from the donor primary and the primary checkpoints
+ *   # startMigrationDonorTimestamp. It ensures the donor primary can't have a snapshot in the
+ *   # middle of a batch and makes this test inapplicable.
+ *   incompatible_with_shard_merge,
+ *   incompatible_with_windows_tls,
+ *   requires_majority_read_concern,
+ *   requires_persistence,
+ *   serverless,
+ *   requires_fcv_71,
+ * ]
+ ','line_number':1,'multiline':True]
+['text':' Set the 'syncdelay' to 1s to speed up checkpointing. Also explicitly set the batch','line_number':56,'multiline':False]
+['text':' size for oplog application to ensure the number of retryable write statements being','line_number':57,'multiline':False]
+['text':' made majority committed isn't a multiple of it.','line_number':58,'multiline':False]
+['text':' Set the bgSyncOplogFetcherBatchSize to 1 oplog entry to guarantee replication','line_number':60,'multiline':False]
+['text':' progress with the stopReplProducerOnDocument failpoint.','line_number':61,'multiline':False]
+['text':' Force secondaries to sync from the primary to guarantee replication progress with the','line_number':67,'multiline':False]
+['text':' stopReplProducerOnDocument failpoint. Also disable primary catchup because some replicated','line_number':68,'multiline':False]
+['text':' retryable write statements are intentionally not being made majority committed.','line_number':69,'multiline':False]
+['text':' Allow non-timestamped reads on donor after migration completes for testing.','line_number':74,'multiline':False]
+['text':' The recipient needs to choose a donor secondary as sync source.','line_number':101,'multiline':False]
+['text':' Start tenant migration and hang after recipient connects to donor sync source.','line_number':111,'multiline':False]
+['text':' Recipient should connect to secondary1 as other secondaries are hidden.','line_number':116,'multiline':False]
+['text':' The default WC is majority and the donor replica set can't satisfy majority writes after we','line_number':124,'multiline':False]
+['text':' stop replication on the secondaries.','line_number':125,'multiline':False]
+['text':' Disable replication on all of the secondaries to manually control the replication progress.','line_number':130,'multiline':False]
+['text':' While replication is still entirely disabled, additionally disable replication partway','line_number':134,'multiline':False]
+['text':' into the retryable write on other secondaries. The idea is that while secondary1 will','line_number':135,'multiline':False]
+['text':' apply all of the oplog entries in a single batch, other secondaries will only apply up','line_number':136,'multiline':False]
+['text':' to counterMajorityCommitted oplog entries.','line_number':137,'multiline':False]
+['text':' Perform all the retryable write statements on donor primary.','line_number':146,'multiline':False]
+['text':' Get the majority committed and last oplog entry of the respective retryable write statements.','line_number':154,'multiline':False]
+['text':' Wait for secondary1 to have applied through the counterTotal retryable write statement and','line_number':168,'multiline':False]
+['text':' other secondaries applied through the counterMajorityCommitted retryable write statement,','line_number':169,'multiline':False]
+['text':' to guarantee that secondary1 will advance its stable_timestamp when learning of the other','line_number':170,'multiline':False]
+['text':' secondaries also having applied through counterMajorityCommitted.','line_number':171,'multiline':False]
+['text':' Wait for secondary1 to have advanced its stable timestamp, and therefore updated the','line_number':189,'multiline':False]
+['text':' committed snapshot.','line_number':190,'multiline':False]
+['text':' Wait before tenant migration starts to wait for the retryable write pre-fetch result to be','line_number':203,'multiline':False]
+['text':' majority committed.','line_number':204,'multiline':False]
+['text':' At this point, the recipient should have fetched retryable writes and put them into the','line_number':211,'multiline':False]
+['text':' oplog buffer.','line_number':212,'multiline':False]
+['text':' Number of entries fetched into oplog buffer is the majority committed count - 1 since we only','line_number':217,'multiline':False]
+['text':' fetch entries that occur before startFetchingDonorOpTime, which is equal to the commit point.','line_number':218,'multiline':False]
+['text':' Resume replication on all the secondaries and wait for migration to complete.','line_number':224,'multiline':False]
+['text':' After migration, verify that if we perform the same retryable write statements on the recipient,','line_number':234,'multiline':False]
+['text':' these statements will not be executed.','line_number':235,'multiline':False]
+['text':' The second query should return the same result as first one, since the recipient should have','line_number':245,'multiline':False]
+['text':' fetched the executed retryable writes from donor.','line_number':246,'multiline':False]

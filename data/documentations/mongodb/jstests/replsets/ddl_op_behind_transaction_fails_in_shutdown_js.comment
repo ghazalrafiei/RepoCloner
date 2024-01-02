@@ -1,0 +1,32 @@
+['text':'*
+ * Tests that a DDL op (drop collection) begun after a prepared transaction fails during shutdown.
+ * Sets up a prepared transaction, starts drop collection in a parallel shell, attempts to wait for
+ * the drop collection operation to enqueue a lock request waiting behind the transaction, then
+ * shuts down the server. On restarting, we expect to find the collection was not dropped, that
+ * there is no way for a DDL op to slip through and succeed after transaction resources (locks) are
+ * cleared away during shutdown.
+ *
+ * This is an attempt to test that DDL ops cannot succeed AFTER transaction state (including locks)
+ * is cleared during shutdown. However, a lot goes on during shutdown and the DDL op probably gets
+ * interrupted well before the transaction state is cleared: either during shutdown's repl
+ * stepdown attempt or as soon as operations get interrupted for shutdown (which occurs before
+ * transaction state is cleared).
+ *
+ * @tags: [requires_persistence, uses_prepare_transaction, uses_transactions]
+ ','line_number':1,'multiline':True]
+['text':' 'db' is defined in the parallel shell 'startParallelShell' will spin up.','line_number':61,'multiline':False]
+['text':' Use a failpoint to wait for the drop operation to get as close as possible to a lock request','line_number':70,'multiline':False]
+['text':' before we release it and wait 1 second more for it to hopefully have time to enqueue a lock','line_number':71,'multiline':False]
+['text':' request. It takes a while for the parallel shell to start up, establish a connection with the','line_number':72,'multiline':False]
+['text':' server for the drop operation, etc., and we do not want to interrupt it earlier than lock','line_number':73,'multiline':False]
+['text':' acquisition with the shutdown signal.','line_number':74,'multiline':False]
+['text':'','line_number':75,'multiline':False]
+['text':' This is best-effort, not deterministic, since we cannot place a fail point directly in the','line_number':76,'multiline':False]
+['text':' locking code as that would hang everything rather than just drop.','line_number':77,'multiline':False]
+['text':' Skip validation because it requires a lock that the prepared transaction is blocking.','line_number':96,'multiline':False]
+['text':'restart','line_number':98,'multiline':True]
+['text':' We expect two documents because the third is in an uncommitted transaction and not visible.','line_number':104,'multiline':False]
+['text':' We will check that the prepared transaction is still active as expected, since we are here.','line_number':112,'multiline':False]
+['text':' Skip validation because it requires a lock that the prepared transaction is blocking.','line_number':121,'multiline':False]
+['text':'use default exit signal','line_number':122,'multiline':True]
+['text':'forRestart','line_number':122,'multiline':True]

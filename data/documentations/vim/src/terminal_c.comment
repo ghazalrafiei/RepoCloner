@@ -1,0 +1,1035 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]
+['text':'
+ * Terminal window support, see ":help :terminal".
+ *
+ * There are three parts:
+ * 1. Generic code for all systems.
+ *    Uses libvterm for the terminal emulator.
+ * 2. The MS-Windows implementation.
+ *    Uses winpty.
+ * 3. The Unix-like implementation.
+ *    Uses pseudo-tty's (pty's).
+ *
+ * For each terminal one VTerm is constructed.  This uses libvterm.  A copy of
+ * this library is in the libvterm directory.
+ *
+ * When a terminal window is opened, a job is started that will be connected to
+ * the terminal emulator.
+ *
+ * If the terminal window has keyboard focus, typed keys are converted to the
+ * terminal encoding and writing to the job over a channel.
+ *
+ * If the job produces output, it is written to the terminal emulator.  The
+ * terminal emulator invokes callbacks when its screen content changes.  The
+ * line range is stored in tl_dirty_row_start and tl_dirty_row_end.  Once in a
+ * while, if the terminal window is visible, the screen contents is drawn.
+ *
+ * When the job ends the text is put in a buffer.  Redrawing then happens from
+ * that buffer, attributes come from the scrollback buffer tl_scrollback.
+ * When the buffer is changed it is turned into a normal buffer, the attributes
+ * in tl_scrollback are no longer used.
+ ','line_number':10,'multiline':True]
+['text':' This is VTermScreenCell without the characters, thus much smaller.','line_number':54,'multiline':False]
+['text':' can differ per line','line_number':63,'multiline':False]
+['text':' allocated','line_number':64,'multiline':False]
+['text':' for short line','line_number':65,'multiline':False]
+['text':' for tl_scrollback_postponed','line_number':66,'multiline':False]
+['text':' typedef term_T in structs.h','line_number':86,'multiline':False]
+['text':' when non-zero used for :!cmd output','line_number':94,'multiline':False]
+['text':' row with first line of system terminal','line_number':95,'multiline':False]
+['text':' Set when setting the size of a vterm, reset after redrawing.','line_number':98,'multiline':False]
+['text':' TRUE: Terminal-Normal mode','line_number':101,'multiline':False]
+['text':' still need to handle tl_finish','line_number':104,'multiline':False]
+['text':' ++close or :terminal without argument','line_number':108,'multiline':False]
+['text':' ++noclose','line_number':109,'multiline':False]
+['text':' ++open','line_number':110,'multiline':False]
+['text':' prefix for terminal API function','line_number':113,'multiline':False]
+['text':' To format the status bar','line_number':115,'multiline':False]
+['text':' Structure that always needs to be hold','line_number':122,'multiline':False]
+['text':' last known vterm size','line_number':131,'multiline':False]
+['text':' NULL or allocated','line_number':135,'multiline':False]
+['text':' NULL or allocated','line_number':136,'multiline':False]
+['text':' Range of screen rows to update.  Zero based.','line_number':138,'multiline':False]
+['text':' MAX_ROW if nothing dirty','line_number':139,'multiline':False]
+['text':' row below last one to update','line_number':140,'multiline':False]
+['text':' text updated after making snapshot','line_number':141,'multiline':False]
+['text':' to be scrolled up','line_number':146,'multiline':False]
+['text':' replaces "Terminal"; allocated','line_number':152,'multiline':False]
+['text':' rows of top diff file or zero','line_number':156,'multiline':False]
+['text':' rows of bottom diff file','line_number':157,'multiline':False]
+['text':' 1: block, 2: underline, 3: bar','line_number':162,'multiline':False]
+['text':' NULL or allocated','line_number':163,'multiline':False]
+['text':' array of 16 colors specified by term_start, can','line_number':165,'multiline':False]
+['text':' be NULL','line_number':166,'multiline':False]
+['text':' incomplete OSC string','line_number':168,'multiline':False]
+['text':' CTRL-\ CTRL-N used','line_number':171,'multiline':False]
+['text':' CTRL-W N used','line_number':172,'multiline':False]
+['text':'
+ * List of all active terminals.
+ ','line_number':174,'multiline':True]
+['text':' Terminal active in terminal_loop().','line_number':179,'multiline':False]
+['text':' used for tl_dirty_row_end to update all rows','line_number':187,'multiline':False]
+['text':'
+ * Functions with separate implementation for MS-Windows and Unix-like systems.
+ ','line_number':193,'multiline':True]
+['text':' The character that we know (or assume) that the terminal expects for the','line_number':206,'multiline':False]
+['text':' backspace key.','line_number':207,'multiline':False]
+['text':' Store the last set and the desired cursor properties, so that we only update','line_number':210,'multiline':False]
+['text':' them when needed.  Doing it unnecessary may result in flicker.','line_number':211,'multiline':False]
+['text':'/////////////////////////////////////','line_number':220,'multiline':False]
+['text':' 1. Generic code for all systems.','line_number':221,'multiline':False]
+['text':' Avoid a free & alloc if the value is already right.','line_number':234,'multiline':False]
+['text':'
+ * Parse 'termwinsize' and set "rows" and "cols" for the terminal size in the
+ * current window.
+ * Sets "rows" and/or "cols" to zero when it should follow the window size.
+ * Return TRUE if the size is the minimum size: "24*80".
+ ','line_number':248,'multiline':True]
+['text':' Syntax of value was already checked when it's set.','line_number':267,'multiline':False]
+['text':'
+ * Determine the terminal size from 'termwinsize' and the current window.
+ ','line_number':282,'multiline':True]
+['text':' Use the whole screen for the system command.  However, it will start','line_number':294,'multiline':False]
+['text':' at the command line and scroll up as needed, using tl_toprow.','line_number':295,'multiline':False]
+['text':' Set 'winsize' now to avoid a resize at the next redraw.','line_number':328,'multiline':False]
+['text':'
+ * Initialize job options for a terminal job.
+ * Caller may overrule some of them.
+ ','line_number':341,'multiline':True]
+['text':'
+ * Set job options mandatory for a terminal job.
+ ','line_number':356,'multiline':True]
+['text':' Win32: Redirecting the job output won't work, thus always connect stdout','line_number':363,'multiline':False]
+['text':' here.','line_number':364,'multiline':False]
+['text':' Connect stdout to the terminal.','line_number':368,'multiline':False]
+['text':' Win32: Redirecting the job output won't work, thus always connect stderr','line_number':376,'multiline':False]
+['text':' here.','line_number':377,'multiline':False]
+['text':' Connect stderr to the terminal.','line_number':381,'multiline':False]
+['text':'
+ * Flush messages on channels.
+ ','line_number':395,'multiline':True]
+['text':'
+ * Close a terminal buffer (and its window).  Used when creating the terminal
+ * fails.
+ ','line_number':405,'multiline':True]
+['text':' Wiping out the buffer will also close the window and call','line_number':422,'multiline':False]
+['text':' free_terminal().','line_number':423,'multiline':False]
+['text':'
+ * Start a terminal window and return its buffer.
+ * Use either "argvar" or "argv", the other must be NULL.
+ * When "flags" has TERM_START_NOJOB only create the buffer, b_term and open
+ * the window.
+ * Returns NULL when failed.
+ ','line_number':427,'multiline':True]
+['text':' only partly filled','line_number':448,'multiline':False]
+['text':' Create a new buffer in the current window.','line_number':489,'multiline':False]
+['text':' Create a new buffer without a window. Make it the current buffer for','line_number':509,'multiline':False]
+['text':' a moment to be able to do the initializations.','line_number':510,'multiline':False]
+['text':' Open a new window or tab.','line_number':526,'multiline':False]
+['text':' split failed','line_number':546,'multiline':False]
+['text':' Only one size was taken care of with :new, do the other one.  With','line_number':556,'multiline':False]
+['text':' "curwin" both need to be done.','line_number':557,'multiline':False]
+['text':' Link the new terminal in the list of active terminals.','line_number':564,'multiline':False]
+['text':' Prepend a ! to the command name to avoid the buffer name equals','line_number':606,'multiline':False]
+['text':' the executable, otherwise ":w!" would overwrite it.','line_number':607,'multiline':False]
+['text':' Avoid that 'buftype' is reset when this buffer is entered.','line_number':634,'multiline':False]
+['text':' Mark the buffer as not modifiable. It can only be made modifiable after','line_number':637,'multiline':False]
+['text':' the job finished.','line_number':638,'multiline':False]
+['text':' Remember the command for the session file.','line_number':651,'multiline':False]
+['text':' Save the user-defined palette, it is only used in GUI (or 'tgc' is on).','line_number':713,'multiline':False]
+['text':' System dependent: setup the vterm and maybe start the job in it.','line_number':726,'multiline':False]
+['text':' Get and remember the size we ended up with.  Update the pty.','line_number':738,'multiline':False]
+['text':' display first line below typed command','line_number':744,'multiline':False]
+['text':' Make sure we don't get stuck on sending keys to the job, it leads to','line_number':750,'multiline':False]
+['text':' a deadlock if the job is waiting for Vim to read.','line_number':751,'multiline':False]
+['text':' When waiting for input need to return and possibly end up in','line_number':769,'multiline':False]
+['text':' terminal_loop() instead.','line_number':770,'multiline':False]
+['text':'
+ * ":terminal": open a terminal window and execute a job in it.
+ ','line_number':791,'multiline':True]
+['text':' Note: Keep this in sync with get_terminalopt_name.','line_number':821,'multiline':False]
+['text':' Make a copy of 'shell', an autocommand may change the option.','line_number':915,'multiline':False]
+['text':' default to close when the shell exits','line_number':918,'multiline':False]
+['text':' Write lines from current buffer to the job.','line_number':925,'multiline':False]
+['text':' :term ++shell command','line_number':940,'multiline':False]
+['text':' Note: Keep this in sync with ex_terminal.','line_number':977,'multiline':False]
+['text':' These are platform-specific values used for job_stop(). They are defined','line_number':1003,'multiline':False]
+['text':' in each platform's mch_signal_job(). Just use a unified auto-complete','line_number':1004,'multiline':False]
+['text':' list for simplicity.','line_number':1005,'multiline':False]
+['text':'
+ * Command-line expansion for :terminal [options]
+ ','line_number':1021,'multiline':True]
+['text':'
+ * Write a :terminal command to the session file to restore the terminal in
+ * window "wp".
+ * Return FAIL if writing fails.
+ ','line_number':1065,'multiline':True]
+['text':' There are multiple views into this terminal buffer. We don't want to','line_number':1078,'multiline':False]
+['text':' create the terminal multiple times. If it's the first time, create,','line_number':1079,'multiline':False]
+['text':' otherwise link to the first buffer.','line_number':1080,'multiline':False]
+['text':' we've already opened this terminal buffer','line_number':1089,'multiline':False]
+['text':' Create the terminal and run the command.  This is not without','line_number':1096,'multiline':False]
+['text':' risk, but let's assume the user only creates a session when this','line_number':1097,'multiline':False]
+['text':' will be OK.','line_number':1098,'multiline':False]
+['text':'
+ * Return TRUE if "buf" has a terminal that should be restored.
+ ','line_number':1125,'multiline':True]
+['text':'
+ * Free the scrollback buffer for "term".
+ ','line_number':1138,'multiline':True]
+['text':' Terminals that need to be freed soon.','line_number':1155,'multiline':False]
+['text':'
+ * Free a terminal and everything it refers to.
+ * Kills the job if there is one.
+ * Called when wiping out a buffer.
+ * The actual terminal structure is freed later in free_unused_terminals(),
+ * because callbacks may wipe out a buffer while the terminal is still
+ * referenced.
+ ','line_number':1158,'multiline':True]
+['text':' Unlink the terminal form the list of terminals.','line_number':1175,'multiline':False]
+['text':'
+ * Get the part that is connected to the tty. Normally this is PART_IN, but
+ * when writing buffer lines to the job it can be another.  This makes it
+ * possible to do "1,5term vim -".
+ ','line_number':1236,'multiline':True]
+['text':'
+ * Read any vterm output and send it on the channel.
+ ','line_number':1259,'multiline':True]
+['text':'
+ * Write job output "msg[len]" to the vterm.
+ ','line_number':1274,'multiline':True]
+['text':' Limit the length to 'termwinscroll' * cols * 3 bytes.  Keep the text at','line_number':1286,'multiline':False]
+['text':' the end.','line_number':1287,'multiline':False]
+['text':' flush vterm buffer when vterm responded to control sequence','line_number':1299,'multiline':False]
+['text':' this invokes the damage callbacks','line_number':1303,'multiline':False]
+['text':' avoid the cursor positioned below the last used line','line_number':1337,'multiline':False]
+['text':' do not use the window cursor position','line_number':1341,'multiline':False]
+['text':' Make sure an invoked autocmd doesn't delete the buffer (and the','line_number':1360,'multiline':False]
+['text':' terminal) under our fingers.','line_number':1361,'multiline':False]
+['text':' save and restore curwin and curbuf, in case the autocmd changes them','line_number':1364,'multiline':False]
+['text':'
+ * Invoked when "msg" output from a job was received.  Write it to the terminal
+ * of "buffer".
+ ','line_number':1373,'multiline':True]
+['text':' Win32: Cannot redirect output of the job, intercept it here and write to','line_number':1384,'multiline':False]
+['text':' the file.','line_number':1385,'multiline':False]
+['text':' show system output, scrolling up the screen as needed','line_number':1406,'multiline':False]
+['text':' In Terminal-Normal mode we are displaying the buffer, not the terminal','line_number':1412,'multiline':False]
+['text':' contents, thus no screen update is needed.','line_number':1413,'multiline':False]
+['text':' Don't use update_screen() when editing the command line, it gets','line_number':1416,'multiline':False]
+['text':' cleared.','line_number':1417,'multiline':False]
+['text':' TODO: only update once in a while.','line_number':1418,'multiline':False]
+['text':' update_screen() can be slow, check the terminal wasn't closed','line_number':1423,'multiline':False]
+['text':' already','line_number':1424,'multiline':False]
+['text':'
+ * Send a mouse position and click to the vterm
+ ','line_number':1433,'multiline':True]
+['text':'
+ * Handle a mouse click, drag or release.
+ * Return TRUE when a mouse event is sent to the terminal.
+ ','line_number':1459,'multiline':True]
+['text':' For modeless selection mouse drag and release events are ignored, unless','line_number':1467,'multiline':False]
+['text':' they are preceded with a mouse down event','line_number':1468,'multiline':False]
+['text':' Terminal is not using the mouse, use modeless selection.','line_number':1475,'multiline':False]
+['text':' Ignore drag and release events when the button-down wasn't','line_number':1482,'multiline':False]
+['text':' seen before.','line_number':1483,'multiline':False]
+['text':' mouse click in the window gave us focus, handle that','line_number':1491,'multiline':False]
+['text':' click now','line_number':1492,'multiline':False]
+['text':' FALLTHROUGH','line_number':1501,'multiline':False]
+['text':' Should we call mouse_has() here?','line_number':1508,'multiline':False]
+['text':' Translate shift-left to right button.','line_number':1518,'multiline':False]
+['text':'
+ * Convert typed key "c" with modifiers "modmask" into bytes to send to the
+ * job.
+ * Return the number of bytes in "buf".
+ ','line_number':1555,'multiline':True]
+['text':' don't use VTERM_KEY_ENTER, it may do an unwanted conversion','line_number':1570,'multiline':False]
+['text':' don't use VTERM_KEY_BACKSPACE, it always','line_number':1572,'multiline':False]
+['text':' becomes 0x7f DEL','line_number':1573,'multiline':False]
+['text':' TODO','line_number':1614,'multiline':False]
+['text':' TODO','line_number':1616,'multiline':False]
+['text':' TODO','line_number':1618,'multiline':False]
+['text':' TODO','line_number':1619,'multiline':False]
+['text':' TODO','line_number':1622,'multiline':False]
+['text':' TODO','line_number':1623,'multiline':False]
+['text':' TODO ','line_number':1666,'multiline':True]
+['text':' TODO ','line_number':1667,'multiline':True]
+['text':' TODO ','line_number':1668,'multiline':True]
+['text':' TODO ','line_number':1669,'multiline':True]
+['text':' TODO ','line_number':1670,'multiline':True]
+['text':' TODO ','line_number':1671,'multiline':True]
+['text':' add modifiers for the typed key','line_number':1705,'multiline':False]
+['text':' Ctrl-Shift-i may have the key "I" instead of "i", but for the kitty','line_number':1713,'multiline':False]
+['text':' keyboard protocol should use "i".  Applies to all ascii letters.','line_number':1714,'multiline':False]
+['text':'
+     * Convert special keys to vterm keys:
+     * - Write keys to vterm: vterm_keyboard_key()
+     * - Write output to channel.
+     ','line_number':1720,'multiline':True]
+['text':' Special key, let vterm convert it.','line_number':1726,'multiline':False]
+['text':' Normal character, let vterm convert it.','line_number':1729,'multiline':False]
+['text':' Read back the converted escape sequence.','line_number':1732,'multiline':False]
+['text':'
+ * Return TRUE if the job for "term" is still running.
+ * If "check_job_status" is TRUE update the job status.
+ * NOTE: "term" may be freed by callbacks.
+ ','line_number':1736,'multiline':True]
+['text':' Also consider the job finished when the channel is closed, to avoid a','line_number':1744,'multiline':False]
+['text':' race condition when updating the title.','line_number':1745,'multiline':False]
+['text':' Careful: Checking the job status may invoke callbacks, which close','line_number':1753,'multiline':False]
+['text':' the buffer and terminate "term".  However, "job" will not be freed','line_number':1754,'multiline':False]
+['text':' yet.','line_number':1755,'multiline':False]
+['text':'
+ * Return TRUE if the job for "term" is still running.
+ ','line_number':1762,'multiline':True]
+['text':'
+ * Return TRUE if the job for "term" is still running, ignoring the job was
+ * "NONE".
+ ','line_number':1771,'multiline':True]
+['text':'
+ * Return TRUE if "term" has an active channel and used ":term NONE".
+ ','line_number':1781,'multiline':True]
+['text':' Also consider the job finished when the channel is closed, to avoid a','line_number':1787,'multiline':False]
+['text':' race condition when updating the title.','line_number':1788,'multiline':False]
+['text':'','line_number':1795,'multiline':False]
+['text':' Used to confirm whether we would like to kill a terminal.','line_number':1796,'multiline':False]
+['text':' Return OK when the user confirms to kill it.','line_number':1797,'multiline':False]
+['text':' Return FAIL if the user selects otherwise.','line_number':1798,'multiline':False]
+['text':'','line_number':1799,'multiline':False]
+['text':'
+ * Used when exiting: kill the job in "buf" if so desired.
+ * Return OK when the job finished.
+ * Return FAIL when the job is still running.
+ ','line_number':1814,'multiline':True]
+['text':' wait for up to a second for the job to die','line_number':1840,'multiline':False]
+['text':' buffer, terminal and job may be cleaned up while waiting','line_number':1845,'multiline':False]
+['text':' Call job_status() to update jv_status. It may cause the job to be','line_number':1852,'multiline':False]
+['text':' cleaned up but it won't be freed.','line_number':1853,'multiline':False]
+['text':'
+ * Add the last line of the scrollback buffer to the buffer in the window.
+ ','line_number':1864,'multiline':True]
+['text':' Delete the empty line that was in the empty buffer.','line_number':1896,'multiline':False]
+['text':' We only compare the RGB colors, ignoring the ANSI index and type.','line_number':1915,'multiline':False]
+['text':' Thus black set explicitly is equal the background black.','line_number':1916,'multiline':False]
+['text':'
+ * Add an empty scrollback line to "term".  When "lnum" is not zero, add the
+ * line at this position.  Otherwise at the end.
+ ','line_number':1925,'multiline':True]
+['text':'
+ * Remove the terminal contents from the scrollback and the buffer.
+ * Used before adding a new scrollback line or updating the buffer for lines
+ * displayed in the terminal.
+ ','line_number':1955,'multiline':True]
+['text':'
+ * Add the current lines of the terminal to scrollback and to the buffer.
+ ','line_number':1981,'multiline':True]
+['text':' First remove the lines that were appended before, they might be','line_number':1998,'multiline':False]
+['text':' outdated.','line_number':1999,'multiline':False]
+['text':' Assume the last attr is the filler attr.','line_number':2015,'multiline':False]
+['text':' Line was skipped, add an empty line.','line_number':2024,'multiline':False]
+['text':' second cell of double-width character has the','line_number':2059,'multiline':False]
+['text':' same attributes.','line_number':2060,'multiline':False]
+['text':' Each character can be up to 6 bytes.','line_number':2063,'multiline':False]
+['text':' Add trailing empty lines.','line_number':2095,'multiline':False]
+['text':'
+ * Loop over all windows in the current tab, and also curwin, which is not
+ * encountered when using a terminal in a popup window.
+ * Return TRUE if "*wp" was set to the next window.
+ ','line_number':2110,'multiline':True]
+['text':'
+ * If needed, add the current lines of the terminal to scrollback and to the
+ * buffer.  Called after the job has ended and when switching to
+ * Terminal-Normal mode.
+ * When "redraw" is TRUE redraw the windows that show the terminal.
+ ','line_number':2131,'multiline':True]
+['text':' Update the snapshot only if something changes or the buffer does not','line_number':2143,'multiline':False]
+['text':' have all the lines.','line_number':2144,'multiline':False]
+['text':' Obtain the current background color.','line_number':2149,'multiline':False]
+['text':'
+ * Check if any terminal timer expired.  If so, copy text from the terminal to
+ * the buffer.
+ * Return the time until the next timer will expire.
+ ','line_number':2179,'multiline':True]
+['text':'
+ * When "normal_mode" is TRUE set the terminal to Terminal-Normal mode,
+ * otherwise end it.
+ ','line_number':2210,'multiline':True]
+['text':'
+ * Called after the job is finished and Terminal mode is not active:
+ * Move the vterm contents into the scrollback buffer and free the vterm.
+ ','line_number':2226,'multiline':True]
+['text':'
+ * Switch from Terminal-Job mode to Terminal-Normal mode.
+ * Suspends updating the terminal window.
+ ','line_number':2239,'multiline':True]
+['text':' Append the current terminal contents to the buffer.','line_number':2250,'multiline':False]
+['text':' Move the window cursor to the position of the cursor in the','line_number':2253,'multiline':False]
+['text':' terminal.','line_number':2254,'multiline':False]
+['text':' Display the same lines as in the terminal.','line_number':2262,'multiline':False]
+['text':'
+ * Returns TRUE if the current window contains a terminal and we are in
+ * Terminal-Normal mode.
+ ','line_number':2266,'multiline':True]
+['text':'
+ * Switch from Terminal-Normal mode to Terminal-Job mode.
+ * Restores updating the terminal window.
+ ','line_number':2278,'multiline':True]
+['text':'
+ * When "modify_other_keys" is set then vgetc() should not reduce a key with
+ * modifiers into a basic key.  However, we may only find out after calling
+ * vgetc().  Therefore vgetorpeek() will call check_no_reduce_keys() to update
+ * "no_reduce_keys" before using it.
+ ','line_number':2298,'multiline':True]
+['text':' initial value','line_number':2305,'multiline':False]
+['text':' modify_other_keys was off before calling vgetc()','line_number':2306,'multiline':False]
+['text':' no_reduce_keys was incremented in term_vgetc() or','line_number':2307,'multiline':False]
+['text':' check_no_reduce_keys(), must be decremented.','line_number':2308,'multiline':False]
+['text':'
+ * Return TRUE if the term is using modifyOtherKeys level 2 or the kitty
+ * keyboard protocol.
+ ','line_number':2313,'multiline':True]
+['text':' "modify_other_keys" or kitty keyboard protocol was enabled while','line_number':2337,'multiline':False]
+['text':' waiting.','line_number':2338,'multiline':False]
+['text':'
+ * Get a key from the user with terminal mode mappings.
+ * Note: while waiting a terminal may be closed and freed if the channel is
+ * closed and ++close was used.  This may even happen before we get here.
+ ','line_number':2344,'multiline':True]
+['text':'
+ * Send key "c" with modifiers "modmask" to terminal.
+ * Return FAIL when the key needs to be handled in Normal mode.
+ * Return OK when the key was dropped or sent to the terminal.
+ ','line_number':2384,'multiline':True]
+['text':' Catch keys that need to be handled as in Normal mode.','line_number':2396,'multiline':False]
+['text':' used for :normal when running out of chars','line_number':2410,'multiline':False]
+['text':' FALLTHROUGH','line_number':2419,'multiline':False]
+['text':' click or scroll outside the current window or on status','line_number':2455,'multiline':False]
+['text':' line or vertical separator','line_number':2456,'multiline':False]
+['text':' Convert the typed key to a sequence of bytes for the job.','line_number':2474,'multiline':False]
+['text':' TODO: if FAIL is returned, stop?','line_number':2477,'multiline':False]
+['text':'
+ * Handle CTRL-W "": send register contents to the job.
+ ','line_number':2484,'multiline':True]
+['text':' job finished while waiting for a character','line_number':2504,'multiline':False]
+['text':' CTRL-W "= prompt for expression to evaluate.','line_number':2507,'multiline':False]
+['text':' job finished while waiting for a character','line_number':2511,'multiline':False]
+['text':'
+ * Return TRUE when waiting for a character in the terminal, the cursor of the
+ * terminal should be displayed.
+ ','line_number':2554,'multiline':True]
+['text':'
+ * Return the highlight group ID for the terminal and the window.
+ ','line_number':2564,'multiline':True]
+['text':' The highlight group overrules the defaults.','line_number':2605,'multiline':False]
+['text':' this will restore the initial cursor style, if possible','line_number':2642,'multiline':False]
+['text':'
+ * Set the cursor color and shape, if not last set to these.
+ ','line_number':2649,'multiline':True]
+['text':' For the GUI the cursor properties are obtained with','line_number':2656,'multiline':False]
+['text':' term_get_cursor_shape().','line_number':2657,'multiline':False]
+['text':'
+ * Reset the desired cursor properties and restore them when needed.
+ ','line_number':2670,'multiline':True]
+['text':'
+ * Returns TRUE if the current window contains a terminal and we are sending
+ * keys to the job.
+ * If "check_job_status" is TRUE update the job status.
+ ','line_number':2686,'multiline':True]
+['text':'
+ * Returns TRUE if the current window contains a terminal and we are sending
+ * keys to the job.
+ ','line_number':2702,'multiline':True]
+['text':'
+ * Called when entering a window with the mouse.  If this is a terminal window
+ * we may want to change state.
+ ','line_number':2712,'multiline':True]
+['text':'
+ * vgetc() may not include CTRL in the key when modify_other_keys is set.
+ * Return the Ctrl-key value in that case.
+ ','line_number':2752,'multiline':True]
+['text':'
+ * When modify_other_keys is set then do the reverse of raw_c_to_ctrl().
+ * Also when the Kitty keyboard protocol is used.
+ * May set "mod_mask".
+ ','line_number':2765,'multiline':True]
+['text':'
+ * Wait for input and send it to the job.
+ * When "blocking" is TRUE wait for a character to be typed.  Otherwise return
+ * when there is no more typahead.
+ * Return when the start of a CTRL-W command is typed or anything else that
+ * should be handled as a Normal mode command.
+ * Returns OK if a typed character is to be handled in Normal mode, FAIL if
+ * the terminal was closed.
+ ','line_number':2781,'multiline':True]
+['text':' Remember the terminal we are sending keys to.  However, the terminal','line_number':2803,'multiline':False]
+['text':' might be closed while waiting for a character, e.g. typing "exit" in a','line_number':2804,'multiline':False]
+['text':' shell and ++close was used.  Therefore use curbuf->b_term instead of a','line_number':2805,'multiline':False]
+['text':' stored reference.','line_number':2806,'multiline':False]
+['text':' TODO: skip screen update when handling a sequence of keys.','line_number':2823,'multiline':False]
+['text':' Repeat redrawing in case a message is received while redrawing.','line_number':2824,'multiline':False]
+['text':' job finished while redrawing','line_number':2829,'multiline':False]
+['text':' Job finished while waiting for a character.  Push back the','line_number':2838,'multiline':False]
+['text':' received character.','line_number':2839,'multiline':False]
+['text':'
+	 * The shell or another program may change the tty settings.  Getting
+	 * them for every typed character is a bit of overhead, but it's needed
+	 * for the first character typed, e.g. when Vim starts in a shell.
+	 ','line_number':2849,'multiline':True]
+['text':' Get the current backspace character of the pty.','line_number':2858,'multiline':False]
+['text':' On Windows winpty handles CTRL-C, don't send a CTRL_C_EVENT.','line_number':2865,'multiline':False]
+['text':' Use CTRL-BREAK to kill the job.','line_number':2866,'multiline':False]
+['text':' Was either CTRL-W (termwinkey) or CTRL-\ pressed?','line_number':2870,'multiline':False]
+['text':' Not in a system terminal.','line_number':2871,'multiline':False]
+['text':' job finished while waiting for a character','line_number':2892,'multiline':False]
+['text':' CTRL-\ CTRL-N : go to Terminal-Normal mode.','line_number':2899,'multiline':False]
+['text':' Send both keys to the terminal, first one here, second one','line_number':2904,'multiline':False]
+['text':' below.','line_number':2905,'multiline':False]
+['text':' "CTRL-W CTRL-C" or 'termwinkey' CTRL-C: end the job','line_number':2911,'multiline':False]
+['text':' "CTRL-W .": send CTRL-W to the job','line_number':2916,'multiline':False]
+['text':' "'termwinkey' .": send 'termwinkey' to the job','line_number':2917,'multiline':False]
+['text':' "CTRL-W CTRL-\": send CTRL-\ to the job','line_number':2922,'multiline':False]
+['text':' CTRL-W N : go to Terminal-Normal mode.','line_number':2927,'multiline':False]
+['text':' space for CTRL-W, modifier, multi-byte char and NUL','line_number':2939,'multiline':False]
+['text':' Put the command into the typeahead buffer, when using the','line_number':2942,'multiline':False]
+['text':' stuff buffer KeyStuffed is set and 'langmap' won't be used.','line_number':2943,'multiline':False]
+['text':' We are sure to come back here, don't reset the cursor color','line_number':2966,'multiline':False]
+['text':' and shape to avoid flickering.','line_number':2967,'multiline':False]
+['text':' Move a snapshot of the screen contents to the buffer, so that completion','line_number':2981,'multiline':False]
+['text':' works in other buffers.','line_number':2982,'multiline':False]
+['text':'
+ * Reverse engineer the RGB value into a cterm color index.
+ * First color is 1.  Return 0 if no match found (default color).
+ ','line_number':3001,'multiline':True]
+['text':' Use the color as-is if possible, give up otherwise.','line_number':3019,'multiline':False]
+['text':' 8-color terminals can actually display twice as many colors by','line_number':3022,'multiline':False]
+['text':' setting the high-intensity/bold bit.','line_number':3023,'multiline':False]
+['text':' 24-color greyscale plus white and black','line_number':3036,'multiline':False]
+['text':' 00/00/00','line_number':3044,'multiline':False]
+['text':' ff/ff/ff','line_number':3045,'multiline':False]
+['text':' 216-color cube','line_number':3056,'multiline':False]
+['text':'
+ * Convert Vterm attributes to highlight flags.
+ ','line_number':3072,'multiline':True]
+['text':'
+ * Store Vterm attributes in "cell" from highlight flags.
+ ','line_number':3093,'multiline':True]
+['text':'
+ * Convert the attributes of a vterm cell into an attribute index.
+ ','line_number':3112,'multiline':True]
+['text':' with 8 colors set the bold attribute to get a bright foreground','line_number':3174,'multiline':False]
+['text':' Update the snapshot after 100 msec of not getting updates.','line_number':3190,'multiline':False]
+['text':' Set the color to clear lines with.','line_number':3224,'multiline':False]
+['text':' Scrolling up is done much more efficiently by deleting lines instead of','line_number':3239,'multiline':False]
+['text':' redrawing the text. But avoid doing this multiple times, postpone until','line_number':3240,'multiline':False]
+['text':' the redraw happens.','line_number':3241,'multiline':False]
+['text':' Note sure if the scrolling will work correctly, let's do a complete','line_number':3256,'multiline':False]
+['text':' redraw later.','line_number':3257,'multiline':False]
+['text':' a blank title isn't useful, make it empty, so that "running" is','line_number':3306,'multiline':False]
+['text':' displayed','line_number':3307,'multiline':False]
+['text':' Same as blank','line_number':3310,'multiline':False]
+['text':' Empty corrupted data of winpty','line_number':3315,'multiline':False]
+['text':' TODO: do anything else?','line_number':3375,'multiline':False]
+['text':' Always return 1, otherwise vterm doesn't store the value internally.','line_number':3384,'multiline':False]
+['text':'
+ * The job running in the terminal resized the terminal.
+ ','line_number':3388,'multiline':True]
+['text':' Size was set by vterm_set_size(), don't set the window size.','line_number':3400,'multiline':False]
+['text':'
+ * If the number of lines that are stored goes over 'termwinscroll' then
+ * delete the first 10%.
+ * "gap" points to tl_scrollback or tl_scrollback_postponed.
+ * "update_buffer" is TRUE when the buffer should be updated.
+ ','line_number':3417,'multiline':True]
+['text':'
+ * Handle a line that is pushed off the top of the screen.
+ ','line_number':3449,'multiline':True]
+['text':' In Terminal-Normal mode the user interacts with the buffer, thus we','line_number':3461,'multiline':False]
+['text':' must not change it. Postpone adding the scrollback lines.','line_number':3462,'multiline':False]
+['text':' First remove the lines that were appended before, the pushed line','line_number':3468,'multiline':False]
+['text':' goes above it.','line_number':3469,'multiline':False]
+['text':' do not store empty cells at the end','line_number':3491,'multiline':False]
+['text':' free the text','line_number':3541,'multiline':False]
+['text':' text is kept in tl_scrollback_postponed','line_number':3546,'multiline':False]
+['text':' ignored','line_number':3549,'multiline':False]
+['text':'
+ * Called when leaving Terminal-Normal mode: deal with any scrollback that was
+ * received and stored in tl_scrollback_postponed.
+ ','line_number':3552,'multiline':True]
+['text':' First remove the lines that were appended before, the pushed lines go','line_number':3565,'multiline':False]
+['text':' above it.','line_number':3566,'multiline':False]
+['text':'
+ * Called when the terminal wants to ring the system bell.
+ ','line_number':3599,'multiline':True]
+['text':' damage','line_number':3610,'multiline':False]
+['text':' moverect','line_number':3611,'multiline':False]
+['text':' movecursor','line_number':3612,'multiline':False]
+['text':' settermprop','line_number':3613,'multiline':False]
+['text':' bell','line_number':3614,'multiline':False]
+['text':' resize','line_number':3615,'multiline':False]
+['text':' sb_pushline','line_number':3616,'multiline':False]
+['text':' sb_popline','line_number':3617,'multiline':False]
+['text':' sb_clear','line_number':3618,'multiline':False]
+['text':'
+ * Do the work after the channel of a terminal was closed.
+ * Must be called only when updating_screen is FALSE.
+ * Returns TRUE when a buffer was closed (list of terminals may have changed).
+ ','line_number':3621,'multiline':True]
+['text':' Unless in Terminal-Normal mode: clear the vterm.','line_number':3629,'multiline':False]
+['text':' If this was a terminal in a popup window, go back to the','line_number':3643,'multiline':False]
+['text':' previous window.','line_number':3644,'multiline':False]
+['text':' If this is the last normal window: exit Vim.','line_number':3653,'multiline':False]
+['text':' ++close or term_finish == "close"','line_number':3663,'multiline':False]
+['text':' Avoid closing the window if we temporarily use it.','line_number':3668,'multiline':False]
+['text':'
+ * If the current window is a terminal in a popup window and the job has
+ * finished, close the popup window and to back to the previous window.
+ * Otherwise return FAIL.
+ ','line_number':3710,'multiline':True]
+['text':'
+ * Called when a channel is going to be closed, before invoking the close
+ * callback.
+ ','line_number':3731,'multiline':True]
+['text':'
+ * Called when a channel has been closed.
+ * If this was a channel for a terminal window then finish it up.
+ ','line_number':3745,'multiline':True]
+['text':' Cannot open or close windows now.  Can happen when','line_number':3776,'multiline':False]
+['text':' 'lazyredraw' is set.','line_number':3777,'multiline':False]
+['text':' Need to break out of vgetc().','line_number':3791,'multiline':False]
+['text':'
+ * To be called after resetting updating_screen: handle any terminal where the
+ * channel was closed.
+ ','line_number':3805,'multiline':True]
+['text':' start over, the list may have changed','line_number':3822,'multiline':False]
+['text':'
+ * Fill one screen line from a line of the terminal.
+ * Advances "pos" to past the last column.
+ ','line_number':3828,'multiline':True]
+['text':' composing chars','line_number':3863,'multiline':False]
+['text':' This will only store the lower byte of "c".','line_number':3901,'multiline':False]
+['text':' don't set the second byte to NUL for a DBCS encoding, it','line_number':3911,'multiline':False]
+['text':' has been set above','line_number':3912,'multiline':False]
+['text':' Can't show a double-width character with a single-byte','line_number':3920,'multiline':False]
+['text':' 'encoding', just use a space.','line_number':3921,'multiline':False]
+['text':' Scroll up to make more room for terminal lines if needed.','line_number':3943,'multiline':False]
+['text':'
+ * Return TRUE if window "wp" is to be redrawn with term_update_window().
+ * Returns FALSE when there is no terminal running in this window or it is in
+ * Terminal-Normal mode.
+ ','line_number':3976,'multiline':True]
+['text':'
+ * Called to update a window that contains an active terminal.
+ ','line_number':3989,'multiline':True]
+['text':' We use UPD_NOT_VALID on a resize or scroll, redraw everything then.','line_number':4009,'multiline':False]
+['text':' With UPD_SOME_VALID only redraw what was marked dirty.','line_number':4010,'multiline':False]
+['text':' Scrolling is usually faster than redrawing, when there are only','line_number':4018,'multiline':False]
+['text':' a few lines to scroll.','line_number':4019,'multiline':False]
+['text':'
+     * If the window was resized a redraw will be triggered and we get here.
+     * Adjust the size of the vterm unless 'termwinsize' specifies a fixed size.
+     ','line_number':4024,'multiline':True]
+['text':' Always use curwin, it may be a popup window.','line_number':4034,'multiline':False]
+['text':' When more than one window shows the same terminal, use the','line_number':4037,'multiline':False]
+['text':' smallest size.','line_number':4038,'multiline':False]
+['text':' safety exit','line_number':4048,'multiline':False]
+['text':' If no cell is visible there is no point in resizing.  Also, vterm can't','line_number':4052,'multiline':False]
+['text':' handle a zero height.','line_number':4053,'multiline':False]
+['text':' Updating the terminal size will cause the snapshot to be cleared.','line_number':4065,'multiline':False]
+['text':' When not in terminal_loop() we need to restore it.','line_number':4066,'multiline':False]
+['text':' The cursor may have been moved when resizing.','line_number':4071,'multiline':False]
+['text':'
+ * Called after updating all windows: may reset dirty rows.
+ ','line_number':4099,'multiline':True]
+['text':'
+ * Return TRUE if "wp" is a terminal window where the job has finished.
+ ','line_number':4115,'multiline':True]
+['text':'
+ * Return TRUE if "wp" is a terminal window where the job has finished or we
+ * are in Terminal-Normal mode, thus we show the buffer contents.
+ ','line_number':4124,'multiline':True]
+['text':'
+ * The current buffer is going to be changed.  If there is terminal
+ * highlighting remove it now.
+ ','line_number':4136,'multiline':True]
+['text':' The buffer is now like a normal buffer, it cannot be easily','line_number':4151,'multiline':False]
+['text':' abandoned when changed.','line_number':4152,'multiline':False]
+['text':'
+ * Get the screen attribute for a position in the buffer.
+ * Use a negative "col" to get the filler background color.
+ ','line_number':4157,'multiline':True]
+['text':'
+ * Convert a cterm color number 0 - 255 to RGB.
+ * This is compatible with xterm.
+ ','line_number':4182,'multiline':True]
+['text':'
+ * Initialize vterm color from the synID.
+ * Returns TRUE if color is set to "fg" and "bg".
+ * Otherwise returns FALSE.
+ ','line_number':4199,'multiline':True]
+['text':' Use the actual color for the GUI and when 'termguicolors' is set.','line_number':4208,'multiline':False]
+['text':' Finally get INVALCOLOR on this execution path','line_number':4216,'multiline':False]
+['text':'
+ * Cache the color of 'wincolor'.
+ ','line_number':4291,'multiline':True]
+['text':'
+ * Called when option 'termguicolors' was set,
+ * or when any highlight is changed.
+ ','line_number':4306,'multiline':True]
+['text':'
+ * Initialize term->tl_default_color from the environment.
+ ','line_number':4320,'multiline':True]
+['text':' Vterm uses a default black background.  Set it to white when','line_number':4335,'multiline':False]
+['text':' 'background' is "light".','line_number':4336,'multiline':False]
+['text':' The highlight group overrules the defaults.','line_number':4352,'multiline':False]
+['text':' In an MS-Windows console we know the normal colors.','line_number':4361,'multiline':False]
+['text':'
+ * Return TRUE if the user-defined palette (either g:terminal_ansi_colors or the
+ * "ansi_colors" argument in term_start()) shall be applied.
+ ','line_number':4403,'multiline':True]
+['text':'
+ * Set the 16 ANSI colors from array of RGB values
+ ','line_number':4422,'multiline':True]
+['text':'
+ * Set the ANSI color palette from a list of colors
+ ','line_number':4444,'multiline':True]
+['text':'
+ * Initialize the ANSI color palette from g:terminal_ansi_colors[0:15]
+ ','line_number':4478,'multiline':True]
+['text':'
+ * Handles a "drop" command from the job in the terminal.
+ * "item" is the file name, "item->li_next" may have options.
+ ','line_number':4497,'multiline':True]
+['text':' buffer is in a window already, go there','line_number':4517,'multiline':False]
+['text':' open in new window, like ":split fname"','line_number':4569,'multiline':False]
+['text':'
+ * Return TRUE if "func" starts with "pat" and "pat" isn't empty.
+ ','line_number':4579,'multiline':True]
+['text':'
+ * Handles a function call from the job running in a terminal.
+ * "item" is the function name, "item->li_next" has the arguments.
+ ','line_number':4588,'multiline':True]
+['text':'
+ * URL decoding (also know as Percent-encoding).
+ *
+ * Note this function currently is only used for decoding shell's
+ * OSC 7 escape sequence which we can assume all bytes are valid
+ * UTF-8 bytes. Thus we don't need to deal with invalid UTF-8
+ * encoding bytes like 0xfe, 0xff.
+ ','line_number':4629,'multiline':True]
+['text':'
+ * Sync terminal buffer's cwd with shell's pwd with the help of OSC 7.
+ *
+ * The OSC 7 sequence has the format of
+ * "\033]7;file://HOSTNAME/CURRENT/DIR\033\\"
+ * and what VTerm provides via VTermStringFragment is
+ * "file://HOSTNAME/CURRENT/DIR"
+ ','line_number':4661,'multiline':True]
+['text':' len of "file://" is 7','line_number':4672,'multiline':False]
+['text':' remove HOSTNAME to get PWD','line_number':4676,'multiline':False]
+['text':'
+ * Called by libvterm when it cannot recognize an OSC sequence.
+ * We recognize a terminal API command.
+ ','line_number':4696,'multiline':True]
+['text':' We recognize only OSC 5 1 ; {command} and OSC 7 ; {command}','line_number':4710,'multiline':False]
+['text':' Concatenate what was received until the final piece is found.','line_number':4714,'multiline':False]
+['text':' Make sure an invoked command doesn't delete the buffer (and the','line_number':4749,'multiline':False]
+['text':' terminal) under our fingers.','line_number':4750,'multiline':False]
+['text':'
+ * Called by libvterm when it cannot recognize a CSI sequence.
+ * We recognize the window position report.
+ ','line_number':4773,'multiline':True]
+['text':' We recognize only CSI 13 t','line_number':4793,'multiline':False]
+['text':' not handled','line_number':4795,'multiline':False]
+['text':' When getting the window position is not possible or it fails it results','line_number':4797,'multiline':False]
+['text':' in zero/zero.','line_number':4798,'multiline':False]
+['text':' We roughly estimate the position of the terminal window inside','line_number':4819,'multiline':False]
+['text':' the Vim window by assuming a 10 x 7 character cell.','line_number':4820,'multiline':False]
+['text':' control','line_number':4833,'multiline':False]
+['text':' csi','line_number':4834,'multiline':False]
+['text':' osc','line_number':4835,'multiline':False]
+['text':' dcs','line_number':4836,'multiline':False]
+['text':' apc','line_number':4837,'multiline':False]
+['text':' pm','line_number':4838,'multiline':False]
+['text':' sos','line_number':4839,'multiline':False]
+['text':'
+ * Use Vim's allocation functions for vterm so profiling works.
+ ','line_number':4842,'multiline':True]
+['text':' make sure that the length is not zero','line_number':4848,'multiline':False]
+['text':'
+ * Create a new vterm and initialize it.
+ * Return FAIL when out of memory.
+ ','line_number':4863,'multiline':True]
+['text':' Allocate screen and state here, so we can bail out if that fails.','line_number':4880,'multiline':False]
+['text':' TODO: depends on 'encoding'.','line_number':4890,'multiline':False]
+['text':' Less than 16 colors: assume that bold means using a bright color for','line_number':4901,'multiline':False]
+['text':' the foreground color.','line_number':4902,'multiline':False]
+['text':' Required to initialize most things.','line_number':4905,'multiline':False]
+['text':' hard ','line_number':4906,'multiline':True]
+['text':' Allow using alternate screen.','line_number':4908,'multiline':False]
+['text':' For unix do not use a blinking cursor.  In an xterm this causes the','line_number':4911,'multiline':False]
+['text':' cursor to blink if it's blinking in the xterm.','line_number':4912,'multiline':False]
+['text':' For Windows we respect the system wide setting.','line_number':4913,'multiline':False]
+['text':'
+ * Reset the terminal palette to its default value.
+ ','line_number':4928,'multiline':True]
+['text':' The first valid index starts at 1.','line_number':4944,'multiline':False]
+['text':'
+ * Called when option 'termguicolors' is changed.
+ ','line_number':4970,'multiline':True]
+['text':'
+ * Called when option 'background' or 'termguicolors' was set,
+ * or when any highlight is changed.
+ ','line_number':4986,'multiline':True]
+['text':'
+ * Return the text to show for the buffer name and status.
+ ','line_number':5007,'multiline':True]
+['text':'
+ * Clear the cached value of the status text.
+ ','line_number':5044,'multiline':True]
+['text':'
+ * Mark references in jobs of terminals.
+ ','line_number':5053,'multiline':True]
+['text':'
+ * Get the buffer from the first argument in "argvars".
+ * Returns NULL when the buffer is not for a terminal window and logs a message
+ * with "where".
+ ','line_number':5073,'multiline':True]
+['text':' issue errmsg if type error','line_number':5088,'multiline':False]
+['text':' use RGB values','line_number':5111,'multiline':False]
+['text':' default color','line_number':5114,'multiline':False]
+['text':'
+ * "term_dumpwrite(buf, filename, options)" function
+ *
+ * Each screen cell in full is:
+ *    |{characters}+{attributes}#{fg-color}{color-idx}#{bg-color}{color-idx}
+ * {characters} is a space for an empty cell
+ * For a double-width character "+" is changed to "*" and the next cell is
+ * skipped.
+ * {attributes} is the decimal value of HL_BOLD + HL_UNDERLINE, etc.
+ *			  when "&" use the same as the previous cell.
+ * {fg-color} is hex RGB, when "&" use the same as the previous cell.
+ * {bg-color} is hex RGB, when "&" use the same as the previous cell.
+ * {color-idx} is a number from 0 to 255
+ *
+ * Screen cell with same width, attributes and color as the previous one:
+ *    |{characters}
+ *
+ * To use the color of the previous cell, use "&" instead of {color}-{idx}.
+ *
+ * Repeating the previous screen cell:
+ *    @{count}
+ ','line_number':5121,'multiline':True]
+['text':' For the first character NUL is the same as space.','line_number':5237,'multiline':False]
+['text':' When only the characters differ we don't write anything, the','line_number':5281,'multiline':False]
+['text':' following "|", "@" or NL will indicate using the same','line_number':5282,'multiline':False]
+['text':' attributes.','line_number':5283,'multiline':False]
+['text':'
+ * Called when a dump is corrupted.  Put a breakpoint here when debugging.
+ ','line_number':5329,'multiline':True]
+['text':'
+ * Read the dump file from "fd" and append lines to the current buffer.
+ * Return the cell width of the longest line.
+ ','line_number':5356,'multiline':True]
+['text':' DOS line endings?  Ignore.','line_number':5388,'multiline':False]
+['text':' End of a line: append it to the buffer.','line_number':5393,'multiline':False]
+['text':' duplicate cursor','line_number':5426,'multiline':False]
+['text':' normal character(s) followed by "+", "*", "|", "@" or NL','line_number':5431,'multiline':False]
+['text':' save the character for repeating it','line_number':5444,'multiline':False]
+['text':' use all attributes from previous cell','line_number':5452,'multiline':False]
+['text':' use same attr as previous cell','line_number':5463,'multiline':False]
+['text':' get the decimal attribute','line_number':5468,'multiline':False]
+['text':' is_bg == 0: fg, is_bg == 1: bg','line_number':5477,'multiline':False]
+['text':' use same color as previous cell','line_number':5482,'multiline':False]
+['text':' repeat previous character, get the count','line_number':5564,'multiline':False]
+['text':' trailing characters after last NL','line_number':5589,'multiline':False]
+['text':'
+ * Return an allocated string with at least "text_width" "=" characters and
+ * "fname" inserted in the middle.
+ ','line_number':5603,'multiline':True]
+['text':' enough room, don't use the full window width','line_number':5624,'multiline':False]
+['text':' full name doesn't fit, use only the tail','line_number':5629,'multiline':False]
+['text':' skip characters until the name fits','line_number':5633,'multiline':False]
+['text':'
+ * Common for "term_dumpdiff()" and "term_dumpload()".
+ ','line_number':5654,'multiline':True]
+['text':' First open the files.  If this fails bail out.','line_number':5671,'multiline':False]
+['text':' With "bufnr" argument: enter the window with this buffer and make it','line_number':5720,'multiline':False]
+['text':' empty.','line_number':5721,'multiline':False]
+['text':' Create a new terminal window.','line_number':5734,'multiline':False]
+['text':' read the files, fill the buffer with the diff','line_number':5752,'multiline':False]
+['text':' position the cursor','line_number':5755,'multiline':False]
+['text':' Delete the empty line that was in the empty buffer.','line_number':5762,'multiline':False]
+['text':' For term_dumpload() we are done here.','line_number':5765,'multiline':False]
+['text':' bottom part has fewer rows, fill with "-"','line_number':5802,'multiline':False]
+['text':' Make a copy, getting the second line will invalidate it.','line_number':5818,'multiline':False]
+['text':' text differs','line_number':5833,'multiline':False]
+['text':' cursor in first but not in second','line_number':5839,'multiline':False]
+['text':' cursor in second but not in first','line_number':5845,'multiline':False]
+['text':' TODO: handle different width','line_number':5864,'multiline':False]
+['text':' bottom part has more rows, fill with "+"','line_number':5894,'multiline':False]
+['text':' looks better without wrapping','line_number':5906,'multiline':False]
+['text':'
+ * If the current buffer shows the output of term_dumpdiff(), swap the top and
+ * bottom files.
+ * Return FAIL when this is not possible.
+ ','line_number':5918,'multiline':True]
+['text':' move lines from top to above the bottom part','line_number':5947,'multiline':False]
+['text':' move lines from bottom to the top','line_number':5958,'multiline':False]
+['text':' move top title to bottom','line_number':5969,'multiline':False]
+['text':' move bottom title to top','line_number':5977,'multiline':False]
+['text':' rows counts are equal, can swap cell properties','line_number':5987,'multiline':False]
+['text':' need to copy cell properties into temp memory','line_number':6002,'multiline':False]
+['text':'
+ * "term_dumpdiff(filename, filename, options)" function
+ ','line_number':6027,'multiline':True]
+['text':'
+ * "term_dumpload(filename, options)" function
+ ','line_number':6042,'multiline':True]
+['text':'
+ * "term_getaltscreen(buf)" function
+ ','line_number':6056,'multiline':True]
+['text':'
+ * "term_getattr(attr, name)" function
+ ','line_number':6073,'multiline':True]
+['text':'
+ * "term_getcursor(buf)" function
+ ','line_number':6114,'multiline':True]
+['text':'
+ * "term_getjob(buf)" function
+ ','line_number':6152,'multiline':True]
+['text':'
+ * "term_getline(buf, row)" function
+ ','line_number':6187,'multiline':True]
+['text':' vterm is finished, get the text from the buffer','line_number':6214,'multiline':False]
+['text':'
+ * "term_getscrolled(buf)" function
+ ','line_number':6241,'multiline':True]
+['text':'
+ * "term_getsize(buf)" function
+ ','line_number':6258,'multiline':True]
+['text':'
+ * "term_setsize(buf, rows, cols)" function
+ ','line_number':6282,'multiline':True]
+['text':' handle_resize() will resize the windows','line_number':6312,'multiline':False]
+['text':' Get and remember the size we ended up with.  Update the pty.','line_number':6314,'multiline':False]
+['text':'
+ * "term_getstatus(buf)" function
+ ','line_number':6319,'multiline':True]
+['text':'
+ * "term_gettitle(buf)" function
+ ','line_number':6348,'multiline':True]
+['text':'
+ * "term_gettty(buf)" function
+ ','line_number':6369,'multiline':True]
+['text':'
+ * "term_list()" function
+ ','line_number':6409,'multiline':True]
+['text':'
+ * "term_scrape(buf, row)" function
+ ','line_number':6429,'multiline':True]
+['text':' can't really happen','line_number':6462,'multiline':False]
+['text':' vterm has finished, get the cell from scrollback','line_number':6493,'multiline':False]
+['text':'
+ * "term_sendkeys(buf, keys)" function
+ ','line_number':6548,'multiline':True]
+['text':'
+ * "term_getansicolors(buf)" function
+ ','line_number':6593,'multiline':True]
+['text':'
+ * "term_setansicolors(buf, list)" function
+ ','line_number':6632,'multiline':True]
+['text':'
+ * "term_setapi(buf, api)" function
+ ','line_number':6693,'multiline':True]
+['text':'
+ * "term_setrestore(buf, command)" function
+ ','line_number':6720,'multiline':True]
+['text':'
+ * "term_setkill(buf, how)" function
+ ','line_number':6749,'multiline':True]
+['text':'
+ * "term_start(command, options)" function
+ ','line_number':6776,'multiline':True]
+['text':'
+ * "term_wait" function
+ ','line_number':6809,'multiline':True]
+['text':' channel is closed, nothing to do','line_number':6831,'multiline':False]
+['text':' Get the job status, this will detect a job that finished.','line_number':6834,'multiline':False]
+['text':' The job is dead, keep reading channel I/O until the channel is','line_number':6838,'multiline':False]
+['text':' closed. buf->b_term may become NULL if the terminal was closed while','line_number':6839,'multiline':False]
+['text':' waiting.','line_number':6840,'multiline':False]
+['text':' If the terminal is closed when the channel is closed the','line_number':6848,'multiline':False]
+['text':' buffer disappears.','line_number':6849,'multiline':False]
+['text':' came here from a close callback, only wait one time','line_number':6852,'multiline':False]
+['text':' Wait for some time for any channel I/O.','line_number':6864,'multiline':False]
+['text':' Flushing messages on channels is hopefully sufficient.','line_number':6869,'multiline':False]
+['text':' TODO: is there a better way?','line_number':6870,'multiline':False]
+['text':'
+ * Called when a channel has sent all the lines to a terminal.
+ * Send a CTRL-D to mark the end of the text.
+ ','line_number':6875,'multiline':True]
+['text':' Default: CTRL-D','line_number':6895,'multiline':False]
+['text':'/////////////////////////////////////','line_number':6911,'multiline':False]
+['text':' 2. MS-Windows implementation.','line_number':6912,'multiline':False]
+['text':' No need to initialize twice.','line_number':6965,'multiline':False]
+['text':' Request by CreateProcessW','line_number':7037,'multiline':False]
+['text':' Addition of NUL by API','line_number':7038,'multiline':False]
+['text':' Set up pipe inheritance safely: Vista or later.','line_number':7066,'multiline':False]
+['text':' Write lines with CR instead of NL.','line_number':7118,'multiline':False]
+['text':' Use to explicitly delete anonymous pipe handle.','line_number':7121,'multiline':False]
+['text':' Failed, switch the way to terminate process with TerminateProcess.','line_number':7130,'multiline':False]
+['text':' Redirecting stdout and stderr doesn't work at the job level.  Instead','line_number':7167,'multiline':False]
+['text':' open the file here and handle it in.  opt->jo_io was changed in','line_number':7168,'multiline':False]
+['text':' setup_job_options(), use the original flags here.','line_number':7169,'multiline':False]
+['text':' No need to initialize twice.','line_number':7308,'multiline':False]
+['text':' Load winpty.dll, prefer using the 'winptydll' option, fall back to just','line_number':7311,'multiline':False]
+['text':' winpty.dll.','line_number':7312,'multiline':False]
+['text':' Write lines with CR instead of NL.','line_number':7458,'multiline':False]
+['text':' Failed, switch the way to terminate process with TerminateProcess.','line_number':7467,'multiline':False]
+['text':' Redirecting stdout and stderr doesn't work at the job level.  Instead','line_number':7506,'multiline':False]
+['text':' open the file here and handle it in.  opt->jo_io was changed in','line_number':7507,'multiline':False]
+['text':' setup_job_options(), use the original flags here.','line_number':7508,'multiline':False]
+['text':'
+ * Create a new terminal of "rows" by "cols" cells.
+ * Store a reference in "term".
+ * Return OK or FAIL.
+ ','line_number':7555,'multiline':True]
+['text':' If neither is available give the errors for winpty, since when','line_number':7576,'multiline':False]
+['text':' conpty is not available it can't be installed either.','line_number':7577,'multiline':False]
+['text':' else: error','line_number':7589,'multiline':False]
+['text':' winpty','line_number':7591,'multiline':False]
+['text':' conpty','line_number':7596,'multiline':False]
+['text':' error','line_number':7610,'multiline':False]
+['text':' behave like the job is already finished','line_number':7653,'multiline':False]
+['text':'
+ * Free the terminal emulator part of "term".
+ ','line_number':7681,'multiline':True]
+['text':'
+ * Report the size to the terminal.
+ ','line_number':7699,'multiline':True]
+['text':'/////////////////////////////////////','line_number':7719,'multiline':False]
+['text':' 3. Unix-like implementation.','line_number':7720,'multiline':False]
+['text':'
+ * Create a new terminal of "rows" by "cols" cells.
+ * Start job for "cmd".
+ * Store the pointers in "term".
+ * When "argv" is not NULL then "argvar" is not used.
+ * Return OK or FAIL.
+ ','line_number':7722,'multiline':True]
+['text':' This may change a string in "argvar".','line_number':7752,'multiline':False]
+['text':' behave like the job is already finished','line_number':7773,'multiline':False]
+['text':'
+ * Free the terminal emulator part of "term".
+ ','line_number':7779,'multiline':True]
+['text':'
+ * Report the size to the terminal.
+ ','line_number':7790,'multiline':True]
+['text':' Use an ioctl() to report the new window size to the job.','line_number':7796,'multiline':False]
+['text':' FEAT_TERMINAL','line_number':7815,'multiline':False]

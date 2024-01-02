@@ -1,0 +1,49 @@
+['text':'*
+ * Test to ensure that two phase drop behavior for databases on replica sets works properly.
+ *
+ * Uses a 3 node replica set with one arbiter to verify both phases of a 2-phase database drop:
+ * the 'Collections' and 'Database' phase. Executing a 'dropDatabase' command should put that
+ * database into a drop-pending state. In this state, all new collection creation requests will
+ * be rejected with an error with the code ErrorCodes.DatabaseDropPending. We will exit the
+ * 'Collections' phase once the last collection drop has been propagated to a majority. All
+ * collections in the database will be physically dropped at this point.
+ *
+ * During the 'Database' phase, collection creation is still disallowed. This phase removes the
+ * metadata for the database from the server and appends the 'dropDatabase' operation to the oplog.
+ * Unlike the 'Collections' phase, we do not wait for the 'dropDatabase' to propagate to a majority
+ * unless explicitly requested by the user with a write concern.
+ ','line_number':1,'multiline':True]
+['text':' Returns a list of all collections in a given database. Use 'args' as the','line_number':20,'multiline':False]
+['text':' 'listCollections' command arguments.','line_number':21,'multiline':False]
+['text':' Returns a list of 'drop-pending' collections. The collection names should be of the','line_number':29,'multiline':False]
+['text':' format "system.drop.<optime>.<collectionName>", where 'optime' is the optime of the','line_number':30,'multiline':False]
+['text':' collection drop operation, encoded as a string, and 'collectionName' is the original','line_number':31,'multiline':False]
+['text':' collection name.','line_number':32,'multiline':False]
+['text':' Returns a list of all collection names in a given database.','line_number':39,'multiline':False]
+['text':' Initiate the replica set.','line_number':47,'multiline':False]
+['text':' The default WC is majority and stopServerReplication will prevent satisfying any majority writes.','line_number':54,'multiline':False]
+['text':' Create the collection that will be dropped and let it replicate.','line_number':61,'multiline':False]
+['text':' Pause the oplog fetcher on secondary so that commit point doesn't advance, meaning that a dropped','line_number':67,'multiline':False]
+['text':' database on the primary will remain in 'drop-pending' state. As there isn't anything in the oplog','line_number':68,'multiline':False]
+['text':' buffer at this time, it is safe to pause the oplog fetcher.','line_number':69,'multiline':False]
+['text':' Make sure the collection was created.','line_number':73,'multiline':False]
+['text':'*
+ * DROP DATABASE 'Collections' PHASE
+ ','line_number':78,'multiline':True]
+['text':' Drop the collection on the primary.','line_number':82,'multiline':False]
+['text':' Check that primary has started two phase drop of the collection.','line_number':94,'multiline':False]
+['text':' 'collToDrop' is no longer visible with its original name. If 'system.drop' two phase drops','line_number':104,'multiline':False]
+['text':' are supported by the storage engine, check for the drop-pending namespace using','line_number':105,'multiline':False]
+['text':' listCollections.','line_number':106,'multiline':False]
+['text':' Commands that manipulate the database being dropped or perform destructive catalog operations','line_number':119,'multiline':False]
+['text':' should fail with the DatabaseDropPending error code while the database is in a drop-pending','line_number':120,'multiline':False]
+['text':' state.','line_number':121,'multiline':False]
+['text':'*
+ * DROP DATABASE 'Database' PHASE
+ ','line_number':127,'multiline':True]
+['text':' Let the secondary apply the collection drop operation, so that the replica set commit point','line_number':131,'multiline':False]
+['text':' will advance, and the 'Database' phase of the database drop will complete on the primary.','line_number':132,'multiline':False]
+['text':' Make sure the collection has been fully dropped. It should not appear as','line_number':139,'multiline':False]
+['text':' a normal collection or under the 'system.drop' namespace any longer. Physical collection','line_number':140,'multiline':False]
+['text':' drops may happen asynchronously, any time after the drop operation is committed, so we wait','line_number':141,'multiline':False]
+['text':' to make sure the collection is eventually dropped.','line_number':142,'multiline':False]

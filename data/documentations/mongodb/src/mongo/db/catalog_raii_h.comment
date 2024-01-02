@@ -1,0 +1,245 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' namespace auto_get_collection','line_number':102,'multiline':False]
+['text':'*
+ * RAII-style class, which acquires a lock on the specified database in the requested mode and
+ * obtains a reference to the database. Used as a shortcut for calls to
+ * DatabaseHolder::get(opCtx)->get().
+ *
+ * Use this when you want to do a database-level operation, like read a list of all collections, or
+ * drop a collection.
+ *
+ * It is guaranteed that the lock will be released when this object goes out of scope, therefore
+ * the database reference returned by this class should not be retained.
+ ','line_number':104,'multiline':True]
+['text':'*
+     * Acquires a lock on the specified database 'dbName' in the requested 'mode'.
+     *
+     * If the database belongs to a tenant, then acquires a tenant lock before the database lock.
+     * For 'mode' MODE_IS or MODE_S acquires tenant lock in intent-shared (IS) mode, otherwise,
+     * acquires a tenant lock in intent-exclusive (IX) mode.
+     ','line_number':127,'multiline':True]
+['text':'*
+     * Acquires a lock on the specified database 'dbName' in the requested 'mode'.
+     *
+     * If the database belongs to a tenant, then acquires a tenant lock before the database lock.
+     * For 'mode' MODE_IS or MODE_S acquires tenant lock in intent-shared (IS) mode, otherwise,
+     * acquires a tenant lock in intent-exclusive (IX) mode. A different, stronger tenant lock mode
+     * to acquire can be specified with 'tenantLockMode' parameter. Passing boost::none for the
+     * tenant lock mode does not skip the tenant lock, but indicates that the tenant lock in default
+     * mode should be acquired.
+     ','line_number':139,'multiline':True]
+['text':'*
+     * Returns the database, or nullptr if it didn't exist.
+     ','line_number':166,'multiline':True]
+['text':'*
+     * Returns the database, creating it if it does not exist.
+     ','line_number':173,'multiline':True]
+['text':'*
+     * Returns the database reference, after attempting to refresh it if it was null. Does not
+     * create the database, so after this call the referece might still be null.
+     ','line_number':178,'multiline':True]
+['text':' Special note! The primary DBLock must destruct last (be declared first) so that the global','line_number':187,'multiline':False]
+['text':' and RSTL locks are not released until all the secondary DBLocks (without global and RSTL)','line_number':188,'multiline':False]
+['text':' have destructed.','line_number':189,'multiline':False]
+['text':' The secondary DBLocks will be acquired without the global or RSTL locks taken, re: the','line_number':194,'multiline':False]
+['text':' skipGlobalAndRSTLLocks flag in the DBLock constructor.','line_number':195,'multiline':False]
+['text':'*
+ * Light wrapper around Lock::CollectionLock which allows acquiring the lock based on UUID rather
+ * than namespace.
+ *
+ * The lock manager manages resources based on namespace and does not have a concept of UUIDs, so
+ * there must be some additional concurrency checks around resolving the UUID to a namespace and
+ * then subsequently acquiring the lock.
+ ','line_number':199,'multiline':True]
+['text':'*
+ * RAII-style class, which acquires global, database, and collection locks according to the chart
+ * below.
+ *
+ * | modeColl | Global Lock Result | DB Lock Result | Collection Lock Result |
+ * |----------+--------------------+----------------+------------------------|
+ * | MODE_IX  | MODE_IX            | MODE_IX        | MODE_IX                |
+ * | MODE_X   | MODE_IX            | MODE_IX        | MODE_X                 |
+ * | MODE_IS  | MODE_IS            | MODE_IS        | MODE_IS                |
+ * | MODE_S   | MODE_IS            | MODE_IS        | MODE_S                 |
+ *
+ * NOTE: Throws NamespaceNotFound if the collection UUID cannot be resolved to a name.
+ *
+ * Any acquired locks may be released when this object goes out of scope, therefore the database
+ * and the collection references returned by this class should not be retained.
+ ','line_number':220,'multiline':True]
+['text':'*
+     * Collection locks are also acquired for any 'secondaryNssOrUUIDs' namespaces provided.
+     * Collection locks are acquired in ascending ResourceId(RESOURCE_COLLECTION, nss) order to
+     * avoid deadlocks, consistent with other locations in the code wherein we take multiple
+     * collection locks.
+     *
+     * Only MODE_IS is supported when 'secondaryNssOrUUIDs' namespaces are provided. It is safe for
+     * 'nsOrUUID' to be duplicated in 'secondaryNssOrUUIDs', or 'secondaryNssOrUUIDs' to contain
+     * duplicates.
+     ','line_number':243,'multiline':True]
+['text':'*
+     * Special constructor when this class is instantiated from AutoGetCollectionForRead. Used to
+     * indicate that the intent is to perform reads only. We cannot use the LockMode to determine
+     * this as multi-document transactions use MODE_IX for reads.
+     ','line_number':258,'multiline':True]
+['text':'*
+     * AutoGetCollection can be used as a pointer with the -> operator.
+     ','line_number':276,'multiline':True]
+['text':'*
+     * Returns the database, or nullptr if it didn't exist.
+     ','line_number':287,'multiline':True]
+['text':'*
+     * Returns the database, creating it if it does not exist.
+     ','line_number':294,'multiline':True]
+['text':'*
+     * Returns nullptr if the collection didn't exist.
+     *
+     * Deprecated in favor of the new ->(), *() and bool() accessors above!
+     ','line_number':301,'multiline':True]
+['text':'*
+     * Returns nullptr if the view didn't exist.
+     ','line_number':310,'multiline':True]
+['text':'*
+     * Returns the resolved namespace of the collection or view.
+     ','line_number':317,'multiline':True]
+['text':'*
+     * Returns a writable Collection copy that will be returned by current and future calls to this
+     * function as well as getCollection(). Any previous Collection pointers that were returned may
+     * be invalidated.
+     *
+     * Must be in an active WriteUnitOfWork
+     ','line_number':324,'multiline':True]
+['text':' Ordering matters, the _collLocks should destruct before the _autoGetDb releases the','line_number':339,'multiline':False]
+['text':' rstl/global/database locks.','line_number':340,'multiline':False]
+['text':' If the object was instantiated with a UUID, contains the resolved namespace, otherwise it is','line_number':347,'multiline':False]
+['text':' the same as the input namespace string','line_number':348,'multiline':False]
+['text':' Populated if getWritableCollection() is called.','line_number':351,'multiline':False]
+['text':'*
+ * RAII-style class to handle the lifetime of writable Collections.
+ * It does not take any locks, concurrency needs to be handled separately using explicit locks or
+ * AutoGetCollection. This class can serve as an adaptor to unify different methods of acquiring a
+ * writable collection.
+ *
+ * It is safe to re-use an instance for multiple WriteUnitOfWorks. It is not safe to destroy it
+ * before the active WriteUnitOfWork finishes.
+ ','line_number':358,'multiline':True]
+['text':' This constructor indicates to the shard role subsystem that the subsequent code enters into','line_number':369,'multiline':False]
+['text':' local DDL land and that the content of the local collection should not be trusted until it','line_number':370,'multiline':False]
+['text':' goes out of scope.','line_number':371,'multiline':False]
+['text':'','line_number':372,'multiline':False]
+['text':' On destruction, if `getWritableCollection` been called during the object lifetime, the','line_number':373,'multiline':False]
+['text':' `acquisition` will be advanced to reflect the local catalog changes. It is important that','line_number':374,'multiline':False]
+['text':' when this destructor is called, the WUOW under which the catalog changes have been performed','line_number':375,'multiline':False]
+['text':' has already been commited or rollbacked. If it hasn't and the WUOW later rollbacks, the','line_number':376,'multiline':False]
+['text':' acquisition is left in an invalid state and must not be used.','line_number':377,'multiline':False]
+['text':'','line_number':378,'multiline':False]
+['text':' Example usage pattern:','line_number':379,'multiline':False]
+['text':' writeConflictRetry {','line_number':380,'multiline':False]
+['text':'     auto coll = acquireCollection(...);','line_number':381,'multiline':False]
+['text':'     CollectionWriter collectionWriter(opCtx, &coll);','line_number':382,'multiline':False]
+['text':'     WriteUnitOfWork wuow();','line_number':383,'multiline':False]
+['text':'     collectionWriter.getWritableCollection().xxxx();','line_number':384,'multiline':False]
+['text':'     wouw.commit();','line_number':385,'multiline':False]
+['text':' }','line_number':386,'multiline':False]
+['text':'','line_number':387,'multiline':False]
+['text':' Example usage pattern when the acquisition is held higher up by the caller:','line_number':388,'multiline':False]
+['text':' auto coll = acquireCollection(...);','line_number':389,'multiline':False]
+['text':' ...','line_number':390,'multiline':False]
+['text':' writeConflictRetry {','line_number':391,'multiline':False]
+['text':'     // It is important that ~CollectionWriter will be executed after the ~WriteUnitOfWork','line_number':392,'multiline':False]
+['text':'     // commits or rollbacks.','line_number':393,'multiline':False]
+['text':'     CollectionWriter collectionWriter(opCtx, &coll);','line_number':394,'multiline':False]
+['text':'     WriteUnitOfWork wuow();','line_number':395,'multiline':False]
+['text':'     collectionWriter.getWritableCollection().xxxx();','line_number':396,'multiline':False]
+['text':'     wouw.commit();','line_number':397,'multiline':False]
+['text':' }','line_number':398,'multiline':False]
+['text':'','line_number':399,'multiline':False]
+['text':' TODO (SERVER-73766): Only this constructor should remain in use','line_number':400,'multiline':False]
+['text':' Gets the collection from the catalog for the provided uuid','line_number':403,'multiline':False]
+['text':' Gets the collection from the catalog for the provided namespace string','line_number':405,'multiline':False]
+['text':' Acts as an adaptor for AutoGetCollection','line_number':407,'multiline':False]
+['text':' Acts as an adaptor for a writable Collection that has been retrieved elsewhere. This','line_number':409,'multiline':False]
+['text':' 'CollectionWriter' will become 'unmanaged' where the Collection will not be updated on','line_number':410,'multiline':False]
+['text':' commit/rollback.','line_number':411,'multiline':False]
+['text':' Not allowed to copy or move.','line_number':416,'multiline':False]
+['text':' Returns writable Collection, any previous Collection that has been returned may be','line_number':438,'multiline':False]
+['text':' invalidated.','line_number':439,'multiline':False]
+['text':' This group of values is only operated on for code paths that go through the','line_number':443,'multiline':False]
+['text':' `CollectionAcquisition` constructor.','line_number':444,'multiline':False]
+['text':' If this class is instantiated with the constructors that take UUID or nss we need somewhere','line_number':448,'multiline':False]
+['text':' to store the CollectionPtr used. But if it is instantiated with an AutoGetCollection then the','line_number':449,'multiline':False]
+['text':' lifetime of the object is managed there. To unify the two code paths we have a pointer that','line_number':450,'multiline':False]
+['text':' points to either the CollectionPtr in an AutoGetCollection or to a stored CollectionPtr in','line_number':451,'multiline':False]
+['text':' this instance. This can also be used to determine how we were instantiated.','line_number':452,'multiline':False]
+['text':' Indicates if this instance is managing Collection pointers through commit and rollback.','line_number':457,'multiline':False]
+['text':'*
+ * Writes to system.views need to use a stronger lock to prevent inconsistencies like view cycles.
+ ','line_number':464,'multiline':True]
+['text':'*
+ * RAII type to set and restore the timestamp read source on the recovery unit.
+ *
+ * Snapshot is abandoned in constructor and destructor, so it can only be used before
+ * the recovery unit becomes active or when the existing snapshot is no longer needed.
+ ','line_number':469,'multiline':True]
+['text':'*
+ * RAII-style class to acquire proper locks using special oplog locking rules for oplog accesses.
+ *
+ * Only the global lock is acquired:
+ * | OplogAccessMode | Global Lock |
+ * +-----------------+-------------|
+ * | kRead           | MODE_IS     |
+ * | kWrite          | MODE_IX     |
+ *
+ * kLogOp is a special mode for replication operation logging and it behaves similar to kWrite. The
+ * difference between kWrite and kLogOp is that kLogOp invariants that global IX lock is already
+ * held. It is the caller's responsibility to ensure the global lock already held is still valid
+ * within the lifetime of this object.
+ *
+ * Any acquired locks may be released when this object goes out of scope, therefore the oplog
+ * collection reference returned by this class should not be retained.
+ ','line_number':488,'multiline':True]
+['text':'*
+     * Return a pointer to the per-service-context LocalOplogInfo.
+     ','line_number':513,'multiline':True]
+['text':'*
+     * Returns a pointer to the oplog collection or nullptr if the oplog collection didn't exist.
+     ','line_number':520,'multiline':True]
+['text':'*
+ * A RAII-style class to acquire lock to a particular tenant's change collection.
+ *
+ * A change collection can be accessed in the following modes:
+ *   kWriteInOplogContext - assumes that the tenant IX lock has been pre-acquired. The user can
+ *                          perform reads and writes to the change collection.
+ *   kWrite - behaves the same as 'AutoGetCollection::AutoGetCollection()' with lock mode MODE_IX.
+ *   kRead - behaves the same as 'AutoGetCollection::AutoGetCollection()' with lock mode MODE_IS.
+ ','line_number':533,'multiline':True]
+['text':' Used when the 'kWrite' or 'kRead' access mode is used.','line_number':559,'multiline':False]
+['text':' Used when the 'kWriteInOplogContext' access mode is used.','line_number':561,'multiline':False]
+['text':' namespace mongo','line_number':565,'multiline':False]

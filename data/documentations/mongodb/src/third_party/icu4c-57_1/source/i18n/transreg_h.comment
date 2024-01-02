@@ -1,0 +1,263 @@
+['text':'
+**********************************************************************
+*   Copyright (c) 2001-2014, International Business Machines
+*   Corporation and others.  All Rights Reserved.
+**********************************************************************
+*   Date        Name        Description
+*   08/10/2001  aliu        Creation.
+**********************************************************************
+','line_number':1,'multiline':True]
+['text':'------------------------------------------------------------------','line_number':28,'multiline':False]
+['text':' TransliteratorAlias','line_number':29,'multiline':False]
+['text':'------------------------------------------------------------------','line_number':30,'multiline':False]
+['text':'*
+ * A TransliteratorAlias object is returned by get() if the given ID
+ * actually translates into something else.  The caller then invokes
+ * the create() method on the alias to create the actual
+ * transliterator, and deletes the alias.
+ *
+ * Why all the shenanigans?  To prevent circular calls between
+ * the registry code and the transliterator code that deadlocks.
+ ','line_number':32,'multiline':True]
+['text':'*
+     * Construct a simple alias (type == SIMPLE)
+     * @param aliasID the given id.
+     ','line_number':43,'multiline':True]
+['text':'*
+     * Construct a compound RBT alias (type == COMPOUND)
+     ','line_number':49,'multiline':True]
+['text':'*
+     * Construct a rules alias (type = RULES)
+     ','line_number':56,'multiline':True]
+['text':'*
+     * The whole point of create() is that the caller must invoke
+     * it when the registry mutex is NOT held, to prevent deadlock.
+     * It may only be called once.
+     *
+     * Note: Only call create() if isRuleBased() returns FALSE.
+     *
+     * This method must be called *outside* of the TransliteratorRegistry
+     * mutex.
+     ','line_number':65,'multiline':True]
+['text':'*
+     * Return TRUE if this alias is rule-based.  If so, the caller
+     * must call parse() on it, then call TransliteratorRegistry::reget().
+     ','line_number':77,'multiline':True]
+['text':'*
+     * If isRuleBased() returns TRUE, then the caller must call this
+     * method, followed by TransliteratorRegistry::reget().  The latter
+     * method must be called inside the TransliteratorRegistry mutex.
+     *
+     * Note: Only call parse() if isRuleBased() returns TRUE.
+     *
+     * This method must be called *outside* of the TransliteratorRegistry
+     * mutex, because it can instantiate Transliterators embedded in
+     * the rules via the "&Latin-Arabic()" syntax.
+     ','line_number':83,'multiline':True]
+['text':' We actually come in three flavors:','line_number':98,'multiline':False]
+['text':' 1. Simple alias','line_number':99,'multiline':False]
+['text':'    Here aliasID is the alias string.  Everything else is','line_number':100,'multiline':False]
+['text':'    null, zero, empty.','line_number':101,'multiline':False]
+['text':' 2. CompoundRBT','line_number':102,'multiline':False]
+['text':'    Here ID is the ID, aliasID is the idBlock, trans is the','line_number':103,'multiline':False]
+['text':'    contained RBT, and idSplitPoint is the offet in aliasID','line_number':104,'multiline':False]
+['text':'    where the contained RBT goes.  compoundFilter is the','line_number':105,'multiline':False]
+['text':'    compound filter, and it is _not_ owned.','line_number':106,'multiline':False]
+['text':' 3. Rules','line_number':107,'multiline':False]
+['text':'    Here ID is the ID, aliasID is the rules string.','line_number':108,'multiline':False]
+['text':'    idSplitPoint is the UTransDirection.','line_number':109,'multiline':False]
+['text':' owned','line_number':112,'multiline':False]
+['text':' alias','line_number':113,'multiline':False]
+['text':' forbid copying of this class','line_number':117,'multiline':False]
+['text':' forbid copying of this class','line_number':118,'multiline':False]
+['text':'*
+ * A registry of system transliterators.  This is the data structure
+ * that implements the mapping between transliterator IDs and the data
+ * or function pointers used to create the corresponding
+ * transliterators.  There is one instance of the registry that is
+ * created statically.
+ *
+ * The registry consists of a dynamic component -- a hashtable -- and
+ * a static component -- locale resource bundles.  The dynamic store
+ * is semantically overlaid on the static store, so the static mapping
+ * can be dynamically overridden.
+ *
+ * This is an internal class that is only used by Transliterator.
+ * Transliterator maintains one static instance of this class and
+ * delegates all registry-related operations to it.
+ *
+ * @author Alan Liu
+ ','line_number':122,'multiline':True]
+['text':'*
+     * Contructor
+     * @param status Output param set to success/failure code.
+     ','line_number':144,'multiline':True]
+['text':'*
+     * Nonvirtual destructor -- this class is not subclassable.
+     ','line_number':150,'multiline':True]
+['text':'------------------------------------------------------------------','line_number':155,'multiline':False]
+['text':' Basic public API','line_number':156,'multiline':False]
+['text':'------------------------------------------------------------------','line_number':157,'multiline':False]
+['text':'*
+     * Given a simple ID (forward direction, no inline filter, not
+     * compound) attempt to instantiate it from the registry.  Return
+     * 0 on failure.
+     *
+     * Return a non-NULL aliasReturn value if the ID points to an alias.
+     * We cannot instantiate it ourselves because the alias may contain
+     * filters or compounds, which we do not understand.  Caller should
+     * make aliasReturn NULL before calling.
+     * @param ID          the given ID
+     * @param aliasReturn output param to receive TransliteratorAlias;
+     *                    should be NULL on entry
+     * @param parseError  Struct to recieve information on position
+     *                    of error if an error is encountered
+     * @param status      Output param set to success/failure code.
+     ','line_number':159,'multiline':True]
+['text':'*
+     * The caller must call this after calling get(), if [a] calling get()
+     * returns an alias, and [b] the alias is rule based.  In that
+     * situation the caller must call alias->parse() to do the parsing
+     * OUTSIDE THE REGISTRY MUTEX, then call this method to retry
+     * instantiating the transliterator.
+     *
+     * Note: Another alias might be returned by this method.
+     *
+     * This method (like all public methods of this class) must be called
+     * from within the TransliteratorRegistry mutex.
+     *
+     * @param aliasReturn output param to receive TransliteratorAlias;
+     *                    should be NULL on entry
+     ','line_number':179,'multiline':True]
+['text':'*
+     * Register a prototype (adopted).  This adds an entry to the
+     * dynamic store, or replaces an existing entry.  Any entry in the
+     * underlying static locale resource store is masked.
+     ','line_number':199,'multiline':True]
+['text':'*
+     * Register an ID and a factory function pointer.  This adds an
+     * entry to the dynamic store, or replaces an existing entry.  Any
+     * entry in the underlying static locale resource store is masked.
+     ','line_number':208,'multiline':True]
+['text':'*
+     * Register an ID and a resource name.  This adds an entry to the
+     * dynamic store, or replaces an existing entry.  Any entry in the
+     * underlying static locale resource store is masked.
+     ','line_number':219,'multiline':True]
+['text':'*
+     * Register an ID and an alias ID.  This adds an entry to the
+     * dynamic store, or replaces an existing entry.  Any entry in the
+     * underlying static locale resource store is masked.
+     ','line_number':231,'multiline':True]
+['text':'*
+     * Unregister an ID.  This removes an entry from the dynamic store
+     * if there is one.  The static locale resource store is
+     * unaffected.
+     * @param ID    the given ID.
+     ','line_number':242,'multiline':True]
+['text':'------------------------------------------------------------------','line_number':250,'multiline':False]
+['text':' Public ID and spec management','line_number':251,'multiline':False]
+['text':'------------------------------------------------------------------','line_number':252,'multiline':False]
+['text':'*
+     * Return a StringEnumeration over the IDs currently registered
+     * with the system.
+     * @internal
+     ','line_number':254,'multiline':True]
+['text':'*
+     * == OBSOLETE - remove in ICU 3.4 ==
+     * Return the number of IDs currently registered with the system.
+     * To retrieve the actual IDs, call getAvailableID(i) with
+     * i from 0 to countAvailableIDs() - 1.
+     * @return the number of IDs currently registered with the system.
+     * @internal
+     ','line_number':261,'multiline':True]
+['text':'*
+     * == OBSOLETE - remove in ICU 3.4 ==
+     * Return the index-th available ID.  index must be between 0
+     * and countAvailableIDs() - 1, inclusive.  If index is out of
+     * range, the result of getAvailableID(0) is returned.
+     * @param index the given index.
+     * @return the index-th available ID.  index must be between 0
+     *         and countAvailableIDs() - 1, inclusive.  If index is out of
+     *         range, the result of getAvailableID(0) is returned.
+     * @internal
+     ','line_number':271,'multiline':True]
+['text':'*
+     * Return the number of registered source specifiers.
+     * @return the number of registered source specifiers.
+     ','line_number':284,'multiline':True]
+['text':'*
+     * Return a registered source specifier.
+     * @param index which specifier to return, from 0 to n-1, where
+     * n = countAvailableSources()
+     * @param result fill-in paramter to receive the source specifier.
+     * If index is out of range, result will be empty.
+     * @return reference to result
+     ','line_number':290,'multiline':True]
+['text':'*
+     * Return the number of registered target specifiers for a given
+     * source specifier.
+     * @param source the given source specifier.
+     * @return the number of registered target specifiers for a given
+     *         source specifier.
+     ','line_number':301,'multiline':True]
+['text':'*
+     * Return a registered target specifier for a given source.
+     * @param index which specifier to return, from 0 to n-1, where
+     * n = countAvailableTargets(source)
+     * @param source the source specifier
+     * @param result fill-in paramter to receive the target specifier.
+     * If source is invalid or if index is out of range, result will
+     * be empty.
+     * @return reference to result
+     ','line_number':310,'multiline':True]
+['text':'*
+     * Return the number of registered variant specifiers for a given
+     * source-target pair.  There is always at least one variant: If
+     * just source-target is registered, then the single variant
+     * NO_VARIANT is returned.  If source-target/variant is registered
+     * then that variant is returned.
+     * @param source the source specifiers
+     * @param target the target specifiers
+     * @return the number of registered variant specifiers for a given
+     *         source-target pair.
+     ','line_number':324,'multiline':True]
+['text':'*
+     * Return a registered variant specifier for a given source-target
+     * pair.  If NO_VARIANT is one of the variants, then it will be
+     * at index 0.
+     * @param index which specifier to return, from 0 to n-1, where
+     * n = countAvailableVariants(source, target)
+     * @param source the source specifier
+     * @param target the target specifier
+     * @param result fill-in paramter to receive the variant
+     * specifier.  If source is invalid or if target is invalid or if
+     * index is out of range, result will be empty.
+     * @return reference to result
+     ','line_number':338,'multiline':True]
+['text':'----------------------------------------------------------------','line_number':358,'multiline':False]
+['text':' Private implementation','line_number':359,'multiline':False]
+['text':'----------------------------------------------------------------','line_number':360,'multiline':False]
+['text':'*
+     * A StringEnumeration over the registered IDs in this object.
+     ','line_number':411,'multiline':True]
+['text':'*
+     * Dynamic registry mapping full IDs to Entry objects.  This
+     * contains both public and internal entities.  The visibility is
+     * controlled by whether an entry is listed in availableIDs and
+     * specDAG or not.
+     ','line_number':431,'multiline':True]
+['text':'*
+     * DAG of visible IDs by spec.  Hashtable: source => (Hashtable:
+     * target => (UVector: variant)) The UVector of variants is never
+     * empty.  For a source-target with no variant, the special
+     * variant NO_VARIANT (the empty string) is stored in slot zero of
+     * the UVector.
+     ','line_number':439,'multiline':True]
+['text':'*
+     * Vector of public full IDs.
+     ','line_number':448,'multiline':True]
+['text':' forbid copying of this class','line_number':453,'multiline':False]
+['text':' forbid copying of this class','line_number':454,'multiline':False]
+['text':' #if !UCONFIG_NO_TRANSLITERATION ','line_number':461,'multiline':True]
+['text':'eof','line_number':464,'multiline':False]

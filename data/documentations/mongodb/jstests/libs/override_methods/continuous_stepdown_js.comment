@@ -1,0 +1,125 @@
+['text':'*
+ * Loading this file exposes ContinuousStepdown, which contains the "configure" function that
+ * extends the prototype for ReplSetTest to spawn a thread that continuously step down its primary
+ * node.
+ *
+ * ContinuousStepdown#configure takes a configuration object with the following options:
+ *
+ *    configStepdown: boolean (default true)
+ *        True if a stepdown thread should be started for the CSRS.
+ *
+ *    electionTimeoutMS: number (default 5 seconds)
+ *        The election timeout for the replica set.
+ *
+ *    shardStepdown: boolean (default true)
+ *        True if a stepdown thread should be started for each shard replica set.
+ *
+ *    stepdownDurationSecs: number (default 10 seconds)
+ *        Number of seconds after stepping down as primary for which the node is not re-electable.
+ *
+ *    stepdownIntervalMS: number (default 8 seconds)
+ *        Number of milliseconds to wait after issuing a step down command, and discovering the new
+ *        primary.
+ *
+ *    catchUpTimeoutMS: number (default 0 seconds)
+ *        The amount of time allowed for newly-elected primaries to catch up.
+ ','line_number':1,'multiline':True]
+['text':'*
+     * Defines two methods on ReplSetTest, startContinuousFailover and stopContinuousFailover, that
+     * allow starting and stopping a separate thread that will periodically step down the replica
+     * set's primary node. Also defines these methods on ShardingTest, which allow starting and
+     * stopping a stepdown thread for the test's config server replica set and each of the shard
+     * replica sets, as specified by the given stepdownOptions object.
+     ','line_number':32,'multiline':True]
+['text':'*
+ * Helper class to manage the Thread instance that will continuously step down the primary
+ * node.
+ ','line_number':60,'multiline':True]
+['text':'*
+     * This function is intended to be called in a separate thread and it continuously
+     * steps down the current primary for a number of attempts.
+     *
+     * @param {CountDownLatch} stopCounter Object, which can be used to stop the thread.
+     *
+     * @param {string} seedNode The connection string of a node from which to discover
+     *      the primary of the replica set.
+     *
+     * @param {Object} options Configuration object with the following fields:
+     *      stepdownDurationSecs {integer}: The number of seconds after stepping down the
+     *          primary for which the node is not re-electable.
+     *      stepdownIntervalMS {integer}: The number of milliseconds to wait after
+     *          issuing a step down command.
+     *
+     * @return Object with the following fields:
+     *      ok {integer}: 0 if it failed, 1 if it succeeded.
+     *      error {string}: Only present if ok == 0. Contains the cause for the error.
+     *      stack {string}: Only present if ok == 0. Contains the stack at the time of
+     *          the error.
+     ','line_number':68,'multiline':True]
+['text':' The config primary may unexpectedly step down during startup if under heavy','line_number':93,'multiline':False]
+['text':' load and too slowly processing heartbeats.','line_number':94,'multiline':False]
+['text':' The command may fail if the node is no longer primary or is in the process of','line_number':102,'multiline':False]
+['text':' stepping down.','line_number':103,'multiline':False]
+['text':' Wait for primary to get elected and allow the test to make some progress','line_number':109,'multiline':False]
+['text':' before attempting another stepdown.','line_number':110,'multiline':False]
+['text':'*
+     * Returns true if the stepdown thread has been created and started.
+     ','line_number':128,'multiline':True]
+['text':'*
+     * Spawns a Thread using the given seedNode to discover the replica set.
+     ','line_number':135,'multiline':True]
+['text':'*
+     * Sets the stepdown thread's counter to 0, and waits for it to finish. Throws if the
+     * stepdown thread did not exit successfully.
+     ','line_number':148,'multiline':True]
+['text':'*
+ * Overrides the ReplSetTest constructor to start the continuous primary stepdown thread.
+ ','line_number':169,'multiline':True]
+['text':' Handle for the continuous stepdown thread.','line_number':176,'multiline':False]
+['text':' Preserve the original set of nodeOptions passed to the constructor.','line_number':178,'multiline':False]
+['text':'*
+         * Overrides startSet call to increase logging verbosity. Ensure that we only override the
+         * 'logComponentVerbosity' server parameter, but retain any other parameters that were
+         * supplied during ReplSetTest construction.
+         ','line_number':182,'multiline':True]
+['text':' Helper function to convert a string representation of setParameter to object form.','line_number':188,'multiline':False]
+['text':'*
+         * Overrides stopSet to terminate the failover thread.
+         ','line_number':208,'multiline':True]
+['text':'*
+         * Overrides awaitLastOpCommitted to retry on network errors.
+         ','line_number':216,'multiline':True]
+['text':'*
+         * Reconfigures the replica set, then starts the stepdown thread. As part of the new
+         * config, this sets:
+         * - electionTimeoutMillis to stepdownOptions.electionTimeoutMS so a new primary can
+         *   get elected before the stepdownOptions.stepdownIntervalMS period would cause one
+         *   to step down again.
+         * - catchUpTimeoutMillis to stepdownOptions.catchUpTimeoutMS. Lower values increase
+         *   the likelihood and volume of rollbacks.
+         ','line_number':223,'multiline':True]
+['text':'*
+         * Blocking method, which tells the thread running continuousPrimaryStepdownFn to stop
+         * and waits for it to terminate.
+         *
+         * If waitForPrimary is true, blocks until a new primary has been elected.
+         ','line_number':266,'multiline':True]
+['text':'*
+ * Overrides the ShardingTest constructor to start the continuous primary stepdown thread.
+ ','line_number':286,'multiline':True]
+['text':' Construct the original object.','line_number':308,'multiline':False]
+['text':' Validate the stepdown options.','line_number':311,'multiline':False]
+['text':'*
+         * Calls startContinuousFailover on the config server and/or each shard replica set as
+         * specifed by the stepdownOptions object.
+         ','line_number':323,'multiline':True]
+['text':'*
+         * Calls stopContinuousFailover on the config server and each shard replica set as
+         * specified by the stepdownOptions object.
+         *
+         * If waitForPrimary is true, blocks until each replica set has elected a primary.
+         ','line_number':339,'multiline':True]
+['text':'*
+         * This method is disabled because it runs aggregation, which doesn't handle config
+         * server stepdown correctly.
+         ','line_number':359,'multiline':True]

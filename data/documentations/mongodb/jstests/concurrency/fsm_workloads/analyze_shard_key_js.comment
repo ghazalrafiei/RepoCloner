@@ -1,0 +1,217 @@
+['text':'*
+ * Tests that the analyzeShardKey command returns correct metrics.
+ *
+ * This workload implicitly assumes that its tid range is [0, $config.threadCount). This isn't
+ * guaranteed to be true when it is run in parallel with other workloads.
+ *
+ * @tags: [
+ *  requires_fcv_71,
+ *  uses_transactions,
+ *  resource_intensive,
+ *  incompatible_with_concurrency_simultaneous,
+ * ]
+ ','line_number':1,'multiline':True]
+['text':' The sample rate range for query sampling.','line_number':38,'multiline':False]
+['text':' The comment to attached to queries in the read and write states below to mark them as','line_number':41,'multiline':False]
+['text':' eligible for sampling. Queries such as the aggregate queries for looking up documents to','line_number':42,'multiline':False]
+['text':' update will not have this comment attached since they do not follow the query patterns','line_number':43,'multiline':False]
+['text':' defined for the workload so can cause the read distribution metrics to be incorrect.','line_number':44,'multiline':False]
+['text':' The fields in the documents in the test collection. The unique document id is is used in','line_number':47,'multiline':False]
+['text':' write filters to make each write only modify or delete one document whether it specifies','line_number':48,'multiline':False]
+['text':' "multi" true or false. This is to avoid drastically changing the cardinality and','line_number':49,'multiline':False]
+['text':' frequency of the shard key as this workload runs.','line_number':50,'multiline':False]
+['text':' The shard key field if the workload is running on a sharded cluster.','line_number':54,'multiline':False]
+['text':' The settings for generating the initial documents if the shard key is unique.','line_number':58,'multiline':False]
+['text':' The settings for generating the initial documents if the shard key in not unique.','line_number':63,'multiline':False]
+['text':'//','line_number':71,'multiline':False]
+['text':' The helpers for setting up the test collection.','line_number':72,'multiline':False]
+['text':'*
+     * Generates the shard key to be analyzed.
+     ','line_number':74,'multiline':True]
+['text':' It is illegal to create a unique index that doesn't have the shard key as a prefix.','line_number':84,'multiline':False]
+['text':'*
+     * Generates the document schema for the collection. Specifically, it defines the type and
+     * monotonicity of each field.
+     ','line_number':109,'multiline':True]
+['text':'*
+     * Generates a unique value for the field with the given name.
+     ','line_number':134,'multiline':True]
+['text':'*
+     * Generates a document for the thread with the given id such that the value of every field in
+     * the document is unique. Does not assign a unique id to the document.
+     ','line_number':147,'multiline':True]
+['text':'*
+     * Same as above but assigns a unique id to the document.
+     ','line_number':159,'multiline':True]
+['text':'*
+     * Returns a random document assigned to the thread invoking this.
+     ','line_number':167,'multiline':True]
+['text':'*
+     * Generates and inserts initial documents.
+     ','line_number':180,'multiline':True]
+['text':' To reduce the insertion order noise caused by parallel oplog application on','line_number':218,'multiline':False]
+['text':' secondaries, insert the documents in multiple batches.','line_number':219,'multiline':False]
+['text':' Wait for secondaries to have replicated the writes.','line_number':226,'multiline':False]
+['text':'//','line_number':238,'multiline':False]
+['text':' The helpers for setting up the query patterns.','line_number':239,'multiline':False]
+['text':'*
+     * Generates n non-negative numbers whose sum is 100.
+     ','line_number':241,'multiline':True]
+['text':'*
+     * Calculates the shard targeting metrics based on the given information about query patterns
+     * and the shard key being analyzed.
+     ','line_number':250,'multiline':True]
+['text':'*
+     * Generates query patterns for this workload. Specifically, it defines the percentages of
+     * reads/writes that filter by shard key equality, filter by shard key range and do not filter
+     * by shard key at all, and the percentages of single writes and multi writes, and percentage
+     * of shard key updates. Then, it calculates the ideal read and write distribution metrics that
+     * the analyzeShardKey command should return.
+     ','line_number':272,'multiline':True]
+['text':' Multi-writes are not retryable.','line_number':307,'multiline':False]
+['text':' Multi-writes against a sharded collection do not synchronize with chunk','line_number':311,'multiline':False]
+['text':' migrations or perform shard filtering. As a result, they can end up getting','line_number':312,'multiline':False]
+['text':' applied to the same document between zero and multiple times.','line_number':313,'multiline':False]
+['text':' The write states "update", "remove", "findAndModifyUpdate" and "findAndModifyRemove"','line_number':318,'multiline':False]
+['text':' all have equal incoming state transition probabilities and the multi writes are not','line_number':319,'multiline':False]
+['text':' applicable to the "findAndModify" states.','line_number':320,'multiline':False]
+['text':' The write states "update", "remove", "findAndModifyUpdate" and "findAndModifyRemove"','line_number':332,'multiline':False]
+['text':' all have equal incoming state transition probabilities and only updates are not','line_number':333,'multiline':False]
+['text':' applicable to the "remove" and "findAndModifyRemove" states.','line_number':334,'multiline':False]
+['text':'//','line_number':362,'multiline':False]
+['text':' The helpers for generating queries.','line_number':363,'multiline':False]
+['text':'*
+     * Generates a read filter.
+     ','line_number':365,'multiline':True]
+['text':'*
+     * Generates a write filter that will match exactly one document assigned to the thread invoking
+     * this. If the document lookup fails with an expected error, returns null. If it fails with
+     * some other error, throws the error.
+     ','line_number':391,'multiline':True]
+['text':' Specify the unique document id in the filter so that there is only one matching document.','line_number':409,'multiline':False]
+['text':'*
+     * Generates a modifier update which sets the value of the field being modified to a new unique
+     * value.
+     ','line_number':429,'multiline':True]
+['text':'//','line_number':440,'multiline':False]
+['text':' The helpers for verifying the metrics returned by the analyzeShardKey command.','line_number':441,'multiline':False]
+['text':' The name of the collection used for storing the latest metrics by returned the','line_number':443,'multiline':False]
+['text':' analyzeShardKey command. The read and write metrics are validated with a more narrow diff','line_number':444,'multiline':False]
+['text':' window during teardown.','line_number':445,'multiline':False]
+['text':' The diff window for the metrics about the characteristics of the shard key.','line_number':448,'multiline':False]
+['text':'*
+     * Verifies that the metrics about the characteristics of the shard key are within acceptable
+     * ranges.
+     ','line_number':451,'multiline':True]
+['text':' Perform basic validation of the metrics.','line_number':457,'multiline':False]
+['text':' Validate the cardinality metrics. Due to the concurrent writes by other threads, it is','line_number':462,'multiline':False]
+['text':' not feasible to assert on the exact "numDistinctValues" value. However, given that this','line_number':463,'multiline':False]
+['text':' workload inserts a new document every time it removes a document and that it generates a','line_number':464,'multiline':False]
+['text':' new value every time it updates a document, "numDistinctValues" should be greater or','line_number':465,'multiline':False]
+['text':' equal to the initial number of distinct values except in the following cases:','line_number':466,'multiline':False]
+['text':' 1. The collection has gone through migrations.','line_number':467,'multiline':False]
+['text':' 2. There have been unclean shutdowns (i.e. kills).','line_number':468,'multiline':False]
+['text':' The reason is that the cardinality metrics are calculated as follows. If the shard key is','line_number':469,'multiline':False]
+['text':' not unique, they are calculated using an aggregation with readConcern "available" (i.e.','line_number':470,'multiline':False]
+['text':' it opts out of shard versioning and filtering). If the shard key is unique, they are','line_number':471,'multiline':False]
+['text':' inferred from fast count of the documents.','line_number':472,'multiline':False]
+['text':' If there are no unclean shutdowns, the diff should be negligible.','line_number':477,'multiline':False]
+['text':' Validate the frequency metrics. Likewise, due to the concurrent writes by other threads,','line_number':486,'multiline':False]
+['text':' it is not feasible to assert on the exact "mostCommonValues".','line_number':487,'multiline':False]
+['text':' Validate the monotonicity metrics. This check is skipped if the balancer is enabled','line_number':490,'multiline':False]
+['text':' since chunk migration deletes documents from the donor shard and re-inserts them on the','line_number':491,'multiline':False]
+['text':' recipient shard so there is no guarantee that the insertion order from the client is','line_number':492,'multiline':False]
+['text':' preserved.','line_number':493,'multiline':False]
+['text':' The intermediate and final diff windows for the metrics about the read and write','line_number':503,'multiline':False]
+['text':' distribution.','line_number':504,'multiline':False]
+['text':' The minimum number of sampled queries to wait for before verifying the read and write','line_number':509,'multiline':False]
+['text':' distribution metrics.','line_number':510,'multiline':False]
+['text':' The diff window for the sample size for each command for the sample population to be','line_number':513,'multiline':False]
+['text':' considered as matching the mock query pattern.','line_number':514,'multiline':False]
+['text':' The number of sampled queries returned by the latest analyzeShardKey command.','line_number':517,'multiline':False]
+['text':' There are 4 read states (i.e. find, aggregate, count and distinct) and they have the','line_number':532,'multiline':False]
+['text':' same incoming and outgoing state transition probabilities.','line_number':533,'multiline':False]
+['text':' expectedPercentage ','line_number':535,'multiline':True]
+['text':' expectedPercentage ','line_number':537,'multiline':True]
+['text':' expectedPercentage ','line_number':539,'multiline':True]
+['text':' expectedPercentage ','line_number':541,'multiline':True]
+['text':' The sample population should always match the mock query patterns unless there are','line_number':547,'multiline':False]
+['text':' retries.','line_number':548,'multiline':False]
+['text':' There are 4 write states (i.e. update, remove, findAndModifyUpdate and','line_number':561,'multiline':False]
+['text':' findAndModifyRemove) and they have the same incoming and outgoing state transition','line_number':562,'multiline':False]
+['text':' probabilities.','line_number':563,'multiline':False]
+['text':' expectedPercentage ','line_number':566,'multiline':True]
+['text':' expectedPercentage ','line_number':568,'multiline':True]
+['text':' expectedPercentage ','line_number':570,'multiline':True]
+['text':' The sample population should always match the mock query patterns unless there are','line_number':576,'multiline':False]
+['text':' retries.','line_number':577,'multiline':False]
+['text':'*
+     * Verifies that the metrics about the read and write distribution are within acceptable ranges.
+     ','line_number':584,'multiline':True]
+['text':' Sanity check sampleSize to make sure we collected non-zero metrics for each of the','line_number':607,'multiline':False]
+['text':' commands.','line_number':608,'multiline':False]
+['text':'//','line_number':652,'multiline':False]
+['text':' The helpers for handling errors.','line_number':653,'multiline':False]
+['text':' Due to the size of the collection, each chunk migration can take quite some time to','line_number':657,'multiline':False]
+['text':' complete. For the analyzeShardKey command, it turns out mongos can sometimes use up','line_number':658,'multiline':False]
+['text':' all of its StaleConfig retries. This is likely caused by the refreshes that occur as','line_number':659,'multiline':False]
+['text':' metrics are calculated.','line_number':660,'multiline':False]
+['text':' (WT-8003) 28799 is the error that $sample throws when it fails to find a','line_number':666,'multiline':False]
+['text':' non-duplicate document using a random cursor. 4952606 is the error that the sampling','line_number':667,'multiline':False]
+['text':' based split policy throws if it fails to find the specified number of split points.','line_number':668,'multiline':False]
+['text':' Inaccurate fast count is only expected when there is unclean shutdown.','line_number':697,'multiline':False]
+['text':' Inaccurate fast count is only expected when there is unclean shutdown.','line_number':705,'multiline':False]
+['text':' The duplicate key error is only acceptable if it's a document shard key update during','line_number':713,'multiline':False]
+['text':' a migration.','line_number':714,'multiline':False]
+['text':'*
+     * Returns a copy for the given analyzeShardKey response with the "numReadsByRange" and
+     * "numWritesByRange" fields truncated if they exist since they are arrays of length
+     * this.numRanges (defaults to 100).
+     ','line_number':724,'multiline':True]
+['text':' deep ','line_number':731,'multiline':True]
+['text':'*
+     * Runs $listSampledQueries and asserts that the number of sampled queries is greater or equal
+     * to the number of sampled queries returned by the latest analyzeShardKey command.
+     ','line_number':743,'multiline':True]
+['text':' The network override does not support issuing getMore commands since','line_number':754,'multiline':False]
+['text':' if a network error occurs during it then it won't know whether the','line_number':755,'multiline':False]
+['text':' cursor was advanced or not. To allow this workload to run in a suite','line_number':756,'multiline':False]
+['text':' with network error, use a large batch size so that no getMore commands','line_number':757,'multiline':False]
+['text':' would be issued.','line_number':758,'multiline':False]
+['text':' To avoid leaving a lot of config.analyzeShardKeySplitPoints documents around which could','line_number':770,'multiline':False]
+['text':' make restart recovery take a long time, overwrite the values of the','line_number':771,'multiline':False]
+['text':' 'analyzeShardKeySplitPointExpirationSecs' and 'ttlMonitorSleepSecs' server parameters to make','line_number':772,'multiline':False]
+['text':' the clean up occur as the workload runs, and then restore the original values during','line_number':773,'multiline':False]
+['text':' teardown().','line_number':774,'multiline':False]
+['text':'*
+     * Returns the number of documents that match the given filter in the given collection.
+     ','line_number':817,'multiline':True]
+['text':' To avoid leaving unnecessary documents in config database after this workload finishes,','line_number':831,'multiline':False]
+['text':' remove all the sampled query documents and split point documents during teardown().','line_number':832,'multiline':False]
+['text':'//','line_number':876,'multiline':False]
+['text':' The body of the workload.','line_number':877,'multiline':False]
+['text':' Look up the number of most common values and the number of ranges that the','line_number':880,'multiline':False]
+['text':' analyzeShardKey command should return.','line_number':881,'multiline':False]
+['text':' Force all mongoses and mongods to only sample queries that are explicitly marked','line_number':901,'multiline':False]
+['text':' as eligible for sampling.','line_number':902,'multiline':False]
+['text':' On a sharded cluster, running an aggregate command by default involves running getMore','line_number':919,'multiline':False]
+['text':' commands since the cursor establisher in sharding is pessimistic about the router being','line_number':920,'multiline':False]
+['text':' stale so it always makes a cursor with {batchSize: 0} on the shards and then run getMore','line_number':921,'multiline':False]
+['text':' commands afterwards because this helps avoid doing any storage work and instead only pins','line_number':922,'multiline':False]
+['text':' the filtering metadata which would be used for the cursor. Interrupts such as','line_number':923,'multiline':False]
+['text':' stepdowns can cause a getMore command get fail as a result of the cursor being killed.','line_number':924,'multiline':False]
+['text':' The unique id of the document storing the latest metrics returned by the analyzeShardKey','line_number':933,'multiline':False]
+['text':' command.','line_number':934,'multiline':False]
+['text':' isFinal ','line_number':955,'multiline':True]
+['text':' Set to a positive value when the analyzeShardKey command fails with an error that is likely','line_number':974,'multiline':False]
+['text':' to occur again upon the next try.','line_number':975,'multiline':False]
+['text':' isFinal ','line_number':1005,'multiline':True]
+['text':' Persist the metrics so we can do the final validation during teardown.','line_number':1006,'multiline':False]
+['text':' upsert ','line_number':1010,'multiline':True]
+['text':' Avoid leaving open cursors.','line_number':1048,'multiline':False]
+['text':' Avoid leaving open cursors.','line_number':1062,'multiline':False]
+['text':' Insert a random document to restore the original number of documents.','line_number':1144,'multiline':False]
+['text':' Insert a random document to restore the original number of documents.','line_number':1193,'multiline':False]
+['text':' If 'passConnectionCache' is true, every state function must accept 3 parameters: db,','line_number':1200,'multiline':False]
+['text':' collName and connCache. This workload does not set 'passConnectionCache' since it doesn't','line_number':1201,'multiline':False]
+['text':' use 'connCache' but it may extend a sharding workload that uses it.','line_number':1202,'multiline':False]

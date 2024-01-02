@@ -1,0 +1,1058 @@
+['text':' -*- c -*- ','line_number':1,'multiline':True]
+['text':' for NPY_CHAR ','line_number':11,'multiline':True]
+['text':'
+ * Define a stack allocated dummy array with only the minimum information set:
+ *   1. The descr, the main field interesting here.
+ *   2. The flags, which are needed for alignment;.
+ *   3. The type is set to NULL and the base is the original array, if this
+ *      is used within a subarray getitem to create a new view, the base
+ *      must be walked until the type is not NULL.
+ *
+ * The following should create errors in debug mode (if deallocated
+ * incorrectly), since base would be incorrectly decref'd as well.
+ * This is especially important for nonzero and copyswap, which may run with
+ * the GIL released.
+ ','line_number':45,'multiline':True]
+['text':' Set to NULL so the dummy object can be distinguished from the real one ','line_number':63,'multiline':True]
+['text':' check for sequences, but ignore the types numpy considers scalars ','line_number':70,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                        PYTHON TYPES TO C TYPES                          **
+ *****************************************************************************
+ ','line_number':80,'multiline':True]
+['text':' Handle case of assigning from an array scalar in setitem ','line_number':138,'multiline':True]
+['text':'*begin repeat
+ *
+ * #Type = Long, LongLong#
+ * #type = npy_long, npy_longlong#
+ ','line_number':159,'multiline':True]
+['text':' Never happens within the function ','line_number':181,'multiline':True]
+['text':'*end repeat*','line_number':185,'multiline':True]
+['text':'*begin repeat
+ *
+ * #Type = Long, LongLong#
+ * #type = npy_ulong, npy_ulonglong#
+ ','line_number':187,'multiline':True]
+['text':' negative wrapped to positive ','line_number':205,'multiline':True]
+['text':'*end repeat*','line_number':220,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                         GETITEM AND SETITEM                             **
+ *****************************************************************************
+ ','line_number':222,'multiline':True]
+['text':'
+ * Disable harmless compiler warning "4116: unnamed type definition in
+ * parentheses" which is caused by the _ALIGN macro.
+ ','line_number':227,'multiline':True]
+['text':'*begin repeat
+ *
+ * #type = npy_byte, npy_short, npy_int, npy_long, npy_longlong,
+ *         npy_ubyte, npy_ushort, npy_uint, npy_ulong, npy_ulonglong#
+ * #TYPE = BYTE, SHORT, INT, LONG, LONGLONG,
+ *         UBYTE, USHORT, UINT, ULONG, ULONGLONG#
+ * #STYPE = BYTE, SHORT, INT, LONG, LONGLONG,
+ *          BYTE, SHORT, INT, LONG, LONGLONG#
+ * #conv_type = npy_long*4, npy_longlong, npy_ulong*4, npy_ulonglong#
+ * #CSTYPE = LONG*4, LONGLONG, LONG*4, LONGLONG#
+ * #func = MyPyLong_AsLong*4, MyPyLong_AsLongLong,
+ *         MyPyLong_AsLong*2, MyPyLong_AsUnsignedLong*2,
+ *         MyPyLong_AsUnsignedLongLong#
+ ','line_number':236,'multiline':True]
+['text':'
+ * Helper for conversion from Python integers.  This uses the same conversion
+ * function as below for compatibility (which may seem strange).
+ * However, it adds more strict integer overflow checks to prevent mainly
+ * conversion of negative integers.  These are considered deprecated, which is
+ * related to NEP 50 (but somewhat independent).
+ ','line_number':251,'multiline':True]
+['text':' Input is guaranteed to be a Python integer ','line_number':261,'multiline':True]
+['text':'
+             * This path will be taken both for the "promotion" case such as
+             * `uint8_arr + 123` as well as the assignment case.
+             * The "legacy" path should only ever be taken for assignment
+             * (legacy promotion will prevent overflows by promoting up)
+             * so a normal deprecation makes sense.
+             * When weak promotion is active, we use "future" behavior unless
+             * warnings were explicitly opt-in.
+             ','line_number':280,'multiline':True]
+['text':' Live in the future, outright error: ','line_number':304,'multiline':True]
+['text':'*end repeat*','line_number':315,'multiline':True]
+['text':'*begin repeat
+ *
+ * #TYPE = BOOL, BYTE, UBYTE, SHORT, USHORT, INT, LONG, UINT, ULONG,
+ *         LONGLONG, ULONGLONG, HALF, FLOAT, DOUBLE#
+ * #func1 = PyBool_FromLong, PyLong_FromLong*6, PyLong_FromUnsignedLong*2,
+ *          PyLong_FromLongLong, PyLong_FromUnsignedLongLong,
+ *          MyPyFloat_FromHalf, PyFloat_FromDouble*2#
+ * #func2 = PyObject_IsTrue, MyPyLong_AsLong*6, MyPyLong_AsUnsignedLong*2,
+ *          MyPyLong_AsLongLong, MyPyLong_AsUnsignedLongLong,
+ *          MyPyFloat_AsHalf, MyPyFloat_AsFloat, MyPyFloat_AsDouble#
+ * #type = npy_bool,
+ *         npy_byte, npy_ubyte, npy_short, npy_ushort, npy_int,
+ *         npy_long, npy_uint, npy_ulong, npy_longlong, npy_ulonglong,
+ *         npy_half, npy_float, npy_double#
+ * #type1 = long*7, npy_ulong*2, npy_longlong, npy_ulonglong,
+ *          npy_half, npy_float, npy_double#
+ * #kind = Bool, Byte, UByte, Short, UShort, Int, Long, UInt, ULong,
+ *         LongLong, ULongLong, Half, Float, Double#
+ * #is_int = 0,1*10,0*3#
+ ','line_number':318,'multiline':True]
+['text':' ensures alignment ','line_number':359,'multiline':True]
+['text':'
+         * When weak promotion is enabled (using NEP 50) we also use more
+         * strict parsing of integers:  All out-of-bound Python integer
+         * parsing fails.
+         ','line_number':363,'multiline':True]
+['text':' continue with if below ','line_number':372,'multiline':True]
+['text':'*end repeat*','line_number':405,'multiline':True]
+['text':'*begin repeat
+ *
+ * #TYPE = CFLOAT, CDOUBLE#
+ * #type = npy_float, npy_double#
+ ','line_number':408,'multiline':True]
+['text':'*end repeat*','line_number':434,'multiline':True]
+['text':'*begin repeat
+ *
+ * #NAME = CFLOAT, CDOUBLE, CLONGDOUBLE#
+ * #type = npy_cfloat, npy_cdouble, npy_clongdouble#
+ * #ftype = npy_float, npy_double, npy_longdouble#
+ * #kind = CFloat, CDouble, CLongDouble#
+ * #suffix = f, , l#
+ ','line_number':438,'multiline':True]
+['text':'
+             * Unlike most numeric conversion functions PyComplex_AsCComplex
+             * does not handle strings, so we have to use its constructor.
+             ','line_number':466,'multiline':True]
+['text':' The complex constructor expects unicode ','line_number':472,'multiline':True]
+['text':' really just float... ','line_number':507,'multiline':True]
+['text':' Overflow could have occurred converting double to float ','line_number':508,'multiline':True]
+['text':'*end repeat*','line_number':525,'multiline':True]
+['text':' Convert python long objects to a longdouble, without precision or range
+     * loss via a double.
+     ','line_number':535,'multiline':True]
+['text':' strtold returns INFINITY of the correct sign. ','line_number':562,'multiline':True]
+['text':' Extra characters at the end of the string, or nothing parsed ','line_number':573,'multiline':True]
+['text':' Probably wasn't a string, try converting it via a python double ','line_number':584,'multiline':True]
+['text':'
+ * These return array scalars which are different than other date-types.
+ ','line_number':592,'multiline':True]
+['text':' ensure alignment ','line_number':606,'multiline':True]
+['text':' In case something funny happened in PyArray_IsScalar ','line_number':617,'multiline':True]
+['text':' UNICODE ','line_number':642,'multiline':True]
+['text':' Try to decode from ASCII ','line_number':671,'multiline':True]
+['text':' truncate if needed ','line_number':681,'multiline':True]
+['text':' Fill in the rest of the space with 0 ','line_number':721,'multiline':True]
+['text':' STRING
+ *
+ * can handle both NULL-terminated and not NULL-terminated cases
+ * will truncate all ending NULLs in returned string.
+ ','line_number':732,'multiline':True]
+['text':' Will eliminate NULLs at the end ','line_number':741,'multiline':True]
+['text':' Assume ASCII codec -- function similarly as Python 2 ','line_number':770,'multiline':True]
+['text':' Emulate similar casting behavior as on Python 2 ','line_number':783,'multiline':True]
+['text':'
+     * If string length is smaller than room in array
+     * Then fill the rest of the element size with NULL
+     ','line_number':800,'multiline':True]
+['text':' OBJECT ','line_number':811,'multiline':True]
+['text':' We support NULL, but still try to guarantee this never happens! ','line_number':821,'multiline':True]
+['text':' A newly created array/buffer may only be NULLed, so XDECREF ','line_number':839,'multiline':True]
+['text':' VOID ','line_number':848,'multiline':True]
+['text':' get the names from the fields dictionary','line_number':866,'multiline':True]
+['text':' update alignment based on offset ','line_number':880,'multiline':True]
+['text':' return an array of the basic type ','line_number':894,'multiline':True]
+['text':'
+         * NOTE: There is the possibility of recursive calls from the above
+         *       field branch. These calls use a dummy arr for thread
+         *       (and general) safety. However, we must set the base array,
+         *       so if such a dummy array was passed (its type is NULL),
+         *       we have walk its base until the initial array is found.
+         *
+         * TODO: This should be fixed, the next "generation" of GETITEM will
+         *       probably need to pass in the original array (in addition
+         *       to the dtype as a method). Alternatively, VOID dtypes
+         *       could have special handling.
+         ','line_number':906,'multiline':True]
+['text':'
+             * Need to create a copy, or we may point to wrong data.  This path
+             * is taken when no "valid" array is passed.  This happens for
+             * casts.
+             ','line_number':928,'multiline':True]
+['text':' Given a structured PyArrayObject arr, index i and structured datatype descr,
+ * modify the dtype of arr to contain a single field corresponding to the ith
+ * field of descr, recompute the alignment flag, and return the offset of the
+ * field (in offset_p). This is useful in preparation for calling copyswap on
+ * individual fields of a numpy structure, in VOID_setitem.  Compare to inner
+ * loops in VOID_getitem and VOID_nonzero.
+ *
+ * WARNING: Clobbers arr's dtype and alignment flag, should not be used
+ *          on the original array!
+ ','line_number':946,'multiline':True]
+['text':' Helper function for VOID_setitem, which uses the copyswap or casting code to
+ * copy structured datatypes between numpy arrays or scalars.
+ ','line_number':984,'multiline':True]
+['text':' Fast path if dtypes are equal ','line_number':997,'multiline':True]
+['text':' neither line can ever fail, in principle ','line_number':1000,'multiline':True]
+['text':' Slow path ','line_number':1010,'multiline':True]
+['text':' If op is 0d-ndarray or numpy scalar, directly get dtype & data ptr ','line_number':1034,'multiline':True]
+['text':' if it's a tuple, copy field-by-field to ap, ','line_number':1051,'multiline':True]
+['text':' use setitem to set this field ','line_number':1079,'multiline':True]
+['text':' Otherwise must be non-void scalar. Try to assign to each field ','line_number':1087,'multiline':True]
+['text':' temporarily make ap have only this field ','line_number':1094,'multiline':True]
+['text':' use setitem to set this field ','line_number':1099,'multiline':True]
+['text':' copy into an array of the same basic type ','line_number':1113,'multiline':True]
+['text':'
+         * Note we set no base object here, as to not rely on the input
+         * being a valid object for base setting. `ret` nevertheless does
+         * does not own its data, this is generally not good, but localized.
+         ','line_number':1122,'multiline':True]
+['text':'
+     * Fall through case - non-structured void datatype. This is a very
+     * undiscerning case: It interprets any object as a buffer
+     * and reads as many bytes as possible, padding with 0.
+     ','line_number':1140,'multiline':True]
+['text':' Get the datetime units metadata ','line_number':1167,'multiline':True]
+['text':' Get the datetime units metadata ','line_number':1191,'multiline':True]
+['text':' ensure alignment ','line_number':1211,'multiline':True]
+['text':' Get the datetime units metadata ','line_number':1215,'multiline':True]
+['text':' Convert the object into a NumPy datetime ','line_number':1221,'multiline':True]
+['text':' Copy the value into the output ','line_number':1227,'multiline':True]
+['text':' ensure alignment ','line_number':1243,'multiline':True]
+['text':' Get the datetime units metadata ','line_number':1247,'multiline':True]
+['text':' Convert the object into a NumPy datetime ','line_number':1253,'multiline':True]
+['text':' Copy the value into the output ','line_number':1259,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                       TYPE TO TYPE CONVERSIONS                          **
+ *****************************************************************************
+ *
+ * WARNING: Most of type conversion does NOT happen here, only few of these
+ *          have never been ported to the new system!
+ *          Most type conversion functions are thus just NULL.
+ ','line_number':1272,'multiline':True]
+['text':' Assumes contiguous, and aligned, from and to ','line_number':1283,'multiline':True]
+['text':'*begin repeat
+ *
+ * #TYPE1 = DATETIME, TIMEDELTA#
+ * #type1 = npy_datetime, npy_timedelta#
+ ','line_number':1286,'multiline':True]
+['text':'*begin repeat1
+ * #TYPE2 = BYTE, UBYTE, SHORT, USHORT, INT, UINT, LONG, ULONG,
+ *          LONGLONG, ULONGLONG, FLOAT, DOUBLE, LONGDOUBLE,
+ *          CFLOAT, CDOUBLE, CLONGDOUBLE#
+ * #type2 = npy_byte, npy_ubyte, npy_short, npy_ushort, npy_int, npy_uint,
+ *          npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *          npy_float, npy_double, npy_longdouble,
+ *          npy_float, npy_double, npy_longdouble#
+ * #floatingpoint = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1#
+ * #steps = 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2#
+ ','line_number':1292,'multiline':True]
+['text':'
+         * volatile works around clang (and gcc sometimes) not branching
+         * correctly, leading to floating point errors in the test suite.
+         ','line_number':1312,'multiline':True]
+['text':' Avoid undefined behaviour and warning for NaN -> NaT ','line_number':1318,'multiline':True]
+['text':' complex type ','line_number':1345,'multiline':True]
+['text':'*end repeat1*','line_number':1351,'multiline':True]
+['text':'*begin repeat1
+ * #TYPE2 = TIMEDELTA, DATETIME#
+ * #type2 = npy_timedelta, npy_datetime#
+ ','line_number':1353,'multiline':True]
+['text':'*end repeat*','line_number':1372,'multiline':True]
+['text':'*begin repeat
+ *
+ * #TYPE = DATETIME, TIMEDELTA#
+ * #type = npy_datetime, npy_timedelta#
+ ','line_number':1376,'multiline':True]
+['text':'*end repeat*','line_number':1406,'multiline':True]
+['text':'*begin repeat
+ *
+ * #FROMTYPE = DATETIME, TIMEDELTA#
+ * #fromtype = npy_datetime, npy_timedelta#
+ ','line_number':1409,'multiline':True]
+['text':'*end repeat*','line_number':1425,'multiline':True]
+['text':'*begin repeat
+ * #TOTYPE = DATETIME, TIMEDELTA#
+ * #totype = npy_datetime, npy_timedelta#
+ ','line_number':1428,'multiline':True]
+['text':'*end repeat*','line_number':1443,'multiline':True]
+['text':'*begin repeat
+ * #TOTYPE = BOOL,
+ *           BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+ *           LONG, ULONG, LONGLONG, ULONGLONG,
+ *           HALF, FLOAT, DOUBLE, LONGDOUBLE,
+ *           CFLOAT, CDOUBLE, CLONGDOUBLE,
+ *           OBJECT#
+ ','line_number':1446,'multiline':True]
+['text':'*begin repeat1
+ * #FROMTYPE = BOOL,
+ *             BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+ *             LONG, ULONG, LONGLONG, ULONGLONG,
+ *             HALF, FLOAT, DOUBLE, LONGDOUBLE,
+ *             CFLOAT, CDOUBLE, CLONGDOUBLE,
+ *             OBJECT#
+ ','line_number':1454,'multiline':True]
+['text':'*end repeat1*','line_number':1465,'multiline':True]
+['text':'*end repeat*','line_number':1466,'multiline':True]
+['text':'*begin repeat
+ * #OTHER = VOID, STRING, UNICODE, DATETIME, TIMEDELTA#
+ ','line_number':1468,'multiline':True]
+['text':'*end repeat*','line_number':1474,'multiline':True]
+['text':'*begin repeat
+ *
+ * #from = STRING*23, UNICODE*23, VOID*23#
+ * #fromtyp = npy_char*69#
+ * #is_string_to_bool = 1, 0*22, 1, 0*22, 0*23#
+ * #to = (BOOL,
+ *           BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+ *           LONG, ULONG, LONGLONG, ULONGLONG,
+ *           HALF, FLOAT, DOUBLE, LONGDOUBLE,
+ *           CFLOAT, CDOUBLE, CLONGDOUBLE,
+ *           STRING, UNICODE, VOID,
+ *           DATETIME, TIMEDELTA)*3#
+ * #totyp = (npy_bool,
+ *              npy_byte, npy_ubyte, npy_short, npy_ushort, npy_int, npy_uint,
+ *              npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *              npy_half, npy_float, npy_double, npy_longdouble,
+ *              npy_cfloat, npy_cdouble, npy_clongdouble,
+ *              npy_char, npy_char, npy_char,
+ *              npy_datetime, npy_timedelta)*3#
+ * #oskip = 1*18,(PyArray_DESCR(aop)->elsize)*3,1*2,
+ *          1*18,(PyArray_DESCR(aop)->elsize)*3,1*2,
+ *          1*18,(PyArray_DESCR(aop)->elsize)*3,1*2#
+ ','line_number':1477,'multiline':True]
+['text':'*end repeat*','line_number':1527,'multiline':True]
+['text':'*begin repeat
+ *
+ * #to = STRING*20, UNICODE*20, VOID*20#
+ * #totyp = npy_char*20, npy_char*20, npy_char*20#
+ * #from = (BOOL,
+ *             BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+ *             LONG, ULONG, LONGLONG, ULONGLONG,
+ *             HALF, FLOAT, DOUBLE, LONGDOUBLE,
+ *             CFLOAT, CDOUBLE, CLONGDOUBLE,
+ *             DATETIME, TIMEDELTA)*3#
+ * #fromtyp = (npy_bool,
+ *               npy_byte, npy_ubyte, npy_short, npy_ushort, npy_int, npy_uint,
+ *               npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *               npy_half, npy_float, npy_double, npy_longdouble,
+ *               npy_cfloat, npy_cdouble, npy_clongdouble,
+ *               npy_datetime, npy_timedelta)*3#
+ ','line_number':1530,'multiline':True]
+['text':'*end repeat*','line_number':1574,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                               SCAN                                      **
+ *****************************************************************************
+ ','line_number':1577,'multiline':True]
+['text':'
+ * The first ignore argument is for backwards compatibility.
+ * Should be removed when the API version is bumped up.
+ ','line_number':1584,'multiline':True]
+['text':'*begin repeat
+ * #fname = SHORT, USHORT, INT, UINT,
+ *          LONG, ULONG, LONGLONG, ULONGLONG#
+ * #type = npy_short, npy_ushort, npy_int, npy_uint,
+ *         npy_long, npy_ulong, npy_longlong, npy_ulonglong#
+ * #format = "hd", "hu", "d", "u",
+ *           "ld", "lu", NPY_LONGLONG_FMT, NPY_ULONGLONG_FMT#
+ ','line_number':1589,'multiline':True]
+['text':'*end repeat*','line_number':1603,'multiline':True]
+['text':'*begin repeat
+ * #fname = FLOAT, DOUBLE#
+ * #type = npy_float, npy_double#
+ ','line_number':1605,'multiline':True]
+['text':'*end repeat*','line_number':1620,'multiline':True]
+['text':'*begin repeat
+ * #fname = BYTE, UBYTE#
+ * #type = npy_byte, npy_ubyte#
+ * #btype = npy_int, npy_uint#
+ * #format = "d", "u"#
+ ','line_number':1646,'multiline':True]
+['text':'*end repeat*','line_number':1663,'multiline':True]
+['text':'*begin repeat
+ * #fname = CFLOAT, CDOUBLE#
+ * #type = npy_cfloat, npy_cdouble#
+ * #suffix = f, #
+ ','line_number':1677,'multiline':True]
+['text':' Peek next character','line_number':1691,'multiline':False]
+['text':' Imaginary component specified','line_number':1694,'multiline':False]
+['text':' Revert peek and read imaginary component','line_number':1696,'multiline':False]
+['text':' Peak next character','line_number':1699,'multiline':False]
+['text':' If read is successful and the immediate following char is j','line_number':1702,'multiline':False]
+['text':' Push an invalid char to trigger the not everything is read error','line_number':1707,'multiline':False]
+['text':' Real component not specified','line_number':1712,'multiline':False]
+['text':' Imaginary component not specified','line_number':1717,'multiline':False]
+['text':' Next character is not + / - / j. Revert peek.','line_number':1720,'multiline':False]
+['text':'*end repeat*','line_number':1726,'multiline':True]
+['text':'*begin repeat
+ * #fname = CLONGDOUBLE,
+ *          OBJECT, STRING, UNICODE, VOID,
+ *          DATETIME, TIMEDELTA#
+ ','line_number':1729,'multiline':True]
+['text':'*end repeat*','line_number':1737,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                             FROMSTR                                     **
+ *****************************************************************************
+ ','line_number':1740,'multiline':True]
+['text':'*begin repeat
+ * #fname = BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+ *          LONG, ULONG, LONGLONG, ULONGLONG,
+ *          DATETIME, TIMEDELTA#
+ * #type = npy_byte, npy_ubyte, npy_short, npy_ushort, npy_int, npy_uint,
+ *         npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *         npy_datetime, npy_timedelta#
+ * #func = (PyOS_strtol, PyOS_strtoul)*4, NumPyOS_strtoll, NumPyOS_strtoull,
+ *         NumPyOS_strtoll*2#
+ * #btype = (npy_long, npy_ulong)*4, npy_longlong, npy_ulonglong,
+ *          npy_longlong*2#
+ ','line_number':1747,'multiline':True]
+['text':'*end repeat*','line_number':1769,'multiline':True]
+['text':'*begin repeat
+ *
+ * #fname = FLOAT, DOUBLE#
+ * #type = npy_float, npy_double#
+ ','line_number':1771,'multiline':True]
+['text':'*end repeat*','line_number':1786,'multiline':True]
+['text':'*begin repeat
+ * #fname = CFLOAT, CDOUBLE#
+ * #type = npy_cfloat, npy_cdouble#
+ * #suffix = f, #
+ ','line_number':1821,'multiline':True]
+['text':' Imaginary component specified','line_number':1836,'multiline':False]
+['text':' Reading imaginary component','line_number':1838,'multiline':False]
+['text':' Read is successful if the immediate following char is j','line_number':1843,'multiline':False]
+['text':' Skip j','line_number':1845,'multiline':False]
+['text':'
+             * Set endptr to previous char to trigger the not everything is
+             * read error
+             ','line_number':1849,'multiline':True]
+['text':' Real component not specified','line_number':1858,'multiline':False]
+['text':' Skip j','line_number':1861,'multiline':False]
+['text':' Imaginary component not specified','line_number':1865,'multiline':False]
+['text':'*end repeat*','line_number':1872,'multiline':True]
+['text':'*begin repeat
+ * #fname = CLONGDOUBLE,
+ *          OBJECT, STRING, UNICODE, VOID#
+ ','line_number':1875,'multiline':True]
+['text':'*end repeat*','line_number':1882,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                            COPYSWAPN                                    **
+ *****************************************************************************
+ ','line_number':1885,'multiline':True]
+['text':'*begin repeat
+ *
+ * #fname = SHORT, USHORT, INT, UINT,
+ *          LONG, ULONG, LONGLONG, ULONGLONG,
+ *          HALF, FLOAT, DOUBLE, LONGDOUBLE,
+ *          DATETIME, TIMEDELTA#
+ * #fsize = SHORT, SHORT, INT, INT,
+ *          LONG, LONG, LONGLONG, LONGLONG,
+ *          HALF, FLOAT, DOUBLE, LONGDOUBLE,
+ *          DATETIME, TIMEDELTA#
+ * #type = npy_short, npy_ushort, npy_int, npy_uint,
+ *         npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *         npy_half, npy_float, npy_double, npy_longdouble,
+ *         npy_datetime, npy_timedelta#
+ ','line_number':1916,'multiline':True]
+['text':' copy first if needed ','line_number':1935,'multiline':True]
+['text':' copy first if needed ','line_number':1945,'multiline':True]
+['text':'*end repeat*','line_number':2006,'multiline':True]
+['text':'*begin repeat
+ *
+ * #fname = BOOL,
+ *          BYTE, UBYTE#
+ * #type = npy_bool,
+ *         npy_byte, npy_ubyte#
+ ','line_number':2008,'multiline':True]
+['text':' copy first if needed ','line_number':2019,'multiline':True]
+['text':' ignore swap ','line_number':2021,'multiline':True]
+['text':' copy first if needed ','line_number':2028,'multiline':True]
+['text':' ignore swap ','line_number':2030,'multiline':True]
+['text':'*end repeat*','line_number':2033,'multiline':True]
+['text':'*begin repeat
+ *
+ * #fname = CFLOAT, CDOUBLE, CLONGDOUBLE#
+ * #fsize = FLOAT, DOUBLE, LONGDOUBLE#
+ * #type = npy_cfloat, npy_cdouble, npy_clongdouble#
+','line_number':2037,'multiline':True]
+['text':' copy first if needed ','line_number':2047,'multiline':True]
+['text':' copy first if needed ','line_number':2060,'multiline':True]
+['text':'*end repeat*','line_number':2159,'multiline':True]
+['text':' ignore swap ','line_number':2198,'multiline':True]
+['text':' ignore swap ','line_number':2225,'multiline':True]
+['text':' ','line_number':2239,'multiline':True]
+['text':'
+         * In certain cases subarray copy can be optimized. This is when
+         * swapping is unnecessary and the subarrays data type can certainly
+         * be simply copied (no object, fields, subarray, and not a user dtype).
+         ','line_number':2283,'multiline':True]
+['text':' There cannot be any elements, so return ','line_number':2304,'multiline':True]
+['text':' Must be a naive Void type (e.g. a "V8") so simple copy is sufficient. ','line_number':2323,'multiline':True]
+['text':'
+         * In certain cases subarray copy can be optimized. This is when
+         * swapping is unnecessary and the subarrays data type can certainly
+         * be simply copied (no object, fields, subarray, and not a user dtype).
+         ','line_number':2368,'multiline':True]
+['text':' There cannot be any elements, so return ','line_number':2387,'multiline':True]
+['text':' Must be a naive Void type (e.g. a "V8") so simple copy is sufficient. ','line_number':2400,'multiline':True]
+['text':' copy first if needed ','line_number':2444,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                                 NONZERO                                 **
+ *****************************************************************************
+ ','line_number':2474,'multiline':True]
+['text':'*begin repeat
+ *
+ * #fname = BOOL,
+ *          BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+ *          LONG, ULONG, LONGLONG, ULONGLONG,
+ *          HALF, FLOAT, DOUBLE, LONGDOUBLE,
+ *          DATETIME, TIMEDELTA#
+ * #type = npy_bool,
+ *         npy_byte, npy_ubyte, npy_short, npy_ushort, npy_int, npy_uint,
+ *         npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *         npy_half, npy_float, npy_double, npy_longdouble,
+ *         npy_datetime, npy_timedelta#
+ * #isfloat = 0*11, 1*4, 0*2#
+ * #nonzero = _NONZERO*11, !npy_half_iszero, _NONZERO*5#
+ ','line_number':2482,'multiline':True]
+['text':'
+         * Don't worry about swapping for integer types,
+         * since we are just testing for equality with 0.
+         * For float types, the signed zeros require us to swap.
+         ','line_number':2505,'multiline':True]
+['text':'*end repeat*','line_number':2520,'multiline':True]
+['text':'*begin repeat
+ *
+ * #fname = CFLOAT, CDOUBLE, CLONGDOUBLE#
+ * #type = npy_cfloat, npy_cdouble, npy_clongdouble#
+ * #suffix = f, , l#
+ ','line_number':2522,'multiline':True]
+['text':'*end repeat*','line_number':2542,'multiline':True]
+['text':' go character by character ','line_number':2564,'multiline':True]
+['text':' go char/byte by char/byte, it doesn't matter where the nonzero is ','line_number':2574,'multiline':True]
+['text':'
+ * if we have fields, then nonzero only if all sub-fields are nonzero.
+ ','line_number':2614,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                                 COMPARE                                 **
+ *****************************************************************************
+ ','line_number':2672,'multiline':True]
+['text':' boolean type ','line_number':2679,'multiline':True]
+['text':' integer types ','line_number':2688,'multiline':True]
+['text':'*begin repeat
+ * #TYPE = BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+ *         LONG, ULONG, LONGLONG, ULONGLONG#
+ * #type = npy_byte, npy_ubyte, npy_short, npy_ushort, npy_int, npy_uint,
+ *         npy_long, npy_ulong, npy_longlong, npy_ulonglong#
+ ','line_number':2690,'multiline':True]
+['text':'*end repeat*','line_number':2706,'multiline':True]
+['text':' float types ','line_number':2709,'multiline':True]
+['text':'
+ * The real/complex comparison functions are compatible with the new sort
+ * order for nans introduced in numpy 1.4.0. All nan values now compare
+ * larger than non-nan values and are sorted to the end. The comparison
+ * order is:
+ *
+ *      Real: [R, nan]
+ *      Complex: [R + Rj, R + nanj, nan + Rj, nan + nanj]
+ *
+ *  where complex values with the same nan placements are sorted according
+ *  to the non-nan part if it exists. If both the real and imaginary parts
+ *  of complex types are non-nan the order is the same as the real parts
+ *  unless they happen to be equal, in which case the order is that of the
+ *  imaginary parts.
+ ','line_number':2711,'multiline':True]
+['text':'*begin repeat
+ *
+ * #TYPE = FLOAT, DOUBLE, LONGDOUBLE#
+ * #type = npy_float, npy_double, npy_longdouble#
+ ','line_number':2727,'multiline':True]
+['text':'*end repeat*','line_number':2803,'multiline':True]
+['text':'*begin repeat
+ * #TYPE = DATETIME, TIMEDELTA#
+ * #type = npy_datetime, npy_timedelta#
+ ','line_number':2805,'multiline':True]
+['text':'*end repeat*','line_number':2834,'multiline':True]
+['text':' object type ','line_number':2866,'multiline':True]
+['text':'
+     * ALIGNMENT NOTE: It seems that PyArray_Sort is already handling
+     * the alignment of pointers, so it doesn't need to be handled
+     * here.
+     ','line_number':2871,'multiline':True]
+['text':'
+     * work around gh-3879, we cannot abort an in-progress quicksort
+     * so at least do not raise again
+     ','line_number':2878,'multiline':True]
+['text':' error occurred, avoid the next call to PyObject_RichCompareBool ','line_number':2897,'multiline':True]
+['text':' string type ','line_number':2912,'multiline':True]
+['text':' unicode type ','line_number':2933,'multiline':True]
+['text':' void type ','line_number':2956,'multiline':True]
+['text':'
+ * If fields are defined, then compare on first field and if equal
+ * compare on second field.  Continue until done or comparison results
+ * in not_equal.
+ *
+ * Must align data passed on to sub-comparisons.
+ * Also must swap data based on to sub-comparisons.
+ ','line_number':2958,'multiline':True]
+['text':'
+     * Compare on the first-field.  If equal, then
+     * compare on the second-field, etc.
+     ','line_number':2985,'multiline':True]
+['text':' Set the fields needed by compare or copyswap ','line_number':2998,'multiline':True]
+['text':'
+                 * create temporary buffer and copy,
+                 * always use the current handler for internal allocations
+                 ','line_number':3006,'multiline':True]
+['text':'
+                 * create temporary buffer and copy,
+                 * always use the current handler for internal allocations
+                 ','line_number':3019,'multiline':True]
+['text':' destroy temporary buffer ','line_number':3026,'multiline':True]
+['text':' destroy temporary buffer ','line_number':3039,'multiline':True]
+['text':' destroy temporary buffer ','line_number':3043,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                                 ARGFUNC                                 **
+ *****************************************************************************
+ ','line_number':3058,'multiline':True]
+['text':'*begin repeat
+ *
+ * #fname = HALF, CFLOAT, CDOUBLE, CLONGDOUBLE,
+ *          DATETIME, TIMEDELTA#
+ * #type = npy_half, npy_float, npy_double, npy_longdouble,
+ *         npy_datetime, npy_timedelta#
+ * #isfloat = 1*4, 0*2#
+ * #isnan = npy_half_isnan, npy_isnan*3, nop*2#
+ * #le = npy_half_le, _LESS_THAN_OR_EQUAL*5#
+ * #iscomplex = 0, 1*3, 0*2#
+ * #incr = ip++, ip+=2*3, ip++*2#
+ * #isdatetime = 0*4, 1*2#
+ ','line_number':3066,'multiline':True]
+['text':' nan encountered; it's maximal ','line_number':3093,'multiline':True]
+['text':' nan encountered; it's maximal ','line_number':3099,'multiline':True]
+['text':' NaT encountered, it's maximal ','line_number':3105,'multiline':True]
+['text':'
+         * Propagate nans, similarly as max() and min()
+         ','line_number':3112,'multiline':True]
+['text':' Lexical order for complex numbers ','line_number':3116,'multiline':True]
+['text':' nan encountered, it's maximal ','line_number':3123,'multiline':True]
+['text':' NaT encountered, it's maximal ','line_number':3130,'multiline':True]
+['text':' negated, for correct nan handling ','line_number':3135,'multiline':True]
+['text':' nan encountered, it's maximal ','line_number':3140,'multiline':True]
+['text':'*end repeat*','line_number':3150,'multiline':True]
+['text':'*begin repeat
+ *
+ * #fname = HALF, CFLOAT, CDOUBLE, CLONGDOUBLE,
+ *          DATETIME, TIMEDELTA#
+ * #type = npy_half, npy_float, npy_double, npy_longdouble,
+ *         npy_datetime, npy_timedelta#
+ * #isfloat = 1*4, 0*2#
+ * #isnan = npy_half_isnan, npy_isnan*3, nop*2#
+ * #le = npy_half_le, _LESS_THAN_OR_EQUAL*5#
+ * #iscomplex = 0, 1*3, 0*2#
+ * #incr = ip++, ip+=2*3, ip++*2#
+ * #isdatetime = 0*4, 1*2#
+ ','line_number':3166,'multiline':True]
+['text':' nan encountered; it's minimal ','line_number':3193,'multiline':True]
+['text':' nan encountered; it's minimal ','line_number':3199,'multiline':True]
+['text':' NaT encountered, it's minimal ','line_number':3205,'multiline':True]
+['text':'
+         * Propagate nans, similarly as max() and min()
+         ','line_number':3212,'multiline':True]
+['text':' Lexical order for complex numbers ','line_number':3216,'multiline':True]
+['text':' nan encountered, it's minimal ','line_number':3223,'multiline':True]
+['text':' NaT encountered, it's minimal ','line_number':3230,'multiline':True]
+['text':' negated, for correct nan handling ','line_number':3235,'multiline':True]
+['text':' nan encountered, it's minimal ','line_number':3240,'multiline':True]
+['text':'*end repeat*','line_number':3250,'multiline':True]
+['text':' Skip over all leading NULL entries ','line_number':3261,'multiline':True]
+['text':' Found first non-NULL entry ','line_number':3264,'multiline':True]
+['text':'*begin repeat
+ *
+ * #fname = STRING, UNICODE#
+ * #type = npy_char, npy_ucs4#
+ ','line_number':3286,'multiline':True]
+['text':'*end repeat*','line_number':3314,'multiline':True]
+['text':' Skip over all leading NULL entries ','line_number':3325,'multiline':True]
+['text':' Found first non-NULL entry ','line_number':3328,'multiline':True]
+['text':'*begin repeat
+ *
+ * #fname = STRING, UNICODE#
+ * #type = npy_char, npy_ucs4#
+ ','line_number':3350,'multiline':True]
+['text':'*end repeat*','line_number':3376,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                                  DOT                                    **
+ *****************************************************************************
+ ','line_number':3382,'multiline':True]
+['text':'
+ * dot means inner product
+ ','line_number':3388,'multiline':True]
+['text':'************************* MAYBE USE CBLAS ********************************','line_number':3392,'multiline':True]
+['text':'*begin repeat
+ *
+ * #name = FLOAT, DOUBLE#
+ * #type = npy_float, npy_double#
+ * #prefix = s, d#
+ ','line_number':3395,'multiline':True]
+['text':' double for stability ','line_number':3411,'multiline':True]
+['text':' use char strides here ','line_number':3419,'multiline':True]
+['text':' could make this double ','line_number':3429,'multiline':True]
+['text':'*end repeat*','line_number':3441,'multiline':True]
+['text':'*begin repeat
+ *
+ * #name = CFLOAT, CDOUBLE#
+ * #ctype = npy_cfloat, npy_cdouble#
+ * #type = npy_float, npy_double#
+ * #prefix = c, z#
+ ','line_number':3443,'multiline':True]
+['text':' double for stability ','line_number':3459,'multiline':True]
+['text':' use char strides here ','line_number':3469,'multiline':True]
+['text':'*end repeat*','line_number':3498,'multiline':True]
+['text':'*************************** NO CBLAS VERSIONS ****************************','line_number':3500,'multiline':True]
+['text':'
+ * `dot` does not make sense for times, for DATETIME it never worked.
+ *  For timedelta it does/did , but should probably also just be removed.
+ ','line_number':3518,'multiline':True]
+['text':'*begin repeat
+ *
+ * #name = BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+ *         LONG, ULONG, LONGLONG, ULONGLONG,
+ *         LONGDOUBLE, TIMEDELTA#
+ * #type = npy_byte, npy_ubyte, npy_short, npy_ushort, npy_int, npy_uint,
+ *         npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *         npy_longdouble, npy_timedelta#
+ * #out = npy_long, npy_ulong, npy_long, npy_ulong, npy_long, npy_ulong,
+ *        npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *        npy_longdouble, npy_timedelta#
+ ','line_number':3524,'multiline':True]
+['text':'*end repeat*','line_number':3549,'multiline':True]
+['text':'
+     * ALIGNMENT NOTE: np.dot, np.inner etc. enforce that the array is
+     * BEHAVED before getting to this point, so unaligned pointers aren't
+     * handled here.
+     ','line_number':3590,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                                 FILL                                    **
+ *****************************************************************************
+ ','line_number':3630,'multiline':True]
+['text':' Boolean fill never works, but define it so that it works up to length 2 ','line_number':3637,'multiline':True]
+['text':' this requires buffer to be filled with objects or NULL ','line_number':3647,'multiline':True]
+['text':'*begin repeat
+ *
+ * #NAME = BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+ *         LONG, ULONG, LONGLONG, ULONGLONG,
+ *         FLOAT, DOUBLE, LONGDOUBLE,
+ *         DATETIME, TIMEDELTA#
+ * #type = npy_byte, npy_ubyte, npy_short, npy_ushort, npy_int, npy_uint,
+ *         npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *         npy_float, npy_double, npy_longdouble,
+ *         npy_datetime, npy_timedelta#
+','line_number':3686,'multiline':True]
+['text':'*end repeat*','line_number':3710,'multiline':True]
+['text':'*begin repeat
+ *
+ * #NAME = CFLOAT, CDOUBLE, CLONGDOUBLE#
+ * #type = npy_cfloat, npy_cdouble, npy_clongdouble#
+ * #t = f, , l#
+','line_number':3726,'multiline':True]
+['text':'*end repeat*','line_number':3751,'multiline':True]
+['text':' this requires buffer to be filled with objects or NULL ','line_number':3754,'multiline':True]
+['text':'*begin repeat
+ *
+ * #NAME = BOOL, BYTE, UBYTE#
+ * #type = npy_bool, npy_byte, npy_ubyte#
+ ','line_number':3767,'multiline':True]
+['text':'*end repeat*','line_number':3778,'multiline':True]
+['text':'*begin repeat
+ *
+ * #NAME = SHORT, USHORT, INT, UINT,
+ *         LONG, ULONG, LONGLONG, ULONGLONG,
+ *         HALF, FLOAT, DOUBLE, LONGDOUBLE,
+ *         CFLOAT, CDOUBLE, CLONGDOUBLE,
+ *         DATETIME, TIMEDELTA#
+ * #type = npy_short, npy_ushort, npy_int, npy_uint,
+ *         npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *         npy_half, npy_float, npy_double, npy_longdouble,
+ *         npy_cfloat, npy_cdouble, npy_clongdouble,
+ *         npy_datetime, npy_timedelta#
+ ','line_number':3780,'multiline':True]
+['text':'*end repeat*','line_number':3804,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                       small correlate                                   **
+ *****************************************************************************
+ ','line_number':3807,'multiline':True]
+['text':'
+ * Compute correlation of data with small kernels
+ * Calling a BLAS dot product for the inner loop of the correlation is overkill
+ * for small kernels. It is faster to compute it directly.
+ * Intended to be used by _pyarray_correlate so no input verifications is done
+ * especially it does not handle the boundaries, they should be handled by the
+ * caller.
+ * Returns 0 if kernel is considered too large or types are not supported, then
+ * the regular array dot should be used to process the data.
+ *
+ * d_, dstride, nd, dtype: data pointer, its stride in bytes, number of
+ *                         elements and type of data
+ * k_, kstride, nk, ktype: kernel pointer, its stride in bytes, number of
+ *                         elements and type of data
+ * out_, ostride: output data pointer and its stride in bytes
+ ','line_number':3813,'multiline':True]
+['text':' only handle small kernels and uniform types ','line_number':3836,'multiline':True]
+['text':'*begin repeat
+ * Float types
+ *  #type = npy_float, npy_double#
+ *  #TYPE = NPY_FLOAT, NPY_DOUBLE#
+ ','line_number':3842,'multiline':True]
+['text':' unroll inner loop to optimize register usage of the kernel','line_number':3856,'multiline':True]
+['text':'*begin repeat1
+ *  #ksz_outer = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11# ','line_number':3858,'multiline':True]
+['text':'*begin repeat2
+ *  #ksz = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11# ','line_number':3862,'multiline':True]
+['text':' load kernel ','line_number':3865,'multiline':True]
+['text':'*end repeat2*','line_number':3868,'multiline':True]
+['text':'*begin repeat2
+ *  #ksz = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11# ','line_number':3871,'multiline':True]
+['text':'*end repeat2*','line_number':3876,'multiline':True]
+['text':'*end repeat1*','line_number':3881,'multiline':True]
+['text':'*end repeat*','line_number':3886,'multiline':True]
+['text':'
+','line_number':3892,'multiline':True]
+['text':' A clone function for the datetime dtype c_metadata ','line_number':3895,'multiline':True]
+['text':'
+ * Allocate and initialize a PyArray_DatetimeDTypeMetaData object
+ ','line_number':3912,'multiline':True]
+['text':' Allocate memory for the metadata ','line_number':3920,'multiline':True]
+['text':' Initialize the base aux data ','line_number':3927,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                       SETUP FUNCTION POINTERS                           **
+ *****************************************************************************
+ ','line_number':3939,'multiline':True]
+['text':'*begin repeat
+ *
+ * #from = VOID, STRING, UNICODE#
+ * #suff = void, string, unicode#
+ * #sort = 0, 1, 1#
+ * #align = char, char, npy_ucs4#
+ * #NAME = Void, String, Unicode#
+ * #endian = |, |, =#
+ * #flags = 0, 0, NPY_NEEDS_INIT#
+ ','line_number':3945,'multiline':True]
+['text':'
+ * FIXME: check for PY3K
+ ','line_number':4020,'multiline':True]
+['text':' typeobj ','line_number':4025,'multiline':True]
+['text':' kind ','line_number':4027,'multiline':True]
+['text':' type ','line_number':4029,'multiline':True]
+['text':' byteorder ','line_number':4031,'multiline':True]
+['text':' flags, unicode needs init as py3.3 does not like printing garbage  ','line_number':4033,'multiline':True]
+['text':' type_num ','line_number':4035,'multiline':True]
+['text':' elsize ','line_number':4037,'multiline':True]
+['text':' alignment ','line_number':4039,'multiline':True]
+['text':' subarray ','line_number':4041,'multiline':True]
+['text':' fields ','line_number':4043,'multiline':True]
+['text':' names ','line_number':4045,'multiline':True]
+['text':' f ','line_number':4047,'multiline':True]
+['text':' metadata ','line_number':4049,'multiline':True]
+['text':' c_metadata ','line_number':4051,'multiline':True]
+['text':' hash ','line_number':4053,'multiline':True]
+['text':'*end repeat*','line_number':4057,'multiline':True]
+['text':'*begin repeat
+ *
+ * #from = BOOL,
+ *         BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+ *         LONG, ULONG, LONGLONG, ULONGLONG,
+ *         HALF, FLOAT, DOUBLE, LONGDOUBLE,
+ *         CFLOAT, CDOUBLE, CLONGDOUBLE,
+ *         OBJECT, DATETIME, TIMEDELTA#
+ * #suff = bool,
+ *         byte, ubyte, short, ushort, int, uint,
+ *         long, ulong, longlong, ulonglong,
+ *         half, float, double, longdouble,
+ *         cfloat, cdouble, clongdouble,
+ *         object, datetime, timedelta#
+ * #sort = 1*18, 0*1, 1*2#
+ * #fromtype = npy_bool,
+ *             npy_byte, npy_ubyte, npy_short, npy_ushort, npy_int, npy_uint,
+ *             npy_long, npy_ulong, npy_longlong, npy_ulonglong,
+ *             npy_half, npy_float, npy_double, npy_longdouble,
+ *             npy_cfloat, npy_cdouble, npy_clongdouble,
+ *             PyObject *, npy_datetime, npy_timedelta#
+ * #rsort = 1*5, 0*16#
+ * #NAME = Bool,
+ *         Byte, UByte, Short, UShort, Int, UInt,
+ *         Long, ULong, LongLong, ULongLong,
+ *         Half, Float, Double, LongDouble,
+ *         CFloat, CDouble, CLongDouble,
+ *         Object, Datetime, Timedelta#
+ * #kind = GENBOOL,
+ *         SIGNED, UNSIGNED, SIGNED, UNSIGNED, SIGNED, UNSIGNED,
+ *         SIGNED, UNSIGNED, SIGNED, UNSIGNED,
+ *         FLOATING, FLOATING, FLOATING, FLOATING,
+ *         COMPLEX, COMPLEX, COMPLEX,
+ *         OBJECT, DATETIME, TIMEDELTA#
+ * #endian = |*3, =*15, |, =*2#
+ * #isobject= 0*18,NPY_OBJECT_DTYPE_FLAGS,0*2#
+ ','line_number':4059,'multiline':True]
+['text':'
+ * FIXME: check for PY3K
+ ','line_number':4170,'multiline':True]
+['text':' typeobj ','line_number':4175,'multiline':True]
+['text':' kind ','line_number':4177,'multiline':True]
+['text':' type ','line_number':4179,'multiline':True]
+['text':' byteorder ','line_number':4181,'multiline':True]
+['text':' flags ','line_number':4183,'multiline':True]
+['text':' type_num ','line_number':4185,'multiline':True]
+['text':' elsize ','line_number':4187,'multiline':True]
+['text':' alignment ','line_number':4189,'multiline':True]
+['text':' subarray ','line_number':4191,'multiline':True]
+['text':' fields ','line_number':4193,'multiline':True]
+['text':' names ','line_number':4195,'multiline':True]
+['text':' f ','line_number':4197,'multiline':True]
+['text':' metadata ','line_number':4199,'multiline':True]
+['text':' c_metadata ','line_number':4201,'multiline':True]
+['text':' hash ','line_number':4203,'multiline':True]
+['text':'*end repeat*','line_number':4207,'multiline':True]
+['text':'NUMPY_API
+ * Get the PyArray_Descr structure for a type.
+ ','line_number':4239,'multiline':True]
+['text':'
+         * It's not valid for type to be less than 0.
+         * If that happens, then no other branch of
+         * this if/else chain should be followed.
+         * This is effectively a no-op that ensures
+         * the default error is raised.
+         ','line_number':4248,'multiline':True]
+['text':'
+         * This needs to not raise an error so
+         * that PyArray_DescrFromType(NPY_NOTYPE)
+         * works for backwards-compatible C-API
+         ','line_number':4261,'multiline':True]
+['text':'
+             * warning added 2017-04-25, 1.13
+             * deprecated in 1.7
+             * ','line_number':4270,'multiline':True]
+['text':'
+ *****************************************************************************
+ **                             SETUP TYPE INFO                             **
+ *****************************************************************************
+ ','line_number':4314,'multiline':True]
+['text':'
+ * This function is called during numpy module initialization,
+ * and is used to initialize internal dtype tables.
+ ','line_number':4321,'multiline':True]
+['text':' SIMD runtime dispatching','line_number':4334,'multiline':False]
+['text':'*begin repeat
+     * #FROM = BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+     *         LONG, ULONG, LONGLONG, ULONGLONG,
+     *         FLOAT, DOUBLE, LONGDOUBLE#
+     * #NAME = Byte, UByte, Short, UShort, Int, UInt,
+     *         Long, ULong, LongLong, ULongLong,
+     *         Float, Double, LongDouble#
+     ','line_number':4338,'multiline':True]
+['text':'*begin repeat1
+     * #func = argmax, argmin#
+     ','line_number':4346,'multiline':True]
+['text':'*end repeat1*','line_number':4354,'multiline':True]
+['text':'*end repeat*','line_number':4355,'multiline':True]
+['text':'
+     * Override the base class for all types, eventually all of this logic
+     * should be defined on the class and inherited to the scalar.
+     * (NPY_HALF is the largest builtin one.)
+     ','line_number':4358,'multiline':True]
+['text':'*begin repeat
+     *
+     * #NAME = BOOL,
+     *         BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+     *         LONG, ULONG, LONGLONG, ULONGLONG,
+     *         HALF, FLOAT, DOUBLE, LONGDOUBLE,
+     *         CFLOAT, CDOUBLE, CLONGDOUBLE,
+     *         OBJECT, STRING, UNICODE, VOID,
+     *         DATETIME, TIMEDELTA#
+     ','line_number':4363,'multiline':True]
+['text':'*end repeat*','line_number':4385,'multiline':True]
+['text':'
+     * Add cast functions for the new types
+     ','line_number':4389,'multiline':True]
+['text':'*begin repeat
+     *
+     * #name1 = BOOL,
+     *          BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+     *          LONG, ULONG, LONGLONG, ULONGLONG,
+     *          HALF, FLOAT, DOUBLE, LONGDOUBLE,
+     *          CFLOAT, CDOUBLE, CLONGDOUBLE,
+     *          OBJECT, STRING, UNICODE, VOID,
+     *          DATETIME,TIMEDELTA#
+     ','line_number':4393,'multiline':True]
+['text':'*begin repeat1
+     *
+     * #name2 = HALF, DATETIME, TIMEDELTA#
+     ','line_number':4404,'multiline':True]
+['text':'*end repeat1*','line_number':4435,'multiline':True]
+['text':'*end repeat*','line_number':4437,'multiline':True]
+['text':'*begin repeat
+     *
+     * #name = BOOL,
+     *         BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+     *         LONG, ULONG, LONGLONG, ULONGLONG,
+     *         HALF, FLOAT, DOUBLE, LONGDOUBLE,
+     *         CFLOAT, CDOUBLE, CLONGDOUBLE,
+     *         OBJECT, STRING, UNICODE, VOID,
+     *         DATETIME,TIMEDELTA#
+     ','line_number':4454,'multiline':True]
+['text':'*end repeat*','line_number':4467,'multiline':True]
+['text':'*begin repeat
+      * #name = BOOL,
+      *         BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+      *         LONG, ULONG, LONGLONG, ULONGLONG,
+      *         HALF, FLOAT, DOUBLE, LONGDOUBLE,
+      *         CFLOAT, CDOUBLE, CLONGDOUBLE,
+      *         OBJECT, STRING, UNICODE, VOID,
+      *         DATETIME, TIMEDELTA#
+      ','line_number':4481,'multiline':True]
+['text':'*end repeat*','line_number':4493,'multiline':True]
+['text':'*begin repeat
+      * #name = STRING, UNICODE, VOID#
+      ','line_number':4496,'multiline':True]
+['text':'*end repeat*','line_number':4502,'multiline':True]
+['text':' Set a dictionary with type information ','line_number':4504,'multiline':True]
+['text':'*begin repeat
+     *
+     * #NAME = BOOL,
+     *         HALF, FLOAT, DOUBLE, LONGDOUBLE,
+     *         CFLOAT, CDOUBLE, CLONGDOUBLE,
+     *         STRING, UNICODE, VOID, OBJECT,
+     *         DATETIME, TIMEDELTA,
+     *         BYTE, UBYTE, SHORT, USHORT, INT, UINT,
+     *         LONG, ULONG, LONGLONG, ULONGLONG#
+     * #Name = Bool,
+     *         Half, Float, Double, LongDouble,
+     *         CFloat, CDouble, CLongDouble,
+     *         Bytes, Str, Void, Object,
+     *         DateTime64, TimeDelta64,
+     *         Byte, UByte, Short, UShort, Int, UInt,
+     *         Long, ULong, LongLong, ULongLong#
+     ','line_number':4509,'multiline':True]
+['text':'
+     * Add the scalar dtypes with their names and aliases (integers have them)
+     * to the dict to populate the namespace in Python.
+     * Note that we do lose one piece of information due to intp/uintp since
+     * they are strict aliases and we do not add the "p" and "P" character
+     * codes for them.
+     ','line_number':4527,'multiline':True]
+['text':'*end repeat*','line_number':4556,'multiline':True]
+['text':' Intp and UIntp are an additional alias ','line_number':4558,'multiline':True]
+['text':'
+     * Add the abstract scalar types to the `_multiarray_umath` namespace.
+     * (duplicates making the name lowercase)
+     ','line_number':4572,'multiline':True]

@@ -1,0 +1,855 @@
+['text':'************************************************
+*      Perl-Compatible Regular Expressions       *
+************************************************','line_number':1,'multiline':True]
+['text':' PCRE is a library of functions to support regular expressions whose syntax
+and semantics are as close as possible to those of the Perl 5 language.
+
+                       Written by Philip Hazel
+                    This module by Zoltan Herczeg
+     Original API code Copyright (c) 1997-2012 University of Cambridge
+          New API code Copyright (c) 2016-2021 University of Cambridge
+
+-----------------------------------------------------------------------------
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the name of the University of Cambridge nor the names of its
+      contributors may be used to endorse or promote products derived from
+      this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+-----------------------------------------------------------------------------
+','line_number':5,'multiline':True]
+['text':' All-in-one: Since we use the JIT compiler only from here,
+we just include it. This way we don't need to touch the build
+system files. ','line_number':50,'multiline':True]
+['text':' Defines for debugging purposes. ','line_number':85,'multiline':True]
+['text':' 1 - Use unoptimized capturing brackets.
+   2 - Enable capture_last_ptr (includes option 1). ','line_number':87,'multiline':True]
+['text':' #define DEBUG_FORCE_UNOPTIMIZED_CBRAS 2 ','line_number':89,'multiline':True]
+['text':' 1 - Always have a control head. ','line_number':91,'multiline':True]
+['text':' #define DEBUG_FORCE_CONTROL_HEAD 1 ','line_number':92,'multiline':True]
+['text':' Allocate memory for the regex stack on the real machine stack.
+Fast, but limited size. ','line_number':94,'multiline':True]
+['text':' Growth rate for stack allocated by the OS. Should be the multiply
+of page size. ','line_number':98,'multiline':True]
+['text':' Enable to check that the allocation could destroy temporaries. ','line_number':102,'multiline':True]
+['text':'
+Short summary about the backtracking mechanism empolyed by the jit code generator:
+
+The code generator follows the recursive nature of the PERL compatible regular
+expressions. The basic blocks of regular expressions are condition checkers
+whose execute different commands depending on the result of the condition check.
+The relationship between the operators can be horizontal (concatenation) and
+vertical (sub-expression) (See struct backtrack_common for more details).
+
+  'ab' - 'a' and 'b' regexps are concatenated
+  'a+' - 'a' is the sub-expression of the '+' operator
+
+The condition checkers are boolean (true/false) checkers. Machine code is generated
+for the checker itself and for the actions depending on the result of the checker.
+The 'true' case is called as the matching path (expected path), and the other is called as
+the 'backtrack' path. Branch instructions are expesive for all CPUs, so we avoid taken
+branches on the matching path.
+
+ Greedy star operator (*) :
+   Matching path: match happens.
+   Backtrack path: match failed.
+ Non-greedy star operator (*?) :
+   Matching path: no need to perform a match.
+   Backtrack path: match is required.
+
+The following example shows how the code generated for a capturing bracket
+with two alternatives. Let A, B, C, D are arbirary regular expressions, and
+we have the following regular expression:
+
+   A(B|C)D
+
+The generated code will be the following:
+
+ A matching path
+ '(' matching path (pushing arguments to the stack)
+ B matching path
+ ')' matching path (pushing arguments to the stack)
+ D matching path
+ return with successful match
+
+ D backtrack path
+ ')' backtrack path (If we arrived from "C" jump to the backtrack of "C")
+ B backtrack path
+ C expected path
+ jump to D matching path
+ C backtrack path
+ A backtrack path
+
+ Notice, that the order of backtrack code paths are the opposite of the fast
+ code paths. In this way the topmost value on the stack is always belong
+ to the current backtrack code path. The backtrack path must check
+ whether there is a next alternative. If so, it needs to jump back to
+ the matching path eventually. Otherwise it needs to clear out its own stack
+ frame and continue the execution on the backtrack code paths.
+','line_number':107,'multiline':True]
+['text':'
+Saved stack frames:
+
+Atomic blocks and asserts require reloading the values of private data
+when the backtrack mechanism performed. Because of OP_RECURSE, the data
+are not necessarly known in compile time, thus we need a dynamic restore
+mechanism.
+
+The stack frames are stored in a chain list, and have the following format:
+([ capturing bracket offset ][ start value ][ end value ])+ ... [ 0 ] [ previous head ]
+
+Thus we can restore the private data to a particular point in the stack.
+','line_number':163,'multiline':True]
+['text':' Pointers first. ','line_number':178,'multiline':True]
+['text':' Everything else after. ','line_number':188,'multiline':True]
+['text':' The following structure is the key data type for the recursive
+code generator. It is allocated by compile_matchingpath, and contains
+the arguments for compile_backtrackingpath. Must be the first member
+of its descendants. ','line_number':234,'multiline':True]
+['text':' Concatenation stack. ','line_number':239,'multiline':True]
+['text':' Internal stack (for component operators). ','line_number':242,'multiline':True]
+['text':' Opcode pointer. ','line_number':245,'multiline':True]
+['text':' Less than 0 if a frame is not needed. ','line_number':252,'multiline':True]
+['text':' Points to our private memory word on the stack. ','line_number':254,'multiline':True]
+['text':' For iterators. ','line_number':256,'multiline':True]
+['text':' Where to coninue if an alternative is successfully matched. ','line_number':262,'multiline':True]
+['text':' For rmin and rmax iterators. ','line_number':264,'multiline':True]
+['text':' For greedy ? operator. ','line_number':266,'multiline':True]
+['text':' Contains the branches of a failed condition. ','line_number':268,'multiline':True]
+['text':' Both for OP_COND, OP_SCOND. ','line_number':270,'multiline':True]
+['text':' For OP_ONCE. Less than 0 if not needed. ','line_number':273,'multiline':True]
+['text':' For brackets with >3 alternatives. ','line_number':275,'multiline':True]
+['text':' Points to our private memory word on the stack. ','line_number':278,'multiline':True]
+['text':' Points to our private memory word on the stack. ','line_number':284,'multiline':True]
+['text':' Reverting stack is needed. ','line_number':286,'multiline':True]
+['text':' Allocated stack size. ','line_number':288,'multiline':True]
+['text':' Next iteration. ','line_number':299,'multiline':True]
+['text':' Next iteration. ','line_number':313,'multiline':True]
+['text':' Contains the function entry label. ','line_number':319,'multiline':True]
+['text':' Contains the function entry label. ','line_number':321,'multiline':True]
+['text':' Collects the entry calls until the function is not created. ','line_number':323,'multiline':True]
+['text':' Collects the backtrack calls until the function is not created. ','line_number':325,'multiline':True]
+['text':' Points to the starting opcode. ','line_number':327,'multiline':True]
+['text':' Return to the matching path. ','line_number':333,'multiline':True]
+['text':' Recursive pattern. ','line_number':335,'multiline':True]
+['text':' Pattern is inlined. ','line_number':337,'multiline':True]
+['text':' If then_trap is not NULL, this structure contains the real
+  then_trap for the backtracking path. ','line_number':345,'multiline':True]
+['text':' Points to the starting opcode. ','line_number':348,'multiline':True]
+['text':' Exit point for the then opcodes of this alternative. ','line_number':350,'multiline':True]
+['text':' Frame size of the current alternative. ','line_number':352,'multiline':True]
+['text':' Number of characters in the chars array, 255 for any character. ','line_number':360,'multiline':True]
+['text':' Number of last UTF-8 characters in the chars array. ','line_number':362,'multiline':True]
+['text':' Available characters in the current position. ','line_number':364,'multiline':True]
+['text':' The sljit ceneric compiler. ','line_number':372,'multiline':True]
+['text':' Compiled regular expression. ','line_number':374,'multiline':True]
+['text':' First byte code. ','line_number':376,'multiline':True]
+['text':' Maps private data offset to each opcode. ','line_number':378,'multiline':True]
+['text':' Chain list of read-only data ptrs. ','line_number':380,'multiline':True]
+['text':' Tells whether the capturing bracket is optimized. ','line_number':382,'multiline':True]
+['text':' Tells whether the starting offset is a target of then. ','line_number':384,'multiline':True]
+['text':' Current position where a THEN must jump. ','line_number':386,'multiline':True]
+['text':' Starting offset of private data for capturing brackets. ','line_number':388,'multiline':True]
+['text':' Output vector starting point. Must be divisible by 2. ','line_number':390,'multiline':True]
+['text':' Points to the starting character of the current match. ','line_number':392,'multiline':True]
+['text':' Last known position of the requested byte. ','line_number':394,'multiline':True]
+['text':' Head of the last recursion. ','line_number':396,'multiline':True]
+['text':' First inspected character for partial matching.
+     (Needed for avoiding zero length partial matches.) ','line_number':398,'multiline':True]
+['text':' Starting pointer for partial soft matches. ','line_number':401,'multiline':True]
+['text':' Pointer of the match end position. ','line_number':403,'multiline':True]
+['text':' Points to the marked string. ','line_number':405,'multiline':True]
+['text':' Recursive control verb management chain. ','line_number':407,'multiline':True]
+['text':' Points to the last matched capture block index. ','line_number':409,'multiline':True]
+['text':' Fast forward skipping byte code pointer. ','line_number':411,'multiline':True]
+['text':' Locals used by fast fail optimization. ','line_number':413,'multiline':True]
+['text':' Variables used by recursive call generator. ','line_number':416,'multiline':True]
+['text':' Flipped and lower case tables. ','line_number':420,'multiline':True]
+['text':' Mode can be PCRE2_JIT_COMPLETE and others. ','line_number':423,'multiline':True]
+['text':' TRUE, when empty match is accepted for partial matching. ','line_number':425,'multiline':True]
+['text':' TRUE, when minlength is greater than 0. ','line_number':427,'multiline':True]
+['text':' \K is found in the pattern. ','line_number':429,'multiline':True]
+['text':' (*SKIP:arg) is found in the pattern. ','line_number':431,'multiline':True]
+['text':' (*THEN) is found in the pattern. ','line_number':433,'multiline':True]
+['text':' (*SKIP) or (*SKIP:arg) is found in lookbehind assertion. ','line_number':435,'multiline':True]
+['text':' Quit is redirected by recurse, negative assertion, or positive assertion in conditional block. ','line_number':437,'multiline':True]
+['text':' Currently in a positive assertion. ','line_number':439,'multiline':True]
+['text':' Newline control. ','line_number':441,'multiline':True]
+['text':' Dollar endonly. ','line_number':449,'multiline':True]
+['text':' Tables. ','line_number':451,'multiline':True]
+['text':' Named capturing brackets. ','line_number':453,'multiline':True]
+['text':' Labels and jump lists. ','line_number':458,'multiline':True]
+['text':' Points to saving area for iref. ','line_number':489,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':504,'multiline':True]
+['text':' For byte_sequence_compare. ','line_number':507,'multiline':True]
+['text':' Undefine sljit macros. ','line_number':541,'multiline':True]
+['text':' Used for accessing the elements of the stack. ','line_number':544,'multiline':True]
+['text':' Nothing. ','line_number':549,'multiline':True]
+['text':' Local space layout. ','line_number':579,'multiline':True]
+['text':' These two locals can be used by the current opcode. ','line_number':580,'multiline':True]
+['text':' Two local variables for possessive quantifiers (char1 cannot use them). ','line_number':583,'multiline':True]
+['text':' Max limit of recursions. ','line_number':586,'multiline':True]
+['text':' The output vector is stored on the stack, and contains pointers
+to characters. The vector data is divided into two groups: the first
+group contains the start / end character pointers, and the second is
+the start pointers when the end of the capturing group has not yet reached. ','line_number':588,'multiline':True]
+['text':' Shortcuts. ','line_number':612,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [8|16|32] ','line_number':834,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':835,'multiline':True]
+['text':' Functions whose might need modification for all new supported opcodes:
+ next_opcode
+ check_opcode_types
+ set_private_data_ptrs
+ get_framesize
+ init_frame
+ get_recurse_data_length
+ copy_recurse_data
+ compile_matchingpath
+ compile_backtrackingpath
+','line_number':860,'multiline':True]
+['text':' Special cases. ','line_number':1030,'multiline':True]
+['text':' Calculate important variables (like stack size) and checks whether all opcodes are supported. ','line_number':1080,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':1098,'multiline':True]
+['text':' Fall through. ','line_number':1099,'multiline':True]
+['text':' Only AUTO_CALLOUT can insert this opcode. We do
+       not intend to support this case. ','line_number':1121,'multiline':True]
+['text':' Set its value only once. ','line_number':1147,'multiline':True]
+['text':' Fall through. ','line_number':1176,'multiline':True]
+['text':' Fall through ','line_number':1182,'multiline':True]
+['text':'
+start:
+  0 - skip / early fail allowed
+  1 - only early fail with range allowed
+  >1 - (start - 1) early fail is processed
+
+return: current number of iterators enhanced with fast fail
+','line_number':1236,'multiline':True]
+['text':' Zero width assertions. ','line_number':1285,'multiline':True]
+['text':' The type or prop opcode is skipped in the next iteration. ','line_number':1337,'multiline':True]
+['text':' Fall through ','line_number':1356,'multiline':True]
+['text':' The type or prop opcode is skipped in the next iteration. ','line_number':1361,'multiline':True]
+['text':' Fall through ','line_number':1419,'multiline':True]
+['text':' Fall through ','line_number':1468,'multiline':True]
+['text':' Fall through ','line_number':1475,'multiline':True]
+['text':' Cannot be part of a repeat. ','line_number':1557,'multiline':True]
+['text':' Detect fixed iterations first. ','line_number':1623,'multiline':True]
+['text':' /(?:AB){4,6}/ is currently converted to /(?:AB){3}(?AB){1,3}/
+ * Skip the check of the second part. ','line_number':1627,'multiline':True]
+['text':' +2 the original and the last. ','line_number':1677,'multiline':True]
+['text':' When the bracket is prefixed by a zero iteration, skip the repeat check (at this point). ','line_number':1768,'multiline':True]
+['text':' These brackets are converted to repeats, so no global
+      based single character repeat is allowed. ','line_number':1773,'multiline':True]
+['text':' Might be a hidden SCOND. ','line_number':1818,'multiline':True]
+['text':' Character iterators, which are not inside a repeated bracket,
+     gets a private slot instead of allocating it on the stack. ','line_number':1901,'multiline':True]
+['text':' Returns with a frame_types (always < 0) if no need for frame. ','line_number':1936,'multiline':True]
+['text':' The last capture is a local variable even for recursions. ','line_number':1944,'multiline':True]
+['text':' This is correct regardless of common->capture_last_ptr. ','line_number':1960,'multiline':True]
+['text':' Fall through. ','line_number':2040,'multiline':True]
+['text':' Possessive quantifiers can use a special case. ','line_number':2114,'multiline':True]
+['text':' The last capture is a local variable even for recursions. ','line_number':2128,'multiline':True]
+['text':' >= 1 + shortest item size (2) ','line_number':2132,'multiline':True]
+['text':' Preserve virtual registers. ','line_number':2283,'multiline':True]
+['text':' Restore virtual registers. ','line_number':2312,'multiline':True]
+['text':' Calculate the sum of the private machine words. ','line_number':2366,'multiline':True]
+['text':' Might be a hidden SCOND. ','line_number':2451,'multiline':True]
+['text':' Might be a hidden SCOND. ','line_number':2825,'multiline':True]
+['text':' Assert captures then. ','line_number':3042,'multiline':True]
+['text':' Conditional block does not. ','line_number':3045,'multiline':True]
+['text':' sljit_set_label is clever enough to do nothing
+  if either the jump or the label is NULL. ','line_number':3086,'multiline':True]
+['text':' May destroy all locals and registers except TMP2. ','line_number':3143,'multiline':True]
+['text':' At this point we can freely use all temporary registers. ','line_number':3192,'multiline':True]
+['text':' TMP1 returns with begin - 1. ','line_number':3194,'multiline':True]
+['text':' OVECTOR(1) contains the "string begin - 1" constant. ','line_number':3282,'multiline':True]
+['text':' At this point we can freely use all registers. ','line_number':3359,'multiline':True]
+['text':' Copy the integer value to the output buffer ','line_number':3406,'multiline':True]
+['text':' Calculate the return value, which is the maximum ovector value. ','line_number':3417,'multiline':True]
+['text':' OVECTOR(0) is never equal to SLJIT_S2. ','line_number':3425,'multiline':True]
+['text':' OVECTOR(0) is never equal to SLJIT_S2. ','line_number':3437,'multiline':True]
+['text':' Store match begin and end. ','line_number':3466,'multiline':True]
+['text':' May destroy TMP1. ','line_number':3490,'multiline':True]
+['text':' The value of -1 must be kept for start_used_ptr! ','line_number':3496,'multiline':True]
+['text':' Jumps if start_used_ptr < STR_PTR, or start_used_ptr == -1. Although overwriting
+  is not necessary if start_used_ptr == STR_PTR, it does not hurt as well. ','line_number':3498,'multiline':True]
+['text':' Detects if the character has an othercase. ','line_number':3514,'multiline':True]
+['text':' Returns with the othercase. ','line_number':3540,'multiline':True]
+['text':' Detects if the character and its othercase has only 1 bit difference. ','line_number':3550,'multiline':True]
+['text':' Optimized for English alphabet. ','line_number':3584,'multiline':True]
+['text':' Since c != oc, they must have at least 1 bit difference. ','line_number':3588,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':3605,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':3618,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [8|16|32] ','line_number':3621,'multiline':True]
+['text':' Checks whether a partial matching is occurred. Does not modify registers. ','line_number':3626,'multiline':True]
+['text':' Does not affect registers. Usually used in a tight spot. ','line_number':3656,'multiline':True]
+['text':' Partial matching mode. ','line_number':3695,'multiline':True]
+['text':' Partial matching mode. ','line_number':3722,'multiline':True]
+['text':' Reads the character into TMP1, keeps STR_PTR.
+Does not check STR_END. TMP2, dst, RETURN_ADDR Destroyed. ','line_number':3748,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH != 32 ','line_number':3753,'multiline':True]
+['text':' TMP2 contains the high surrogate. ','line_number':3796,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [8|16|32] ','line_number':3826,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':3827,'multiline':True]
+['text':' Reads one character back without moving STR_PTR. TMP2 must
+contain the start of the subject buffer. Affects TMP1, TMP2, and RETURN_ADDR. ','line_number':3832,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH != 32 ','line_number':3838,'multiline':True]
+['text':' TMP2 contains the low surrogate. ','line_number':3878,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [8|16|32] ','line_number':3894,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':3895,'multiline':True]
+['text':' Reads the precise value of a character into TMP1, if the character is
+between min and max (c >= min && c <= max). Otherwise it returns with a value
+outside the range. Does not check STR_END. ','line_number':3906,'multiline':True]
+['text':' TMP2 contains the high surrogate. ','line_number':4042,'multiline':True]
+['text':' Skip low surrogate if necessary. ','line_number':4052,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [8|16|32] ','line_number':4093,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':4094,'multiline':True]
+['text':' Tells whether the character codes below 128 are enough
+to determine a match. ','line_number':4101,'multiline':True]
+['text':' Reads the precise character type of a character into TMP1, if the character
+is less than 128. Otherwise it returns with zero. Does not check STR_END. The
+full_read argument tells whether characters above max are accepted or not. ','line_number':4118,'multiline':True]
+['text':' All values > 127 are zero in ctypes. ','line_number':4129,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':4151,'multiline':True]
+['text':' Reads the character type into TMP1, updates STR_PTR. Does not check STR_END. ','line_number':4155,'multiline':True]
+['text':' The result of this read may be unused, but saves an "else" part. ','line_number':4173,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':4216,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH == 32 ','line_number':4221,'multiline':True]
+['text':' The ctypes array contains only 256 values. ','line_number':4224,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH != 8 ','line_number':4227,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH != 8 ','line_number':4231,'multiline':True]
+['text':' Skip low surrogate if necessary. ','line_number':4236,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH == 16 ','line_number':4269,'multiline':True]
+['text':' Goes one character back. Affects STR_PTR and TMP1. If must_be_valid is TRUE,
+TMP2 is not used. Otherwise TMP2 must contain the start of the subject buffer,
+and it is destroyed. Does not modify STR_PTR for invalid character sequences. ','line_number':4274,'multiline':True]
+['text':' Skip low surrogate if necessary. ','line_number':4325,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [8|16|32] ','line_number':4350,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':4351,'multiline':True]
+['text':' Character comes in TMP1. Checks if it is a newline. TMP2 may be destroyed. ','line_number':4361,'multiline':True]
+['text':' Fast decoding a UTF-8 character. TMP1 contains the first byte
+of the character (>= 0xc0). Return char value in TMP1. ','line_number':4397,'multiline':True]
+['text':' Searching for the first zero. ','line_number':4408,'multiline':True]
+['text':' Two byte sequence. ','line_number':4411,'multiline':True]
+['text':' Three byte sequence. ','line_number':4424,'multiline':True]
+['text':' Four byte sequence. ','line_number':4429,'multiline':True]
+['text':' Fast decoding a UTF-8 character type. TMP2 contains the first byte
+of the character (>= 0xc0). Return value in TMP1. ','line_number':4442,'multiline':True]
+['text':' Two byte sequence. ','line_number':4452,'multiline':True]
+['text':' The upper 5 bits are known at this point. ','line_number':4456,'multiline':True]
+['text':' We only have types for characters less than 256. ','line_number':4468,'multiline':True]
+['text':' Slow decoding a UTF-8 character. TMP1 contains the first byte
+of the character (>= 0xc0). Return char value in TMP1. STR_PTR is
+undefined for invalid characters. ','line_number':4478,'multiline':True]
+['text':' Usually more than 3 characters remained in the subject buffer. ','line_number':4494,'multiline':True]
+['text':' Not a valid start of a multi-byte sequence, no more bytes read. ','line_number':4497,'multiline':True]
+['text':' If TMP2 is in 0x80-0xbf range, TMP1 is also increased by (0x2 << 6). ','line_number':4504,'multiline':True]
+['text':' Three-byte sequence. ','line_number':4517,'multiline':True]
+['text':' Four-byte sequence. ','line_number':4560,'multiline':True]
+['text':' Two-byte sequence. ','line_number':4591,'multiline':True]
+['text':' If TMP2 is in 0x80-0xbf range, TMP1 is also increased by (0x2 << 6). ','line_number':4594,'multiline':True]
+['text':' Three-byte sequence. ','line_number':4604,'multiline':True]
+['text':' One will be substracted from STR_PTR later. ','line_number':4621,'multiline':True]
+['text':' Four byte sequences are not possible. ','line_number':4624,'multiline':True]
+['text':' Slow decoding a UTF-8 character, specialized for newlines.
+TMP1 contains the first byte of the character (>= 0xc0). Return
+char value in TMP1. ','line_number':4637,'multiline':True]
+['text':' All newlines are ascii, just skip intermediate octets. ','line_number':4652,'multiline':True]
+['text':' Skip intermediate octets. ','line_number':4685,'multiline':True]
+['text':' Two byte long newline: 0x85. ','line_number':4703,'multiline':True]
+['text':' Three byte long newlines: 0x2028 and 0x2029. ','line_number':4710,'multiline':True]
+['text':' Goes one character back. ','line_number':4728,'multiline':True]
+['text':' Two-byte sequence. ','line_number':4742,'multiline':True]
+['text':' Three-byte sequence. ','line_number':4754,'multiline':True]
+['text':' Four-byte sequence. ','line_number':4767,'multiline':True]
+['text':' Two-byte sequence. ','line_number':4780,'multiline':True]
+['text':' Three-byte sequence. ','line_number':4791,'multiline':True]
+['text':' Four-byte sequences are not possible. ','line_number':4801,'multiline':True]
+['text':' -2 + 4 = 2 ','line_number':4811,'multiline':True]
+['text':' Peak a character back. Does not modify STR_PTR. ','line_number':4824,'multiline':True]
+['text':' Peak a character back. Does not modify STR_PTR. ','line_number':4861,'multiline':True]
+['text':' Two-byte sequence. ','line_number':4877,'multiline':True]
+['text':' If TMP1 is in 0x80-0xbf range, TMP1 is also increased by (0x2 << 6). ','line_number':4884,'multiline':True]
+['text':' Three-byte sequence. ','line_number':4895,'multiline':True]
+['text':' Four-byte sequence. ','line_number':4932,'multiline':True]
+['text':' ADD is used instead of OR because of the SUB 0x10000 above. ','line_number':4937,'multiline':True]
+['text':' Two-byte sequence. ','line_number':4956,'multiline':True]
+['text':' Three-byte sequence. ','line_number':4967,'multiline':True]
+['text':' Two-byte sequence. ','line_number':4978,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':4991,'multiline':True]
+['text':' Slow decoding a UTF-16 character. TMP1 contains the first half
+of the character (>= 0xd800). Return char value in TMP1. STR_PTR is
+undefined for invalid characters. ','line_number':4997,'multiline':True]
+['text':' TMP2 contains the high surrogate. ','line_number':5005,'multiline':True]
+['text':' Slow decoding a UTF-16 character, specialized for newlines.
+TMP1 contains the first half of the character (>= 0xd800). Return
+char value in TMP1. ','line_number':5029,'multiline':True]
+['text':' TMP2 contains the high surrogate. ','line_number':5038,'multiline':True]
+['text':' Goes one character back. ','line_number':5061,'multiline':True]
+['text':' Peak a character back. Does not modify STR_PTR. ','line_number':5089,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 16 ','line_number':5119,'multiline':True]
+['text':' UCD_BLOCK_SIZE must be 128 (see the assert below). ','line_number':5121,'multiline':True]
+['text':' Search the UCD record for the character comes in TMP1.
+Returns chartype in TMP1 and UCD offset in TMP2. ','line_number':5127,'multiline':True]
+['text':' dummy_ucd_record ','line_number':5135,'multiline':True]
+['text':' Search the UCD record for the character comes in TMP1.
+Returns chartype in TMP1 and UCD offset in TMP2. ','line_number':5167,'multiline':True]
+['text':' dummy_ucd_record ','line_number':5175,'multiline':True]
+['text':' TMP2 is multiplied by 12. Same as (TMP2 << 2) + ((TMP2 << 2) << 1). ','line_number':5203,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':5212,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH != 32 ','line_number':5225,'multiline':True]
+['text':' Search for the end of the first line. ','line_number':5240,'multiline':True]
+['text':' Continual stores does not cause data dependency. ','line_number':5260,'multiline':True]
+['text':' Check whether offset limit is set and valid. ','line_number':5274,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [16|32] ','line_number':5294,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [16|32] ','line_number':5320,'multiline':True]
+['text':' Increasing the STR_PTR here requires one less jump in the most common case. ','line_number':5327,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH != 32 ','line_number':5330,'multiline':True]
+['text':' Skip continuation code units. ','line_number':5344,'multiline':True]
+['text':' Skip continuation code units. ','line_number':5364,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [8|16] ','line_number':5392,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH != 32 ','line_number':5393,'multiline':True]
+['text':' Recursive function, which scans prefix literals. ','line_number':5442,'multiline':True]
+['text':' Any unicode character. ','line_number':5445,'multiline':True]
+['text':' Fall through ','line_number':5472,'multiline':True]
+['text':' Zero width assertions. ','line_number':5489,'multiline':True]
+['text':' Fall through ','line_number':5506,'multiline':True]
+['text':' Fall through ','line_number':5515,'multiline':True]
+['text':' Fall through ','line_number':5526,'multiline':True]
+['text':' Fall through. ','line_number':5623,'multiline':True]
+['text':' Stops compiler warning - PH ','line_number':5809,'multiline':True]
+['text':' JIT_HAS_FAST_FORWARD_CHAR_PAIR_SIMD ','line_number':5913,'multiline':True]
+['text':' Convert last_count to priority. ','line_number':6028,'multiline':True]
+['text':' Simplifies algorithms later. ','line_number':6036,'multiline':True]
+['text':' Prevent compiler "uninitialized" warning ','line_number':6058,'multiline':True]
+['text':' minimum length ','line_number':6060,'multiline':True]
+['text':' Scan forward. ','line_number':6106,'multiline':True]
+['text':' Works regardless the value is 1 or 2. ','line_number':6127,'multiline':True]
+['text':' JIT_HAS_FAST_FORWARD_CHAR_PAIR_SIMD ','line_number':6288,'multiline':True]
+['text':' Example: match /^/ to \r\n from offset 1. ','line_number':6339,'multiline':True]
+['text':' JIT_HAS_FAST_FORWARD_CHAR_SIMD ','line_number':6376,'multiline':True]
+['text':' Drop frames until we reach STACK_TOP. ','line_number':6573,'multiline':True]
+['text':' SIG_LESS ','line_number':6597,'multiline':True]
+['text':' End of reverting values. ','line_number':6598,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':6626,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH != 8 || SUPPORT_UNICODE ','line_number':6630,'multiline':True]
+['text':' Get type of the previous char, and put it to TMP3. ','line_number':6635,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':6657,'multiline':True]
+['text':' Testing char type. ','line_number':6669,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':6686,'multiline':True]
+['text':' Here TMP3 has already been zeroed. ','line_number':6691,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':6695,'multiline':True]
+['text':' ctype_word ','line_number':6697,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':6704,'multiline':True]
+['text':' Testing char type. This is a code duplication. ','line_number':6712,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':6731,'multiline':True]
+['text':' TMP2 may be destroyed by peek_char. ','line_number':6734,'multiline':True]
+['text':' ctype_word ','line_number':6744,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':6751,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':6776,'multiline':True]
+['text':' May destroy TMP1. ','line_number':6781,'multiline':True]
+['text':' All bits will be zero or one (since bit is zero or one). ','line_number':6788,'multiline':True]
+['text':' No character is accepted. ','line_number':6826,'multiline':True]
+['text':' When bit != 0, all characters are accepted. ','line_number':6833,'multiline':True]
+['text':' May destroy TMP1. ','line_number':6933,'multiline':True]
+['text':' Should never occur, but stops analyzers complaining. ','line_number':6985,'multiline':True]
+['text':' May destroy TMP1. ','line_number':7034,'multiline':True]
+['text':' Check whether TMP1 contains a newline character. TMP2 destroyed. ','line_number':7042,'multiline':True]
+['text':' SUPPORT_UNICODE || PCRE2_CODE_UNIT_WIDTH == [16|32] ','line_number':7062,'multiline':True]
+['text':' Check whether TMP1 contains a newline character. TMP2 destroyed. ','line_number':7069,'multiline':True]
+['text':' SUPPORT_UNICODE || PCRE2_CODE_UNIT_WIDTH == [16|32] ','line_number':7100,'multiline':True]
+['text':' Check whether TMP1 contains a newline character. TMP2 destroyed. ','line_number':7108,'multiline':True]
+['text':' SUPPORT_UNICODE || PCRE2_CODE_UNIT_WIDTH == [16|32] ','line_number':7128,'multiline':True]
+['text':' Extracting bit difference info. ','line_number':7326,'multiline':True]
+['text':' Note that this code only handles characters in the BMP. If there
+  ever are characters outside the BMP whose othercase differs in only one
+  bit from itself (there currently are none), this code will need to be
+  revised for PCRE2_CODE_UNIT_WIDTH == 32. ','line_number':7331,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [8|16|32] ','line_number':7340,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [8|16|32] ','line_number':7363,'multiline':True]
+['text':' Unaligned read is supported. ','line_number':7379,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':7405,'multiline':True]
+['text':' Unaligned read is unsupported or in 32 bit mode. ','line_number':7439,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':7502,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH == [8|16] ','line_number':7515,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':7522,'multiline':True]
+['text':' Scanning the necessary info. ','line_number':7524,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':7546,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':7557,'multiline':True]
+['text':' Any either accepts everything or ignored. ','line_number':7583,'multiline':True]
+['text':' Fall through ','line_number':7608,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':7642,'multiline':True]
+['text':' We are not necessary in utf mode even in 8 bit mode. ','line_number':7646,'multiline':True]
+['text':' !SUPPORT_UNICODE ','line_number':7654,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':7656,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':7690,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':7696,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':7708,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 32 ','line_number':7729,'multiline':True]
+['text':' Fall through ','line_number':7849,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':7952,'multiline':True]
+['text':' Generating code. ','line_number':7954,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':7959,'multiline':True]
+['text':' Do nothing. ','line_number':8056,'multiline':True]
+['text':' Fall through. ','line_number':8080,'multiline':True]
+['text':' At least three characters are required.
+         Otherwise this case would be handled by the normal code path. ','line_number':8095,'multiline':True]
+['text':' Optimizing character pairs, if their difference is power of 2. ','line_number':8100,'multiline':True]
+['text':' C and Z groups are the farthest two groups. ','line_number':8163,'multiline':True]
+['text':' In case of ucp_Cf, we overwrite the result. ','line_number':8170,'multiline':True]
+['text':' C and Z groups are the farthest two groups. ','line_number':8186,'multiline':True]
+['text':' In case of ucp_Cf, we overwrite the result. ','line_number':8196,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':8229,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':8251,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':8286,'multiline':True]
+['text':' Requires rather complex checks. ','line_number':8292,'multiline':True]
+['text':' LESS ','line_number':8330,'multiline':True]
+['text':' Equal. ','line_number':8331,'multiline':True]
+['text':' STR_PTR = STR_END - IN_UCHARS(1) ','line_number':8409,'multiline':True]
+['text':' TMP2 might be used by peek_char_back. ','line_number':8447,'multiline':True]
+['text':' Not breaking between Regional Indicators is allowed only if there
+  are an even number of preceding RIs. ','line_number':8550,'multiline':True]
+['text':' bptr is pointing to the left-hand character ','line_number':8558,'multiline':True]
+['text':' Grapheme break required ','line_number':8571,'multiline':True]
+['text':' If Extend or ZWJ follows Extended_Pictographic, do not update lgb; this
+  allows any number of them before a following Extended_Pictographic. ','line_number':8574,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH != 32 ','line_number':8589,'multiline':True]
+['text':' Not breaking between Regional Indicators is allowed only if there
+  are an even number of preceding RIs. ','line_number':8618,'multiline':True]
+['text':' bptr is pointing to the left-hand character ','line_number':8626,'multiline':True]
+['text':' Grapheme break required ','line_number':8638,'multiline':True]
+['text':' If Extend or ZWJ follows Extended_Pictographic, do not update lgb; this
+  allows any number of them before a following Extended_Pictographic. ','line_number':8641,'multiline':True]
+['text':' Patch by PH ','line_number':8664,'multiline':True]
+['text':' GETCHARINC(c, cc); ','line_number':8665,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 32 ','line_number':8671,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 32 ','line_number':8680,'multiline':True]
+['text':' Not breaking between Regional Indicators is allowed only if there
+  are an even number of preceding RIs. ','line_number':8686,'multiline':True]
+['text':' bptr is pointing to the left-hand character ','line_number':8694,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 32 ','line_number':8702,'multiline':True]
+['text':' Grapheme break required ','line_number':8710,'multiline':True]
+['text':' If Extend or ZWJ follows Extended_Pictographic, do not update lgb; this
+  allows any number of them before a following Extended_Pictographic. ','line_number':8713,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':8726,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':8738,'multiline':True]
+['text':' Digits are usually 0-9, so it is worth to optimize them. ','line_number':8744,'multiline':True]
+['text':' Flip the starting bit in the negative case. ','line_number':8753,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':8834,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == [8|16] ','line_number':8837,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':8839,'multiline':True]
+['text':' We don't need to handle soft partial matching case. ','line_number':8868,'multiline':True]
+['text':' Since we successfully read a char above, partial matching must occure. ','line_number':8940,'multiline':True]
+['text':' Since UTF8 code page is fixed, we know that c is in [a-z] or [A-Z] range. ','line_number':9022,'multiline':True]
+['text':' Skip the variable-length character. ','line_number':9026,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':9035,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':9041,'multiline':True]
+['text':' SUPPORT_UNICODE && PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':9106,'multiline':True]
+['text':' This function consumes at least one input character. ','line_number':9135,'multiline':True]
+['text':' To decrease the number of length checks, we try to concatenate the fixed length character sequences. ','line_number':9136,'multiline':True]
+['text':' We have a fixed-length byte sequence. ','line_number':9183,'multiline':True]
+['text':' A non-fixed length character will be checked if length == 0. ','line_number':9195,'multiline':True]
+['text':' Forward definitions. ','line_number':9199,'multiline':True]
+['text':' The OVECTOR offset goes to TMP2. ','line_number':9233,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':9276,'multiline':True]
+['text':' OVECTOR(1) contains the "string begin - 1" constant. ','line_number':9282,'multiline':True]
+['text':' Read original character. It must be a valid UTF character. ','line_number':9313,'multiline':True]
+['text':' Read second character. ','line_number':9323,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':9381,'multiline':True]
+['text':' TMP2 -= STR_END - STR_PTR ','line_number':9403,'multiline':True]
+['text':' Temporary release of STR_PTR. ','line_number':9490,'multiline':True]
+['text':' Handles both invalid and empty cases. Since the minimum repeat,
+    is zero the invalid case is basically the same as an empty case. ','line_number':9492,'multiline':True]
+['text':' Restore if not zero length. ','line_number':9503,'multiline':True]
+['text':' Includes min > 1 case as well. ','line_number':9553,'multiline':True]
+['text':' Handles both invalid and empty cases. Since the minimum repeat,
+  is zero the invalid case is basically the same as an empty case. ','line_number':9575,'multiline':True]
+['text':' Length is non-zero, we can match real repeats. ','line_number':9586,'multiline':True]
+['text':' Inlining simple patterns. ','line_number':9645,'multiline':True]
+['text':' Leave if the match is failed. ','line_number':9686,'multiline':True]
+['text':' Offsets in subject. ','line_number':9712,'multiline':True]
+['text':' Convert and copy the JIT offset vector to the ovector array. ','line_number':9718,'multiline':True]
+['text':' Convert pointers to sizes. ','line_number':9728,'multiline':True]
+['text':' These pointer sized fields temporarly stores internal variables. ','line_number':9775,'multiline':True]
+['text':' Needed to save important temporary registers. ','line_number':9804,'multiline':True]
+['text':' SLJIT_R0 = arguments ','line_number':9806,'multiline':True]
+['text':' Check return value. ','line_number':9813,'multiline':True]
+['text':' SIG_LESS ','line_number':9817,'multiline':True]
+['text':' SIG_LESS ','line_number':9819,'multiline':True]
+['text':' Saving previous accept variables. ','line_number':9871,'multiline':True]
+['text':' Assert captures then. ','line_number':9883,'multiline':True]
+['text':' This is a braminzero backtrack path. ','line_number':9905,'multiline':True]
+['text':' Control verbs cannot escape from these asserts. ','line_number':9966,'multiline':True]
+['text':' Reset stack. ','line_number':10007,'multiline':True]
+['text':' We don't need to keep the STR_PTR, only the previous private_data_ptr. ','line_number':10022,'multiline':True]
+['text':' We know that STR_PTR was stored on the top of the stack. ','line_number':10039,'multiline':True]
+['text':' For OP_BRA and OP_BRAMINZERO. ','line_number':10060,'multiline':True]
+['text':' Makes the check less complicated below. ','line_number':10094,'multiline':True]
+['text':' None of them matched. ','line_number':10098,'multiline':True]
+['text':' Assert is failed. ','line_number':10120,'multiline':True]
+['text':' The topmost item should be 0. ','line_number':10126,'multiline':True]
+['text':' The topmost item should be 0. ','line_number':10139,'multiline':True]
+['text':' Assert is successful. ','line_number':10153,'multiline':True]
+['text':' We know that STR_PTR was stored on the top of the stack. ','line_number':10157,'multiline':True]
+['text':' Keep the STR_PTR on the top of the stack. ','line_number':10161,'multiline':True]
+['text':' We don't need to keep the STR_PTR, only the previous private_data_ptr. ','line_number':10178,'multiline':True]
+['text':' We don't need to keep the STR_PTR, only the previous private_data_ptr. ','line_number':10184,'multiline':True]
+['text':' AssertNot is successful. ','line_number':10223,'multiline':True]
+['text':' The topmost item should be 0. ','line_number':10242,'multiline':True]
+['text':' TMP2 which is set here used by OP_KETRMAX below. ','line_number':10305,'multiline':True]
+['text':' Move the STR_PTR to the private_data_ptr. ','line_number':10310,'multiline':True]
+['text':' TMP2 which is set here used by OP_KETRMAX below. ','line_number':10323,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':10372,'multiline':True]
+['text':'
+  Handling bracketed expressions is probably the most complex part.
+
+  Stack layout naming characters:
+    S - Push the current STR_PTR
+    0 - Push a 0 (NULL)
+    A - Push the current STR_PTR. Needed for restoring the STR_PTR
+        before the next alternative. Not pushed if there are no alternatives.
+    M - Any values pushed by the current alternative. Can be empty, or anything.
+    C - Push the previous OVECTOR(i), OVECTOR(i+1) and OVECTOR_PRIV(i) to the stack.
+    L - Push the previous local (pointed by localptr) to the stack
+   () - opional values stored on the stack
+  ()* - optonal, can be stored multiple times
+
+  The following list shows the regular expression templates, their PCRE byte codes
+  and stack layout supported by pcre-sljit.
+
+  (?:)                     OP_BRA     | OP_KET                A M
+  ()                       OP_CBRA    | OP_KET                C M
+  (?:)+                    OP_BRA     | OP_KETRMAX        0   A M S   ( A M S )*
+                           OP_SBRA    | OP_KETRMAX        0   L M S   ( L M S )*
+  (?:)+?                   OP_BRA     | OP_KETRMIN        0   A M S   ( A M S )*
+                           OP_SBRA    | OP_KETRMIN        0   L M S   ( L M S )*
+  ()+                      OP_CBRA    | OP_KETRMAX        0   C M S   ( C M S )*
+                           OP_SCBRA   | OP_KETRMAX        0   C M S   ( C M S )*
+  ()+?                     OP_CBRA    | OP_KETRMIN        0   C M S   ( C M S )*
+                           OP_SCBRA   | OP_KETRMIN        0   C M S   ( C M S )*
+  (?:)?    OP_BRAZERO    | OP_BRA     | OP_KET            S ( A M 0 )
+  (?:)??   OP_BRAMINZERO | OP_BRA     | OP_KET            S ( A M 0 )
+  ()?      OP_BRAZERO    | OP_CBRA    | OP_KET            S ( C M 0 )
+  ()??     OP_BRAMINZERO | OP_CBRA    | OP_KET            S ( C M 0 )
+  (?:)*    OP_BRAZERO    | OP_BRA     | OP_KETRMAX      S 0 ( A M S )*
+           OP_BRAZERO    | OP_SBRA    | OP_KETRMAX      S 0 ( L M S )*
+  (?:)*?   OP_BRAMINZERO | OP_BRA     | OP_KETRMIN      S 0 ( A M S )*
+           OP_BRAMINZERO | OP_SBRA    | OP_KETRMIN      S 0 ( L M S )*
+  ()*      OP_BRAZERO    | OP_CBRA    | OP_KETRMAX      S 0 ( C M S )*
+           OP_BRAZERO    | OP_SCBRA   | OP_KETRMAX      S 0 ( C M S )*
+  ()*?     OP_BRAMINZERO | OP_CBRA    | OP_KETRMIN      S 0 ( C M S )*
+           OP_BRAMINZERO | OP_SCBRA   | OP_KETRMIN      S 0 ( C M S )*
+
+
+  Stack layout naming characters:
+    A - Push the alternative index (starting from 0) on the stack.
+        Not pushed if there is no alternatives.
+    M - Any values pushed by the current alternative. Can be empty, or anything.
+
+  The next list shows the possible content of a bracket:
+  (|)     OP_*BRA    | OP_ALT ...         M A
+  (?()|)  OP_*COND   | OP_ALT             M A
+  (?>|)   OP_ONCE    | OP_ALT ...         [stack trace] M A
+                                          Or nothing, if trace is unnecessary
+','line_number':10392,'multiline':True]
+['text':' Capturing brackets has a pre-allocated space. ','line_number':10512,'multiline':True]
+['text':' Other brackets simply allocate the next entry. ','line_number':10529,'multiline':True]
+['text':' Instructions before the first alternative. ','line_number':10537,'multiline':True]
+['text':' This is a backtrack path! (Since the try-path of OP_BRAMINZERO matches to the empty string) ','line_number':10559,'multiline':True]
+['text':' Nothing stored during the first run. ','line_number':10570,'multiline':True]
+['text':' Checking zero-length iteration. ','line_number':10573,'multiline':True]
+['text':' When we come from outside, private_data_ptr contains the previous STR_PTR. ','line_number':10576,'multiline':True]
+['text':' Except when the whole stack frame must be saved. ','line_number':10581,'multiline':True]
+['text':' Handling capturing brackets and alternatives. ','line_number':10612,'multiline':True]
+['text':' Neither capturing brackets nor recursions are found in the block. ','line_number':10624,'multiline':True]
+['text':' Saving the previous values. ','line_number':10693,'multiline':True]
+['text':' Saving the previous value. ','line_number':10714,'multiline':True]
+['text':' Pushing the starting string pointer. ','line_number':10722,'multiline':True]
+['text':' Generating code for the first alternative. ','line_number':10727,'multiline':True]
+['text':' Never has other case. ','line_number':10760,'multiline':True]
+['text':' The stacksize == 0 is a common "else" case. ','line_number':10808,'multiline':True]
+['text':' Similar code as PUSH_BACKTRACK macro. ','line_number':10823,'multiline':True]
+['text':' We need to preserve the counter. TMP2 will be used below. ','line_number':10850,'multiline':True]
+['text':' TMP2 was set above. ','line_number':10872,'multiline':True]
+['text':' Skip and count the other alternatives. ','line_number':10889,'multiline':True]
+['text':' Must be after the matchingpath label. ','line_number':10910,'multiline':True]
+['text':' Drop STR_PTR for greedy plus quantifier. ','line_number':10925,'multiline':True]
+['text':' Checking zero-length iteration. ','line_number':10934,'multiline':True]
+['text':' This case includes opcodes such as OP_SCRIPT_RUN. ','line_number':10937,'multiline':True]
+['text':' Drop STR_PTR for greedy plus quantifier. ','line_number':10939,'multiline':True]
+['text':' TMP2 must contain the starting STR_PTR. ','line_number':10944,'multiline':True]
+['text':' We need to preserve the counter. ','line_number':10960,'multiline':True]
+['text':' This is a backtrack path! (From the viewpoint of OP_BRAMINZERO) ','line_number':10971,'multiline':True]
+['text':' We need to release the end pointer to perform the
+    backtrack for the zero-length iteration. When
+    framesize is < 0, OP_ONCE will do the release itself. ','line_number':10976,'multiline':True]
+['text':' Continue to the normal backtrack. ','line_number':10988,'multiline':True]
+['text':' We temporarily encode the needs_control_head in the lowest bit.
+     Note: on the target architectures of SLJIT the ((x << 1) >> 1) returns
+     the same value for small signed numbers (including negative numbers). ','line_number':10998,'multiline':True]
+['text':' Also contains the offset of control head. ','line_number':11019,'multiline':True]
+['text':' This case cannot be optimized in the same was as
+  normal capturing brackets. ','line_number':11044,'multiline':True]
+['text':' Even if the match is empty, we need to reset the control head. ','line_number':11189,'multiline':True]
+['text':' Even if the match is empty, we need to reset the control head. ','line_number':11220,'multiline':True]
+['text':' Last alternative. ','line_number':11255,'multiline':True]
+['text':' We don't have to restore the control head in case of a failed match. ','line_number':11272,'multiline':True]
+['text':' TMP2 is set to [private_data_ptr] above. ','line_number':11279,'multiline':True]
+['text':' None of them matched. ','line_number':11283,'multiline':True]
+['text':' During recursion, these optimizations are disabled. ','line_number':11465,'multiline':True]
+['text':' Handle fixed part first. ','line_number':11491,'multiline':True]
+['text':' We cannot use TMP3 because of allocate_stack. ','line_number':11563,'multiline':True]
+['text':' Consume the OP_CHAR opcode. ','line_number':11648,'multiline':True]
+['text':' Search the first instance of charpos_char. ','line_number':11671,'multiline':True]
+['text':' Search the last instance of charpos_char. ','line_number':11701,'multiline':True]
+['text':' No need to check notempty conditions. ','line_number':11964,'multiline':True]
+['text':' Data will be discarded anyway... ','line_number':12008,'multiline':True]
+['text':' Tail item on backtrack. ','line_number':12100,'multiline':True]
+['text':' Head item on backtrack. ','line_number':12393,'multiline':True]
+['text':' Maximize case. ','line_number':12556,'multiline':True]
+['text':' We know there is enough place on the stack. ','line_number':12651,'multiline':True]
+['text':' Decoding the needs_control_head in framesize. ','line_number':12714,'multiline':True]
+['text':' TMP1 is used in OP_KETRMIN below. ','line_number':12723,'multiline':True]
+['text':' TMP1 was set a few lines above. ','line_number':12748,'multiline':True]
+['text':' Drop STR_PTR for non-greedy plus quantifier. ','line_number':12750,'multiline':True]
+['text':' Checking zero-length iteration. ','line_number':12756,'multiline':True]
+['text':' Drop STR_PTR for non-greedy plus quantifier. ','line_number':12764,'multiline':True]
+['text':' Always exactly one alternative. ','line_number':12824,'multiline':True]
+['text':' Conditional block always has at most one alternative. ','line_number':12855,'multiline':True]
+['text':' Conditional blocks always have an additional alternative, even if it is empty. ','line_number':12889,'multiline':True]
+['text':' Instructions after the current alternative is successfully matched. ','line_number':12917,'multiline':True]
+['text':' There is a similar code in compile_bracket_matchingpath. ','line_number':12918,'multiline':True]
+['text':' We need to preserve the counter. TMP2 will be used below. ','line_number':12925,'multiline':True]
+['text':' TMP2 was set above. ','line_number':12947,'multiline':True]
+['text':' If ket is not OP_KETRMAX, this code path is executed after the jump to alternative_matchingpath. ','line_number':12974,'multiline':True]
+['text':' Free the STR_PTR. ','line_number':13022,'multiline':True]
+['text':' Using both tmp register is better for instruction scheduling. ','line_number':13029,'multiline':True]
+['text':' Reset head and drop saved frame. ','line_number':13057,'multiline':True]
+['text':' The STR_PTR must be released. ','line_number':13062,'multiline':True]
+['text':' Restore previous private_data_ptr ','line_number':13070,'multiline':True]
+['text':' See the comment below. ','line_number':13076,'multiline':True]
+['text':' OP_ONCE removes everything in case of a backtrack, so we don't
+  need to explicitly release the STR_PTR. The extra release would
+  affect badly the free_stack(2) above. ','line_number':13107,'multiline':True]
+['text':' Drop the stack frame. ','line_number':13159,'multiline':True]
+['text':' Manual call of compile_bracket_matchingpath and compile_bracket_backtrackingpath. ','line_number':13175,'multiline':True]
+['text':' Manual call of compile_assert_matchingpath. ','line_number':13184,'multiline':True]
+['text':' Abort match with a fail. ','line_number':13225,'multiline':True]
+['text':' STACK_TOP is set by THEN. ','line_number':13272,'multiline':True]
+['text':' A virtual opcode for then traps. ','line_number':13463,'multiline':True]
+['text':' Recurse captures then. ','line_number':13492,'multiline':True]
+['text':' Matching path. ','line_number':13500,'multiline':True]
+['text':' (Reversed) stack layout:
+   [private data][return address][optional: str ptr] ... [optional: alternative index][recursive_head_ptr] ','line_number':13510,'multiline':True]
+['text':' Save return address. ','line_number':13514,'multiline':True]
+['text':' This variable is saved and restored all time when we enter or exit from a recursive context. ','line_number':13519,'multiline':True]
+['text':' Backtracking path entry. ','line_number':13562,'multiline':True]
+['text':' Save return address. ','line_number':13573,'multiline':True]
+['text':' No alternative is matched. ','line_number':13624,'multiline':True]
+['text':' Save return address. ','line_number':13650,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':13736,'multiline':True]
+['text':' PCRE_UTF[16|32] have the same value as PCRE_UTF8. ','line_number':13780,'multiline':True]
+['text':' We only care about the first newline character. ','line_number':13791,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':13808,'multiline':True]
+['text':' Calculate the local space size on the stack. ','line_number':13811,'multiline':True]
+['text':' Checking flags and updating ovector_start. ','line_number':13833,'multiline':True]
+['text':' Saving the real start pointer is necessary. ','line_number':13864,'multiline':True]
+['text':' Aligning ovector to even number of sljit words. ','line_number':13869,'multiline':True]
+['text':' Capturing brackets cannot be optimized if callouts are allowed. ','line_number':13876,'multiline':True]
+['text':' Main pcre2_jit_exec entry. ','line_number':13924,'multiline':True]
+['text':' Register init. ','line_number':13928,'multiline':True]
+['text':' Main part of the matching ','line_number':13954,'multiline':True]
+['text':' Forward search if possible. ','line_number':13959,'multiline':True]
+['text':' Store the current STR_PTR in OVECTOR(0). ','line_number':13984,'multiline':True]
+['text':' Copy the limit of allowed recursions. ','line_number':13986,'multiline':True]
+['text':' Copy the beginning of the string. ','line_number':13996,'multiline':True]
+['text':' This means we have a match. Update the ovector. ','line_number':14029,'multiline':True]
+['text':' Update hit_start only in the first time. ','line_number':14077,'multiline':True]
+['text':' Check we have remaining characters. ','line_number':14085,'multiline':True]
+['text':' There cannot be more newlines if PCRE2_FIRSTLINE is set. ','line_number':14098,'multiline':True]
+['text':' No more remaining characters. ','line_number':14116,'multiline':True]
+['text':' A free bit for each private data. ','line_number':14150,'multiline':True]
+['text':' Might add new entries. ','line_number':14159,'multiline':True]
+['text':' The common->recurse_bitset has been freed. ','line_number':14173,'multiline':True]
+['text':' Allocating stack, returns with PCRE_ERROR_JIT_STACKLIMIT if fails. ','line_number':14186,'multiline':True]
+['text':' This is a (really) rare case. ','line_number':14187,'multiline':True]
+['text':' RETURN_ADDR is not a saved register. ','line_number':14189,'multiline':True]
+['text':' Allocation failed. ','line_number':14209,'multiline':True]
+['text':' We break the return address cache here, but this is a really rare case. ','line_number':14211,'multiline':True]
+['text':' Call limit reached. ','line_number':14215,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 ','line_number':14280,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH == 8 || PCRE2_CODE_UNIT_WIDTH == 16 ','line_number':14302,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':14313,'multiline':True]
+['text':' Reuse the function descriptor if possible. ','line_number':14328,'multiline':True]
+['text':' This case is highly unlikely since we just recently
+    freed a lot of memory. Not impossible though. ','line_number':14336,'multiline':True]
+['text':' Turn mode into an index. ','line_number':14348,'multiline':True]
+['text':'************************************************
+*        JIT compile a Regular Expression        *
+************************************************','line_number':14363,'multiline':True]
+['text':' This function used JIT to convert a previously-compiled pattern into machine
+code.
+
+Arguments:
+  code          a compiled pattern
+  options       JIT option bits
+
+Returns:        0: success or (*NOJIT) was used
+               <0: an error code
+','line_number':14367,'multiline':True]
+['text':' Support for invalid UTF was first introduced in JIT, with the option
+PCRE2_JIT_INVALID_UTF. Later, support was added to the interpreter, and the
+compile-time option PCRE2_MATCH_INVALID_UTF was created. This is now the
+preferred feature, with the earlier option deprecated. However, for backward
+compatibility, if the earlier option is set, it forces the new option so that
+if JIT matching falls back to the interpreter, there is still support for
+invalid UTF. However, if this function has already been successfully called
+without PCRE2_JIT_INVALID_UTF and without PCRE2_MATCH_INVALID_UTF (meaning that
+non-invalid-supporting JIT code was compiled), give an error.
+
+If in the future support for PCRE2_JIT_INVALID_UTF is withdrawn, the following
+actions are needed:
+
+  1. Remove the definition from pcre2.h.in and from the list in
+     PUBLIC_JIT_COMPILE_OPTIONS above.
+
+  2. Replace PCRE2_JIT_INVALID_UTF with a local flag in this module.
+
+  3. Replace PCRE2_JIT_INVALID_UTF in pcre2_jit_test.c.
+
+  4. Delete the following short block of code. The setting of "re" and
+     "functions" can be moved into the JIT-only block below, but if that is
+     done, (void)re and (void)functions will be needed in the non-JIT case, to
+     avoid compiler warnings.
+','line_number':14396,'multiline':True]
+['text':' The above tests are run with and without JIT support. This means that
+PCRE2_JIT_INVALID_UTF propagates back into the regex options (ensuring
+interpreter support) even in the absence of JIT. But now, if there is no JIT
+support, give an error return. ','line_number':14437,'multiline':True]
+['text':' SUPPORT_JIT ','line_number':14444,'multiline':True]
+['text':' There is JIT support. Do the necessary. ','line_number':14446,'multiline':True]
+['text':' Checks whether the executable allocator is working. This check
+     might run multiple times in multi-threaded environments, but the
+     result should not be affected by it. ','line_number':14452,'multiline':True]
+['text':' SUPPORT_JIT ','line_number':14498,'multiline':True]
+['text':' JIT compiler uses an all-in-one approach. This improves security,
+   since the code generator functions are not exported. ','line_number':14501,'multiline':True]
+['text':' End of pcre2_jit_compile.c ','line_number':14509,'multiline':True]

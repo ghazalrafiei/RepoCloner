@@ -1,0 +1,694 @@
+['text':' vi:set ts=8 sts=4 sw=4 noet:
+ *
+ * VIM - Vi IMproved	by Bram Moolenaar
+ *
+ * Do ":help uganda"  in Vim to read copying and usage conditions.
+ * Do ":help credits" in Vim to see a list of people who contributed.
+ * See README.txt for an overview of the Vim source code.
+ ','line_number':1,'multiline':True]
+['text':'
+ * mouse.c: mouse handling functions
+ ','line_number':10,'multiline':True]
+['text':'
+ * Horiziontal and vertical steps used when scrolling.
+ * When negative scroll by a whole page.
+ ','line_number':16,'multiline':True]
+['text':'
+ * Return the duration from t1 to t2 in milliseconds.
+ ','line_number':36,'multiline':True]
+['text':' This handles wrapping of tv_usec correctly without any special case.','line_number':42,'multiline':False]
+['text':' Example of 2 pairs (tv_sec, tv_usec) with a duration of 5 ms:','line_number':43,'multiline':False]
+['text':'	   t1 = (1, 998000) t2 = (2, 3000) gives:','line_number':44,'multiline':False]
+['text':'	   (2 - 1) * 1000 + (3000 - 998000) / 1000 -> 5 ms.','line_number':45,'multiline':False]
+['text':'
+ * Get class of a character for selection: same class means same word.
+ * 0: blank
+ * 1: punctuation groups
+ * 2: normal word character
+ * >2: multi-byte word character.
+ ','line_number':51,'multiline':True]
+['text':' There are a few special cases where we want certain combinations of','line_number':73,'multiline':False]
+['text':' characters to be considered as a single word.  These are things like','line_number':74,'multiline':False]
+['text':' "->", "/ *", "*=", "+=", "&=", "<=", ">=", "!=" etc.  Otherwise, each','line_number':75,'multiline':False]
+['text':' character is in its own class.','line_number':76,'multiline':False]
+['text':'
+ * Move "pos" back to the start of the word it's in.
+ ','line_number':82,'multiline':True]
+['text':'
+ * Move "pos" forward to the end of the word it's in.
+ * When 'selection' is "exclusive", the position is just after the word.
+ ','line_number':105,'multiline':True]
+['text':'
+ * Translate window coordinates to buffer position without any side effects.
+ * Returns IN_BUFFER and sets "mpos->col" to the column when in buffer text.
+ * The column is one for the first column.
+ ','line_number':143,'multiline':True]
+['text':' check if it makes sense','line_number':155,'multiline':False]
+['text':' find the window where the row is in','line_number':158,'multiline':False]
+['text':' winpos and height may change in win_enter()!','line_number':162,'multiline':False]
+['text':' In (or below) status line','line_number':163,'multiline':False]
+['text':' In vertical separator line','line_number':165,'multiline':False]
+['text':' compute the position in the buffer line from the posn on the screen','line_number':171,'multiline':False]
+['text':' past bottom','line_number':173,'multiline':False]
+['text':'
+ * Do the appropriate action for the current mouse click in the current mode.
+ * Not used for Command-line mode.
+ *
+ * Normal and Visual Mode:
+ * event	 modi-	position      visual	   change   action
+ *		 fier	cursor			   window
+ * left press	  -	yes	    end		    yes
+ * left press	  C	yes	    end		    yes	    "^]" (2)
+ * left press	  S	yes	end (popup: extend) yes	    "*" (2)
+ * left drag	  -	yes	start if moved	    no
+ * left relse	  -	yes	start if moved	    no
+ * middle press	  -	yes	 if not active	    no	    put register
+ * middle press	  -	yes	 if active	    no	    yank and put
+ * right press	  -	yes	start or extend	    yes
+ * right press	  S	yes	no change	    yes	    "#" (2)
+ * right drag	  -	yes	extend		    no
+ * right relse	  -	yes	extend		    no
+ *
+ * Insert or Replace Mode:
+ * event	 modi-	position      visual	   change   action
+ *		 fier	cursor			   window
+ * left press	  -	yes	(cannot be active)  yes
+ * left press	  C	yes	(cannot be active)  yes	    "CTRL-O^]" (2)
+ * left press	  S	yes	(cannot be active)  yes	    "CTRL-O*" (2)
+ * left drag	  -	yes	start or extend (1) no	    CTRL-O (1)
+ * left relse	  -	yes	start or extend (1) no	    CTRL-O (1)
+ * middle press	  -	no	(cannot be active)  no	    put register
+ * right press	  -	yes	start or extend	    yes	    CTRL-O
+ * right press	  S	yes	(cannot be active)  yes	    "CTRL-O#" (2)
+ *
+ * (1) only if mouse pointer moved since press
+ * (2) only if click is in same buffer
+ *
+ * Return TRUE if start_arrow() should be called for edit mode.
+ ','line_number':180,'multiline':True]
+['text':' operator argument, can be NULL','line_number':218,'multiline':False]
+['text':' K_LEFTMOUSE, etc','line_number':219,'multiline':False]
+['text':' Direction to 'put' if necessary','line_number':220,'multiline':False]
+['text':' PUT_FIXINDENT if fixing indent necessary','line_number':222,'multiline':False]
+['text':' ignore 'mouse' setting next time','line_number':224,'multiline':False]
+['text':' got a click some time back','line_number':225,'multiline':False]
+['text':' MOUSE_LEFT, _MIDDLE or _RIGHT','line_number':227,'multiline':False]
+['text':' If FALSE it's a drag or release event','line_number':228,'multiline':False]
+['text':' If TRUE it's a drag event','line_number':229,'multiline':False]
+['text':' flags for jump_to_mouse()','line_number':230,'multiline':False]
+['text':' Has cursor moved?','line_number':232,'multiline':False]
+['text':' mouse in status line','line_number':233,'multiline':False]
+['text':' mouse clicked in tab line','line_number':234,'multiline':False]
+['text':' mouse in vertical separator line','line_number':235,'multiline':False]
+['text':' When GUI is active, always recognize mouse events, otherwise:','line_number':253,'multiline':False]
+['text':' - Ignore mouse event in normal mode if 'mouse' doesn't include 'n'.','line_number':254,'multiline':False]
+['text':' - Ignore mouse event in visual mode if 'mouse' doesn't include 'v'.','line_number':255,'multiline':False]
+['text':' - For command line and insert mode 'mouse' is checked before calling','line_number':256,'multiline':False]
+['text':'	 do_mouse().','line_number':257,'multiline':False]
+['text':' If the next character is the same mouse event then use that','line_number':279,'multiline':False]
+['text':' one. Speeds up dragging the status line.','line_number':280,'multiline':False]
+['text':' Note: Since characters added to the stuff buffer in the code','line_number':281,'multiline':False]
+['text':' below need to come before the next character, do not do this','line_number':282,'multiline':False]
+['text':' when the current character was stuffed.','line_number':283,'multiline':False]
+['text':' Need to get the character, peeking doesn't get the actual','line_number':290,'multiline':False]
+['text':' one.','line_number':291,'multiline':False]
+['text':' Mouse moved without a button pressed.','line_number':305,'multiline':False]
+['text':' May have stopped dragging the status or separator line.  The pointer is','line_number':321,'multiline':False]
+['text':' most likely still on the status or separator line.','line_number':322,'multiline':False]
+['text':' Ignore drag and release events if we didn't get a click.','line_number':335,'multiline':False]
+['text':' didn't get click, ignore','line_number':340,'multiline':False]
+['text':' release, reset got_click','line_number':342,'multiline':False]
+['text':' CTRL right mouse button does CTRL-T','line_number':353,'multiline':False]
+['text':' ignore drag&release now','line_number':361,'multiline':False]
+['text':' CTRL only works with left mouse button','line_number':365,'multiline':False]
+['text':' When a modifier is down, ignore drag and release events, as well as','line_number':369,'multiline':False]
+['text':' multiple clicks and the middle mouse button.','line_number':370,'multiline':False]
+['text':' Accept shift-leftmouse drags when 'mousemodel' is "popup.*".','line_number':371,'multiline':False]
+['text':' If the button press was used as the movement command for an operator','line_number':386,'multiline':False]
+['text':' (eg "d<MOUSE>"), or it is the middle button that is held down, ignore','line_number':387,'multiline':False]
+['text':' drag/release events.','line_number':388,'multiline':False]
+['text':' Middle mouse button does a 'put' of the selected text','line_number':397,'multiline':False]
+['text':' If an operator was pending, we don't know what the user wanted','line_number':402,'multiline':False]
+['text':' to do. Go back to normal mode: Clear the operator and beep().','line_number':403,'multiline':False]
+['text':' If visual was active, yank the highlighted text and put it','line_number':410,'multiline':False]
+['text':' before the mouse pointer position.','line_number':411,'multiline':False]
+['text':' In Select mode replace the highlighted text with the clipboard.','line_number':412,'multiline':False]
+['text':' ignore 'mouse' setting next time','line_number':425,'multiline':False]
+['text':' The rest is below jump_to_mouse()','line_number':428,'multiline':False]
+['text':' Middle click in insert mode doesn't move the mouse, just insert the','line_number':434,'multiline':False]
+['text':' contents of a register.  '.' register is special, can't insert that','line_number':435,'multiline':False]
+['text':' with do_put().','line_number':436,'multiline':False]
+['text':' Also paste at the cursor if the current mode isn't in 'mouse' (only','line_number':437,'multiline':False]
+['text':' happens for the GUI).','line_number':438,'multiline':False]
+['text':' Repeat it with CTRL-R CTRL-O r or CTRL-R CTRL-P r','line_number':456,'multiline':False]
+['text':' When dragging or button-up stay in the same window.','line_number':466,'multiline':False]
+['text':' only when initialized','line_number':472,'multiline':False]
+['text':' Check for clicking in the tab page line.','line_number':474,'multiline':False]
+['text':' click in a tab selects that tab page','line_number':488,'multiline':False]
+['text':' double click opens new page','line_number':497,'multiline':False]
+['text':' Go to specified tab page, or next one if not clicking','line_number':504,'multiline':False]
+['text':' on a label.','line_number':505,'multiline':False]
+['text':' It's like clicking on the status line of a window.','line_number':508,'multiline':False]
+['text':' Close the current or specified tab page.','line_number':517,'multiline':False]
+['text':' When 'mousemodel' is "popup" or "popup_setpos", translate mouse events:','line_number':541,'multiline':False]
+['text':' right button up   -> pop-up menu','line_number':542,'multiline':False]
+['text':' shift-left button -> right button','line_number':543,'multiline':False]
+['text':' alt-left button   -> alt-right button','line_number':544,'multiline':False]
+['text':' Ignore right button release events, only shows the popup','line_number':557,'multiline':False]
+['text':' menu on the button down event.','line_number':558,'multiline':False]
+['text':' Ignore right button down and drag mouse events.  Windows','line_number':563,'multiline':False]
+['text':' only shows the popup menu on the button up event.','line_number':564,'multiline':False]
+['text':' Ignore right button release events, only shows the popup','line_number':574,'multiline':False]
+['text':' menu on the button down event.','line_number':575,'multiline':False]
+['text':' First set the cursor position before showing the popup','line_number':582,'multiline':False]
+['text':' menu.','line_number':583,'multiline':False]
+['text':' set MOUSE_MAY_STOP_VIS if we are outside the','line_number':588,'multiline':False]
+['text':' selection or the current window (might have false','line_number':589,'multiline':False]
+['text':' negative here)','line_number':590,'multiline':False]
+['text':' Update before showing popup menu','line_number':638,'multiline':False]
+['text':' ignore release events','line_number':642,'multiline':False]
+['text':' stop Visual mode for a left click in a window, but not when','line_number':664,'multiline':False]
+['text':' on a status line','line_number':665,'multiline':False]
+['text':' Remember the start and end of visual before moving the','line_number':676,'multiline':False]
+['text':' cursor.','line_number':677,'multiline':False]
+['text':' If an operator is pending, ignore all drags and releases until the','line_number':695,'multiline':False]
+['text':' next mouse click.','line_number':696,'multiline':False]
+['text':' When releasing the button let jump_to_mouse() know.','line_number':703,'multiline':False]
+['text':' JUMP!','line_number':707,'multiline':False]
+['text':' A click in the window toolbar has no side effects.','line_number':712,'multiline':False]
+['text':' When jumping to another window, clear a pending operator.  That's a bit','line_number':732,'multiline':False]
+['text':' friendlier than beeping and not jumping to that window.','line_number':733,'multiline':False]
+['text':' open or close a fold at this line','line_number':743,'multiline':False]
+['text':' don't move the cursor if still in the same window','line_number':748,'multiline':False]
+['text':' Set global flag that we are extending the Visual area with mouse','line_number':762,'multiline':False]
+['text':' dragging; temporarily minimize 'scrolloff'.','line_number':763,'multiline':False]
+['text':' In the very first line, allow scrolling one line','line_number':766,'multiline':False]
+['text':' When dragging the mouse above the window, scroll down.','line_number':773,'multiline':False]
+['text':' right click in visual mode','line_number':780,'multiline':False]
+['text':' When ALT is pressed make Visual mode blockwise.','line_number':782,'multiline':False]
+['text':' In Visual-block mode, divide the area in four, pick up the corner','line_number':786,'multiline':False]
+['text':' that is in the quarter that the cursor is in.','line_number':787,'multiline':False]
+['text':' move VIsual to the right column','line_number':799,'multiline':False]
+['text':' save the cursor pos','line_number':800,'multiline':False]
+['text':' restore the cursor','line_number':804,'multiline':False]
+['text':' If the click is before the start of visual, change the start.','line_number':808,'multiline':False]
+['text':' If the click is after the end of visual, change the end.  If','line_number':809,'multiline':False]
+['text':' the click is inside the visual, change the closest side.','line_number':810,'multiline':False]
+['text':' In the same line, compare column number','line_number':817,'multiline':False]
+['text':' In different lines, compare line number','line_number':827,'multiline':False]
+['text':' closest to end','line_number':833,'multiline':False]
+['text':' closest to start','line_number':835,'multiline':False]
+['text':' in the middle line','line_number':837,'multiline':False]
+['text':' If Visual mode started in insert mode, execute "CTRL-O"','line_number':849,'multiline':False]
+['text':' Middle mouse click: Put text before cursor.','line_number':853,'multiline':False]
+['text':' Remember where the paste started, so in edit() Insstart can be set','line_number':880,'multiline':False]
+['text':' to this position','line_number':881,'multiline':False]
+['text':' Ctrl-Mouse click or double click in a quickfix window jumps to the','line_number':888,'multiline':False]
+['text':' error under the mouse pointer.','line_number':889,'multiline':False]
+['text':' quickfix window','line_number':894,'multiline':False]
+['text':' location list window','line_number':896,'multiline':False]
+['text':' ignore drag&release now','line_number':898,'multiline':False]
+['text':' Ctrl-Mouse click (or double click in a help window) jumps to the tag','line_number':902,'multiline':False]
+['text':' under the mouse pointer.','line_number':903,'multiline':False]
+['text':' ignore drag&release now','line_number':910,'multiline':False]
+['text':' Shift-Mouse click searches for the next occurrence of the word under','line_number':913,'multiline':False]
+['text':' the mouse pointer','line_number':914,'multiline':False]
+['text':' MOUSE_RIGHT','line_number':921,'multiline':False]
+['text':' Handle double clicks, unless on status line','line_number':925,'multiline':False]
+['text':' start Select mode if 'selectmode' contains "mouse"','line_number':961,'multiline':False]
+['text':' Double click with ALT pressed makes it blockwise.','line_number':967,'multiline':False]
+['text':' Make sure the clipboard gets updated.  Needed because start and','line_number':978,'multiline':False]
+['text':' end may still be the same, and the selection needs to be owned','line_number':979,'multiline':False]
+['text':' A double click selects a word or a block.','line_number':983,'multiline':False]
+['text':' If the character under the cursor (skipping white space) is','line_number':991,'multiline':False]
+['text':' not a word character, try finding a match and select a (),','line_number':992,'multiline':False]
+['text':' {}, [], #if/#endif, etc. block.','line_number':993,'multiline':False]
+['text':' When not found a match or when dragging: extend to include','line_number':1020,'multiline':False]
+['text':' a word.','line_number':1021,'multiline':False]
+['text':' update the inversion','line_number':1039,'multiline':False]
+['text':' If Visual mode changed show it later.','line_number':1049,'multiline':False]
+['text':' When GUI is active, also move/paste when 'mouse' is empty','line_number':1065,'multiline':False]
+['text':' Mouse took us to another window.  We need to go back to the','line_number':1079,'multiline':False]
+['text':' previous one to stop insert there properly.','line_number':1080,'multiline':False]
+['text':' Restart Insert mode when re-entering the prompt buffer.','line_number':1085,'multiline':False]
+['text':' redraw status lines (in case another window became active)','line_number':1098,'multiline':False]
+['text':'
+ * Common mouse wheel scrolling, shared between Insert mode and NV modes.
+ * Default action is to scroll mouse_vert_step lines (or mouse_hor_step columns
+ * depending on the scroll direction) or one page when Shift or Ctrl is used.
+ * Direction is indicated by "cap->arg":
+ *    K_MOUSEUP    - MSCR_UP
+ *    K_MOUSEDOWN  - MSCR_DOWN
+ *    K_MOUSELEFT  - MSCR_LEFT
+ *    K_MOUSERIGHT - MSCR_RIGHT
+ * "curwin" may have been changed to the window that should be scrolled and
+ * differ from the window that actually has focus.
+ ','line_number':1102,'multiline':True]
+['text':' This window is a terminal window, send the mouse event there.','line_number':1121,'multiline':False]
+['text':' Set "typed" to FALSE to avoid an endless loop.','line_number':1122,'multiline':False]
+['text':' Vertical scrolling','line_number':1128,'multiline':False]
+['text':' whole page up or down','line_number':1131,'multiline':False]
+['text':' whole page up or down','line_number':1138,'multiline':False]
+['text':' Don't scroll more than half the window height.','line_number':1141,'multiline':False]
+['text':' Horizontal scrolling','line_number':1163,'multiline':False]
+['text':'
+ * Insert mode implementation for scrolling in direction "dir", which is
+ * one of the MSCR_ values.
+ ','line_number':1175,'multiline':True]
+['text':' Find the window at the mouse pointer coordinates.','line_number':1210,'multiline':False]
+['text':' NOTE: Must restore "curwin" to "old_curwin" before returning!','line_number':1211,'multiline':False]
+['text':' Don't scroll the current window if the popup menu is visible.','line_number':1225,'multiline':False]
+['text':' Call the common mouse scroll function shared with other modes.','line_number':1236,'multiline':False]
+['text':' If the window actually scrolled and the popup menu may overlay the','line_number':1246,'multiline':False]
+['text':' window, need to redraw it.','line_number':1247,'multiline':False]
+['text':' TODO: Would be more efficient to only redraw the windows that are','line_number':1250,'multiline':False]
+['text':' overlapped by the popup menu.','line_number':1251,'multiline':False]
+['text':'
+ * Return TRUE if "c" is a mouse key.
+ ','line_number':1263,'multiline':True]
+['text':' Code for pseudo mouse event','line_number':1295,'multiline':False]
+['text':' Which mouse button is it?','line_number':1296,'multiline':False]
+['text':' Is it a mouse button click event?','line_number':1297,'multiline':False]
+['text':' Is it a mouse drag event?','line_number':1298,'multiline':False]
+['text':' DRAG without CLICK','line_number':1322,'multiline':False]
+['text':' RELEASE without CLICK','line_number':1324,'multiline':False]
+['text':'
+ * Look up the given mouse code to return the relevant information in the other
+ * arguments.  Return which button is down or was released.
+ ','line_number':1329,'multiline':True]
+['text':' Shouldn't get here','line_number':1345,'multiline':False]
+['text':'
+ * Return the appropriate pseudo mouse event token (KE_LEFTMOUSE etc) based on
+ * the given information about which mouse button is down, and whether the
+ * mouse was clicked, dragged or released.
+ ','line_number':1348,'multiline':True]
+['text':' eg MOUSE_LEFT','line_number':1355,'multiline':False]
+['text':' Trick: a non mappable left click and release has mouse_col -1','line_number':1367,'multiline':False]
+['text':' or added MOUSE_COLOFF.  Used for 'mousefocus' in','line_number':1368,'multiline':False]
+['text':' gui_mouse_moved()','line_number':1369,'multiline':False]
+['text':' not recognized, ignore it','line_number':1384,'multiline':False]
+['text':' KS_MOUSE, KS_NETTERM_MOUSE or KS_DEC_MOUSE','line_number':1400,'multiline':False]
+['text':' KS_MOUSE, KS_NETTERM_MOUSE or KS_DEC_MOUSE','line_number':1449,'multiline':False]
+['text':'
+ * setmouse() - switch mouse on/off depending on current mode and 'mouse'
+ ','line_number':1495,'multiline':True]
+['text':' Should be outside proc, but may break MOUSESHAPE','line_number':1507,'multiline':False]
+['text':' In the GUI the mouse is always enabled.','line_number':1509,'multiline':False]
+['text':' be quick when mouse is off','line_number':1513,'multiline':False]
+['text':' don't switch mouse on when not in raw mode (Ex mode)','line_number':1517,'multiline':False]
+['text':' don't use mouse for ":confirm" or ":!cmd"','line_number':1534,'multiline':False]
+['text':' assume normal mode','line_number':1536,'multiline':False]
+['text':'
+ * Return TRUE if
+ * - "c" is in 'mouse', or
+ * - 'a' is in 'mouse' and "c" is in MOUSE_A, or
+ * - the current buffer is a help file and 'h' is in 'mouse' and we are in a
+ *   normal editing mode (not at hit-return message).
+ ','line_number':1544,'multiline':True]
+['text':'
+ * Return TRUE when 'mousemodel' is set to "popup" or "popup_setpos".
+ ','line_number':1570,'multiline':True]
+['text':' window being dragged','line_number':1579,'multiline':False]
+['text':'
+ * Reset the window being dragged.  To be called when switching tab page.
+ ','line_number':1581,'multiline':True]
+['text':'
+ * Move the cursor to the specified row and column on the screen.
+ * Change current window if necessary.	Returns an integer with the
+ * CURSOR_MOVED bit set if the cursor has moved or unset otherwise.
+ *
+ * The MOUSE_FOLD_CLOSE bit is set when clicked on the '-' in a fold column.
+ * The MOUSE_FOLD_OPEN bit is set when clicked on the '+' in a fold column.
+ *
+ * If flags has MOUSE_FOCUS, then the current window will not be changed, and
+ * if the mouse is outside the window then the text will scroll, or if the
+ * mouse was previously on a status line, then the status line may be dragged.
+ *
+ * If flags has MOUSE_MAY_VIS, then VIsual mode will be started before the
+ * cursor is moved unless the cursor was on a status line.
+ * This function returns one of IN_UNKNOWN, IN_BUFFER, IN_STATUS_LINE or
+ * IN_SEP_LINE depending on where the cursor was clicked.
+ *
+ * If flags has MOUSE_MAY_STOP_VIS, then Visual mode will be stopped, unless
+ * the mouse is on the status line of the same window.
+ *
+ * If flags has MOUSE_DID_MOVE, nothing is done if the mouse didn't move since
+ * the last call.
+ *
+ * If flags has MOUSE_SETPOS, nothing is done, only the current position is
+ * remembered.
+ ','line_number':1590,'multiline':True]
+['text':' used for inclusive operator, can be NULL','line_number':1619,'multiline':False]
+['text':' MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE','line_number':1620,'multiline':False]
+['text':' #lines below bottom of window','line_number':1622,'multiline':False]
+['text':' on separator right of window','line_number':1623,'multiline':False]
+['text':' drag was noticed','line_number':1633,'multiline':False]
+['text':' On button release we may change window focus if positioned on a','line_number':1651,'multiline':False]
+['text':' status line and no dragging happened.','line_number':1652,'multiline':False]
+['text':' before moving the cursor for a left click which is NOT in a status','line_number':1671,'multiline':False]
+['text':' line, stop Visual mode','line_number':1672,'multiline':False]
+['text':' A quick second click may arrive as a double-click, but we use it','line_number':1680,'multiline':False]
+['text':' as a second click in the WinBar.','line_number':1681,'multiline':False]
+['text':' delete the inversion','line_number':1695,'multiline':False]
+['text':' Continue a modeless selection in another window.','line_number':1698,'multiline':False]
+['text':' Continue a modeless selection in a popup window or dragging it.','line_number':1703,'multiline':False]
+['text':' don't close it on release','line_number':1706,'multiline':False]
+['text':' dragging a popup window','line_number':1709,'multiline':False]
+['text':' ugly goto...','line_number':1723,'multiline':False]
+['text':' check if it makes sense','line_number':1730,'multiline':False]
+['text':' find the window where the row is in and adjust "row" and "col" to be','line_number':1733,'multiline':False]
+['text':' relative to top-left of the window','line_number':1734,'multiline':False]
+['text':' Click in a popup window may start dragging or modeless selection,','line_number':1741,'multiline':False]
+['text':' but not much else.','line_number':1742,'multiline':False]
+['text':' Only close on release, otherwise it's not possible to drag or do','line_number':1760,'multiline':False]
+['text':' modeless selection.','line_number':1761,'multiline':False]
+['text':' If the click is in the scrollbar, may scroll up/down.','line_number':1768,'multiline':False]
+['text':' A click in the window toolbar does not enter another window or','line_number':1782,'multiline':False]
+['text':' change Visual highlighting.','line_number':1783,'multiline':False]
+['text':' winpos and height may change in win_enter()!','line_number':1791,'multiline':False]
+['text':' In (or below) status line','line_number':1792,'multiline':False]
+['text':' In separator line','line_number':1799,'multiline':False]
+['text':' The rightmost character of the status line might be a vertical','line_number':1807,'multiline':False]
+['text':' separator character if there is no connecting window to the right.','line_number':1808,'multiline':False]
+['text':' Before jumping to another buffer, or moving the cursor for a left','line_number':1817,'multiline':False]
+['text':' click, stop Visual mode.','line_number':1818,'multiline':False]
+['text':' delete the inversion','line_number':1833,'multiline':False]
+['text':' A click outside the command-line window: Use modeless','line_number':1837,'multiline':False]
+['text':' selection if possible.  Allow dragging the status lines.','line_number':1838,'multiline':False]
+['text':' terminal in popup window: don't jump to another window','line_number':1852,'multiline':False]
+['text':' Only change window focus when not clicking on or dragging the','line_number':1855,'multiline':False]
+['text':' status line.  Do change focus when releasing the mouse button','line_number':1856,'multiline':False]
+['text':' (MOUSE_FOCUS was set above if we dragged first).','line_number':1857,'multiline':False]
+['text':' can make wp invalid!','line_number':1859,'multiline':False]
+['text':' set topline, to be able to check for double click ourselves','line_number':1864,'multiline':False]
+['text':' when entering a terminal window may change state','line_number':1868,'multiline':False]
+['text':' In (or below) status line','line_number':1872,'multiline':False]
+['text':' Don't use start_arrow() if we're in the same window','line_number':1874,'multiline':False]
+['text':' In (or below) status line','line_number':1880,'multiline':False]
+['text':' Don't use start_arrow() if we're in the same window','line_number':1882,'multiline':False]
+['text':' remember topline, needed for double click','line_number':1891,'multiline':False]
+['text':' Drag the status line','line_number':1902,'multiline':False]
+['text':' Cursor didn't move','line_number':1908,'multiline':False]
+['text':' Drag the separator column','line_number':1914,'multiline':False]
+['text':' Cursor didn't move','line_number':1920,'multiline':False]
+['text':' After a click on the window toolbar don't start Visual mode.','line_number':1925,'multiline':False]
+['text':' keep_window_focus must be TRUE','line_number':1929,'multiline':False]
+['text':' before moving the cursor for a left click, stop Visual mode','line_number':1931,'multiline':False]
+['text':' delete the inversion','line_number':1935,'multiline':False]
+['text':' Continue a modeless selection in another window.','line_number':1939,'multiline':False]
+['text':' dragging a popup window','line_number':1948,'multiline':False]
+['text':' continue a modeless selection in a popup window','line_number':1952,'multiline':False]
+['text':' When clicking beyond the end of the window, scroll the screen.','line_number':1961,'multiline':False]
+['text':' Scroll by however many rows outside the window we are.','line_number':1962,'multiline':False]
+['text':' When dragging the mouse, while the text has been scrolled up as','line_number':2042,'multiline':False]
+['text':' far as it goes, moving the mouse in the top line should scroll','line_number':2043,'multiline':False]
+['text':' the text down (done later when recomputing w_topline).','line_number':2044,'multiline':False]
+['text':' Only use ScreenCols[] after the window was redrawn.  Mainly matters','line_number':2058,'multiline':False]
+['text':' for tests, a user would not click before redrawing.','line_number':2059,'multiline':False]
+['text':' Do not use when 'virtualedit' is active.','line_number':2060,'multiline':False]
+['text':' Remember the character under the mouse, it might be a '-' or '+' in','line_number':2064,'multiline':False]
+['text':' the fold column.','line_number':2065,'multiline':False]
+['text':' Check for position outside of the fold column.','line_number':2071,'multiline':False]
+['text':' compute the position in the buffer line from the posn on the screen','line_number':2081,'multiline':False]
+['text':' Start Visual mode before coladvance(), for when 'sel' != "old"','line_number':2085,'multiline':False]
+['text':' if 'selectmode' contains "mouse", start Select mode','line_number':2092,'multiline':False]
+['text':' show visual mode later','line_number':2096,'multiline':False]
+['text':' When clicking after end of line, still need to set correct curswant','line_number':2101,'multiline':False]
+['text':' Binary search to find last char in line','line_number':2105,'multiline':False]
+['text':' Empty line or whole line before w_leftcol,','line_number':2118,'multiline':False]
+['text':' with columns before buffer text','line_number':2119,'multiline':False]
+['text':' Empty line or whole line before w_leftcol','line_number':2124,'multiline':False]
+['text':' Use the virtual column from ScreenCols[], it is accurate also after','line_number':2129,'multiline':False]
+['text':' concealed characters.','line_number':2130,'multiline':False]
+['text':' May still have been TRUE','line_number':2135,'multiline':False]
+['text':' Mouse click beyond end of line','line_number':2136,'multiline':False]
+['text':' Cursor has moved','line_number':2148,'multiline':False]
+['text':'
+ * Make a horizontal scroll to "leftcol".
+ * Return TRUE if the cursor moved, FALSE otherwise.
+ ','line_number':2160,'multiline':True]
+['text':' no horizontal scrolling when wrapping','line_number':2168,'multiline':False]
+['text':' already there','line_number':2171,'multiline':False]
+['text':' When the line of the cursor is too short, move the cursor to the','line_number':2173,'multiline':False]
+['text':' longest visible line.','line_number':2174,'multiline':False]
+['text':'
+ * Normal and Visual modes implementation for scrolling in direction
+ * "cap->arg", which is one of the MSCR_ values.
+ ','line_number':2189,'multiline':True]
+['text':' Find the window at the mouse pointer coordinates.','line_number':2200,'multiline':False]
+['text':' NOTE: Must restore "curwin" to "old_curwin" before returning!','line_number':2201,'multiline':False]
+['text':' cannot scroll this popup window','line_number':2214,'multiline':False]
+['text':' Call the common mouse scroll function shared with other modes.','line_number':2222,'multiline':False]
+['text':'
+ * Mouse clicks and drags.
+ ','line_number':2234,'multiline':True]
+['text':'
+ * Check if typebuf 'tp' contains a terminal mouse code and returns the
+ * modifiers found in typebuf in 'modifiers'.
+ ','line_number':2251,'multiline':True]
+['text':' init for GCC','line_number':2271,'multiline':False]
+['text':' time of previous mouse click','line_number':2282,'multiline':False]
+['text':' time of current mouse click','line_number':2283,'multiline':False]
+['text':' elapsed time in msec','line_number':2284,'multiline':False]
+['text':'
+	 * For xterm we get "<t_mouse>scr", where s == encoded button state:
+	 *	   0x20 = left button down
+	 *	   0x21 = middle button down
+	 *	   0x22 = right button down
+	 *	   0x23 = any button release
+	 *	   0x60 = button 4 down (scroll wheel down)
+	 *	   0x61 = button 5 down (scroll wheel up)
+	 *	add 0x04 for SHIFT
+	 *	add 0x08 for ALT
+	 *	add 0x10 for CTRL
+	 *	add 0x20 for mouse drag (0x40 is drag with left button)
+	 *	add 0x40 for mouse move (0x80 is move, 0x81 too)
+	 *		 0x43 (drag + release) is also move
+	 *  c == column + ' ' + 1 == column + 33
+	 *  r == row + ' ' + 1 == row + 33
+	 *
+	 * The coordinates are passed on through global variables.  Ugly, but
+	 * this avoids trouble with mouse clicks at an unexpected moment and
+	 * allows for mapping them.
+	 ','line_number':2297,'multiline':True]
+['text':' For the GUI and for MS-Windows two bytes each are used for row','line_number':2320,'multiline':False]
+['text':' and column.  Allows for more than 223 columns.','line_number':2321,'multiline':False]
+['text':' not enough coordinates','line_number':2330,'multiline':False]
+['text':' not enough coordinates','line_number':2342,'multiline':False]
+['text':' If the following bytes is also a mouse code and it has the same','line_number':2350,'multiline':False]
+['text':' code, dump this one and get the next.  This makes dragging a','line_number':2351,'multiline':False]
+['text':' whole lot faster.','line_number':2352,'multiline':False]
+['text':' URXVT 1015 mouse reporting mode:','line_number':2379,'multiline':False]
+['text':' Almost identical to xterm mouse mode, except the values are decimal','line_number':2380,'multiline':False]
+['text':' instead of bytes.','line_number':2381,'multiline':False]
+['text':'','line_number':2382,'multiline':False]
+['text':' \033[%d;%d;%dM','line_number':2383,'multiline':False]
+['text':'	       ^-- row','line_number':2384,'multiline':False]
+['text':'	    ^----- column','line_number':2385,'multiline':False]
+['text':'	 ^-------- code','line_number':2386,'multiline':False]
+['text':'','line_number':2387,'multiline':False]
+['text':' SGR 1006 mouse reporting mode:','line_number':2388,'multiline':False]
+['text':' Almost identical to xterm mouse mode, except the values are decimal','line_number':2389,'multiline':False]
+['text':' instead of bytes.','line_number':2390,'multiline':False]
+['text':'','line_number':2391,'multiline':False]
+['text':' \033[<%d;%d;%dM','line_number':2392,'multiline':False]
+['text':'	       ^-- row','line_number':2393,'multiline':False]
+['text':'	    ^----- column','line_number':2394,'multiline':False]
+['text':'	 ^-------- code','line_number':2395,'multiline':False]
+['text':'','line_number':2396,'multiline':False]
+['text':' \033[<%d;%d;%dm	  : mouse release event','line_number':2397,'multiline':False]
+['text':'	       ^-- row','line_number':2398,'multiline':False]
+['text':'	    ^----- column','line_number':2399,'multiline':False]
+['text':'	 ^-------- code','line_number':2400,'multiline':False]
+['text':' when mouse reporting is SGR, add 32 to mouse code','line_number':2409,'multiline':False]
+['text':' The modifiers were the mouse coordinates, not the modifier keys','line_number':2420,'multiline':False]
+['text':' (alt/shift/ctrl/meta) state.','line_number':2421,'multiline':False]
+['text':' This is used below to set held_button.','line_number':2431,'multiline':False]
+['text':'
+	 * Handle old style mouse events.
+	 * Recognize the xterm mouse wheel, but not in the GUI, the
+	 * Linux console with GPM and the MS-DOS or Win32 console
+	 * (multi-clicks use >= 0x60).
+	 ','line_number':2453,'multiline':True]
+['text':' mouse-move event, using MOUSE_DRAG works','line_number':2470,'multiline':False]
+['text':' Keep the mouse_code before it's changed, so that we','line_number':2474,'multiline':False]
+['text':' remember that it was a mouse wheel click.','line_number':2475,'multiline':False]
+['text':' Apparently 0x23 and 0x24 are used by rxvt scroll wheel.','line_number':2486,'multiline':False]
+['text':' And 0x40 and 0x41 are used by some xterm emulator.','line_number':2487,'multiline':False]
+['text':' !UNIX || FEAT_MOUSE_XTERM','line_number':2511,'multiline':False]
+['text':' expect a rather limited sequence like: balancing {','line_number':2517,'multiline':False]
+['text':' \033}6,45\r','line_number':2518,'multiline':False]
+['text':' '6' is the row, 45 is the column','line_number':2519,'multiline':False]
+['text':' FEAT_MOUSE_NET','line_number':2533,'multiline':False]
+['text':'
+	 * JSBTERM Input Model
+	 * \033[0~zw uniq escape sequence
+	 * (L-x)  Left button pressed - not pressed x not reporting
+	 * (M-x)  Middle button pressed - not pressed x not reporting
+	 * (R-x)  Right button pressed - not pressed x not reporting
+	 * (SDmdu)  Single , Double click, m: mouse move, d: button down,
+		      *						   u: button up
+	 *  ###   X cursor position padded to 3 digits
+	 *  ###   Y cursor position padded to 3 digits
+	 * (s-x)  SHIFT key pressed - not pressed x not reporting
+	 * (c-x)  CTRL key pressed - not pressed x not reporting
+	 * \033\\ terminating sequence
+	 ','line_number':2539,'multiline':True]
+['text':' ignore sequence','line_number':2559,'multiline':False]
+['text':' Unknown Result','line_number':2560,'multiline':False]
+['text':' ignore sequence','line_number':2566,'multiline':False]
+['text':' Unknown Result','line_number':2567,'multiline':False]
+['text':' ignore sequence','line_number':2573,'multiline':False]
+['text':' Unknown Result','line_number':2574,'multiline':False]
+['text':' SHIFT key Pressed','line_number':2593,'multiline':False]
+['text':' Not Pressed','line_number':2594,'multiline':False]
+['text':' Not Reporting','line_number':2595,'multiline':False]
+['text':' Unknown Result','line_number':2596,'multiline':False]
+['text':' CTRL key Pressed','line_number':2600,'multiline':False]
+['text':' Not Pressed','line_number':2601,'multiline':False]
+['text':' Not Reporting','line_number':2602,'multiline':False]
+['text':' Unknown Result','line_number':2603,'multiline':False]
+['text':' Double Click','line_number':2611,'multiline':False]
+['text':' Single Click','line_number':2612,'multiline':False]
+['text':' Mouse move','line_number':2619,'multiline':False]
+['text':' Button Down','line_number':2633,'multiline':False]
+['text':' Button Up','line_number':2640,'multiline':False]
+['text':' Unknown Result','line_number':2653,'multiline':False]
+['text':' FEAT_MOUSE_JSB','line_number':2658,'multiline':False]
+['text':'
+	 * The DEC Locator Input Model
+	 * Netterm delivers the code sequence:
+	 *  \033[2;4;24;80&w  (left button down)
+	 *  \033[3;0;24;80&w  (left button up)
+	 *  \033[6;1;24;80&w  (right button down)
+	 *  \033[7;0;24;80&w  (right button up)
+	 * CSI Pe ; Pb ; Pr ; Pc ; Pp & w
+	 * Pe is the event code
+	 * Pb is the button code
+	 * Pr is the row coordinate
+	 * Pc is the column coordinate
+	 * Pp is the third coordinate (page number)
+	 * Pe, the event code indicates what event caused this report
+	 *    The following event codes are defined:
+	 *    0 - request, the terminal received an explicit request for a
+	 *	  locator report, but the locator is unavailable
+	 *    1 - request, the terminal received an explicit request for a
+	 *	  locator report
+	 *    2 - left button down
+	 *    3 - left button up
+	 *    4 - middle button down
+	 *    5 - middle button up
+	 *    6 - right button down
+	 *    7 - right button up
+	 *    8 - fourth button down
+	 *    9 - fourth button up
+	 *    10 - locator outside filter rectangle
+	 * Pb, the button code, ASCII decimal 0-15 indicating which buttons are
+	 *   down if any. The state of the four buttons on the locator
+	 *   correspond to the low four bits of the decimal value, "1" means
+	 *   button depressed
+	 *   0 - no buttons down,
+	 *   1 - right,
+	 *   2 - middle,
+	 *   4 - left,
+	 *   8 - fourth
+	 * Pr is the row coordinate of the locator position in the page,
+	 *   encoded as an ASCII decimal value.  If Pr is omitted, the locator
+	 *   position is undefined (outside the terminal window for example).
+	 * Pc is the column coordinate of the locator position in the page,
+	 *   encoded as an ASCII decimal value.  If Pc is omitted, the locator
+	 *   position is undefined (outside the terminal window for example).
+	 * Pp is the page coordinate of the locator position encoded as an
+	 *   ASCII decimal value.  The page coordinate may be omitted if the
+	 *   locator is on page one (the default).  We ignore it anyway.
+	 ','line_number':2662,'multiline':True]
+['text':' get event status','line_number':2713,'multiline':False]
+['text':' get button status','line_number':2718,'multiline':False]
+['text':' get row status','line_number':2723,'multiline':False]
+['text':' get column status','line_number':2728,'multiline':False]
+['text':' the page parameter is optional','line_number':2731,'multiline':False]
+['text':' position request while unavailable','line_number':2745,'multiline':False]
+['text':' a response to a locator position request includes','line_number':2746,'multiline':False]
+['text':'	the status of all buttons','line_number':2747,'multiline':False]
+['text':' mask off and ignore fourth button','line_number':2748,'multiline':False]
+['text':' fourth button down','line_number':2782,'multiline':False]
+['text':' fourth button up','line_number':2783,'multiline':False]
+['text':' mouse outside of filter rectangle','line_number':2784,'multiline':False]
+['text':' should never occur','line_number':2785,'multiline':False]
+['text':' FEAT_MOUSE_DEC','line_number':2793,'multiline':False]
+['text':' Initial press','line_number':2825,'multiline':False]
+['text':' Not used','line_number':2829,'multiline':False]
+['text':' Release','line_number':2832,'multiline':False]
+['text':' Drag','line_number':2836,'multiline':False]
+['text':' FEAT_MOUSE_PTERM','line_number':2850,'multiline':False]
+['text':' Interpret the mouse code','line_number':2852,'multiline':False]
+['text':'
+	 * If we get a mouse drag or release event when there is no mouse
+	 * button held down (held_button == MOUSE_RELEASE), produce a K_IGNORE
+	 * below.
+	 * (can happen when you hold down two buttons and then let them go, or
+	 * click in the menu bar, but not on a menu, and drag into the text).
+	 ','line_number':2863,'multiline':True]
+['text':'
+	 * Only for Unix, when GUI not active, we handle multi-clicks here, but
+	 * not for GPM mouse events.
+	 ','line_number':2880,'multiline':True]
+['text':'
+		     * Compute the time elapsed since the previous mouse click.
+		     ','line_number':2895,'multiline':True]
+['text':'
+			 * Avoid computing the difference between mouse_time
+			 * and orig_mouse_time for the first click, as the
+			 * difference would be huge and would cause
+			 * multiplication overflow.
+			 ','line_number':2901,'multiline':True]
+['text':' Double click in tab pages line also works','line_number':2918,'multiline':False]
+['text':' when window contents changes.','line_number':2919,'multiline':False]
+['text':'
+     * Translate the actual mouse event into a pseudo mouse event.
+     * First work out what modifiers are to be used.
+     ','line_number':2943,'multiline':True]
+['text':' Work out our pseudo mouse event. Note that MOUSE_RELEASE gets added,','line_number':2960,'multiline':False]
+['text':' then it's not mouse up/down.','line_number':2961,'multiline':False]
+['text':' Make sure the mouse position is valid.  Some terminals may return weird','line_number':2985,'multiline':False]
+['text':' values.','line_number':2986,'multiline':False]
+['text':' Functions also used for popup windows.','line_number':2995,'multiline':False]
+['text':'
+ * Compute the buffer line position from the screen position "rowp" / "colp" in
+ * window "win".
+ * "plines_cache" can be NULL (no cache) or an array with "Rows" entries that
+ * caches the plines_win() result from a previous call.  Entry is zero if not
+ * computed yet.  There must be no text or setting changes since the entry is
+ * put in the cache.
+ * Returns TRUE if the position is below the last line.
+ ','line_number':2997,'multiline':True]
+['text':' Only "Rows" lines are cached, with folding we'll run out of entries','line_number':3032,'multiline':False]
+['text':' and use the slow way.','line_number':3033,'multiline':False]
+['text':' Don't include filler lines in "count"','line_number':3040,'multiline':False]
+['text':' Adjust for 'smoothscroll' clipping the top screen lines.','line_number':3062,'multiline':False]
+['text':' A similar formula is used in curs_columns().','line_number':3063,'multiline':False]
+['text':' Position is in this buffer line.','line_number':3075,'multiline':False]
+['text':' past end of file','line_number':3082,'multiline':False]
+['text':' Compute the column without wrapping.','line_number':3090,'multiline':False]
+['text':' Add skip column for the topline.','line_number':3096,'multiline':False]
+['text':' skip line number and fold column in front of the line','line_number':3104,'multiline':False]
+['text':' if mouse is clicked on the gutter, then inform the netbeans server','line_number':3109,'multiline':False]
+['text':'
+ * Find the window at screen position "*rowp" and "*colp".  The positions are
+ * updated to become relative to the top-left of the window.
+ * When "popup" is FAIL_POPUP and the position is in a popup window then NULL
+ * is returned.  When "popup" is IGNORE_POPUP then do not even check popup
+ * windows.
+ * Returns NULL when something is wrong.
+ ','line_number':3122,'multiline':True]
+['text':' fr_layout == FR_COL','line_number':3175,'multiline':False]
+['text':' When using a timer that closes a window the window might not actually','line_number':3185,'multiline':False]
+['text':' exist.','line_number':3186,'multiline':False]
+['text':'
+ * Convert a virtual (screen) column to a character column.
+ * The first column is zero.
+ ','line_number':3200,'multiline':True]
+['text':' try to advance to the specified column','line_number':3210,'multiline':False]
+['text':'
+ * "getmousepos()" function.
+ ','line_number':3230,'multiline':True]

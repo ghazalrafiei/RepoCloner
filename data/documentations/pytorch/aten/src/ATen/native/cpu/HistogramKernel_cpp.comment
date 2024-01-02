@@ -1,0 +1,92 @@
+['text':' The main algorithm. Expects that the input tensor has shape (N, D).
+ * Expects that bin_edges contains D one-dimensional tensors, each specifying
+ * an increasing sequences of bin edges.
+ *
+ * Interprets the input as N different D-dimensional coordinates and maps them
+ * into the D-dimensional bins defined by bin_edges, accumulating a D-dimensional
+ * histogram in the hist tensor.
+ *
+ * Accepts a template argument of type BIN_SELECTION_ALGORITHM specifying how
+ * the scalars in each dimension should be mapped into the dimension's bins:
+ *
+ *     - LINEAR_INTERPOLATION: each bin edge sequence must form a linear progression.
+ *       Scalars are mapped to bins by computing
+ *           (element - leftmost_edge)/(rightmost_edge - leftmost_edge) * bin_ct
+ *       and truncating the result to an integer.
+ *
+ *       This is the fastest option, but its results may not be perfectly consistent
+ *       with the boundaries specified in bin_edges due to precision issues.
+ *
+ *       Used by torch.histc, which doesn't need consistency with bin_edges as it does not
+ *       return bin_edges. Additionally, this implementation is identical to the legacy histc
+ *       implementation, which was replaced when histogram was implemented.
+ *
+ *     - LINEAR_INTERPOLATION_WITH_LOCAL_SEARCH: Also expects that each bin edge sequence
+ *       forms a linear progression. For each scalar, if 'pos' is the bin selected by the
+ *       LINEAR_INTERPOLATION approach, this approach inspects the boundaries in bin_edges to
+ *       place the scalar into pos - 1, pos, or pos + 1. The "local search" over neighboring
+ *       bins allows for correction of misclassifications due to precision issues (a scalar
+ *       very close to a bin_edge may be misclassified by LINEAR_INTERPOLATION).
+ *
+ *       Should produce the same output as the general case BINARY_SEARCH, but run about
+ *       3x faster asymptotically.
+ *
+ *       Used by torch.histogram for cases in which bin_edges is constructed using
+ *       torch.linspace. The behavior of LINEAR_INTERPOLATION may not perfectly align
+ *       with linspace bin_edges due to precision issues. torch.histogram returns both
+ *       the hist and bin_edges tensors as output, so the "local search" is needed to
+ *       keep its output internally consistent.
+ *
+ *     - BINARY_SEARCH: Handles torch.histogram's general case by by searching over the
+ *       elements of bin_edges. Implemented using std::upper_bound.
+ *
+ * See discussion at https://github.com/pytorch/pytorch/pull/58780#discussion_r648604866
+ * for further details on relative performance of the bin selection algorithms.
+ ','line_number':29,'multiline':True]
+['text':' hist is an empty tensor in this case; nothing to do here','line_number':97,'multiline':False]
+['text':' Constructs a c10::optional<TensorAccessor> containing an accessor iff
+     * the optional weight tensor has a value.
+     ','line_number':103,'multiline':True]
+['text':' Parallelizes processing of input using at::parallel_for.
+     * Each thread accumulates a local result into their own slice of
+     * thread_histograms which get summed together at the end.
+     ','line_number':123,'multiline':True]
+['text':' View only this thread's local results','line_number':141,'multiline':False]
+['text':' Skips elements which fall outside the specified bins and NaN elements','line_number':152,'multiline':False]
+['text':' Handles the general case via binary search on the bin edges.','line_number':161,'multiline':False]
+['text':' When bin_edges is known to be a linear progression, maps elt to
+                     * the appropriate bin via simple division.
+                     ','line_number':166,'multiline':True]
+['text':' Ensures consistency with bin_edges by checking the bins to the left and right
+                     * of the selected position. Necessary for cases in which an element very close
+                     * to a bin edge may be misclassified by simple division.
+                     ','line_number':173,'multiline':True]
+['text':' Unlike other bins, the rightmost bin includes its right boundary','line_number':187,'multiline':False]
+['text':' In the unweighted case, the default weight is 1','line_number':196,'multiline':False]
+['text':'dim=','line_number':204,'multiline':True]
+['text':' Some pre- and post- processing steps for the main algorithm.
+ * Initializes hist to 0, calls into the main algorithm, and normalizes output if necessary.
+ ','line_number':207,'multiline':True]
+['text':' Divides each bin's value by the total count/weight in all bins,
+     * and by the bin's volume.
+     ','line_number':235,'multiline':True]
+['text':' For each dimension, divides each bin's value
+          * by the bin's length in that dimension.
+          ','line_number':242,'multiline':True]
+['text':' Used to reshape bin_lengths to align with the corresponding dimension of hist.','line_number':248,'multiline':False]
+['text':' The general implementation of the histogram kernel. Maps each element of the input tensor
+ * to its corresponding bin by performing a binary search over the elements of bin_edges.
+ *
+ * Refer to histogramdd_out_cpu_template for more details.
+ ','line_number':257,'multiline':True]
+['text':' A faster version of the histogram kernel for cases in which bin_edges are known
+ * to form a linear progression.
+ *
+ * Refer to histogramdd_out_cpu_template for more details.
+ ','line_number':267,'multiline':True]
+['text':' histogramdd codepath: both hist and bin_edges are eventually returned as output,','line_number':275,'multiline':False]
+['text':' so we'll keep them consistent','line_number':276,'multiline':False]
+['text':' histc codepath: bin_edges are not returned to the caller','line_number':280,'multiline':False]
+['text':' Calls aminmax on input with dim=0, reducing all but the innermost dimension of input.','line_number':289,'multiline':False]
+['text':' namespace','line_number':309,'multiline':False]
+['text':' namespace at::native','line_number':315,'multiline':False]

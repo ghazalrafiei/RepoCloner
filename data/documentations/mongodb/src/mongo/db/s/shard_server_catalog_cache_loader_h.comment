@@ -1,0 +1,249 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Shard implementation of the CatalogCacheLoader used by the CatalogCache. Retrieves chunk metadata
+ * for the CatalogCache on shards.
+ *
+ * If a shard primary, retrieves chunk metadata from the config server and maintains a persisted
+ * copy of that chunk metadata so shard secondaries can access the metadata. If a shard secondary,
+ * retrieves chunk metadata from the shard persisted chunk metadata.
+ ','line_number':62,'multiline':True]
+['text':'*
+     * Initializes internal state so that the loader behaves as a primary or secondary. This can
+     * only be called once, when the sharding state is initialized.
+     ','line_number':78,'multiline':True]
+['text':'*
+     * Updates internal state so that the loader can start behaving like a secondary.
+     ','line_number':84,'multiline':True]
+['text':'*
+     * Updates internal state so that the loader can start behaving like a primary.
+     ','line_number':89,'multiline':True]
+['text':'*
+     * Interrupts ongoing refreshes to prevent secondaries from waiting for opTimes from wrong terms
+     * in case of rollback. Primaries must step down before going through rollback, so this should
+     * only be run on secondaries.
+     ','line_number':96,'multiline':True]
+['text':'*
+     * Sets any notifications waiting for this version to arrive and invalidates the catalog cache's
+     * chunk metadata for collection 'nss' so that the next caller provokes a refresh.
+     ','line_number':103,'multiline':True]
+['text':' Differentiates the server's role in the replica set so that the chunk loader knows whether to','line_number':120,'multiline':False]
+['text':' load metadata locally or remotely.','line_number':121,'multiline':False]
+['text':'*
+     * This represents an update task for the persisted chunk metadata. The task will either be to
+     * apply a set up updated chunks to the shard persisted metadata store or to drop the persisted
+     * metadata for a specific collection.
+     ','line_number':124,'multiline':True]
+['text':'*
+         * Initializes a task for either dropping or updating the persisted metadata for the
+         * associated collection. Which type of task is determined by the Status of
+         * 'statusWithCollectionAndChangedChunks', whether it is NamespaceNotFound or OK.
+         *
+         * Note: statusWithCollectionAndChangedChunks must always be NamespaceNotFound or
+         * OK, otherwise the constructor will invariant because there is no task to complete.
+         *
+         *
+         * 'collectionAndChangedChunks' is only initialized if 'dropped' is false.
+         * 'minimumQueryVersion' sets 'minQueryVersion'.
+         * 'maxQueryVersion' is either set to the highest chunk version in
+         * 'collectionAndChangedChunks' or ChunkVersion::UNSHARDED().
+         ','line_number':134,'multiline':True]
+['text':' Always-incrementing task number to uniquely identify different tasks','line_number':153,'multiline':False]
+['text':' Chunks and Collection updates to be applied to the shard persisted metadata store.','line_number':156,'multiline':False]
+['text':' The highest version that the loader had before going to the config server's metadata','line_number':159,'multiline':False]
+['text':' store for updated chunks.','line_number':160,'multiline':False]
+['text':' Used by the CollAndChunkTaskList below to enforce consistent updates are applied.','line_number':161,'multiline':False]
+['text':' Either the highest chunk version in 'collectionAndChangedChunks' or the same as','line_number':164,'multiline':False]
+['text':' 'minQueryVersion' if 'dropped' is true.','line_number':165,'multiline':False]
+['text':' Used by the CollAndChunkTaskList below to enforce consistent updates are','line_number':166,'multiline':False]
+['text':' applied.','line_number':167,'multiline':False]
+['text':' Indicates whether the collection metadata must be cleared.','line_number':170,'multiline':False]
+['text':' The term in which the loader scheduled this task.','line_number':173,'multiline':False]
+['text':'*
+     * A list (work queue) of updates to apply to the shard persisted metadata store for a specific
+     * collection. Enforces that tasks that are added to the list are either consistent:
+     *
+     *     tasks[i].minQueryVersion == tasks[i-1].maxQueryVersion.
+     *
+     * or applying a complete update from the minumum version, where
+     *
+     *     minQueryVersion == ChunkVersion::UNSHARDED().
+     ','line_number':191,'multiline':True]
+['text':'*
+         * Adds 'task' to the back of the 'tasks' list.
+         *
+         * If 'task' is a drop task, clears 'tasks' except for the front active task, so that we
+         * don't waste time applying changes we will just delete. If the one remaining task in the
+         * list is already a drop task, the new one isn't added because it is redundant.
+         ','line_number':205,'multiline':True]
+['text':'*
+         * Checks whether 'term' matches the term of the latest task in the task list. This is
+         * useful to check whether the task list has outdated data that's no longer valid to use in
+         * the current/new term specified by 'term'.
+         ','line_number':240,'multiline':True]
+['text':'*
+         * Gets the last task's highest version -- this is the most up to date version.
+         ','line_number':247,'multiline':True]
+['text':'*
+         * Iterates over the task list to retrieve the enqueued metadata. Only retrieves
+         * collects data from tasks that have terms matching the specified 'term'.
+         ','line_number':252,'multiline':True]
+['text':' Condition variable which will be signaled whenever the active task from the tasks list is','line_number':264,'multiline':False]
+['text':' completed. Must be used in conjunction with the loader's mutex.','line_number':265,'multiline':False]
+['text':'*
+     * This represents an update task for the persisted database metadata. The task will either be
+     * to persist an update to the shard persisted metadata store or to drop the persisted
+     * metadata for a specific database.
+     ','line_number':269,'multiline':True]
+['text':'*
+         * Initializes a task for either dropping or updating the persisted metadata for the
+         * associated database. Which type of task is determined by the Status of 'swDatabaseType',
+         * whether it is NamespaceNotFound or OK.
+         *
+         * Note: swDatabaseType must always be NamespaceNotFound or OK, otherwise the constructor
+         * will invariant because there is no task to complete.
+         ','line_number':279,'multiline':True]
+['text':' Always-incrementing task number to uniquely identify different tasks','line_number':289,'multiline':False]
+['text':' If boost::none, indicates this task is for a drop. Otherwise, contains the refreshed','line_number':292,'multiline':False]
+['text':' database entry.','line_number':293,'multiline':False]
+['text':' The term in which the loader scheduled this task.','line_number':296,'multiline':False]
+['text':'*
+     * A list (work queue) of updates to apply to the shard persisted metadata store for a specific
+     * database.
+     ','line_number':300,'multiline':True]
+['text':'*
+         * Adds 'task' to the back of the 'tasks' list.
+         *
+         * If 'task' is a drop task, clears 'tasks' except for the front active task, so that we
+         * don't waste time applying changes we will just delete. If the one remaining task in the
+         * list is already a drop task, the new one isn't added because it is redundant.
+         ','line_number':308,'multiline':True]
+['text':' Condition variable which will be signaled whenever the active task from the tasks list is','line_number':348,'multiline':False]
+['text':' completed. Must be used in conjunction with the loader's mutex.','line_number':349,'multiline':False]
+['text':'*
+     * Forces the primary to refresh its metadata for 'nss' and waits until this node's metadata
+     * has caught up to the primary's.
+     *
+     * Returns chunk metadata from this node's persisted metadata store.
+     ','line_number':356,'multiline':True]
+['text':'*
+     * Refreshes chunk metadata from the config server's metadata store, and schedules maintenance
+     * of the shard's persisted metadata store with the latest updates retrieved from the config
+     * server.
+     *
+     * Returns the metadata retrieved locally from the shard persisted metadata
+     * store and any in-memory enqueued tasks to update that store that match the given term,
+     * greater then or equal to the given chunk version.
+     *
+     * Only run on the shard primary.
+     ','line_number':367,'multiline':True]
+['text':'*
+     * Forces the primary to refresh its metadata for 'dbName' and waits until this node's metadata
+     * has caught up to the primary's.
+     * Returns the database version from this node's persisted metadata store.
+     ','line_number':384,'multiline':True]
+['text':'*
+     * Refreshes db version from the config server's metadata store, and schedules maintenance
+     * of the shard's persisted metadata store with the latest updates retrieved from the config
+     * server.
+     *
+     * Returns the metadata retrieved locally from the shard persisted metadata to update that
+     * store.
+     *
+     * Only run on the shard primary.
+     ','line_number':392,'multiline':True]
+['text':'*
+     * Loads chunk metadata from the shard persisted metadata store and any in-memory tasks with
+     * terms matching 'term' enqueued to update that store, GTE to 'catalogCacheSinceVersion'.
+     *
+     * Will return an empty CollectionAndChangedChunks object if no metadata is found (collection
+     * was dropped).
+     *
+     * Only run on the shard primary.
+     ','line_number':406,'multiline':True]
+['text':'*
+     * Loads chunk metadata from all in-memory tasks enqueued to update the shard persisted metadata
+     * store for collection 'nss' that is GTE 'catalogCacheSinceVersion'. If
+     * 'catalogCacheSinceVersion's epoch does not match that of the metadata enqueued, returns all
+     * metadata. Ignores tasks with terms that do not match 'term': these are no longer valid.
+     *
+     * The bool returned in the pair indicates whether there are any tasks enqueued. If none are, it
+     * is false. If it is true, and the CollectionAndChangedChunks returned is empty, this indicates
+     * a drop was enqueued and there is no metadata.
+     *
+     * Only run on the shard primary.
+     ','line_number':421,'multiline':True]
+['text':'*
+     * First ensures that this server is a majority primary in the case of a replica set with two
+     * primaries: we do not want a minority primary to see majority side routing table changes for
+     * which the minority does not have the corresponding data.
+     *
+     * Then adds 'task' to the task list for 'nss'. If this creates a new task list, then
+     * '_runTasks' is started on another thread to execute the tasks.
+     *
+     * Only run on the shard primary.
+     ','line_number':436,'multiline':True]
+['text':'*
+     * Schedules tasks in the 'nss' task list to execute until the task list is depleted.
+     *
+     * Only run on the shard primary.
+     ','line_number':453,'multiline':True]
+['text':'*
+     * Executes the task at the front of the task list for 'nss'. The task will either drop 'nss's
+     * metadata or apply a set of updates.
+     *
+     * Only run on the shard primary.
+     ','line_number':462,'multiline':True]
+['text':'*
+     * Sends _flushRoutingTableCacheUpdates to the primary to force it to refresh its routing table
+     * for collection 'nss' and then waits for the refresh to replicate to this node. Returns a
+     * notification that can be used to wait for the refreshing flag to be set to true in the
+     * config.collections entry to provide a consistent view of config.chunks.
+     ','line_number':472,'multiline':True]
+['text':'*
+     * Attempts to read the collection and chunk metadata since 'version' from the shard persisted
+     * metadata store. Continues to retry reading the metadata until a complete diff is read
+     * uninterrupted by concurrent updates.
+     *
+     * Returns a complete metadata update since 'version', which when applied to a complete metadata
+     * store up to 'version' again produces a complete metadata store. Throws on error --
+     * NamespaceNotFound error means the collection does not exist.
+     ','line_number':482,'multiline':True]
+['text':' Loader used by the shard primary to retrieve the authoritative routing metadata from the','line_number':497,'multiline':False]
+['text':' config server','line_number':498,'multiline':False]
+['text':' Thread pool used to run blocking tasks which perform disk reads and writes','line_number':501,'multiline':False]
+['text':' Registry of notifications for changes happening to the shard's on-disk routing information','line_number':504,'multiline':False]
+['text':' Protects the class state below','line_number':507,'multiline':False]
+['text':' True if shutDown was called.','line_number':510,'multiline':False]
+['text':' This value is bumped every time the set of currently scheduled tasks should no longer be','line_number':513,'multiline':False]
+['text':' running. This includes, replica set state transitions and shutdown.','line_number':514,'multiline':False]
+['text':' Indicates whether this server is the primary or not, so that the appropriate loading action','line_number':517,'multiline':False]
+['text':' can be taken.','line_number':518,'multiline':False]
+['text':' The collection of operation contexts in use by all threads.','line_number':521,'multiline':False]
+['text':' namespace mongo','line_number':528,'multiline':False]

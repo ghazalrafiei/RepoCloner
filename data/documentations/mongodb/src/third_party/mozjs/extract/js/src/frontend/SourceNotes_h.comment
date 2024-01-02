@@ -1,0 +1,95 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' MOZ_ASSERT','line_number':10,'multiline':False]
+['text':' std::min','line_number':12,'multiline':False]
+['text':' ptrdiff_t, size_t','line_number':13,'multiline':False]
+['text':' int8_t, uint8_t, uint32_t','line_number':14,'multiline':False]
+['text':' js::{Bit, BitMask}','line_number':16,'multiline':False]
+['text':'
+ * Source notes generated along with bytecode for decompiling and debugging.
+ * A source note is a uint8_t with 4 bits of type and 4 of offset from the pc
+ * of the previous note. If 4 bits of offset aren't enough, extended delta
+ * notes (XDelta) consisting of 1 set high order bit followed by 7 offset
+ * bits are emitted before the next note. Some notes have operand offsets
+ * encoded immediately after them, in note bytes or byte-triples.
+ *
+ *                 Source Note               Extended Delta
+ *              +7-6-5-4+3-2-1-0+           +7+6-5-4-3-2-1-0+
+ *              | type  | delta |           |1| ext-delta   |
+ *              +-------+-------+           +-+-------------+
+ *
+ * At most one "gettable" note (i.e., a note of type other than NewLine,
+ * ColSpan, SetLine, and XDelta) applies to a given bytecode.
+ *
+ * NB: the js::SrcNote::specs_ array is indexed by this enum, so its
+ * initializers need to match the order here.
+ ','line_number':20,'multiline':True]
+['text':' Terminates a note vector. ','line_number':41,'multiline':True]
+['text':' += or another assign-op follows. ','line_number':43,'multiline':True]
+['text':' All notes above here are "gettable".  See SrcNote::isGettable below. ','line_number':45,'multiline':True]
+['text':' Bytecode follows a source newline. ','line_number':47,'multiline':True]
+['text':' Bytecode is a recommended breakpoint. ','line_number':50,'multiline':True]
+['text':' Bytecode is the first in a new steppable area. ','line_number':52,'multiline':True]
+['text':' 8-15 (0b1xxx) are for extended delta notes. ','line_number':55,'multiline':True]
+['text':' Note: need to add a new source note? If there's no Unused* note left,','line_number':58,'multiline':False]
+['text':' consider bumping SrcNoteType::XDelta to 12-15 and change','line_number':59,'multiline':False]
+['text':' SrcNote::XDeltaBits from 7 to 6.','line_number':60,'multiline':False]
+['text':' number of operands','line_number':136,'multiline':False]
+['text':' name for disassembly/debugging output','line_number':150,'multiline':False]
+['text':'
+   * Operand fields follow certain notes and are frequency-encoded: an operand
+   * in [0,0x7f] consumes one byte, an operand in [0x80,0x7fffffff] takes four,
+   * and the high bit of the first byte is set.
+   ','line_number':172,'multiline':True]
+['text':' The column span (the diff between the column corresponds to the','line_number':192,'multiline':False]
+['text':' current op and last known column).','line_number':193,'multiline':False]
+['text':'
+     * SrcNoteType::ColSpan values represent changes to the column number.
+     * Colspans are signed: negative changes arise in describing constructs like
+     * for(;;) loops, that generate code in non-source order. (Negative colspans
+     * also have a history of indicating bugs in updating ParseNodes' source
+     * locations.)
+     *
+     * We store colspans in operands. However, unlike normal operands, colspans
+     * are signed, so we truncate colspans (toOperand) for storage as
+     * operands, and sign-extend operands into colspans when we read them
+     * (fromOperand).
+     ','line_number':199,'multiline':True]
+['text':' There should be no bits set outside the field we're going to','line_number':214,'multiline':False]
+['text':' sign-extend.','line_number':215,'multiline':False]
+['text':' Sign-extend the least significant OperandBits bits.','line_number':218,'multiline':False]
+['text':' Truncate the two's complement colspan, for storage as an operand.','line_number':227,'multiline':False]
+['text':' When we read this back, we'd better get the value we stored.','line_number':230,'multiline':False]
+['text':' The file-absolute source line number of the current op.','line_number':241,'multiline':False]
+['text':' SetLine ','line_number':257,'multiline':True]
+['text':' Write a source note with given `type`, and `delta` from the last source','line_number':275,'multiline':False]
+['text':' note. This writes the source note itself, and `XDelta`s if necessary.','line_number':276,'multiline':False]
+['text':'','line_number':277,'multiline':False]
+['text':' This doesn't write or allocate space for operands.','line_number':278,'multiline':False]
+['text':' If the source note is not nullary, the caller is responsible for calling','line_number':279,'multiline':False]
+['text':' `writeOperand` immediately after this.','line_number':280,'multiline':False]
+['text':'','line_number':281,'multiline':False]
+['text':' `allocator` is called with the number of bytes required to store the notes.','line_number':282,'multiline':False]
+['text':' `allocator` can be called multiple times for each source note.','line_number':283,'multiline':False]
+['text':' The last call corresponds to the source note for `type`.','line_number':284,'multiline':False]
+['text':' Write source note operand.','line_number':305,'multiline':False]
+['text':'','line_number':306,'multiline':False]
+['text':' `allocator` is called with the number of bytes required to store the','line_number':307,'multiline':False]
+['text':' operand.  `allocator` is called only once.','line_number':308,'multiline':False]
+['text':' Return the operand of source note `sn`, specified by `which`.','line_number':352,'multiline':False]
+['text':' static ','line_number':367,'multiline':True]
+['text':' static ','line_number':372,'multiline':True]
+['text':' Iterate over SrcNote array, until it hits terminator.','line_number':378,'multiline':False]
+['text':'','line_number':379,'multiline':False]
+['text':' Usage:','line_number':380,'multiline':False]
+['text':'   for (SrcNoteIterator iter(notes); !iter.atEnd(); ++iter) {','line_number':381,'multiline':False]
+['text':'     auto sn = *iter; // `sn` is `const SrcNote*` typed.','line_number':382,'multiline':False]
+['text':'     ...','line_number':383,'multiline':False]
+['text':'   }','line_number':384,'multiline':False]
+['text':' Pre-increment','line_number':416,'multiline':False]
+['text':' Post-increment','line_number':422,'multiline':False]
+['text':' namespace js','line_number':426,'multiline':False]
+['text':' frontend_SourceNotes_h ','line_number':428,'multiline':True]

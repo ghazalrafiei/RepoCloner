@@ -1,0 +1,183 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' The Intel C library typedefs wchar_t, but it is a distinct fundamental type','line_number':39,'multiline':False]
+['text':' in C++, so we #define _WCHAR_T here to prevent the library from trying to typedef.','line_number':40,'multiline':False]
+['text':' IWYU pragma: keep','line_number':51,'multiline':False]
+['text':'*
+ * Returns the number of characters consumed from input string. If unable to parse,
+ * it returns 0.
+ *
+ * Input must be of these forms:
+ *  - Valid decimal (standard or scientific notation): /(?i)^[+-]?\d*(.\d+)?(e[+-]?\d+)?$/
+ *  - NaN: /(?i)^[+-]?nan$/
+ *  - Infinity: /(?i)^[+-]?inf(inity)?$)
+ ','line_number':61,'multiline':True]
+['text':' Check for NaN and Infinity','line_number':77,'multiline':False]
+['text':' Input starting with non digit','line_number':91,'multiline':False]
+['text':' Check coefficient, i.e. the part before the e','line_number':104,'multiline':False]
+['text':'i = 0','line_number':107,'multiline':True]
+['text':' Override inexact/overflow flag set by the intel library','line_number':127,'multiline':False]
+['text':' Input is valid if we've parsed the entire string','line_number':131,'multiline':False]
+['text':' String with empty coefficient and non-empty exponent','line_number':136,'multiline':False]
+['text':' Check exponent','line_number':142,'multiline':False]
+['text':' Determine system's endian ordering in order to construct decimal 128 values directly','line_number':169,'multiline':False]
+['text':' The Intel library uses long long for BID_UINT128s parts, which on some','line_number':174,'multiline':False]
+['text':' systems is longer than a uint64_t.  We need to cast down, although there','line_number':175,'multiline':False]
+['text':' will not be data loss.','line_number':176,'multiline':False]
+['text':'*
+ * This helper function creates a library specific type for the
+ * IntelRDFPMathLib20U1 library from Decimal128's _value
+ ','line_number':182,'multiline':True]
+['text':' namespace','line_number':192,'multiline':False]
+['text':'*
+ * Quantize a doubleValue argument to a Decimal128 with exactly 15 digits
+ * of precision.
+ *
+ * To highlight the motivation for this function, consider doubleValue = 0.1.
+ * The quantity 0.1 does not have an exact respresentation as a double.
+ * The actual value stored in the 64-bit type is 0.1000000000000000055511...
+ *
+ * Although imprecise, the double type does guarantee a minimum of 15 digits
+ * of decimal precision. When casting the double to a decimal type, we choose
+ * to only appreciate the double's first 15 digits and round accordingly.
+ *
+ * To perform this operation, doubleValue is converted to a decimal and then quantized
+ * with the appropriate quantum (Q) to yield exactly 15 digits of precision.
+ * For example,
+ *     doubleValue = 0.1
+ *     dec128 = Decimal128(doubleValue)  <== 0.1000000000000000055511151231257827
+ *     Q = 1E-15
+ *     dec128.quantize(Q)
+ *     ==> 0.100000000000000
+ *
+ * The value to quantize dec128 on (Q) is related to the base 10 exponent of the rounded
+ * doubleValue,
+ *     Q = 10 ** (floor(log10(doubleValue rounded to 15 decimal digits)) - 14)
+ *
+ *
+ * ===============================================================================
+ *
+ * Convert a double's base 2 exponent to base 10 using integer arithmetic.
+ *
+ * Given doubleValue with exponent base2Exp, we would like to find base10Exp such that:
+ *   (1) 10**base10Exp > |doubleValue rounded to 15 decimal digits|
+ *   (2) 10**(base10Exp-1) <= |doubleValue rounded to 15 decimal digits|
+ *
+ * Given a double precision number of the form 2**E, we can compute base10Exp such that these
+ * conditions hold for 2**E. However, because the absolute value of doubleValue maybe up to a
+ * factor of two higher, the required base10Exp may be 1 higher. Exactly knowing in which case we
+ * are would require knowing how the double value will round, so just try with the lowest
+ * possible base10Exp, and retry if we need to increase the exponent by 1. It is important to first
+ * try the lower exponent, as the other way around might unnecessarily lose a significant digit,
+ * as in 0.9999999999999994 (15 nines) -> 1.00000000000000 (14 zeros) instead of 0.999999999999999
+ * (15 nines).
+ *
+ *    +-------------+-------------------+----------------------+---------------------------+
+ *    | doubleValue |      base2Exp     |  computed base10Exp  | Q                         |
+ *    +-------------+-------------------+----------------------+---------------------------+
+ *    | 100000      |                16 |                    4 | 10**(5 - 14) <= Retry     |
+ *    | 500000      |                18 |                    5 | 10**(5 - 14)              |
+ *    | 999999      |                19 |                    5 | 10**(5 - 14)              |
+ *    | .00001      |               -17 |                   -6 | 10**(5 - 14) <= Retry     |
+ *    | .00005      |               -15 |                   -5 | 10**(5 - 14)              |
+ *    | .00009      |               -14 |                   -5 | 10**(5 - 14)              |
+ *    +-------------+-------------------+----------------------+---------------------------+
+ ','line_number':194,'multiline':True]
+['text':' If the original number was zero, infinity, or NaN, there's no need to quantize','line_number':255,'multiline':False]
+['text':' Get the base2 exponent from doubleValue.','line_number':262,'multiline':False]
+['text':' As frexp normalizes doubleValue between 0.5 and 1.0 rather than 1.0 and 2.0, adjust.','line_number':266,'multiline':False]
+['text':' We will use base10Exp = base2Exp * 30103 / (100*1000) as lowerbound (using integer division).','line_number':270,'multiline':False]
+['text':'','line_number':271,'multiline':False]
+['text':' This formula is derived from the following, with base2Exp the binary exponent of doubleValue:','line_number':272,'multiline':False]
+['text':'   (1) 10**(base2Exp * log10(2)) == 2**base2Exp','line_number':273,'multiline':False]
+['text':'   (2) 0.30103 closely approximates log10(2)','line_number':274,'multiline':False]
+['text':'','line_number':275,'multiline':False]
+['text':' Exhaustive testing using Python shows :','line_number':276,'multiline':False]
+['text':'     { base2Exp * 30103 / (100 * 1000) == math.floor(math.log10(2**base2Exp))','line_number':277,'multiline':False]
+['text':'       for base2Exp in xrange(-1074, 1023) } == { True }','line_number':278,'multiline':False]
+['text':' As integer division truncates, rather than rounds down (as in Python), adjust accordingly.','line_number':281,'multiline':False]
+['text':' Check if the quantization was done correctly: _value stores exactly 15','line_number':288,'multiline':False]
+['text':' decimal digits of precision (15 digits can fit into the low 64 bits of the decimal)','line_number':289,'multiline':False]
+['text':' A 1 with 14 zeros','line_number':290,'multiline':False]
+['text':' 15 nines','line_number':291,'multiline':False]
+['text':' If we didn't precisely get 15 digits of precision, the original base 10 exponent','line_number':293,'multiline':False]
+['text':' guess was 1 off, so quantize once more with base10Exp + 1','line_number':294,'multiline':False]
+['text':' The decimal must have exactly 15 digits of precision','line_number':299,'multiline':False]
+['text':' The intel library function requires a char * while c_str() returns a const char*.','line_number':317,'multiline':False]
+['text':' We're using const_cast here since the library function should not modify the input.','line_number':318,'multiline':False]
+['text':' If the decimal is a variant of NaN (i.e. sNaN, -NaN, +NaN, etc...) or a variant of','line_number':611,'multiline':False]
+['text':' Inf (i.e. +Inf, Inf, -Inf), return either NaN, Infinity, or -Infinity','line_number':612,'multiline':False]
+['text':' mantissa sign ','line_number':623,'multiline':True]
+['text':' mantissa ','line_number':623,'multiline':True]
+['text':' scientific E ','line_number':624,'multiline':True]
+['text':' exponent sign ','line_number':624,'multiline':True]
+['text':' exponent ','line_number':624,'multiline':True]
+['text':' null terminator ','line_number':625,'multiline':True]
+['text':'*
+     * Use the library's defined to_string method, which returns a string composed of a
+     * sign ('+' or '-')
+     * 1 to 34 decimal digits (no leading zeros)
+     * the character 'E'
+     * sign ('+' or '-')
+     * 1 to 4 decimal digits (no leading zeros)
+     * For example: +10522E-3
+     ','line_number':627,'multiline':True]
+['text':' Calculate the precision and exponent of the number and output it in a readable manner','line_number':642,'multiline':False]
+['text':' Get the value of the exponent, start at 2 to ignore the E and the sign','line_number':648,'multiline':False]
+['text':' Get the total precision of the number, i.e. the length of the coefficient','line_number':655,'multiline':False]
+['text':' mantissa sign ','line_number':656,'multiline':True]
+['text':' Initially result is set to equal just the sign of the dec128 string','line_number':659,'multiline':False]
+['text':' For formatting, leave off the sign if it is positive','line_number':660,'multiline':False]
+['text':' Absolute value of the exponent','line_number':724,'multiline':False]
+['text':' Pre-pend 0's before the coefficient as necessary','line_number':728,'multiline':False]
+['text':' Copy over the digits in the coefficient','line_number':737,'multiline':False]
+['text':'*
+ * The following static const variables are used to mathematically produce
+ * frequently needed Decimal128 constants.
+ ','line_number':1008,'multiline':True]
+['text':' Get the representation of 1 with 17 zeros (half of decimal128's 34 digit precision)','line_number':1014,'multiline':False]
+['text':' Get the low 64 bits of 34 consecutive decimal 9's','line_number':1016,'multiline':False]
+['text':' t17 * 17 gives 1 with 34 0's, so subtract 1 to get all 9's == 4003012203950112767','line_number':1017,'multiline':False]
+['text':' Using the computed constant avoids a MSVC warning.','line_number':1018,'multiline':False]
+['text':' Computed by running the calculations in Python, and verified with static_assert.','line_number':1019,'multiline':False]
+['text':' Mod t17 by 2^32 to get the low 32 bits of t17's binary representation','line_number':1024,'multiline':False]
+['text':' Divide t17 by 2^32 to get the high 32 bits of t17's binary representation','line_number':1026,'multiline':False]
+['text':' Multiply t17 by t17 and keep the high 64 bits by distributing the operation to','line_number':1028,'multiline':False]
+['text':' t17hi32*t17hi32 + 2*t17hi32*t17lo32 + t17lo32*t17lo32 where the 2nd term','line_number':1029,'multiline':False]
+['text':' is shifted right by 32 and the 3rd term by 64 (which effectively drops the 3rd term)','line_number':1030,'multiline':False]
+['text':' namespace','line_number':1034,'multiline':False]
+['text':' (t34hi64 << 64) + t34lo64 == 1e34 - 1','line_number':1036,'multiline':False]
+['text':' The smallest positive decimal is 1 with the largest negative exponent of 0 (biased)','line_number':1038,'multiline':False]
+['text':' Add a sign bit to the largest and smallest positive to get their corresponding negatives','line_number':1041,'multiline':False]
+['text':' Get the representation of 0 (0E0).','line_number':1045,'multiline':False]
+['text':' Shift the format of the combination bits to the right position to get Inf and NaN','line_number':1049,'multiline':False]
+['text':' +Inf = 0111 1000 ... ... = 0x78 ... ..., -Inf = 1111 1000 ... ... = 0xf8 ... ...','line_number':1050,'multiline':False]
+['text':' +NaN = 0111 1100 ... ... = 0x7c ... ..., -NaN = 1111 1100 ... ... = 0xfc ... ...','line_number':1051,'multiline':False]
+['text':' Get the representation of 0 with the most negative exponent','line_number':1057,'multiline':False]
+['text':' namespace mongo','line_number':1096,'multiline':False]

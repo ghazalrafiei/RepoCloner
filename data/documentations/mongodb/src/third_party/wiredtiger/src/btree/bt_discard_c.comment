@@ -1,0 +1,180 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __wt_ref_out --
+ *     Discard an in-memory page, freeing all memory associated with it.
+ ','line_number':20,'multiline':True]
+['text':'
+     * A version of the page-out function that allows us to make additional diagnostic checks.
+     *
+     * The WT_REF cannot be the eviction thread's location.
+     ','line_number':27,'multiline':True]
+['text':'
+     * Make sure no other thread has a hazard pointer on the page we are about to discard. This is
+     * complicated by the fact that readers publish their hazard pointer before re-checking the page
+     * state, so our check can race with readers without indicating a real problem. If we find a
+     * hazard pointer, wait for it to be cleared.
+     ','line_number':34,'multiline':True]
+['text':' Check we are not evicting an accessible internal page with an active split generation. ','line_number':44,'multiline':True]
+['text':'
+ * __wt_page_out --
+ *     Discard an in-memory page, freeing all memory associated with it.
+ ','line_number':53,'multiline':True]
+['text':'
+     * Kill our caller's reference, do our best to catch races.
+     ','line_number':64,'multiline':True]
+['text':'
+     * Unless we have a dead handle or we're closing the database, we should never discard a dirty
+     * page. We do ordinary eviction from dead trees until sweep gets to them, so we may not in the
+     * WT_SYNC_DISCARD loop.
+     ','line_number':70,'multiline':True]
+['text':'
+     * If a root page split, there may be one or more pages linked from the page; walk the list,
+     * discarding pages.
+     ','line_number':84,'multiline':True]
+['text':' Update the cache's information. ','line_number':97,'multiline':True]
+['text':' Discard any mapped image. ','line_number':104,'multiline':True]
+['text':'
+     * If discarding the page as part of process exit, the application may configure to leak the
+     * memory rather than do the work.
+     ','line_number':109,'multiline':True]
+['text':' Free the page modification information. ','line_number':116,'multiline':True]
+['text':' Discard any allocated disk image. ','line_number':136,'multiline':True]
+['text':'
+ * __free_page_modify --
+ *     Discard the page's associated modification structures.
+ ','line_number':143,'multiline':True]
+['text':' In some failed-split cases, we can't discard updates. ','line_number':158,'multiline':True]
+['text':' Free list of replacement blocks. ','line_number':163,'multiline':True]
+['text':'
+             * Discard the new disk images if they are not NULL. If the new disk images are NULL,
+             * they must have been instantiated into memory. Otherwise, we have a failure in
+             * eviction after reconciliation. If the split code only successfully instantiates a
+             * subset of new pages into memory, free the instantiated pages and the new disk images
+             * of the pages not in memory. We will redo reconciliation next time we visit this page.
+             ','line_number':172,'multiline':True]
+['text':'
+         * Discard any replacement address: this memory is usually moved into the parent's WT_REF,
+         * but at the root that can't happen.
+         *
+         * Discard the new disk image if it is not NULL. If the new disk image is NULL, it must have
+         * been instantiated into memory. Otherwise, we have a failure in eviction after
+         * reconciliation and later we decide to discard the old disk image without loading the new
+         * disk image into memory. Free the new disk image in this case. If a checkpoint visits this
+         * page, it would write the new disk image even it hasn't been instantiated into memory.
+         * Therefore, no need to reconcile the page again if it remains clean.
+         ','line_number':185,'multiline':True]
+['text':' Free the append array. ','line_number':204,'multiline':True]
+['text':' Free the insert/update array. ','line_number':211,'multiline':True]
+['text':'
+         * Free the insert array.
+         *
+         * Row-store tables have one additional slot in the insert array (the insert array has an
+         * extra slot to hold keys that sort before keys found on the original page).
+         ','line_number':217,'multiline':True]
+['text':' Free the update array. ','line_number':226,'multiline':True]
+['text':' Free the overflow on-page and reuse skiplists. ','line_number':232,'multiline':True]
+['text':'
+ * __wt_ref_addr_free --
+ *     Free the address in a reference, if necessary.
+ ','line_number':243,'multiline':True]
+['text':'
+     * In order to free the WT_REF.addr field we need to read and clear the address without a race.
+     * The WT_REF may be a child of a page being split, in which case the addr field could be
+     * instantiated concurrently which changes the addr field. Once we swap in NULL we effectively
+     * own the addr. Then provided the addr is off page we can free the memory.
+     *
+     * However as we could be the child of a page being split the ref->home pointer which tells us
+     * whether the addr is on or off page could change concurrently. To avoid this we save the home
+     * pointer before we do the compare and swap. While the second ordered read should be sufficient
+     * we use an ordered read on the ref->home pointer as that is the standard mechanism to
+     * guarantee we read the current value.
+     *
+     * We don't reread this value inside loop as if it was to change then we would be pointing at a
+     * new parent, which would mean that our ref->addr must have been instantiated and thus we are
+     * safe to free it at the end of this function.
+     ','line_number':253,'multiline':True]
+['text':' Encourage races. ','line_number':276,'multiline':True]
+['text':'
+ * __wt_free_ref --
+ *     Discard the contents of a WT_REF structure (optionally including the pages it references).
+ ','line_number':289,'multiline':True]
+['text':'
+     * We create WT_REFs in many places, assert a WT_REF has been configured as either an internal
+     * page or a leaf page, to catch any we've missed.
+     ','line_number':301,'multiline':True]
+['text':'
+     * Optionally free the referenced pages. (The path to free referenced page is used for error
+     * cleanup, no instantiated and then discarded page should have WT_REF entries with real pages.
+     * The page may have been marked dirty as well; page discard checks for that, so we mark it
+     * clean explicitly.)
+     ','line_number':307,'multiline':True]
+['text':'
+     * Optionally free row-store WT_REF key allocation. Historic versions of this code looked in a
+     * passed-in page argument, but that is dangerous, some of our error-path callers create WT_REF
+     * structures without ever setting WT_REF.home or having a parent page to which the WT_REF will
+     * be linked. Those WT_REF structures invariably have instantiated keys, (they obviously cannot
+     * be on-page keys), and we must free the memory.
+     ','line_number':320,'multiline':True]
+['text':' Free any address allocation. ','line_number':335,'multiline':True]
+['text':' Free any backing fast-truncate memory. ','line_number':338,'multiline':True]
+['text':'
+ * __free_page_int --
+ *     Discard a WT_PAGE_COL_INT or WT_PAGE_ROW_INT page.
+ ','line_number':344,'multiline':True]
+['text':'
+ * __wt_free_ref_index --
+ *     Discard a page index and its references.
+ ','line_number':360,'multiline':True]
+['text':'
+         * Used when unrolling splits and other error paths where there should never have been a
+         * hazard pointer taken.
+         ','line_number':379,'multiline':True]
+['text':'
+ * __free_page_col_fix --
+ *     Discard a WT_PAGE_COL_FIX page.
+ ','line_number':392,'multiline':True]
+['text':' Free the time window lookup array. ','line_number':399,'multiline':True]
+['text':'
+ * __free_page_col_var --
+ *     Discard a WT_PAGE_COL_VAR page.
+ ','line_number':403,'multiline':True]
+['text':' Free the RLE lookup array. ','line_number':410,'multiline':True]
+['text':'
+ * __free_page_row_leaf --
+ *     Discard a WT_PAGE_ROW_LEAF page.
+ ','line_number':414,'multiline':True]
+['text':' Free any allocated memory used by instantiated keys. ','line_number':424,'multiline':True]
+['text':'
+ * __free_skip_array --
+ *     Discard an array of skip list headers.
+ ','line_number':429,'multiline':True]
+['text':'
+     * For each non-NULL slot in the page's array of inserts, free the linked list anchored in that
+     * slot.
+     ','line_number':439,'multiline':True]
+['text':' Free the header array. ','line_number':449,'multiline':True]
+['text':'
+ * __free_skip_list --
+ *     Walk a WT_INSERT forward-linked list and free the per-thread combination of a WT_INSERT
+ *     structure and its associated chain of WT_UPDATE structures.
+ ','line_number':453,'multiline':True]
+['text':'
+ * __free_update --
+ *     Discard the update array.
+ ','line_number':471,'multiline':True]
+['text':'
+     * For each non-NULL slot in the page's array of updates, free the linked list anchored in that
+     * slot.
+     ','line_number':481,'multiline':True]
+['text':' Free the update array. ','line_number':489,'multiline':True]
+['text':'
+ * __wt_free_update_list --
+ *     Walk a WT_UPDATE forward-linked list and free the per-thread combination of a WT_UPDATE
+ *     structure and its associated data.
+ ','line_number':493,'multiline':True]

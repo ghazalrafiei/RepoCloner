@@ -1,0 +1,140 @@
+['text':' gzjoin -- command to join gzip files into one gzip file
+
+  Copyright (C) 2004, 2005, 2012 Mark Adler, all rights reserved
+  version 1.2, 14 Aug 2012
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the author be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+  Mark Adler    madler@alumni.caltech.edu
+ ','line_number':1,'multiline':True]
+['text':'
+ * Change history:
+ *
+ * 1.0  11 Dec 2004     - First version
+ * 1.1  12 Jun 2005     - Changed ssize_t to long for portability
+ * 1.2  14 Aug 2012     - Clean up for z_const usage
+ ','line_number':25,'multiline':True]
+['text':'
+   gzjoin takes one or more gzip files on the command line and writes out a
+   single gzip file that will uncompress to the concatenation of the
+   uncompressed data from the individual gzip files.  gzjoin does this without
+   having to recompress any of the data and without having to calculate a new
+   crc32 for the concatenated uncompressed data.  gzjoin does however have to
+   decompress all of the input data in order to find the bits in the compressed
+   data that need to be modified to concatenate the streams.
+
+   gzjoin does not do an integrity check on the input gzip files other than
+   checking the gzip header and decompressing the compressed data.  They are
+   otherwise assumed to be complete and correct.
+
+   Each joint between gzip files removes at least 18 bytes of previous trailer
+   and subsequent header, and inserts an average of about three bytes to the
+   compressed data in order to connect the streams.  The output gzip file
+   has a minimal ten-byte gzip header with no file name or modification time.
+
+   This program was written to illustrate the use of the Z_BLOCK option of
+   inflate() and the crc32_combine() function.  gzjoin will not compile with
+   versions of zlib earlier than 1.2.3.
+ ','line_number':33,'multiline':True]
+['text':' fputs(), fprintf(), fwrite(), putc() ','line_number':56,'multiline':True]
+['text':' exit(), malloc(), free() ','line_number':57,'multiline':True]
+['text':' open() ','line_number':58,'multiline':True]
+['text':' close(), read(), lseek() ','line_number':59,'multiline':True]
+['text':' crc32(), crc32_combine(), inflateInit2(), inflate(), inflateEnd() ','line_number':61,'multiline':True]
+['text':' exit with an error (return a value to allow use in an expression) ','line_number':65,'multiline':True]
+['text':' -- simple buffered file input with access to the buffer -- ','line_number':73,'multiline':True]
+['text':' must be a power of two and fit in unsigned ','line_number':75,'multiline':True]
+['text':' bin buffered input file type ','line_number':77,'multiline':True]
+['text':' name of file for error messages ','line_number':79,'multiline':True]
+['text':' file descriptor ','line_number':80,'multiline':True]
+['text':' bytes remaining at next ','line_number':81,'multiline':True]
+['text':' next byte to read ','line_number':82,'multiline':True]
+['text':' allocated buffer of length CHUNK ','line_number':83,'multiline':True]
+['text':' close a buffered file and free allocated memory ','line_number':86,'multiline':True]
+['text':' open a buffered file for input, return a pointer to type bin, or NULL on
+   failure ','line_number':98,'multiline':True]
+['text':' load buffer from file, return -1 on read error, 0 or 1 on success, with
+   1 indicating that end-of-file was reached ','line_number':119,'multiline':True]
+['text':' get a byte from the file, bail if end of file ','line_number':139,'multiline':True]
+['text':' get a four-byte little-endian unsigned integer from file ','line_number':144,'multiline':True]
+['text':' skip bytes in file ','line_number':156,'multiline':True]
+['text':' check pointer ','line_number':159,'multiline':True]
+['text':' easy case -- skip bytes in buffer ','line_number':163,'multiline':True]
+['text':' skip what's in buffer, discard buffer contents ','line_number':170,'multiline':True]
+['text':' seek past multiples of CHUNK bytes ','line_number':174,'multiline':True]
+['text':' exact number of chunks: seek all the way minus one byte to check
+               for end-of-file with a read ','line_number':180,'multiline':True]
+['text':' skip the integral chunks, update skip with remainder ','line_number':188,'multiline':True]
+['text':' read more input and skip remainder ','line_number':193,'multiline':True]
+['text':' -- end of buffered input functions -- ','line_number':201,'multiline':True]
+['text':' skip the gzip header from file in ','line_number':203,'multiline':True]
+['text':' verify gzip magic header and compression method ','line_number':208,'multiline':True]
+['text':' get and verify flags ','line_number':212,'multiline':True]
+['text':' skip modification time, extra flags, and os ','line_number':217,'multiline':True]
+['text':' skip extra field if present ','line_number':220,'multiline':True]
+['text':' skip file name if present ','line_number':229,'multiline':True]
+['text':' skip comment if present ','line_number':234,'multiline':True]
+['text':' skip header crc if present ','line_number':239,'multiline':True]
+['text':' write a four-byte little-endian unsigned integer to out ','line_number':244,'multiline':True]
+['text':' Load up zlib stream from buffered input, bail if end of file ','line_number':253,'multiline':True]
+['text':' Write header for gzip file to out and initialize trailer. ','line_number':264,'multiline':True]
+['text':' Copy the compressed data from name, zeroing the last block bit of the last
+   block if clr is true, and adding empty blocks as needed to get to a byte
+   boundary.  If clr is false, then the last block becomes the last block of
+   the output, and the gzip trailer is written.  crc and tot maintains the
+   crc and length (modulo 2^32) of the output for the trailer.  The resulting
+   gzip file is written to out.  gzinit() must be called before the first call
+   of gzcopy() to write the gzip header and to initialize crc and tot. ','line_number':272,'multiline':True]
+['text':' return value from zlib functions ','line_number':282,'multiline':True]
+['text':' where the "last block" bit is in byte ','line_number':283,'multiline':True]
+['text':' true if processing the last block ','line_number':284,'multiline':True]
+['text':' buffered input file ','line_number':285,'multiline':True]
+['text':' start of compressed data in buffer ','line_number':286,'multiline':True]
+['text':' buffer for uncompressed data -- discarded ','line_number':287,'multiline':True]
+['text':' length of uncompressed data (support > 4 GB) ','line_number':288,'multiline':True]
+['text':' zlib inflate stream ','line_number':289,'multiline':True]
+['text':' open gzip file and skip header ','line_number':291,'multiline':True]
+['text':' allocate buffer for uncompressed data and initialize raw inflate
+       stream ','line_number':297,'multiline':True]
+['text':' inflate and copy compressed data, clear last-block bit if requested ','line_number':309,'multiline':True]
+['text':' if input used and output done, write used input and get more ','line_number':318,'multiline':True]
+['text':' decompress -- return early when end-of-block reached ','line_number':326,'multiline':True]
+['text':' update length of uncompressed data ','line_number':337,'multiline':True]
+['text':' check for block boundary (only get this when block copied out) ','line_number':340,'multiline':True]
+['text':' if that was the last block, then done ','line_number':342,'multiline':True]
+['text':' number of unused bits in last byte ','line_number':346,'multiline':True]
+['text':' find the next last-block bit ','line_number':349,'multiline':True]
+['text':' next last-block bit is in last used byte ','line_number':351,'multiline':True]
+['text':' next last-block bit is in next unused byte ','line_number':358,'multiline':True]
+['text':' don't have that byte yet -- get it ','line_number':360,'multiline':True]
+['text':' update buffer with unused input ','line_number':373,'multiline':True]
+['text':' copy used input, write empty blocks to get to byte boundary ','line_number':377,'multiline':True]
+['text':' already at byte boundary, or last file: write last byte ','line_number':382,'multiline':True]
+['text':' append empty blocks to last byte ','line_number':385,'multiline':True]
+['text':' assure unused bits are zero ','line_number':386,'multiline':True]
+['text':' odd -- append an empty stored block ','line_number':388,'multiline':True]
+['text':' two more bits in block header ','line_number':391,'multiline':True]
+['text':' even -- append 1, 2, or 3 empty fixed blocks ','line_number':395,'multiline':True]
+['text':' update crc and tot ','line_number':410,'multiline':True]
+['text':' clean up ','line_number':414,'multiline':True]
+['text':' write trailer if this is the last gzip file ','line_number':419,'multiline':True]
+['text':' join the gzip files on the command line, write result to stdout ','line_number':426,'multiline':True]
+['text':' running crc and total uncompressed length ','line_number':429,'multiline':True]
+['text':' skip command name ','line_number':431,'multiline':True]
+['text':' show usage if no arguments ','line_number':435,'multiline':True]
+['text':' join gzip files on command line and write to stdout ','line_number':442,'multiline':True]
+['text':' done ','line_number':447,'multiline':True]

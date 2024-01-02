@@ -1,0 +1,723 @@
+['text':'************************************************
+*      Perl-Compatible Regular Expressions       *
+************************************************','line_number':1,'multiline':True]
+['text':' PCRE2 is a library of functions to support regular expressions whose syntax
+and semantics are as close as possible to those of the Perl 5 language.
+
+                       Written by Philip Hazel
+     Original API code Copyright (c) 1997-2012 University of Cambridge
+          New API code Copyright (c) 2016-2022 University of Cambridge
+
+-----------------------------------------------------------------------------
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the name of the University of Cambridge nor the names of its
+      contributors may be used to endorse or promote products derived from
+      this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+-----------------------------------------------------------------------------
+','line_number':5,'multiline':True]
+['text':' We do not support both EBCDIC and Unicode at the same time. The "configure"
+script prevents both being selected, but not everybody uses "configure". EBCDIC
+is only supported for the 8-bit library, but the check for this has to be later
+in this file, because the first part is not width-dependent, and is included by
+pcre2test.c with CODE_UNIT_WIDTH == 0. ','line_number':44,'multiline':True]
+['text':' Standard C headers ','line_number':54,'multiline':True]
+['text':' Macros to make boolean values more obvious. The #ifndef is to pacify
+compiler warnings in environments where these macros are defined elsewhere.
+Unfortunately, there is no way to do the same for the typedef. ','line_number':63,'multiline':True]
+['text':' Valgrind (memcheck) support ','line_number':73,'multiline':True]
+['text':' -ftrivial-auto-var-init support supports initializing all local variables
+to avoid some classes of bug, but this can cause an unacceptable slowdown
+for large on-stack arrays in hot functions. This macro lets us annotate
+such arrays. ','line_number':79,'multiline':True]
+['text':' Older versions of MSVC lack snprintf(). This define allows for
+warning/error-free compilation and testing with MSVC compilers back to at least
+MSVC 10/2010. Except for VC6 (which is missing some fundamentals and fails). ','line_number':90,'multiline':True]
+['text':' When compiling a DLL for Windows, the exported symbols have to be declared
+using some MS magic. I found some useful information on this web page:
+http://msdn2.microsoft.com/en-us/library/y4h7bcy6(VS.80).aspx. According to the
+information there, using __declspec(dllexport) without "extern" we have a
+definition; with "extern" we have a declaration. The settings here override the
+setting in pcre2.h (which is included below); it defines only PCRE2_EXP_DECL,
+which is all that is needed for applications (they just import the symbols). We
+use:
+
+  PCRE2_EXP_DECL    for declarations
+  PCRE2_EXP_DEFN    for definitions
+
+The reason for wrapping this in #ifndef PCRE2_EXP_DECL is so that pcre2test,
+which is an application, but needs to import this file in order to "peek" at
+internals, can #include pcre2.h first to get an application's-eye view.
+
+In principle, people compiling for non-Windows, non-Unix-like (i.e. uncommon,
+special-purpose environments) might want to stick other stuff in front of
+exported symbols. That's why, in the non-Windows case, we set PCRE2_EXP_DEFN
+only if it is not already set. ','line_number':98,'multiline':True]
+['text':' Include the public PCRE2 header and the definitions of UCP character
+property values. This must follow the setting of PCRE2_EXP_DECL above. ','line_number':140,'multiline':True]
+['text':' When PCRE2 is compiled as a C++ library, the subject pointer can be replaced
+with a custom type. This makes it possible, for example, to allow pcre2_match()
+to process subject strings that are discontinuous by using a smart pointer
+class. It must always be possible to inspect all of the subject string in
+pcre2_match() because of the way it backtracks. ','line_number':146,'multiline':True]
+['text':' WARNING: This is as yet untested for PCRE2. ','line_number':152,'multiline':True]
+['text':' When checking for integer overflow in pcre2_compile(), we need to handle
+large integers. If a 64-bit integer type is available, we can use that.
+Otherwise we have to cast to double, which of course requires floating point
+arithmetic. Handle this by defining a macro for the appropriate type. ','line_number':159,'multiline':True]
+['text':' External (in the C sense) functions and tables that are private to the
+libraries are always referenced using the PRIV macro. This makes it possible
+for pcre2test.c to include some of the source files from the libraries using a
+different PRIV definition to avoid name clashes. It also makes it clear in the
+code that a non-static object is being referenced. ','line_number':170,'multiline':True]
+['text':' When compiling for use with the Virtual Pascal compiler, these functions
+need to have their names changed. PCRE2 must be compiled with the -DVPCOMPAT
+option on the command line. ','line_number':180,'multiline':True]
+['text':' VPCOMPAT ','line_number':191,'multiline':True]
+['text':' Otherwise, to cope with SunOS4 and other systems that lack memmove(), define
+a macro that calls an emulating function. ','line_number':193,'multiline':True]
+['text':' Some systems may have a macro ','line_number':197,'multiline':True]
+['text':' not HAVE_MEMMOVE ','line_number':199,'multiline':True]
+['text':' not VPCOMPAT ','line_number':200,'multiline':True]
+['text':' This is an unsigned int value that no UTF character can ever have, as
+Unicode doesn't go beyond 0x0010ffff. ','line_number':202,'multiline':True]
+['text':' This is the largest valid UTF/Unicode code point. ','line_number':207,'multiline':True]
+['text':' Compile-time positive error numbers (all except UTF errors, which are
+negative) start at this value. It should probably never be changed, in case
+some application is checking for specific numbers. There is a copy of this
+#define in pcre2posix.c (which now no longer includes this file). Ideally, a
+way of having a single definition should be found, but as the number is
+unlikely to change, this is not a pressing issue. The original reason for
+having a base other than 0 was to keep the absolute values of compile-time and
+run-time error numbers numerically different, but in the event the code does
+not rely on this. ','line_number':211,'multiline':True]
+['text':' The initial frames vector for remembering backtracking points in
+pcre2_match() is allocated on the system stack, of this size (bytes). The size
+must be a multiple of sizeof(PCRE2_SPTR) in all environments, so making it a
+multiple of 8 is best. Typical frame sizes are a few hundred bytes (it depends
+on the number of capturing parentheses) so 20KiB handles quite a few frames. A
+larger vector on the heap is obtained for patterns that need more frames. The
+maximum size of this can be limited. ','line_number':223,'multiline':True]
+['text':' Similarly, for DFA matching, an initial internal workspace vector is
+allocated on the stack. ','line_number':233,'multiline':True]
+['text':' Define the default BSR convention. ','line_number':238,'multiline':True]
+['text':' ---------------- Basic UTF-8 macros ---------------- ','line_number':247,'multiline':True]
+['text':' These UTF-8 macros are always defined because they are used in pcre2test for
+handling wide characters in 16-bit and 32-bit modes, even if an 8-bit library
+is not supported. ','line_number':249,'multiline':True]
+['text':' Tests whether a UTF-8 code point needs extra bytes to decode. ','line_number':253,'multiline':True]
+['text':' The following macros were originally written in the form of loops that used
+data from the tables whose names start with PRIV(utf8_table). They were
+rewritten by a user so as not to use loops, because in some environments this
+gives a significant performance advantage, and it seems never to do any harm.
+','line_number':257,'multiline':True]
+['text':' Base macro to pick up the remaining bytes of a UTF-8 character, not
+advancing the pointer. ','line_number':263,'multiline':True]
+['text':' Base macro to pick up the remaining bytes of a UTF-8 character, advancing
+the pointer. ','line_number':285,'multiline':True]
+['text':' Base macro to pick up the remaining bytes of a UTF-8 character, not
+advancing the pointer, incrementing the length. ','line_number':319,'multiline':True]
+['text':' --------------- Whitespace macros ---------------- ','line_number':356,'multiline':True]
+['text':' Tests for Unicode horizontal and vertical whitespace characters must check a
+number of different values. Using a switch statement for this generates the
+fastest code (no loop, no memory access), and there are several places in the
+interpreter code where this happens. In order to ensure that all the case lists
+remain in step, we use macros so that there is only one place where the lists
+are defined.
+
+These values are also required as lists in pcre2_compile.c when processing \h,
+\H, \v and \V in a character class. The lists are defined in pcre2_tables.c,
+but macros that define the values are here so that all the definitions are
+together. The lists must be in ascending character order, terminated by
+NOTACHAR (which is 0xffffffff).
+
+Any changes should ensure that the various macros are kept in step with each
+other. NOTE: The values also appear in pcre2_jit_compile.c. ','line_number':358,'multiline':True]
+['text':' -------------- ASCII/Unicode environments -------------- ','line_number':374,'multiline':True]
+['text':' Character U+180E (Mongolian Vowel Separator) is not included in the list of
+spaces in the Unicode file PropList.txt, and Perl does not recognize it as a
+space. However, in many other sources it is listed as a space and has been in
+PCRE (both APIs) for a long time. ','line_number':378,'multiline':True]
+['text':' OGHAM SPACE MARK ','line_number':390,'multiline':True]
+['text':' MONGOLIAN VOWEL SEPARATOR ','line_number':391,'multiline':True]
+['text':' EN QUAD ','line_number':392,'multiline':True]
+['text':' EM QUAD ','line_number':393,'multiline':True]
+['text':' EN SPACE ','line_number':394,'multiline':True]
+['text':' EM SPACE ','line_number':395,'multiline':True]
+['text':' THREE-PER-EM SPACE ','line_number':396,'multiline':True]
+['text':' FOUR-PER-EM SPACE ','line_number':397,'multiline':True]
+['text':' SIX-PER-EM SPACE ','line_number':398,'multiline':True]
+['text':' FIGURE SPACE ','line_number':399,'multiline':True]
+['text':' PUNCTUATION SPACE ','line_number':400,'multiline':True]
+['text':' THIN SPACE ','line_number':401,'multiline':True]
+['text':' HAIR SPACE ','line_number':402,'multiline':True]
+['text':' NARROW NO-BREAK SPACE ','line_number':403,'multiline':True]
+['text':' MEDIUM MATHEMATICAL SPACE ','line_number':404,'multiline':True]
+['text':' IDEOGRAPHIC SPACE ','line_number':405,'multiline':True]
+['text':' LINE SEPARATOR ','line_number':420,'multiline':True]
+['text':' PARAGRAPH SEPARATOR ','line_number':421,'multiline':True]
+['text':' -------------- EBCDIC environments -------------- ','line_number':434,'multiline':True]
+['text':' EBCDIC ','line_number':462,'multiline':True]
+['text':' -------------- End of whitespace macros -------------- ','line_number':464,'multiline':True]
+['text':' PCRE2 is able to support several different kinds of newline (CR, LF, CRLF,
+"any" and "anycrlf" at present). The following macros are used to package up
+testing for newlines. NLBLOCK, PSSTART, and PSEND are defined in the various
+modules to indicate in which datablock the parameters exist, and what the
+start/end of string field names are. ','line_number':467,'multiline':True]
+['text':' Newline is a fixed length string ','line_number':473,'multiline':True]
+['text':' Newline is any Unicode line ending ','line_number':474,'multiline':True]
+['text':' Newline is CR, LF, or CRLF ','line_number':475,'multiline':True]
+['text':' This macro checks for a newline at the given position ','line_number':477,'multiline':True]
+['text':' This macro checks for a newline immediately preceding the given position ','line_number':491,'multiline':True]
+['text':' Private flags containing information about the compiled pattern. The first
+three must not be changed, because whichever is set is actually the number of
+bytes in a code unit in that mode. ','line_number':505,'multiline':True]
+['text':' compiled in 8 bit mode ','line_number':509,'multiline':True]
+['text':' compiled in 16 bit mode ','line_number':510,'multiline':True]
+['text':' compiled in 32 bit mode ','line_number':511,'multiline':True]
+['text':' first_code unit is set ','line_number':512,'multiline':True]
+['text':' caseless first code unit ','line_number':513,'multiline':True]
+['text':' bitmap of first code units is set ','line_number':514,'multiline':True]
+['text':' last code unit is set ','line_number':515,'multiline':True]
+['text':' caseless last code unit ','line_number':516,'multiline':True]
+['text':' start after \n for multiline ','line_number':517,'multiline':True]
+['text':' j option used in pattern ','line_number':518,'multiline':True]
+['text':' explicit \r or \n in pattern ','line_number':519,'multiline':True]
+['text':' pattern contains (*THEN) ','line_number':520,'multiline':True]
+['text':' pattern can match empty string ','line_number':521,'multiline':True]
+['text':' BSR was set in the pattern ','line_number':522,'multiline':True]
+['text':' newline was set in the pattern ','line_number':523,'multiline':True]
+['text':' (*NOTEMPTY) used        ) keep ','line_number':524,'multiline':True]
+['text':' (*NOTEMPTY_ATSTART) used) together ','line_number':525,'multiline':True]
+['text':' release character tables ','line_number':526,'multiline':True]
+['text':' (*NOJIT) used ','line_number':527,'multiline':True]
+['text':' contains \P, \p, or \X ','line_number':528,'multiline':True]
+['text':' contains (?| ','line_number':529,'multiline':True]
+['text':' contains \C ','line_number':530,'multiline':True]
+['text':' contains (*ACCEPT) ','line_number':531,'multiline':True]
+['text':' Values for the matchedby field in a match data block. ','line_number':535,'multiline':True]
+['text':' pcre2_match() ','line_number':537,'multiline':True]
+['text':' pcre2_dfa_match() ','line_number':538,'multiline':True]
+['text':' pcre2_jit_match() ','line_number':539,'multiline':True]
+['text':' Values for the flags field in a match data block. ','line_number':541,'multiline':True]
+['text':' Magic number to provide a small check against being handed junk. ','line_number':545,'multiline':True]
+['text':' 'PCRE' ','line_number':547,'multiline':True]
+['text':' The maximum remaining length of subject we are prepared to search for a
+req_unit match from an anchored pattern. In 8-bit mode, memchr() is used and is
+much faster than the search loop that has to be used in 16-bit and 32-bit
+modes. ','line_number':549,'multiline':True]
+['text':' Offsets for the bitmap tables in the cbits set of tables. Each table
+contains a set of bits for a class map. Some classes are built by combining
+these tables. ','line_number':560,'multiline':True]
+['text':' [:space:] or \s ','line_number':564,'multiline':True]
+['text':' [:xdigit:] ','line_number':565,'multiline':True]
+['text':' [:digit:] or \d ','line_number':566,'multiline':True]
+['text':' [:upper:] ','line_number':567,'multiline':True]
+['text':' [:lower:] ','line_number':568,'multiline':True]
+['text':' [:word:] or \w ','line_number':569,'multiline':True]
+['text':' [:graph:] ','line_number':570,'multiline':True]
+['text':' [:print:] ','line_number':571,'multiline':True]
+['text':' [:punct:] ','line_number':572,'multiline':True]
+['text':' [:cntrl:] ','line_number':573,'multiline':True]
+['text':' Length of the cbits table ','line_number':574,'multiline':True]
+['text':' Bit definitions for entries in the ctypes table. Do not change these values
+without checking pcre2_jit_compile.c, which has an assertion to ensure that
+ctype_word has the value 16. ','line_number':576,'multiline':True]
+['text':' alphanumeric or '_' ','line_number':584,'multiline':True]
+['text':' Offsets of the various tables from the base tables pointer, and
+total length of the tables. ','line_number':586,'multiline':True]
+['text':' Lower case ','line_number':589,'multiline':True]
+['text':' Flip case ','line_number':590,'multiline':True]
+['text':' Character classes ','line_number':591,'multiline':True]
+['text':' Character types ','line_number':592,'multiline':True]
+['text':' -------------------- Character and string names ------------------------ ','line_number':596,'multiline':True]
+['text':' If PCRE2 is to support UTF-8 on EBCDIC platforms, we cannot use normal
+character constants like '*' because the compiler would emit their EBCDIC code,
+which is different from their ASCII/UTF-8 code. Instead we define macros for
+the characters so that they always use the ASCII/UTF-8 code when UTF-8 support
+is enabled. When UTF-8 support is not enabled, the definitions use character
+literals. Both character and string versions of each character are needed, and
+there are some longer strings as well.
+
+This means that, on EBCDIC platforms, the PCRE2 library can handle either
+EBCDIC, or UTF-8, but not both. To support both in the same compiled library
+would need different lookups depending on whether PCRE2_UTF was set or not.
+This would make it impossible to use characters in switch/case statements,
+which would reduce performance. For a theoretical use (which nobody has asked
+for) in a minority area (EBCDIC platforms), this is not sensible. Any
+application that did need both could compile two versions of the library, using
+macros to give the functions distinct names. ','line_number':598,'multiline':True]
+['text':' UTF-8 support is not enabled; use the platform-dependent character literals
+so that PCRE2 works in both ASCII and EBCDIC environments, but only in non-UTF
+mode. Newline characters are problematic in EBCDIC. Though it has CR and LF
+characters, a common practice has been to use its NL (0x15) character as the
+line terminator in C-like processing environments. However, sometimes the LF
+(0x25) character is used instead, according to this Unicode document:
+
+http://unicode.org/standard/reports/tr13/tr13-5.html
+
+PCRE2 defaults EBCDIC NL to 0x15, but has a build-time option to select 0x25
+instead. Whichever is *not* chosen is defined as NEL.
+
+In both ASCII and EBCDIC environments, CHAR_NL and CHAR_LF are synonyms for the
+same code point. ','line_number':617,'multiline':True]
+['text':' Not EBCDIC ','line_number':655,'multiline':True]
+['text':' In ASCII/Unicode, linefeed is '\n' and we equate this to NL for
+compatibility. NEL is the Unicode newline character; make sure it is
+a positive value. ','line_number':657,'multiline':True]
+['text':' EBCDIC ','line_number':674,'multiline':True]
+['text':' The remaining definitions work in both environments. ','line_number':676,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':964,'multiline':True]
+['text':' UTF-8 support is enabled; always use UTF-8 (=ASCII) character codes. This
+works in both modes non-EBCDIC platforms, and on EBCDIC platforms in UTF-8 mode
+only. ','line_number':966,'multiline':True]
+['text':' SUPPORT_UNICODE ','line_number':1266,'multiline':True]
+['text':' -------------------- End of character and string names -------------------','line_number':1268,'multiline':True]
+['text':' -------------------- Definitions for compiled patterns -------------------','line_number':1270,'multiline':True]
+['text':' Codes for different types of Unicode property. If these definitions are
+changed, the autopossessifying table in pcre2_auto_possess.c must be updated to
+match. ','line_number':1272,'multiline':True]
+['text':' Any property - matches all chars ','line_number':1276,'multiline':True]
+['text':' L& - the union of Lu, Ll, Lt ','line_number':1277,'multiline':True]
+['text':' Specified general characteristic (e.g. L) ','line_number':1278,'multiline':True]
+['text':' Specified particular characteristic (e.g. Lu) ','line_number':1279,'multiline':True]
+['text':' Script only (e.g. Han) ','line_number':1280,'multiline':True]
+['text':' Script extensions (includes SC) ','line_number':1281,'multiline':True]
+['text':' Alphanumeric - the union of L and N ','line_number':1282,'multiline':True]
+['text':' Perl space - general category Z plus 9,10,12,13 ','line_number':1283,'multiline':True]
+['text':' POSIX space - Z plus 9,10,11,12,13 ','line_number':1284,'multiline':True]
+['text':' Word - L plus N plus underscore ','line_number':1285,'multiline':True]
+['text':' Pseudo-property: match character list ','line_number':1286,'multiline':True]
+['text':' Universal Character nameable character ','line_number':1287,'multiline':True]
+['text':' Specified bidi class ','line_number':1288,'multiline':True]
+['text':' Boolean property ','line_number':1289,'multiline':True]
+['text':' Size of square table for autopossessify tests ','line_number':1290,'multiline':True]
+['text':' The following special properties are used only in XCLASS items, when POSIX
+classes are specified and PCRE2_UCP is set - in other words, for Unicode
+handling of these classes. They are not available via the \p or \P escapes like
+those in the above list, and so they do not take part in the autopossessifying
+table. ','line_number':1292,'multiline':True]
+['text':' [:graph:] - characters that mark the paper ','line_number':1298,'multiline':True]
+['text':' [:print:] - [:graph:] plus non-control spaces ','line_number':1299,'multiline':True]
+['text':' [:punct:] - punctuation characters ','line_number':1300,'multiline':True]
+['text':' This value is used when parsing \p and \P escapes to indicate that neither
+\p{script:...} nor \p{scx:...} has been encountered. ','line_number':1302,'multiline':True]
+['text':' Flag bits and data types for the extended class (OP_XCLASS) for classes that
+contain characters with values greater than 255. ','line_number':1307,'multiline':True]
+['text':' Flag: this is a negative class ','line_number':1310,'multiline':True]
+['text':' Flag: a 32-byte map is present ','line_number':1311,'multiline':True]
+['text':' Flag: property checks are present. ','line_number':1312,'multiline':True]
+['text':' Marks end of individual items ','line_number':1314,'multiline':True]
+['text':' Single item (one multibyte char) follows ','line_number':1315,'multiline':True]
+['text':' A range (two multibyte chars) follows ','line_number':1316,'multiline':True]
+['text':' Unicode property (2-byte property code follows) ','line_number':1317,'multiline':True]
+['text':' Unicode inverted property (ditto) ','line_number':1318,'multiline':True]
+['text':' These are escaped items that aren't just an encoding of a particular data
+value such as \n. They must have non-zero values, as check_escape() returns 0
+for a data character. In the escapes[] table in pcre2_compile.c their values
+are negated in order to distinguish them from data values.
+
+They must appear here in the same order as in the opcode definitions below, up
+to ESC_z. There's a dummy for OP_ALLANY because it corresponds to "." in DOTALL
+mode rather than an escape sequence. It is also used for [^] in JavaScript
+compatibility mode, and for \C in non-utf mode. In non-DOTALL mode, "." behaves
+like \N.
+
+Negative numbers are used to encode a backreference (\1, \2, \3, etc.) in
+check_escape(). There are tests in the code for an escape greater than ESC_b
+and less than ESC_Z to detect the types that may be repeated. These are the
+types that consume characters. If any new escapes are put in between that don't
+consume a character, that code will have to change. ','line_number':1320,'multiline':True]
+['text':'********************* Opcode definitions *****************','line_number':1343,'multiline':True]
+['text':'***** NOTE NOTE NOTE ******
+
+Starting from 1 (i.e. after OP_END), the values up to OP_EOD must correspond in
+order to the list of escapes immediately above. Furthermore, values up to
+OP_DOLLM must not be changed without adjusting the table called autoposstab in
+pcre2_auto_possess.c.
+
+Whenever this list is updated, the two macro definitions that follow must be
+updated to match. The possessification table called "opcode_possessify" in
+pcre2_compile.c must also be updated, and also the tables called "coptable"
+and "poptable" in pcre2_dfa_match.c.
+
+****** NOTE NOTE NOTE *****','line_number':1345,'multiline':True]
+['text':' The values between FIRST_AUTOTAB_OP and LAST_AUTOTAB_RIGHT_OP, inclusive,
+are used in a table for deciding whether a repeated character type can be
+auto-possessified. ','line_number':1360,'multiline':True]
+['text':' 0 End of pattern ','line_number':1369,'multiline':True]
+['text':' Values corresponding to backslashed metacharacters ','line_number':1371,'multiline':True]
+['text':' 1 Start of data: \A ','line_number':1373,'multiline':True]
+['text':' 2 Start of match (subject + offset): \G ','line_number':1374,'multiline':True]
+['text':' 3 Set start of match (\K) ','line_number':1375,'multiline':True]
+['text':'  4 \B ','line_number':1376,'multiline':True]
+['text':'  5 \b ','line_number':1377,'multiline':True]
+['text':'  6 \D ','line_number':1378,'multiline':True]
+['text':'  7 \d ','line_number':1379,'multiline':True]
+['text':'  8 \S ','line_number':1380,'multiline':True]
+['text':'  9 \s ','line_number':1381,'multiline':True]
+['text':' 10 \W ','line_number':1382,'multiline':True]
+['text':' 11 \w ','line_number':1383,'multiline':True]
+['text':' 12 Match any character except newline (\N) ','line_number':1385,'multiline':True]
+['text':' 13 Match any character ','line_number':1386,'multiline':True]
+['text':' 14 Match any byte (\C); different to OP_ANY for UTF-8 ','line_number':1387,'multiline':True]
+['text':' 15 \P (not Unicode property) ','line_number':1388,'multiline':True]
+['text':' 16 \p (Unicode property) ','line_number':1389,'multiline':True]
+['text':' 17 \R (any newline sequence) ','line_number':1390,'multiline':True]
+['text':' 18 \H (not horizontal whitespace) ','line_number':1391,'multiline':True]
+['text':' 19 \h (horizontal whitespace) ','line_number':1392,'multiline':True]
+['text':' 20 \V (not vertical whitespace) ','line_number':1393,'multiline':True]
+['text':' 21 \v (vertical whitespace) ','line_number':1394,'multiline':True]
+['text':' 22 \X (extended Unicode sequence ','line_number':1395,'multiline':True]
+['text':' 23 End of data or \n at end of data (\Z) ','line_number':1396,'multiline':True]
+['text':' 24 End of data (\z) ','line_number':1397,'multiline':True]
+['text':' Line end assertions ','line_number':1399,'multiline':True]
+['text':' 25 End of line - not multiline ','line_number':1401,'multiline':True]
+['text':' 26 End of line - multiline ','line_number':1402,'multiline':True]
+['text':' 27 Start of line - not multiline ','line_number':1403,'multiline':True]
+['text':' 28 Start of line - multiline ','line_number':1404,'multiline':True]
+['text':' Single characters; caseful must precede the caseless ones, and these
+  must remain in this order, and adjacent. ','line_number':1406,'multiline':True]
+['text':' 29 Match one character, casefully ','line_number':1409,'multiline':True]
+['text':' 30 Match one character, caselessly ','line_number':1410,'multiline':True]
+['text':' 31 Match one character, not the given one, casefully ','line_number':1411,'multiline':True]
+['text':' 32 Match one character, not the given one, caselessly ','line_number':1412,'multiline':True]
+['text':' The following sets of 13 opcodes must always be kept in step because
+  the offset from the first one is used to generate the others. ','line_number':1414,'multiline':True]
+['text':' Repeated characters; caseful must precede the caseless ones ','line_number':1417,'multiline':True]
+['text':' 33 The maximizing and minimizing versions of ','line_number':1419,'multiline':True]
+['text':' 34 these six opcodes must come in pairs, with ','line_number':1420,'multiline':True]
+['text':' 35 the minimizing one second. ','line_number':1421,'multiline':True]
+['text':' 36 ','line_number':1422,'multiline':True]
+['text':' 37 ','line_number':1423,'multiline':True]
+['text':' 38 ','line_number':1424,'multiline':True]
+['text':' 39 From 0 to n matches of one character, caseful','line_number':1426,'multiline':True]
+['text':' 40 ','line_number':1427,'multiline':True]
+['text':' 41 Exactly n matches ','line_number':1428,'multiline':True]
+['text':' 42 Possessified star, caseful ','line_number':1430,'multiline':True]
+['text':' 43 Possessified plus, caseful ','line_number':1431,'multiline':True]
+['text':' 44 Posesssified query, caseful ','line_number':1432,'multiline':True]
+['text':' 45 Possessified upto, caseful ','line_number':1433,'multiline':True]
+['text':' Repeated characters; caseless must follow the caseful ones ','line_number':1435,'multiline':True]
+['text':' 46 ','line_number':1437,'multiline':True]
+['text':' 47 ','line_number':1438,'multiline':True]
+['text':' 48 ','line_number':1439,'multiline':True]
+['text':' 49 ','line_number':1440,'multiline':True]
+['text':' 50 ','line_number':1441,'multiline':True]
+['text':' 51 ','line_number':1442,'multiline':True]
+['text':' 52 From 0 to n matches of one character, caseless ','line_number':1444,'multiline':True]
+['text':' 53 ','line_number':1445,'multiline':True]
+['text':' 54 ','line_number':1446,'multiline':True]
+['text':' 55 Possessified star, caseless ','line_number':1448,'multiline':True]
+['text':' 56 Possessified plus, caseless ','line_number':1449,'multiline':True]
+['text':' 57 Posesssified query, caseless ','line_number':1450,'multiline':True]
+['text':' 58 Possessified upto, caseless ','line_number':1451,'multiline':True]
+['text':' The negated ones must follow the non-negated ones, and match them ','line_number':1453,'multiline':True]
+['text':' Negated repeated character, caseful; must precede the caseless ones ','line_number':1454,'multiline':True]
+['text':' 59 The maximizing and minimizing versions of ','line_number':1456,'multiline':True]
+['text':' 60 these six opcodes must come in pairs, with ','line_number':1457,'multiline':True]
+['text':' 61 the minimizing one second. They must be in ','line_number':1458,'multiline':True]
+['text':' 62 exactly the same order as those above. ','line_number':1459,'multiline':True]
+['text':' 63 ','line_number':1460,'multiline':True]
+['text':' 64 ','line_number':1461,'multiline':True]
+['text':' 65 From 0 to n matches, caseful ','line_number':1463,'multiline':True]
+['text':' 66 ','line_number':1464,'multiline':True]
+['text':' 67 Exactly n matches ','line_number':1465,'multiline':True]
+['text':' 68 Possessified versions, caseful ','line_number':1467,'multiline':True]
+['text':' 69 ','line_number':1468,'multiline':True]
+['text':' 70 ','line_number':1469,'multiline':True]
+['text':' 71 ','line_number':1470,'multiline':True]
+['text':' Negated repeated character, caseless; must follow the caseful ones ','line_number':1472,'multiline':True]
+['text':' 72 ','line_number':1474,'multiline':True]
+['text':' 73 ','line_number':1475,'multiline':True]
+['text':' 74 ','line_number':1476,'multiline':True]
+['text':' 75 ','line_number':1477,'multiline':True]
+['text':' 76 ','line_number':1478,'multiline':True]
+['text':' 77 ','line_number':1479,'multiline':True]
+['text':' 78 From 0 to n matches, caseless ','line_number':1481,'multiline':True]
+['text':' 79 ','line_number':1482,'multiline':True]
+['text':' 80 Exactly n matches ','line_number':1483,'multiline':True]
+['text':' 81 Possessified versions, caseless ','line_number':1485,'multiline':True]
+['text':' 82 ','line_number':1486,'multiline':True]
+['text':' 83 ','line_number':1487,'multiline':True]
+['text':' 84 ','line_number':1488,'multiline':True]
+['text':' Character types ','line_number':1490,'multiline':True]
+['text':' 85 The maximizing and minimizing versions of ','line_number':1492,'multiline':True]
+['text':' 86 these six opcodes must come in pairs, with ','line_number':1493,'multiline':True]
+['text':' 87 the minimizing one second. These codes must ','line_number':1494,'multiline':True]
+['text':' 88 be in exactly the same order as those above. ','line_number':1495,'multiline':True]
+['text':' 89 ','line_number':1496,'multiline':True]
+['text':' 90 ','line_number':1497,'multiline':True]
+['text':' 91 From 0 to n matches ','line_number':1499,'multiline':True]
+['text':' 92 ','line_number':1500,'multiline':True]
+['text':' 93 Exactly n matches ','line_number':1501,'multiline':True]
+['text':' 94 Possessified versions ','line_number':1503,'multiline':True]
+['text':' 95 ','line_number':1504,'multiline':True]
+['text':' 96 ','line_number':1505,'multiline':True]
+['text':' 97 ','line_number':1506,'multiline':True]
+['text':' These are used for character classes and back references; only the
+  first six are the same as the sets above. ','line_number':1508,'multiline':True]
+['text':' 98 The maximizing and minimizing versions of ','line_number':1511,'multiline':True]
+['text':' 99 all these opcodes must come in pairs, with ','line_number':1512,'multiline':True]
+['text':' 100 the minimizing one second. These codes must ','line_number':1513,'multiline':True]
+['text':' 101 be in exactly the same order as those above. ','line_number':1514,'multiline':True]
+['text':' 102 ','line_number':1515,'multiline':True]
+['text':' 103 ','line_number':1516,'multiline':True]
+['text':' 104 These are different to the three sets above. ','line_number':1518,'multiline':True]
+['text':' 105 ','line_number':1519,'multiline':True]
+['text':' 106 Possessified versions ','line_number':1521,'multiline':True]
+['text':' 107 ','line_number':1522,'multiline':True]
+['text':' 108 ','line_number':1523,'multiline':True]
+['text':' 109 ','line_number':1524,'multiline':True]
+['text':' End of quantifier opcodes ','line_number':1526,'multiline':True]
+['text':' 110 Match a character class, chars < 256 only ','line_number':1528,'multiline':True]
+['text':' 111 Same, but the bitmap was created from a negative
+                              class - the difference is relevant only when a
+                              character > 255 is encountered. ','line_number':1529,'multiline':True]
+['text':' 112 Extended class for handling > 255 chars within the
+                              class. This does both positive and negative. ','line_number':1532,'multiline':True]
+['text':' 113 Match a back reference, casefully ','line_number':1534,'multiline':True]
+['text':' 114 Match a back reference, caselessly ','line_number':1535,'multiline':True]
+['text':' 115 Match a duplicate name backref, casefully ','line_number':1536,'multiline':True]
+['text':' 116 Match a duplicate name backref, caselessly ','line_number':1537,'multiline':True]
+['text':' 117 Match a numbered subpattern (possibly recursive) ','line_number':1538,'multiline':True]
+['text':' 118 Call out to external function if provided ','line_number':1539,'multiline':True]
+['text':' 119 Call out with string argument ','line_number':1540,'multiline':True]
+['text':' 120 Start of alternation ','line_number':1542,'multiline':True]
+['text':' 121 End of group that doesn't have an unbounded repeat ','line_number':1543,'multiline':True]
+['text':' 122 These two must remain together and in this ','line_number':1544,'multiline':True]
+['text':' 123 order. They are for groups the repeat for ever. ','line_number':1545,'multiline':True]
+['text':' 124 Possessive unlimited repeat. ','line_number':1546,'multiline':True]
+['text':' The assertions must come before BRA, CBRA, ONCE, and COND. ','line_number':1548,'multiline':True]
+['text':' 125 Move pointer back - used in lookbehind assertions ','line_number':1550,'multiline':True]
+['text':' 126 Positive lookahead ','line_number':1551,'multiline':True]
+['text':' 127 Negative lookahead ','line_number':1552,'multiline':True]
+['text':' 128 Positive lookbehind ','line_number':1553,'multiline':True]
+['text':' 129 Negative lookbehind ','line_number':1554,'multiline':True]
+['text':' 130 Positive non-atomic lookahead ','line_number':1555,'multiline':True]
+['text':' 131 Positive non-atomic lookbehind ','line_number':1556,'multiline':True]
+['text':' ONCE, SCRIPT_RUN, BRA, BRAPOS, CBRA, CBRAPOS, and COND must come
+  immediately after the assertions, with ONCE first, as there's a test for >=
+  ONCE for a subpattern that isn't an assertion. The POS versions must
+  immediately follow the non-POS versions in each case. ','line_number':1558,'multiline':True]
+['text':' 132 Atomic group, contains captures ','line_number':1563,'multiline':True]
+['text':' 133 Non-capture, but check characters' scripts ','line_number':1564,'multiline':True]
+['text':' 134 Start of non-capturing bracket ','line_number':1565,'multiline':True]
+['text':' 135 Ditto, with unlimited, possessive repeat ','line_number':1566,'multiline':True]
+['text':' 136 Start of capturing bracket ','line_number':1567,'multiline':True]
+['text':' 137 Ditto, with unlimited, possessive repeat ','line_number':1568,'multiline':True]
+['text':' 138 Conditional group ','line_number':1569,'multiline':True]
+['text':' These five must follow the previous five, in the same order. There's a
+  check for >= SBRA to distinguish the two sets. ','line_number':1571,'multiline':True]
+['text':' 139 Start of non-capturing bracket, check empty  ','line_number':1574,'multiline':True]
+['text':' 149 Ditto, with unlimited, possessive repeat ','line_number':1575,'multiline':True]
+['text':' 141 Start of capturing bracket, check empty ','line_number':1576,'multiline':True]
+['text':' 142 Ditto, with unlimited, possessive repeat ','line_number':1577,'multiline':True]
+['text':' 143 Conditional group, check empty ','line_number':1578,'multiline':True]
+['text':' The next two pairs must (respectively) be kept together. ','line_number':1580,'multiline':True]
+['text':' 144 Used to hold a capture number as condition ','line_number':1582,'multiline':True]
+['text':' 145 Used to point to duplicate names as a condition ','line_number':1583,'multiline':True]
+['text':' 146 Used to hold a recursion number as condition ','line_number':1584,'multiline':True]
+['text':' 147 Used to point to duplicate names as a condition ','line_number':1585,'multiline':True]
+['text':' 148 Always false (used by DEFINE and VERSION) ','line_number':1586,'multiline':True]
+['text':' 149 Always true (used by VERSION) ','line_number':1587,'multiline':True]
+['text':' 150 These two must remain together and in this ','line_number':1589,'multiline':True]
+['text':' 151 order. ','line_number':1590,'multiline':True]
+['text':' 152 ','line_number':1591,'multiline':True]
+['text':' These are backtracking control verbs ','line_number':1593,'multiline':True]
+['text':' 153 always has an argument ','line_number':1595,'multiline':True]
+['text':' 154 ','line_number':1596,'multiline':True]
+['text':' 155 same, but with argument ','line_number':1597,'multiline':True]
+['text':' 156 ','line_number':1598,'multiline':True]
+['text':' 157 same, but with argument ','line_number':1599,'multiline':True]
+['text':' 158 ','line_number':1600,'multiline':True]
+['text':' 159 same, but with argument ','line_number':1601,'multiline':True]
+['text':' 160 ','line_number':1602,'multiline':True]
+['text':' 161 same, but with argument ','line_number':1603,'multiline':True]
+['text':' These are forced failure and success verbs. FAIL and ACCEPT do accept an
+  argument, but these cases can be compiled as, for example, (*MARK:X)(*FAIL)
+  without the need for a special opcode. ','line_number':1605,'multiline':True]
+['text':' 162 ','line_number':1609,'multiline':True]
+['text':' 163 ','line_number':1610,'multiline':True]
+['text':' 164 Used inside assertions ','line_number':1611,'multiline':True]
+['text':' 165 Used before OP_ACCEPT to close open captures ','line_number':1612,'multiline':True]
+['text':' This is used to skip a subpattern with a {0} quantifier ','line_number':1614,'multiline':True]
+['text':' 166 ','line_number':1616,'multiline':True]
+['text':' This is used to identify a DEFINE group during compilation so that it can
+  be checked for having only one branch. It is changed to OP_FALSE before
+  compilation finishes. ','line_number':1618,'multiline':True]
+['text':' 167 ','line_number':1622,'multiline':True]
+['text':' This is not an opcode, but is used to check that tables indexed by opcode
+  are the correct length, in order to catch updating errors - there have been
+  some in the past. ','line_number':1624,'multiline':True]
+['text':' *** NOTE NOTE NOTE *** Whenever the list above is updated, the two macro
+definitions that follow must also be updated to match. There are also tables
+called "opcode_possessify" in pcre2_compile.c and "coptable" and "poptable" in
+pcre2_dfa_match.c that must be updated. ','line_number':1632,'multiline':True]
+['text':' This macro defines textual names for all the opcodes. These are used only
+for debugging, and some of them are only partial names. The macro is referenced
+only in pcre2_printint.c, which fills out the full names in many cases (and in
+some cases doesn't actually use these names at all). ','line_number':1638,'multiline':True]
+['text':' This macro defines the length of fixed length operations in the compiled
+regex. The lengths are used when searching for specific things, and also in the
+debugging printing of a compiled regex. We use a macro so that it can be
+defined close to the definitions of the opcodes themselves.
+
+As things have been extended, some of these are no longer fixed lenths, but are
+minima instead. For example, the length of a single-character repeat may vary
+in UTF-8 mode. The code that uses this table must know about such things. ','line_number':1686,'multiline':True]
+['text':' End                                    ','line_number':1696,'multiline':True]
+['text':' \A, \G, \K, \B, \b                     ','line_number':1697,'multiline':True]
+['text':' \D, \d, \S, \s, \W, \w                 ','line_number':1698,'multiline':True]
+['text':' Any, AllAny, Anybyte                   ','line_number':1699,'multiline':True]
+['text':' \P, \p                                 ','line_number':1700,'multiline':True]
+['text':' \R, \H, \h, \V, \v                     ','line_number':1701,'multiline':True]
+['text':' \X                                     ','line_number':1702,'multiline':True]
+['text':' \Z, \z, $, $M ^, ^M                    ','line_number':1703,'multiline':True]
+['text':' Char  - the minimum length             ','line_number':1704,'multiline':True]
+['text':' Chari  - the minimum length            ','line_number':1705,'multiline':True]
+['text':' not                                    ','line_number':1706,'multiline':True]
+['text':' noti                                   ','line_number':1707,'multiline':True]
+['text':' Positive single-char repeats                             ** These are ','line_number':1708,'multiline':True]
+['text':' *, *?, +, +?, ?, ??       ** minima in ','line_number':1709,'multiline':True]
+['text':' upto, minupto             ** mode      ','line_number':1710,'multiline':True]
+['text':' exact                                  ','line_number':1711,'multiline':True]
+['text':' *+, ++, ?+, upto+                      ','line_number':1712,'multiline':True]
+['text':' *I, *?I, +I, +?I, ?I, ??I ** UTF-8     ','line_number':1713,'multiline':True]
+['text':' upto I, minupto I                      ','line_number':1714,'multiline':True]
+['text':' exact I                                ','line_number':1715,'multiline':True]
+['text':' *+I, ++I, ?+I, upto+I                  ','line_number':1716,'multiline':True]
+['text':' Negative single-char repeats - only for chars < 256                   ','line_number':1717,'multiline':True]
+['text':' NOT *, *?, +, +?, ?, ??                ','line_number':1718,'multiline':True]
+['text':' NOT upto, minupto                      ','line_number':1719,'multiline':True]
+['text':' NOT exact                              ','line_number':1720,'multiline':True]
+['text':' Possessive NOT *, +, ?, upto           ','line_number':1721,'multiline':True]
+['text':' NOT *I, *?I, +I, +?I, ?I, ??I          ','line_number':1722,'multiline':True]
+['text':' NOT upto I, minupto I                  ','line_number':1723,'multiline':True]
+['text':' NOT exact I                            ','line_number':1724,'multiline':True]
+['text':' Possessive NOT *I, +I, ?I, upto I      ','line_number':1725,'multiline':True]
+['text':' Positive type repeats                                                 ','line_number':1726,'multiline':True]
+['text':' Type *, *?, +, +?, ?, ??               ','line_number':1727,'multiline':True]
+['text':' Type upto, minupto                     ','line_number':1728,'multiline':True]
+['text':' Type exact                             ','line_number':1729,'multiline':True]
+['text':' Possessive *+, ++, ?+, upto+           ','line_number':1730,'multiline':True]
+['text':' Character class & ref repeats                                         ','line_number':1731,'multiline':True]
+['text':' *, *?, +, +?, ?, ??                    ','line_number':1732,'multiline':True]
+['text':' CRRANGE, CRMINRANGE                    ','line_number':1733,'multiline':True]
+['text':' Possessive *+, ++, ?+, CRPOSRANGE      ','line_number':1734,'multiline':True]
+['text':' CLASS                                  ','line_number':1735,'multiline':True]
+['text':' NCLASS                                 ','line_number':1736,'multiline':True]
+['text':' XCLASS - variable length               ','line_number':1737,'multiline':True]
+['text':' REF                                    ','line_number':1738,'multiline':True]
+['text':' REFI                                   ','line_number':1739,'multiline':True]
+['text':' DNREF                                  ','line_number':1740,'multiline':True]
+['text':' DNREFI                                 ','line_number':1741,'multiline':True]
+['text':' RECURSE                                ','line_number':1742,'multiline':True]
+['text':' CALLOUT                                ','line_number':1743,'multiline':True]
+['text':' CALLOUT_STR - variable length          ','line_number':1744,'multiline':True]
+['text':' Alt                                    ','line_number':1745,'multiline':True]
+['text':' Ket                                    ','line_number':1746,'multiline':True]
+['text':' KetRmax                                ','line_number':1747,'multiline':True]
+['text':' KetRmin                                ','line_number':1748,'multiline':True]
+['text':' KetRpos                                ','line_number':1749,'multiline':True]
+['text':' Reverse                                ','line_number':1750,'multiline':True]
+['text':' Assert                                 ','line_number':1751,'multiline':True]
+['text':' Assert not                             ','line_number':1752,'multiline':True]
+['text':' Assert behind                          ','line_number':1753,'multiline':True]
+['text':' Assert behind not                      ','line_number':1754,'multiline':True]
+['text':' NA Assert                              ','line_number':1755,'multiline':True]
+['text':' NA Assert behind                       ','line_number':1756,'multiline':True]
+['text':' ONCE                                   ','line_number':1757,'multiline':True]
+['text':' SCRIPT_RUN                             ','line_number':1758,'multiline':True]
+['text':' BRA                                    ','line_number':1759,'multiline':True]
+['text':' BRAPOS                                 ','line_number':1760,'multiline':True]
+['text':' CBRA                                   ','line_number':1761,'multiline':True]
+['text':' CBRAPOS                                ','line_number':1762,'multiline':True]
+['text':' COND                                   ','line_number':1763,'multiline':True]
+['text':' SBRA                                   ','line_number':1764,'multiline':True]
+['text':' SBRAPOS                                ','line_number':1765,'multiline':True]
+['text':' SCBRA                                  ','line_number':1766,'multiline':True]
+['text':' SCBRAPOS                               ','line_number':1767,'multiline':True]
+['text':' SCOND                                  ','line_number':1768,'multiline':True]
+['text':' CREF, DNCREF                           ','line_number':1769,'multiline':True]
+['text':' RREF, DNRREF                           ','line_number':1770,'multiline':True]
+['text':' FALSE, TRUE                            ','line_number':1771,'multiline':True]
+['text':' BRAZERO, BRAMINZERO, BRAPOSZERO        ','line_number':1772,'multiline':True]
+['text':' MARK, PRUNE, PRUNE_ARG                 ','line_number':1773,'multiline':True]
+['text':' SKIP, SKIP_ARG                         ','line_number':1774,'multiline':True]
+['text':' THEN, THEN_ARG                         ','line_number':1775,'multiline':True]
+['text':' COMMIT, COMMIT_ARG                     ','line_number':1776,'multiline':True]
+['text':' FAIL, ACCEPT, ASSERT_ACCEPT            ','line_number':1777,'multiline':True]
+['text':' CLOSE, SKIPZERO                        ','line_number':1778,'multiline':True]
+['text':' DEFINE                                 ','line_number':1779,'multiline':True]
+['text':' A magic value for OP_RREF to indicate the "any recursion" condition. ','line_number':1781,'multiline':True]
+['text':' ---------- Private structures that are mode-independent. ---------- ','line_number':1786,'multiline':True]
+['text':' Structure to hold data for custom memory management. ','line_number':1788,'multiline':True]
+['text':' Structure for building a chain of open capturing subpatterns during
+compiling, so that instructions to close them can be compiled when (*ACCEPT) is
+encountered. ','line_number':1796,'multiline':True]
+['text':' Chain link ','line_number':1801,'multiline':True]
+['text':' Capture number ','line_number':1802,'multiline':True]
+['text':' Assertion depth when opened ','line_number':1803,'multiline':True]
+['text':' Layout of the UCP type table that translates property names into types and
+codes. Each entry used to point directly to a name, but to reduce the number of
+relocations in shared libraries, it now has an offset into a single string
+instead. ','line_number':1806,'multiline':True]
+['text':' Unicode character database (UCD) record format ','line_number':1817,'multiline':True]
+['text':' ucp_Arabic, etc. ','line_number':1820,'multiline':True]
+['text':' ucp_Cc, etc. (general categories) ','line_number':1821,'multiline':True]
+['text':' ucp_gbControl, etc. (grapheme break property) ','line_number':1822,'multiline':True]
+['text':' offset to multichar other cases or zero ','line_number':1823,'multiline':True]
+['text':' offset to other case, or zero if none ','line_number':1824,'multiline':True]
+['text':' script extension (11 bit) and bidi class (5 bit) values ','line_number':1825,'multiline':True]
+['text':' binary properties offset ','line_number':1826,'multiline':True]
+['text':' UCD access macros ','line_number':1829,'multiline':True]
+['text':' The "scriptx" and bprops fields contain offsets into vectors of 32-bit words
+that form a bitmap representing a list of scripts or boolean properties. These
+macros test or set a bit in the map by number. ','line_number':1861,'multiline':True]
+['text':' Header for serialized pcre2 codes. ','line_number':1868,'multiline':True]
+['text':' ----------------- Items that need PCRE2_CODE_UNIT_WIDTH ----------------- ','line_number':1879,'multiline':True]
+['text':' When this file is included by pcre2test, PCRE2_CODE_UNIT_WIDTH is defined as
+0, so the following items are omitted. ','line_number':1881,'multiline':True]
+['text':' EBCDIC is supported only for the 8-bit library. ','line_number':1886,'multiline':True]
+['text':' This is the largest non-UTF code point. ','line_number':1892,'multiline':True]
+['text':' Internal shared data tables and variables. These are used by more than one
+of the exported public functions. They have to be "external" in the C sense,
+but are not part of the PCRE2 public API. Although the data for some of them is
+identical in all libraries, they must have different names so that multiple
+libraries can be simultaneously linked to a single application. However, UTF-8
+tables are needed only when compiling the 8-bit library. ','line_number':1896,'multiline':True]
+['text':' Mode-dependent macros and hidden and private structures are defined in a
+separate file so that pcre2test can include them at all supported widths. When
+compiling the library, PCRE2_CODE_UNIT_WIDTH will be defined, and we can
+include them at the appropriate width, after setting up suffix macros for the
+private structures. ','line_number':1967,'multiline':True]
+['text':' Private "external" functions. These are internal functions that are called
+from modules other than the one in which they are defined. They have to be
+"external" in the C sense, but are not part of the PCRE2 public API. They are
+not referenced from pcre2test, and must not be defined when no code unit width
+is available. ','line_number':1981,'multiline':True]
+['text':' This function is needed only when memmove() is not available. ','line_number':2038,'multiline':True]
+['text':' PCRE2_CODE_UNIT_WIDTH ','line_number':2045,'multiline':True]
+['text':' PCRE2_INTERNAL_H_IDEMPOTENT_GUARD ','line_number':2046,'multiline':True]
+['text':' End of pcre2_internal.h ','line_number':2048,'multiline':True]

@@ -1,0 +1,271 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' Readable stream default controller abstract operations. ','line_number':7,'multiline':True]
+['text':' MOZ_ASSERT{,_IF}','line_number':11,'multiline':False]
+['text':' js::AssertSameCompartment','line_number':13,'multiline':False]
+['text':' js::ReadableByteStreamControllerClearPendingPullIntos','line_number':15,'multiline':False]
+['text':' js::CreateAlgorithmFromUnderlyingMethod, js::InvokeOrNoop, js::IsMaybeWrapped','line_number':16,'multiline':False]
+['text':' js::EnqueueValueWithSize, js::ResetQueue','line_number':17,'multiline':False]
+['text':' js::ReadableStream{,Default}Controller, js::ReadableByteStreamController, js::ReadableStreamControllerStart{,Failed}Handler','line_number':18,'multiline':False]
+['text':' js::ReadableStream{CloseInternal,ErrorInternal,FulfillReadOrReadIntoRequest,GetNumReadRequests}','line_number':19,'multiline':False]
+['text':' js::ReadableStreamTee_Pull, js::SetUpReadableStreamDefaultController','line_number':20,'multiline':False]
+['text':' js::TeeState','line_number':21,'multiline':False]
+['text':' JS::CallArgs{,FromVp}','line_number':22,'multiline':False]
+['text':' JS::AddPromiseReactions','line_number':23,'multiline':False]
+['text':' JS::Handle, JS::Rooted','line_number':24,'multiline':False]
+['text':' JS::ReadableStreamUnderlyingSource','line_number':25,'multiline':False]
+['text':' JS::{,Int32,Object}Value, JS::UndefinedHandleValue','line_number':26,'multiline':False]
+['text':' JS::Compartment','line_number':27,'multiline':False]
+['text':' js::Call, js::GetAndClearExceptionAndStack','line_number':28,'multiline':False]
+['text':' JSContext','line_number':29,'multiline':False]
+['text':' JSObject','line_number':30,'multiline':False]
+['text':' js::ListObject','line_number':31,'multiline':False]
+['text':' js::PromiseObject, js::PromiseResolvedWithUndefined','line_number':32,'multiline':False]
+['text':' JSAtomState','line_number':33,'multiline':False]
+['text':' js::SavedFrame','line_number':34,'multiline':False]
+['text':' js::NewHandler','line_number':36,'multiline':False]
+['text':' js::PromiseCall','line_number':37,'multiline':False]
+['text':' JS::Compartment::wrap, js::UnwrapCalleeSlot','line_number':38,'multiline':False]
+['text':' JSContext::check','line_number':39,'multiline':False]
+['text':' js::IsCallable, js::NewBuiltinClassInstance','line_number':40,'multiline':False]
+['text':' js::AutoRealm','line_number':41,'multiline':False]
+['text':'** 3.10. Readable stream default controller abstract operations **********','line_number':58,'multiline':True]
+['text':' Streams spec, 3.10.1. IsReadableStreamDefaultController ( x )','line_number':60,'multiline':False]
+['text':' Implemented via is<ReadableStreamDefaultController>()','line_number':61,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.2 and 3.13.3. step 7:
+ *      Upon fulfillment of pullPromise, [...]
+ ','line_number':63,'multiline':True]
+['text':' Step a: Set controller.[[pulling]] to false.','line_number':78,'multiline':False]
+['text':' Step b.i: Set controller.[[pullAgain]] to false.','line_number':79,'multiline':False]
+['text':' Step b: If controller.[[pullAgain]] is true,','line_number':82,'multiline':False]
+['text':' Step ii: Perform','line_number':84,'multiline':False]
+['text':'          ! ReadableStreamDefaultControllerCallPullIfNeeded(controller)','line_number':85,'multiline':False]
+['text':'          (or ReadableByteStreamControllerCallPullIfNeeded(controller)).','line_number':86,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.2 and 3.13.3. step 8:
+ * Upon rejection of pullPromise with reason e,
+ ','line_number':96,'multiline':True]
+['text':' Step a: Perform ! ReadableStreamDefaultControllerError(controller, e).','line_number':111,'multiline':False]
+['text':'         (ReadableByteStreamControllerError in 3.12.3.)','line_number':112,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.2
+ *      ReadableStreamDefaultControllerCallPullIfNeeded ( controller )
+ * Streams spec, 3.13.3.
+ *      ReadableByteStreamControllerCallPullIfNeeded ( controller )
+ ','line_number':124,'multiline':True]
+['text':' Step 1: Let shouldPull be','line_number':132,'multiline':False]
+['text':'         ! ReadableStreamDefaultControllerShouldCallPull(controller).','line_number':133,'multiline':False]
+['text':' (ReadableByteStreamDefaultControllerShouldCallPull in 3.13.3.)','line_number':134,'multiline':False]
+['text':' Step 2: If shouldPull is false, return.','line_number':137,'multiline':False]
+['text':' Step 3: If controller.[[pulling]] is true,','line_number':142,'multiline':False]
+['text':' Step a: Set controller.[[pullAgain]] to true.','line_number':144,'multiline':False]
+['text':' Step b: Return.','line_number':147,'multiline':False]
+['text':' Step 4: Assert: controller.[[pullAgain]] is false.','line_number':151,'multiline':False]
+['text':' Step 5: Set controller.[[pulling]] to true.','line_number':154,'multiline':False]
+['text':' We use this variable in step 7. For ease of error-handling, we wrap it','line_number':157,'multiline':False]
+['text':' early.','line_number':158,'multiline':False]
+['text':' Step 6: Let pullPromise be the result of performing','line_number':164,'multiline':False]
+['text':'         controller.[[pullAlgorithm]].','line_number':165,'multiline':False]
+['text':' Our representation of pull algorithms is a bit awkward, for performance,','line_number':166,'multiline':False]
+['text':' so we must figure out which algorithm is being invoked.','line_number':167,'multiline':False]
+['text':' The pull algorithm given in ReadableStreamTee step 12.','line_number':173,'multiline':False]
+['text':' An embedding-provided pull algorithm.','line_number':181,'multiline':False]
+['text':' The pull algorithm created in','line_number':193,'multiline':False]
+['text':' SetUpReadableStreamDefaultControllerFromUnderlyingSource step 4.','line_number':194,'multiline':False]
+['text':' CreateAlgorithmFromUnderlyingMethod step 7.','line_number':197,'multiline':False]
+['text':' CreateAlgorithmFromUnderlyingMethod step 6.b.i.','line_number':200,'multiline':False]
+['text':' |unwrappedPullMethod| and |unwrappedUnderlyingSource| come directly','line_number':204,'multiline':False]
+['text':' from |unwrappedController| slots so must be same-compartment with it.','line_number':205,'multiline':False]
+['text':' Step 7: Upon fulfillment of pullPromise, [...]','line_number':227,'multiline':False]
+['text':' Step 8. Upon rejection of pullPromise with reason e, [...]','line_number':228,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.3.
+ *      ReadableStreamDefaultControllerShouldCallPull ( controller )
+ * Streams spec, 3.13.25.
+ *      ReadableByteStreamControllerShouldCallPull ( controller )
+ ','line_number':243,'multiline':True]
+['text':' Step 1: Let stream be controller.[[controlledReadableStream]]','line_number':251,'multiline':False]
+['text':'         (or [[controlledReadableByteStream]]).','line_number':252,'multiline':False]
+['text':' 3.10.3. Step 2:','line_number':255,'multiline':False]
+['text':'      If ! ReadableStreamDefaultControllerCanCloseOrEnqueue(controller)','line_number':256,'multiline':False]
+['text':'      is false, return false.','line_number':257,'multiline':False]
+['text':' This turns out to be the same as 3.13.25 steps 2-3.','line_number':258,'multiline':False]
+['text':' 3.13.25 Step 2: If stream.[[state]] is not "readable", return false.','line_number':260,'multiline':False]
+['text':' 3.13.25 Step 3: If controller.[[closeRequested]] is true, return false.','line_number':265,'multiline':False]
+['text':' Step 3 (or 4):','line_number':270,'multiline':False]
+['text':'      If controller.[[started]] is false, return false.','line_number':271,'multiline':False]
+['text':' 3.10.3.','line_number':276,'multiline':False]
+['text':' Step 4: If ! IsReadableStreamLocked(stream) is true and','line_number':277,'multiline':False]
+['text':'      ! ReadableStreamGetNumReadRequests(stream) > 0, return true.','line_number':278,'multiline':False]
+['text':'','line_number':279,'multiline':False]
+['text':' 3.13.25.','line_number':280,'multiline':False]
+['text':' Step 5: If ! ReadableStreamHasDefaultReader(stream) is true and','line_number':281,'multiline':False]
+['text':'         ! ReadableStreamGetNumReadRequests(stream) > 0, return true.','line_number':282,'multiline':False]
+['text':' Step 6: If ! ReadableStreamHasBYOBReader(stream) is true and','line_number':283,'multiline':False]
+['text':'         ! ReadableStreamGetNumReadIntoRequests(stream) > 0, return true.','line_number':284,'multiline':False]
+['text':'','line_number':285,'multiline':False]
+['text':' All of these amount to the same thing in this implementation:','line_number':286,'multiline':False]
+['text':' Step 5 (or 7):','line_number':292,'multiline':False]
+['text':'      Let desiredSize be','line_number':293,'multiline':False]
+['text':'      ! ReadableStreamDefaultControllerGetDesiredSize(controller).','line_number':294,'multiline':False]
+['text':'      (ReadableByteStreamControllerGetDesiredSize in 3.13.25.)','line_number':295,'multiline':False]
+['text':' Step 6 (or 8): Assert: desiredSize is not null (implicit).','line_number':299,'multiline':False]
+['text':' Step 7 (or 9): If desiredSize > 0, return true.','line_number':300,'multiline':False]
+['text':' Step 8 (or 10): Return false.','line_number':301,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.4.
+ *      ReadableStreamDefaultControllerClearAlgorithms ( controller )
+ * and 3.13.4.
+ *      ReadableByteStreamControllerClearAlgorithms ( controller )
+ ','line_number':305,'multiline':True]
+['text':' Step 1: Set controller.[[pullAlgorithm]] to undefined.','line_number':313,'multiline':False]
+['text':' Step 2: Set controller.[[cancelAlgorithm]] to undefined.','line_number':314,'multiline':False]
+['text':' (In this implementation, the UnderlyingSource slot is part of the','line_number':315,'multiline':False]
+['text':' representation of these algorithms.)','line_number':316,'multiline':False]
+['text':' Step 3 (of 3.10.4 only) : Set controller.[[strategySizeAlgorithm]] to','line_number':321,'multiline':False]
+['text':' undefined.','line_number':322,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.5. ReadableStreamDefaultControllerClose ( controller )
+ ','line_number':329,'multiline':True]
+['text':' Step 1: Let stream be controller.[[controlledReadableStream]].','line_number':335,'multiline':False]
+['text':' Step 2: Assert:','line_number':338,'multiline':False]
+['text':'         ! ReadableStreamDefaultControllerCanCloseOrEnqueue(controller)','line_number':339,'multiline':False]
+['text':'         is true.','line_number':340,'multiline':False]
+['text':' Step 3: Set controller.[[closeRequested]] to true.','line_number':344,'multiline':False]
+['text':' Step 4: If controller.[[queue]] is empty,','line_number':347,'multiline':False]
+['text':' Step a: Perform','line_number':350,'multiline':False]
+['text':'         ! ReadableStreamDefaultControllerClearAlgorithms(controller).','line_number':351,'multiline':False]
+['text':' Step b: Perform ! ReadableStreamClose(stream).','line_number':354,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.6.
+ *      ReadableStreamDefaultControllerEnqueue ( controller, chunk )
+ ','line_number':361,'multiline':True]
+['text':' Step 1: Let stream be controller.[[controlledReadableStream]].','line_number':370,'multiline':False]
+['text':' Step 2: Assert:','line_number':373,'multiline':False]
+['text':'      ! ReadableStreamDefaultControllerCanCloseOrEnqueue(controller) is','line_number':374,'multiline':False]
+['text':'      true.','line_number':375,'multiline':False]
+['text':' Step 3: If ! IsReadableStreamLocked(stream) is true and','line_number':379,'multiline':False]
+['text':'         ! ReadableStreamGetNumReadRequests(stream) > 0, perform','line_number':380,'multiline':False]
+['text':'         ! ReadableStreamFulfillReadRequest(stream, chunk, false).','line_number':381,'multiline':False]
+['text':' Step 4: Otherwise,','line_number':389,'multiline':False]
+['text':' Step a: Let result be the result of performing','line_number':390,'multiline':False]
+['text':'         controller.[[strategySizeAlgorithm]], passing in chunk, and','line_number':391,'multiline':False]
+['text':'         interpreting the result as an ECMAScript completion value.','line_number':392,'multiline':False]
+['text':' Step c: (on success) Let chunkSize be result.[[Value]].','line_number':393,'multiline':False]
+['text':' Step d: Let enqueueResult be','line_number':404,'multiline':False]
+['text':'         EnqueueValueWithSize(controller, chunk, chunkSize).','line_number':405,'multiline':False]
+['text':' Step b: If result is an abrupt completion,','line_number':410,'multiline':False]
+['text':' and','line_number':411,'multiline':False]
+['text':' Step e: If enqueueResult is an abrupt completion,','line_number':412,'multiline':False]
+['text':' Uncatchable error. Die immediately without erroring the','line_number':418,'multiline':False]
+['text':' stream.','line_number':419,'multiline':False]
+['text':' Step b.i: Perform ! ReadableStreamDefaultControllerError(','line_number':423,'multiline':False]
+['text':'           controller, result.[[Value]]).','line_number':424,'multiline':False]
+['text':' Step e.i: Perform ! ReadableStreamDefaultControllerError(','line_number':425,'multiline':False]
+['text':'           controller, enqueueResult.[[Value]]).','line_number':426,'multiline':False]
+['text':' Step b.ii: Return result.','line_number':431,'multiline':False]
+['text':' Step e.ii: Return enqueueResult.','line_number':432,'multiline':False]
+['text':' (I.e., propagate the exception.)','line_number':433,'multiline':False]
+['text':' Step 5: Perform','line_number':439,'multiline':False]
+['text':'         ! ReadableStreamDefaultControllerCallPullIfNeeded(controller).','line_number':440,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.7. ReadableStreamDefaultControllerError ( controller, e )
+ * Streams spec, 3.13.11. ReadableByteStreamControllerError ( controller, e )
+ ','line_number':444,'multiline':True]
+['text':' Step 1: Let stream be controller.[[controlledReadableStream]]','line_number':454,'multiline':False]
+['text':'         (or controller.[[controlledReadableByteStream]]).','line_number':455,'multiline':False]
+['text':' Step 2: If stream.[[state]] is not "readable", return.','line_number':458,'multiline':False]
+['text':' Step 3 of 3.13.10:','line_number':463,'multiline':False]
+['text':' Perform ! ReadableByteStreamControllerClearPendingPullIntos(controller).','line_number':464,'multiline':False]
+['text':' Step 3 (or 4): Perform ! ResetQueue(controller).','line_number':474,'multiline':False]
+['text':' Step 4 (or 5):','line_number':479,'multiline':False]
+['text':'      Perform ! ReadableStreamDefaultControllerClearAlgorithms(controller)','line_number':480,'multiline':False]
+['text':'      (or ReadableByteStreamControllerClearAlgorithms(controller)).','line_number':481,'multiline':False]
+['text':' Step 5 (or 6): Perform ! ReadableStreamError(stream, e).','line_number':484,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.8.
+ *      ReadableStreamDefaultControllerGetDesiredSize ( controller )
+ * Streams spec 3.13.14.
+ *      ReadableByteStreamControllerGetDesiredSize ( controller )
+ ','line_number':488,'multiline':True]
+['text':' Steps 1-4 done at callsites, so only assert that they have been done.','line_number':496,'multiline':False]
+['text':' DEBUG','line_number':500,'multiline':False]
+['text':' Step 5: Return controller.[[strategyHWM]] − controller.[[queueTotalSize]].','line_number':502,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.11.
+ *      SetUpReadableStreamDefaultController(stream, controller,
+ *          startAlgorithm, pullAlgorithm, cancelAlgorithm, highWaterMark,
+ *          sizeAlgorithm )
+ *
+ * The standard algorithm takes a `controller` argument which must be a new,
+ * blank object. This implementation creates a new controller instead.
+ *
+ * In the spec, three algorithms (startAlgorithm, pullAlgorithm,
+ * cancelAlgorithm) are passed as arguments to this routine. This
+ * implementation passes these "algorithms" as data, using four arguments:
+ * sourceAlgorithms, underlyingSource, pullMethod, and cancelMethod. The
+ * sourceAlgorithms argument tells how to interpret the other three:
+ *
+ * -   SourceAlgorithms::Script - We're creating a stream from a JS source.
+ *     The caller is `new ReadableStream(underlyingSource)` or
+ *     `JS::NewReadableDefaultStreamObject`. `underlyingSource` is the
+ *     source; `pullMethod` and `cancelMethod` are its .pull and
+ *     .cancel methods, which the caller has already extracted and
+ *     type-checked: each one must be either a callable JS object or undefined.
+ *
+ *     Script streams use the start/pull/cancel algorithms defined in
+ *     3.10.12. SetUpReadableStreamDefaultControllerFromUnderlyingSource, which
+ *     call JS methods of the underlyingSource.
+ *
+ * -   SourceAlgorithms::Tee - We're creating a tee stream. `underlyingSource`
+ *     is a TeeState object. `pullMethod` and `cancelMethod` are undefined.
+ *
+ *     Tee streams use the start/pull/cancel algorithms given in
+ *     3.4.10. ReadableStreamTee.
+ *
+ * Note: All arguments must be same-compartment with cx. ReadableStream
+ * controllers are always created in the same compartment as the stream.
+ ','line_number':506,'multiline':True]
+['text':' Done elsewhere in the standard: Create the new controller.','line_number':556,'multiline':False]
+['text':' Step 1: Assert: stream.[[readableStreamController]] is undefined.','line_number':563,'multiline':False]
+['text':' Step 2: Set controller.[[controlledReadableStream]] to stream.','line_number':566,'multiline':False]
+['text':' Step 3: Set controller.[[queue]] and controller.[[queueTotalSize]] to','line_number':569,'multiline':False]
+['text':'         undefined (implicit), then perform ! ResetQueue(controller).','line_number':570,'multiline':False]
+['text':' Step 4: Set controller.[[started]], controller.[[closeRequested]],','line_number':575,'multiline':False]
+['text':'         controller.[[pullAgain]], and controller.[[pulling]] to false.','line_number':576,'multiline':False]
+['text':' Step 5: Set controller.[[strategySizeAlgorithm]] to sizeAlgorithm','line_number':579,'multiline':False]
+['text':'         and controller.[[strategyHWM]] to highWaterMark.','line_number':580,'multiline':False]
+['text':' Step 6: Set controller.[[pullAlgorithm]] to pullAlgorithm.','line_number':584,'multiline':False]
+['text':' (In this implementation, the pullAlgorithm is determined by the','line_number':585,'multiline':False]
+['text':' underlyingSource in combination with the pullMethod field.)','line_number':586,'multiline':False]
+['text':' Step 7: Set controller.[[cancelAlgorithm]] to cancelAlgorithm.','line_number':590,'multiline':False]
+['text':' Step 8: Set stream.[[readableStreamController]] to controller.','line_number':593,'multiline':False]
+['text':' Step 9: Let startResult be the result of performing startAlgorithm.','line_number':596,'multiline':False]
+['text':' Step 10: Let startPromise be a promise resolved with startResult.','line_number':606,'multiline':False]
+['text':' Step 11: Upon fulfillment of startPromise, [...]','line_number':613,'multiline':False]
+['text':' Step 12: Upon rejection of startPromise with reason r, [...]','line_number':614,'multiline':False]
+['text':'*
+ * Streams spec, 3.10.12.
+ *      SetUpReadableStreamDefaultControllerFromUnderlyingSource( stream,
+ *          underlyingSource, highWaterMark, sizeAlgorithm )
+ ','line_number':634,'multiline':True]
+['text':' Step 1: Assert: underlyingSource is not undefined.','line_number':643,'multiline':False]
+['text':' Step 2: Let controller be ObjectCreate(the original value of','line_number':646,'multiline':False]
+['text':'         ReadableStreamDefaultController's prototype property).','line_number':647,'multiline':False]
+['text':' (Deferred to SetUpReadableStreamDefaultController.)','line_number':648,'multiline':False]
+['text':' Step 3: Let startAlgorithm be the following steps:','line_number':650,'multiline':False]
+['text':'         a. Return ? InvokeOrNoop(underlyingSource, "start",','line_number':651,'multiline':False]
+['text':'                                  « controller »).','line_number':652,'multiline':False]
+['text':' Step 4: Let pullAlgorithm be','line_number':655,'multiline':False]
+['text':'         ? CreateAlgorithmFromUnderlyingMethod(underlyingSource, "pull",','line_number':656,'multiline':False]
+['text':'                                               0, « controller »).','line_number':657,'multiline':False]
+['text':' Step 5. Let cancelAlgorithm be','line_number':665,'multiline':False]
+['text':'         ? CreateAlgorithmFromUnderlyingMethod(underlyingSource,','line_number':666,'multiline':False]
+['text':'                                               "cancel", 1, « »).','line_number':667,'multiline':False]
+['text':' Step 6. Perform ? SetUpReadableStreamDefaultController(stream,','line_number':675,'multiline':False]
+['text':'             controller, startAlgorithm, pullAlgorithm, cancelAlgorithm,','line_number':676,'multiline':False]
+['text':'             highWaterMark, sizeAlgorithm).','line_number':677,'multiline':False]

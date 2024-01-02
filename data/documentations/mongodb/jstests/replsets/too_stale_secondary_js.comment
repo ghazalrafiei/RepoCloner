@@ -1,0 +1,63 @@
+['text':'*
+ * This test ensures that a secondary that has gone "too stale" (i.e. cannot find another node with
+ * a common oplog point) will transition to RECOVERING state, stay in RECOVERING after restart, and
+ * transition back to SECONDARY once it finds a sync source with a common oplog point.
+ *
+ * Note: This test requires persistence in order for a restarted node with a stale oplog to stay in
+ * the RECOVERING state. A restarted node with an ephemeral storage engine will not have an oplog
+ * upon restart, so will immediately resync.
+ *
+ * @tags: [
+ *   requires_persistence,
+ * ]
+ *
+ * Replica Set Setup:
+ *
+ * Node 0 (PRIMARY)     : Small Oplog
+ * Node 1 (SECONDARY)   : Large Oplog
+ * Node 2 (SECONDARY)   : Small Oplog
+ *
+ * 1:  Insert one document on the primary (Node 0) and ensure it is replicated.
+ * 2:  Stop node 2.
+ * 3:  Wait until Node 2 is down.
+ * 4:  Overflow the primary's oplog.
+ * 5:  Stop Node 1 and restart Node 2.
+ * 6:  Wait for Node 2 to transition to RECOVERING (it should be too stale).
+ * 7:  Stop and restart Node 2.
+ * 8:  Wait for Node 2 to transition to RECOVERING (its oplog should remain stale after restart).
+ * 9:  Restart Node 1, which should have the full oplog history.
+ * 10: Wait for Node 2 to leave RECOVERING and transition to SECONDARY.
+ *
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Overflows the oplog of a given node.
+ *
+ * To detect oplog overflow, we continuously insert large documents until we
+ * detect that the first entry of the oplog is no longer the same as when we started. This
+ * implies that the oplog attempted to grow beyond its maximum size i.e. it
+ * has overflowed/rolled over.
+ *
+ * Each document will be inserted with a writeConcern given by 'writeConcern'.
+ *
+ ','line_number':35,'multiline':True]
+['text':' Keep inserting large documents until the oplog rolls over.','line_number':50,'multiline':False]
+['text':'*
+ * True if a node's entry in "members" has tooStale: true.
+ ','line_number':58,'multiline':True]
+['text':'*
+ * Returns a node's current replica state.
+ ','line_number':65,'multiline':True]
+['text':' Node 0 is given a small oplog so we can overflow it. Node 1's large oplog allows it to','line_number':77,'multiline':False]
+['text':' store all entries comfortably without overflowing, so that Node 2 can eventually use it as','line_number':78,'multiline':False]
+['text':' a sync source after it goes too stale. Because this test overflows the oplog, a small','line_number':79,'multiline':False]
+['text':' syncdelay is chosen to frequently take checkpoints, allowing oplog truncation to proceed.','line_number':80,'multiline':False]
+['text':' Make sure that Node 1's oplog didn't overflow.','line_number':122,'multiline':False]
+['text':' This checks the state as reported by the node itself.','line_number':133,'multiline':False]
+['text':' This waits for the state as indicated by the primary node.','line_number':136,'multiline':False]
+['text':' Set the failpoint to fail the transition to maintenance mode once. Make sure transitioning to','line_number':142,'multiline':False]
+['text':' maintenance mode is resilient to errors (e.g. race with a concurrent election) and will','line_number':143,'multiline':False]
+['text':' eventually succeed.','line_number':144,'multiline':False]
+['text':' This checks the state as reported by the node itself.','line_number':151,'multiline':False]
+['text':' This waits for the state as indicated by the primary node.','line_number':154,'multiline':False]
+['text':' This checks the state as reported by the node itself.','line_number':162,'multiline':False]
+['text':' This waits for the state as indicated by the primary node.','line_number':165,'multiline':False]

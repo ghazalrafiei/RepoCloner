@@ -1,0 +1,104 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- ','line_number':1,'multiline':True]
+['text':' vim: set ts=8 sts=2 et sw=2 tw=80: ','line_number':2,'multiline':True]
+['text':' This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':3,'multiline':True]
+['text':' Weak pointer functionality, implemented as a mixin for use with any class. ','line_number':7,'multiline':True]
+['text':'*
+ * SupportsWeakPtr lets you have a pointer to an object 'Foo' without affecting
+ * its lifetime. It works by creating a single shared reference counted object
+ * (WeakReference) that each WeakPtr will access 'Foo' through. This lets 'Foo'
+ * clear the pointer in the WeakReference without having to know about all of
+ * the WeakPtrs to it and allows the WeakReference to live beyond the lifetime
+ * of 'Foo'.
+ *
+ * PLEASE NOTE: This weak pointer implementation is not thread-safe.
+ *
+ * The overhead of WeakPtr is that accesses to 'Foo' becomes an additional
+ * dereference, and an additional heap allocated pointer sized object shared
+ * between all of the WeakPtrs.
+ *
+ * Example of usage:
+ *
+ *   // To have a class C support weak pointers, inherit from
+ *   // SupportsWeakPtr
+ *   class C : public SupportsWeakPtr
+ *   {
+ *   public:
+ *     int mNum;
+ *     void act();
+ *   };
+ *
+ *   C* ptr = new C();
+ *
+ *   // Get weak pointers to ptr. The first time a weak pointer
+ *   // is obtained, a reference counted WeakReference object is created that
+ *   // can live beyond the lifetime of 'ptr'. The WeakReference
+ *   // object will be notified of 'ptr's destruction.
+ *   WeakPtr<C> weak = ptr;
+ *   WeakPtr<C> other = ptr;
+ *
+ *   // Test a weak pointer for validity before using it.
+ *   if (weak) {
+ *     weak->mNum = 17;
+ *     weak->act();
+ *   }
+ *
+ *   // Destroying the underlying object clears weak pointers to it.
+ *   delete ptr;
+ *
+ *   MOZ_ASSERT(!weak, "Deleting |ptr| clears weak pointers to it.");
+ *   MOZ_ASSERT(!other, "Deleting |ptr| clears all weak pointers to it.");
+ *
+ * WeakPtr is typesafe and may be used with any class. It is not required that
+ * the class be reference-counted or allocated in any particular way.
+ *
+ * The API was loosely inspired by Chromium's weak_ptr.h:
+ * http://src.chromium.org/svn/trunk/src/base/memory/weak_ptr.h
+ *
+ * Note that multiple base classes inheriting from SupportsWeakPtr is not
+ * currently supported. We could support it if needed though.
+ *
+ * For Gecko-internal usage there is also MainThreadWeakPtr<T>, a version of
+ * WeakPtr that can be destroyed on any thread, but whose release gets proxied
+ * to the main thread. This is a similar API to nsMainThreadPtrHandle, but
+ * without keeping a strong reference to the main-thread object. Said WeakPtr
+ * can't be accessed from any other thread that isn't the main thread.
+ ','line_number':9,'multiline':True]
+['text':' For thread safety checking.','line_number':85,'multiline':False]
+['text':' For main thread destructor behavior.','line_number':87,'multiline':False]
+['text':' Weak referencing is not implemented as thread safe.  When a WeakPtr','line_number':94,'multiline':False]
+['text':' is created or dereferenced on thread A but the real object is just','line_number':95,'multiline':False]
+['text':' being Released() on thread B, there is a possibility of a race','line_number':96,'multiline':False]
+['text':' when the proxy object (detail::WeakReference) is notified about','line_number':97,'multiline':False]
+['text':' the real object destruction just between when thread A is storing','line_number':98,'multiline':False]
+['text':' the object pointer locally and is about to add a reference to it.','line_number':99,'multiline':False]
+['text':'','line_number':100,'multiline':False]
+['text':' Hence, a non-null weak proxy object is considered to have a single','line_number':101,'multiline':False]
+['text':' "owning thread".  It means that each query for a weak reference,','line_number':102,'multiline':False]
+['text':' its dereference, and destruction of the real object must all happen','line_number':103,'multiline':False]
+['text':' on a single thread.  The following macros implement assertions for','line_number':104,'multiline':False]
+['text':' checking these conditions.','line_number':105,'multiline':False]
+['text':'','line_number':106,'multiline':False]
+['text':' We re-use XPCOM's nsAutoOwningEventTarget checks when they are available.','line_number':107,'multiline':False]
+['text':' This has the advantage that it works with cooperative thread pools.','line_number':108,'multiline':False]
+['text':' Will be none if mPtr = nullptr. ','line_number':111,'multiline':True]
+['text':' namespace detail','line_number':165,'multiline':False]
+['text':' This can live beyond the lifetime of the class derived from','line_number':174,'multiline':False]
+['text':' SupportsWeakPtr.','line_number':175,'multiline':False]
+['text':' namespace detail','line_number':209,'multiline':False]
+['text':' We must make sure the reference we have now is safe to be dereferenced','line_number':246,'multiline':False]
+['text':' before we throw it away... (this can be called from a ctor)','line_number':247,'multiline':False]
+['text':' ...and make sure the new reference is used on a single thread as well.','line_number':249,'multiline':False]
+['text':' The thread safety check is performed inside of the operator= method.','line_number':257,'multiline':False]
+['text':' We must make sure the reference we have now is safe to be dereferenced','line_number':262,'multiline':False]
+['text':' before we throw it away.','line_number':263,'multiline':False]
+['text':' Ensure that mRef is dereferenceable in the uninitialized state.','line_number':266,'multiline':False]
+['text':' We must make sure the reference we have now is safe to be dereferenced','line_number':273,'multiline':False]
+['text':' before we throw it away.','line_number':274,'multiline':False]
+['text':' Ensure that mRef is dereferenceable in the uninitialized state.','line_number':279,'multiline':False]
+['text':' The thread safety check happens inside SelfReferencingWeakPtr','line_number':282,'multiline':False]
+['text':' or is initialized in the WeakReference constructor.','line_number':283,'multiline':False]
+['text':' Ensure that mRef is dereferenceable in the uninitialized state.','line_number':299,'multiline':False]
+['text':' namespace mozilla','line_number':356,'multiline':False]
+['text':' mozilla_WeakPtr_h ','line_number':358,'multiline':True]

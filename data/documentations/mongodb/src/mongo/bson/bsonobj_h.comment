@@ -1,0 +1,424 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+   C++ representation of a "BSON" object -- that is, an extended JSON-style
+   object in a binary representation.
+
+   See bsonspec.org.
+
+   Note that BSONObj's have a smart pointer capability built in -- so you can
+   pass them around by value.  The reference counts used to implement this
+   do not use locking, so copying and destroying BSONObj's are not thread-safe
+   operations.
+
+ BSON object format:
+
+ code
+ <unsigned totalSize> {<byte BSONType><cstring FieldName><Data>}* EOO
+
+ totalSize includes itself.
+
+ Data:
+ Bool:      <byte>
+ EOO:       nothing follows
+ Undefined: nothing follows
+ OID:       an OID object
+ NumberDouble: <double>
+ NumberInt: <int32>
+ NumberDecimal: <dec128>
+ String:    <unsigned32 strsizewithnull><cstring>
+ Date:      <8bytes>
+ Regex:     <cstring regex><cstring options>
+ Object:    a nested object, leading with its entire size, which terminates with EOO.
+ Array:     same as object
+ DBRef:     <strlen> <cstring ns> <oid>
+ DBRef:     a database reference: basically a collection name plus an Object ID
+ BinData:   <int len> <byte subtype> <byte[len] data>
+ Code:      a function (not a closure): same format as String.
+ Symbol:    a language symbol (say a python symbol).  same format as String.
+ Code With Scope: <total size><String><Object>
+ \endcode
+ ','line_number':81,'multiline':True]
+['text':' Declared in bsonobj_comparator_interface.h.','line_number':129,'multiline':False]
+['text':'*
+     * Operator overloads for relops return a DeferredComparison which can subsequently be evaluated
+     * by a BSONObj::ComparatorInterface.
+     ','line_number':132,'multiline':True]
+['text':'*
+     * Set of rules that dictate the behavior of the comparison APIs.
+     ','line_number':138,'multiline':True]
+['text':'*
+     * Construct an empty BSONObj -- that is, {}.
+     ','line_number':147,'multiline':True]
+['text':' Little endian ordering here, but that is ok regardless as BSON is spec'd to be','line_number':151,'multiline':False]
+['text':' little endian external to the system. (i.e. the rest of the implementation of','line_number':152,'multiline':False]
+['text':' bson, not this part, fails to support big endian)','line_number':153,'multiline':False]
+['text':'*
+     * Construct a BSONObj from data in the proper format.
+     *  Use this constructor when something else owns bsonData's buffer
+     ','line_number':157,'multiline':True]
+['text':'*
+     * Move construct a BSONObj
+     ','line_number':170,'multiline':True]
+['text':' To return to an empty state.','line_number':175,'multiline':False]
+['text':' The explicit move constructor above will inhibit generation of the copy ctor, so','line_number':179,'multiline':False]
+['text':' explicitly request the default implementation.','line_number':180,'multiline':False]
+['text':'*
+     * Copy construct a BSONObj.
+     ','line_number':182,'multiline':True]
+['text':'*
+     * Provide assignment semantics. We use the value taking form so that we can use copy
+     * and swap, and consume both lvalue and rvalue references.
+     ','line_number':187,'multiline':True]
+['text':'*
+     * Swap this BSONObj with 'other'
+     ','line_number':196,'multiline':True]
+['text':'*
+       A BSONObj can use a buffer it "owns" or one it does not.
+
+       OWNED CASE
+       If the BSONObj owns the buffer, the buffer can be shared among several BSONObj's (by
+       assignment). In this case the buffer is basically implemented as a shared_ptr.
+       Since BSONObj's are typically immutable, this works well.
+
+       UNOWNED CASE
+       A BSONObj can also point to BSON data in some other data structure it does not "own" or free
+       later. For example, in a memory mapped file.  In this case, it is important the original data
+       stays in scope for as long as the BSONObj is in use.  If you think the original data may go
+       out of scope, call BSONObj::getOwned() to promote your BSONObj to having its own copy.
+
+       On a BSONObj assignment, if the source is unowned, both the source and dest will have unowned
+       pointers to the original buffer after the assignment.
+
+       If you are not sure about ownership but need the buffer to last as long as the BSONObj, call
+       getOwned().  getOwned() is a no-op if the buffer is already owned.  If not already owned, a
+       malloc and memcpy will result.
+
+       Most ways to create BSONObj's create 'owned' variants.  Unowned versions can be created with:
+       (1) specifying true for the ifree parameter in the constructor
+       (2) calling BSONObjBuilder::done().  Use BSONObjBuilder::obj() to get an owned copy
+       (3) retrieving a subobject retrieves an unowned pointer into the parent BSON object
+
+       @return true if this is in owned mode
+    ','line_number':205,'multiline':True]
+['text':'*
+     * Share ownership with another object.
+     *
+     * It is the callers responsibility to ensure that the other object is owned and contains the
+     * data this BSONObj is viewing. This can happen if this is a subobject or sibling object
+     * contained in a larger buffer.
+     ','line_number':237,'multiline':True]
+['text':' Leave *this in a valid moved-from state.','line_number':267,'multiline':False]
+['text':'*
+     * If the data buffer is under the control of this BSONObj, return it.
+     * Else return an owned copy.
+     ','line_number':271,'multiline':True]
+['text':'*
+     * Returns an owned copy of the given BSON object.
+     ','line_number':277,'multiline':True]
+['text':'*
+     * @return a new full (and owned) copy of the object.
+     ','line_number':282,'multiline':True]
+['text':'*
+     * If the data buffer is not under the control of this BSONObj, allocate
+     * a separate copy and make this object a fully owned one.
+     ','line_number':287,'multiline':True]
+['text':'*
+     * @return a new full (and owned) redacted copy of the object.
+     ','line_number':295,'multiline':True]
+['text':'*
+     * Readable representation of a BSON object in an extended JSON-style notation.
+     * This is an abbreviated representation which might be used for logging.
+     ','line_number':302,'multiline':True]
+['text':'*
+     * Properly formatted JSON string.
+     * @param pretty if true we try to add some lf's and indentation
+     ','line_number':315,'multiline':True]
+['text':'*
+     * Add specific field to the end of the object if it did not exist, otherwise replace it
+     * preserving original field order. Returns newly built object. Returns copy of this for empty
+     * field.
+     ','line_number':347,'multiline':True]
+['text':'*
+     * Merges the specified 'fields' from the 'from' object into the current BSON and returns the
+     * merged object. If the 'fields' is not specified, all the fields from the 'from' object are
+     * merged.
+     *
+     * Note that if the original object already has a particular field, then the field will be
+     * replaced.
+     ','line_number':354,'multiline':True]
+['text':'*
+     * Remove specified field and return a new object with the remaining fields.
+     * slowish as builds a full new object
+     ','line_number':365,'multiline':True]
+['text':'*
+     * Remove specified fields and return a new object with the remaining fields.
+     ','line_number':371,'multiline':True]
+['text':'*
+     * Returns # of top level fields in the object
+     * note: iterates to count the fields
+     ','line_number':377,'multiline':True]
+['text':'*
+     * Returns a 'Container' populated with the field names of the object.
+     ','line_number':383,'multiline':True]
+['text':'*
+     * Get the field of the specified name. eoo() is true on the returned
+     * element if not found.
+     ','line_number':389,'multiline':True]
+['text':'*
+     * Get several fields at once. This is faster than separate getField() calls as the size of
+     * elements iterated can then be calculated only once each.
+     * @param n number of fieldNames, and number of elements in the fields array
+     * @param fields if a field is found its element is stored in its corresponding position in
+     *          this array. if not found the array element is unchanged.
+     ','line_number':395,'multiline':True]
+['text':'*
+     * Get several fields at once. This is faster than separate getField() calls as the size of
+     * elements iterated can then be calculated only once each.
+     ','line_number':404,'multiline':True]
+['text':'*
+     * Get the field of the specified name. eoo() is true on the returned
+     * element if not found.
+     ','line_number':413,'multiline':True]
+['text':'*
+     * @return true if field exists
+     ','line_number':428,'multiline':True]
+['text':'*
+     * @return true if field exists
+     ','line_number':434,'multiline':True]
+['text':'*
+     * Looks up the element with the given 'name'. If the element is a string,
+     * returns it as a StringData. Otherwise returns an empty StringData.
+     ','line_number':441,'multiline':True]
+['text':'*
+     * @return subobject of the given name
+     ','line_number':447,'multiline':True]
+['text':'*
+     * @return INT_MIN if not present - does some type conversions
+     ','line_number':452,'multiline':True]
+['text':'*
+     * @return false if not present
+     * @see BSONElement::trueValue()
+     ','line_number':457,'multiline':True]
+['text':'*
+     * @param pattern a BSON obj indicating a set of (un-dotted) field
+     * names.  Element values are ignored.
+     * @return a BSON obj constructed by taking the elements of this obj
+     * that correspond to the fields in pattern. Field names of the
+     * returned object are replaced with the empty string. If field in
+     * pattern is missing, it is omitted from the returned object.
+     *
+     * Example: if this = {a : 4 , b : 5 , c : 6})
+     *   this.extractFieldsUnDotted({a : 1 , c : 1}) -> {"" : 4 , "" : 6 }
+     *   this.extractFieldsUnDotted({b : "blah"}) -> {"" : 5}
+     ','line_number':463,'multiline':True]
+['text':'*
+     * arrays are bson objects with numeric and increasing field names
+     * @return true if field names are numeric and increasing
+     ','line_number':483,'multiline':True]
+['text':'*
+     * @return the raw data of the object
+     ','line_number':489,'multiline':True]
+['text':'*
+     * @return total size of the BSON object in bytes
+     ','line_number':496,'multiline':True]
+['text':'*
+     * performs a cursory check on the object's size only.
+     ','line_number':503,'multiline':True]
+['text':'*
+     * Validates that the element is okay to be stored in a collection.
+     * Recursively validates children.
+     ','line_number':514,'multiline':True]
+['text':'*
+     * @return true if object is empty -- i.e.,  {}
+     ','line_number':520,'multiline':True]
+['text':'*
+     * Whether this BSONObj is the "empty prototype" special case.
+     ','line_number':527,'multiline':True]
+['text':'*
+     * Alternative output format
+     ','line_number':534,'multiline':True]
+['text':'','line_number':539,'multiline':False]
+['text':' Comparison API.','line_number':540,'multiline':False]
+['text':'','line_number':541,'multiline':False]
+['text':' BSONObj instances can be compared either using woCompare() or via operator overloads. Most','line_number':542,'multiline':False]
+['text':' callers should prefer operator overloads. Note that the operator overloads return a','line_number':543,'multiline':False]
+['text':' DeferredComparison, which must be subsequently evaluated by a BSONObj::ComparatorInterface.','line_number':544,'multiline':False]
+['text':' See bsonobj_comparator_interface.h for details.','line_number':545,'multiline':False]
+['text':'','line_number':546,'multiline':False]
+['text':'*
+     * Compares two BSON Objects using the rules specified by 'rules', 'comparator' for
+     * string comparisons, and 'o' for ascending vs. descending ordering.
+     *
+     * Returns <0 if 'this' is less than 'obj'.
+     *         >0 if 'this' is greater than 'obj'.
+     *          0 if 'this' is equal to 'obj'.
+     ','line_number':548,'multiline':True]
+['text':'*
+     * Returns true if 'this' is a prefix of otherObj- in other words if otherObj contains the same
+     * field names and field vals in the same order as 'this', plus optionally some additional
+     * elements.
+     *
+     * All comparisons between elements are made using 'eltCmp'.
+     ','line_number':590,'multiline':True]
+['text':'*
+     * @param otherObj
+     * @return returns true if the list of field names in 'this' is a prefix
+     * of the list of field names in otherObj.  Similar to 'isPrefixOf',
+     * but ignores the field values and only looks at field names.
+     ','line_number':599,'multiline':True]
+['text':'*
+     * This is "shallow equality" -- ints and doubles won't match.  for a
+     * deep equality test use woCompare (which is slower).
+     ','line_number':607,'multiline':True]
+['text':'*
+     * @return first field of the object
+     ','line_number':619,'multiline':True]
+['text':'*
+     * faster than firstElement().fieldName() - for the first element we can easily find the
+     * fieldname without computing the element size.
+     ','line_number':626,'multiline':True]
+['text':'*
+     * Get the _id field from the object.  For good performance drivers should
+     * assure that _id is the first element of the object; however, correct operation
+     * is assured regardless.
+     * @return true if found
+     ','line_number':644,'multiline':True]
+['text':'*
+     * Return a version of this object where top level elements of types
+     * that are not part of the bson wire protocol are replaced with
+     * std::string identifier equivalents.
+     * TODO Support conversion of element types other than min and max.
+     ','line_number':652,'multiline':True]
+['text':'*
+     * Return new object with the field names replaced by those in the
+     * passed object.
+     ','line_number':660,'multiline':True]
+['text':'*
+     * add all elements of the object to the specified vector
+     ','line_number':670,'multiline':True]
+['text':'*
+     * add all elements of the object to the specified list
+     ','line_number':674,'multiline':True]
+['text':'*
+     * These enable range-based for loops over BSONObjs:
+     *
+     *      for (BSONElement elem : BSON("a" << 1 << "b" << 2)) {
+     *          ... // Do something with elem
+     *      }
+     *
+     * You can also loop over a bson object as-if it were a map<StringData, BSONElement>:
+     *
+     *      for (auto [fieldName, elem] : BSON("a" << 1 << "b" << 2)) {
+     *          ... // Do something with fieldName and elem
+     *      }
+     ','line_number':684,'multiline':True]
+['text':'/ members for Sorter','line_number':708,'multiline':False]
+['text':' unused','line_number':709,'multiline':False]
+['text':' TODO consider ownedness?','line_number':719,'multiline':False]
+['text':'size','line_number':724,'multiline':True]
+['text':'eoo','line_number':724,'multiline':True]
+['text':' Don't add anything other than forwarding constructors!!!','line_number':762,'multiline':False]
+['text':'*
+ * An stl-compatible forward iterator over the elements of a BSONObj.
+ *
+ * The BSONObj must stay in scope for the duration of the iterator's execution.
+ ','line_number':767,'multiline':True]
+['text':'*
+     * All default constructed iterators are equal to each other.
+     * They are in a dereferencable state, and return an EOO BSONElement.
+     * They must not be incremented.
+     ','line_number':780,'multiline':True]
+['text':'*
+     * Constructs an iterator pointing to the first element in obj or EOO if it is empty.
+     ','line_number':787,'multiline':True]
+['text':'*
+     * Returns an iterator pointing to the EOO element in obj.
+     ','line_number':792,'multiline':True]
+['text':' This is checked in the BSONObj constructor.','line_number':798,'multiline':False]
+['text':'*
+     * pre-increment
+     ','line_number':802,'multiline':True]
+['text':'*
+     * post-increment
+     ','line_number':811,'multiline':True]
+['text':'*
+ * Non-STL iterator for a BSONObj
+ *
+ * For simple loops over BSONObj, do this instead: for (auto&& elem : obj) { ... }
+ *
+ * Note each BSONObj ends with an EOO element: so you will get moreWithEOO() on an empty
+ * object, although more() will be false and next().eoo() will be true.
+ *
+ * The BSONObj must stay in scope for the duration of the iterator's execution.
+ ','line_number':840,'multiline':True]
+['text':'*
+     * Create an iterator for a BSON object.
+     ','line_number':852,'multiline':True]
+['text':'*
+     * Advance '_pos' by currentElement.size(). The element passed in must be equivalent to the
+     * current element '_pos' is at.
+     ','line_number':870,'multiline':True]
+['text':'*
+     * Return true if the current element is equal to 'otherElement'.
+     * Do *not* use with moreWithEOO() as the function will return false if the current element and
+     * 'otherElement' are EOO.
+     ','line_number':879,'multiline':True]
+['text':'*
+     * @return true if more elements exist to be enumerated.
+     ','line_number':889,'multiline':True]
+['text':'*
+     * @return true if more elements exist to be enumerated INCLUDING the EOO element which is
+     * always at the end.
+     ','line_number':896,'multiline':True]
+['text':'*
+     * pre-increment
+     ','line_number':911,'multiline':True]
+['text':'*
+     * post-increment
+     ','line_number':919,'multiline':True]
+['text':'*
+ * Base class implementing ordered iteration through BSONElements.
+ ','line_number':947,'multiline':True]
+['text':' Include type byte','line_number':967,'multiline':False]
+['text':' Add null terminator','line_number':968,'multiline':False]
+['text':'*
+ * Provides iteration of a BSONObj's BSONElements in lexical field order.
+ ','line_number':989,'multiline':True]
+['text':'*
+ * Provides iteration of a BSONArray's BSONElements in numeric field order.
+ * The elements of a bson array should always be numerically ordered by field name, but this
+ * implementation re-sorts them anyway.
+ ','line_number':997,'multiline':True]
+['text':'*
+ * Similar to BOOST_FOREACH
+ *
+ * DEPRECATED: Use range-based for loops now.
+ ','line_number':1014,'multiline':True]
+['text':' namespace mongo','line_number':1081,'multiline':False]

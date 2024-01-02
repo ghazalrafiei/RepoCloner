@@ -1,0 +1,296 @@
+['text':'*
+ *    Copyright (C) 2022-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Marker for node class (both logical and physical sub-classes).
+ * A node not marked with either ExclusivelyLogicalNode or ExclusivelyPhysicalNode is considered to
+ * be both a logical and a physical node (e.g. a filter node). It is invalid to mark a node with
+ * both tags at the same time.
+ ','line_number':62,'multiline':True]
+['text':'*
+ * Marker for exclusively logical nodes.
+ ','line_number':70,'multiline':True]
+['text':'*
+ * Marker for exclusively physical nodes.
+ ','line_number':75,'multiline':True]
+['text':' Node which is not exclusively physical.','line_number':86,'multiline':False]
+['text':' Node which is not exclusively logical.','line_number':92,'multiline':False]
+['text':'*
+ * Logical Scan node.
+ * Represents scanning from an underlying collection and producing a single projection conceptually
+ * containing the stream of BSON objects read from the collection.
+ ','line_number':96,'multiline':True]
+['text':'*
+ * Physical Scan node.
+ * It defines scanning a collection with an optional projection name that contains the documents.
+ *
+ * Optionally set of fields is specified to retrieve from the underlying collection, and expose as
+ * projections.
+ ','line_number':125,'multiline':True]
+['text':'*
+ * Logical ValueScanNode.
+ *
+ * It originates a set of projections each with a fixed sequence of values, which is encoded as an
+ * array. Each array element has as many entries as the number of projections plus one. If are
+ * providing a row id, the first one must be of type RecordId.
+ ','line_number':164,'multiline':True]
+['text':'*
+     * Each element of 'valueArray' is an array itself and must have one entry corresponding to
+     * each of 'projections'.
+     ','line_number':178,'multiline':True]
+['text':' Optional logical properties. Used as a seed during logical proeprties derivation.','line_number':203,'multiline':False]
+['text':' Indicates if the valueArray provides a column with RecordId elements.','line_number':209,'multiline':False]
+['text':'*
+ * Physical CoScanNode.
+ *
+ * The "Co" in CoScan indicates that it is constant; conceptually it originates an infinite stream
+ * of Nothing. A typical use case is to limit it to one document, and attach projections with a
+ * following EvaluationNode(s).
+ ','line_number':213,'multiline':True]
+['text':'*
+ * Index scan node.
+ * Retrieve data using an index. Return recordIds or values (if the index is covering).
+ * This is a physical node.
+ ','line_number':229,'multiline':True]
+['text':' Name of the collection.','line_number':265,'multiline':False]
+['text':' The name of the index.','line_number':268,'multiline':False]
+['text':' The index interval.','line_number':271,'multiline':False]
+['text':' Do we reverse the index order.','line_number':274,'multiline':False]
+['text':'*
+ * SeekNode.
+ * Retrieve values using rowIds (typically previously retrieved using an index scan).
+ * This is a physical node.
+ *
+ * 'ridProjectionName' parameter designates the incoming rid which is the starting point of the
+ * seek. 'fieldProjectionMap' may choose to include an outgoing rid which will contain the
+ * successive (if we do not have a following limit) document ids.
+ ','line_number':278,'multiline':True]
+['text':'*
+ * Logical group delegator node: scan from a given group.
+ * Used in conjunction with memo.
+ ','line_number':315,'multiline':True]
+['text':'*
+ * Physical group delegator node: refer to a physical node in a memo group.
+ * Used in conjunction with memo.
+ ','line_number':333,'multiline':True]
+['text':'*
+ * Filter node.
+ * It applies a filter over its input.
+ *
+ * This node is both logical and physical.
+ *
+ * The Filter node evaluates its Expression child. If the expression evaluates to false or is not a
+ * boolean, the value is filtered out, otherwise it's retained.
+ ','line_number':351,'multiline':True]
+['text':'*
+ * Evaluation node.
+ * Adds a new projection to its input.
+ *
+ * This node is both logical and physical.
+ ','line_number':375,'multiline':True]
+['text':'*
+ * RID intersection node.
+ * This is a logical node representing either index-index intersection or index-collection scan
+ * (seek) fetch.
+ *
+ * It is equivalent to a join node with the difference that RID projections do not exist on logical
+ * level, and thus projection names are not determined until physical optimization. We want to also
+ * restrict the type of operations on RIDs (in this case only set intersection) as opposed to say
+ * filter on rid = 5.
+ ','line_number':412,'multiline':True]
+['text':'*
+ * RID union node.
+ * This is a logical node representing index-index unioning. Used for index OR-ing.
+ ','line_number':442,'multiline':True]
+['text':'*
+ * Sargable node.
+ * This is a logical node which represents special kinds of (simple) evaluations and filters which
+ * are amenable to being used in indexing or covered scans.
+ *
+ * These evaluations and filters are tracked via PartialSchemaRequirements in DNF. For example, a
+ * SargableNode which encodes a disjunction of three predicates, {a: {$eq: 1}},
+ * {b: {$eq: 2}}, and {c: {$gt: 3}} may have the following PartialSchemaEntries:
+ *      entry1: {<PathGet "a" Traverse Id, scan_0>,    <[1, 1],     <none>>}
+ *      entry2: {<PathGet "b" Traverse Id, scan_0>,    <[2, 2],     <none>>}
+ *      entry3: {<PathGet "c" Traverse Id, scan_0>,    <[3, +inf],  <none>>}
+ * These entries would then be composed in DNF: OR( AND( entry1 ), AND( entry2 ), AND( entry3 )).
+ *
+ * The partial schema requirements should be simplified before constructing a SargableNode. There
+ * should be at least 1 and at most kMaxPartialSchemaReqs entries in the requirements. Also, within
+ * a conjunction of PartialSchemaEntries, only one instance of a path without Traverse elements
+ * (non-multikey) is allowed. By contrast several instances of paths with Traverse elements
+ * (multikey) are allowed. For example: Get "a" Get "b" Id is allowed just once while Get "a"
+ * Traverse Get "b" Id is allowed multiple times.
+ *
+ * The SargableNode also tracks some precomputed information such as which indexes are suitable
+ * for satisfying the requirements.
+ *
+ * Finally, each SargableNode has an IndexReqTarget used to control SargableNode splitting
+ * optimizations. During optimization, SargableNodes are first introduced with a Complete target.
+ * A Complete target indicates that the SargableNode is responsible for satisfying
+ * the entire set of predicates extracted from the original query (that is, all predicates
+ * identified pre-splitting). During SargableNode splitting, Index and Seek targets may be
+ * introduced. An Index target indicates the SargableNode need only produce index keys, whereas a
+ * Seek target indicates the SargableNode should produce documents given RIDs.
+ ','line_number':471,'multiline':True]
+['text':'*
+     * Maximum size of the PartialSchemaRequirements that can be used to create a SargableNode.
+     ','line_number':506,'multiline':True]
+['text':' Performance optimization to limit number of groups.','line_number':544,'multiline':False]
+['text':' Under what indexing requirements can this node be implemented.','line_number':545,'multiline':False]
+['text':'*
+ * Logical binary join.
+ * Join of two logical nodes. Can express inner and outer joins, with an associated join predicate.
+ *
+ * Variables specified in correlatedProjectionNames and used in the inner (right) side are
+ * automatically bound with variables from the left (outer) side.
+ ','line_number':558,'multiline':True]
+['text':' Those projections must exist on the outer side and are used to bind free variables on the','line_number':592,'multiline':False]
+['text':' inner side.','line_number':593,'multiline':False]
+['text':'*
+ * Physical hash join node.
+ * Join condition is a conjunction of pairwise equalities between corresponding left and right keys.
+ * It assumes the outer side is probe side and inner side is "build" side. Currently supports only
+ * inner joins.
+ ','line_number':597,'multiline':True]
+['text':' Join condition is a conjunction of _leftKeys.at(i) == _rightKeys.at(i).','line_number':628,'multiline':False]
+['text':'*
+ * Merge Join node.
+ * This is a physical node representing joining of two sorted inputs. Applies an equality predicate
+ * left == right for each left and right key provided. Returns the same "bag" as an intersection,
+ * with the output being sorted.
+ ','line_number':633,'multiline':True]
+['text':' Describes how to merge the sorted streams.','line_number':663,'multiline':False]
+['text':' Join condition is a conjunction of _leftKeys.at(i) == _rightKeys.at(i).','line_number':666,'multiline':False]
+['text':' This struct is a workaround to avoid a use-after-move problem while initializing the base','line_number':671,'multiline':False]
+['text':' class and passing constructor arguments. Due to the way how the base class is designed, we','line_number':672,'multiline':False]
+['text':' need to std::move the children vector as the first argument to the Base vector, but then','line_number':673,'multiline':False]
+['text':' obtain the size of the moved vector while computing the last argument. So, we'll preserve','line_number':674,'multiline':False]
+['text':' the children's vector size in this struct to avoid this situation. Used by SortedMergeNode and','line_number':675,'multiline':False]
+['text':' UnionNode.','line_number':676,'multiline':False]
+['text':'*
+ * Sorted Merge node.
+ * Used to merge an arbitrary number of sorted input streams. Returns the same "bag" as union, with
+ * the output being sorted.
+ ','line_number':686,'multiline':True]
+['text':' Describes how to merge the sorted streams.','line_number':710,'multiline':False]
+['text':'*
+ * Physical nested loop join (NLJ). Can express inner and outer joins, with an associated join
+ * predicate.
+ *
+ * Variables specified in correlatedProjectionNames and used in the inner (right) side are
+ * automatically bound with variables from the left (outer) side.
+ ','line_number':714,'multiline':True]
+['text':' Those projections must exist on the outer side and are used to bind free variables on the','line_number':748,'multiline':False]
+['text':' inner side.','line_number':749,'multiline':False]
+['text':'*
+ * Union of several logical nodes. Projections in common to all nodes are logically union-ed in the
+ * output. It can be used with a single child just to restrict projections.
+ *
+ * This node is both logical and physical.
+ ','line_number':753,'multiline':True]
+['text':'*
+ * Group-by node.
+ * This node is logical with a default physical implementation corresponding to a hash group-by.
+ * Projects the group-by column from its child, and adds aggregation expressions.
+ ','line_number':785,'multiline':True]
+['text':'*
+     * groupByProjectionNames: The group keys for the group operation. These bindings are also
+     * accessible to parents of this node. aggregationProjectionNames: The output bindings for each
+     * aggregation function. aggregationExpressions: The aggregation functions to compute the values
+     * for the groups.
+     ','line_number':794,'multiline':True]
+['text':' Used for local-global rewrite.','line_number':849,'multiline':False]
+['text':'*
+ * Unwind node.
+ * Unwinds an embedded relation inside an array. Generates unwinding positions in the CID
+ * projection.
+ *
+ * This node is both logical and physical.
+ ','line_number':853,'multiline':True]
+['text':'*
+ * Unique node.
+ *
+ * This is a physical node. It encodes an operation which will deduplicate the child input using a
+ * sequence of given projection names. It is similar to GroupBy using the given projections as a
+ * compound grouping key.
+ ','line_number':903,'multiline':True]
+['text':'*
+ * Spool producer node.
+ *
+ * This is a physical node. It buffers the values coming from its child in a shared buffer indexed
+ * by the "spoolId" field. This buffer in turn is accessed via a corresponding SpoolConsumer node.
+ * It can be used to implement recursive plans.
+ *
+ * We have two different modes of operation:
+ *    1. Eager: on startup it will read and store the entire input from its child into the buffer
+ * identified by the "spoolId" parameter. Then when asked for more data, it will return data from
+ * the buffer.
+ *    2. Lazy: by contrast to "eager", it will request each value from its child incrementally
+ * and store it into the shared buffer, and immediately propagate it to the parent.
+ ','line_number':934,'multiline':True]
+['text':'*
+ * Spool consumer node.
+ *
+ * This is a physical node. It delivers incoming values from a shared buffer (indexed by "spoolId").
+ * This shared buffer is populated by a corresponding SpoolProducer node.
+ *
+ * It has two modes of operation:
+ *   1. Stack: the consumer removes each value from the buffer as it is returned. The values are
+ * returned in reverse order (hence "stack") of insertion in the shared buffer.
+ *   2. Regular: the node will return the values in the same order in which they were inserted. The
+ * values are not removed from the buffer.
+ ','line_number':986,'multiline':True]
+['text':'*
+ * Collation node.
+ * This node is both logical and physical.
+ *
+ * It represents an operator to collate (sort, or cluster) the input.
+ ','line_number':1020,'multiline':True]
+['text':'*
+ * Limit and skip node.
+ * This node is both logical and physical.
+ *
+ * It limits the size of the input by a fixed amount.
+ ','line_number':1045,'multiline':True]
+['text':'*
+ * Exchange node.
+ * It specifies how the relation is spread across machines in the execution environment.
+ * Currently only single-node, and hash-based partitioning are supported.
+ *
+ * This node is both logical and physical.
+ ','line_number':1070,'multiline':True]
+['text':'*
+ * Root of the tree that holds references to the output of the query. In the mql case the query
+ * outputs a single "column" (aka document) but in a general case (SQL) we can output arbitrary many
+ * "columns". We need the internal references for the output projections in order to keep them live,
+ * otherwise they would be dropped from the tree by DCE.
+ *
+ * This node is only logical.
+ ','line_number':1096,'multiline':True]
+['text':' namespace mongo::optimizer','line_number':1121,'multiline':False]

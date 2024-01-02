@@ -1,0 +1,606 @@
+['text':'
+ * vim: syntax=c
+ *
+ * Implement some C99-compatible complex math functions
+ *
+ * Most of the code is taken from the msun library in FreeBSD (HEAD @ 4th
+ * October 2013), under the following license:
+ *
+ * Copyright (c) 2007, 2011 David Schultz <das@FreeBSD.ORG>
+ * Copyright (c) 2012 Stephen Montgomery-Smith <stephen@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ ','line_number':1,'multiline':True]
+['text':'
+ * Hack inherited from BSD, the intent is to set the FPU inexact
+ * flag in an efficient way. The flag is IEEE specific. See
+ * https://github.com/freebsd/freebsd/blob/4c6378299/lib/msun/src/catrig.c#L42
+ ','line_number':38,'multiline':True]
+['text':'*begin repeat
+ * #type = npy_float, npy_double, npy_longdouble#
+ * #ctype = npy_cfloat,npy_cdouble,npy_clongdouble#
+ * #c = f, , l#
+ * #C = F, , L#
+ * #NAME = CFLOAT, CDOUBLE, CLONGDOUBLE#
+ * #TMAX = FLT_MAX, DBL_MAX, LDBL_MAX#
+ * #TMIN = FLT_MIN, DBL_MIN, LDBL_MIN#
+ * #TMANT_DIG = FLT_MANT_DIG, DBL_MANT_DIG, LDBL_MANT_DIG#
+ * #TEPS = FLT_EPSILON, DBL_EPSILON, LDBL_EPSILON#
+ * #precision = 1, 2, 3#
+ ','line_number':52,'multiline':True]
+['text':'==========================================================
+ * Constants
+ *=========================================================','line_number':65,'multiline':True]
+['text':'==========================================================
+ * Helper functions
+ *
+ * These are necessary because we do not count on using a
+ * C99 compiler.
+ *=========================================================','line_number':74,'multiline':True]
+['text':' divide by zeros should yield a complex inf or nan ','line_number':106,'multiline':True]
+['text':'==========================================================
+ * Custom implementation of missing complex C99 functions
+ *=========================================================','line_number':122,'multiline':True]
+['text':'
+ * cexp and (ccos, csin)h functions need to calculate exp scaled by another
+ * number.  This can be difficult if exp(x) overflows.  By doing this way, we
+ * don't risk overflowing exp. This likely raises floating-point exceptions,
+ * if we decide that we care.
+ *
+ * This is only useful over a limited range, (see below) an expects that the
+ * input values are in this range.
+ *
+ * This is based on the technique used in FreeBSD's __frexp_exp and
+ * __ldexp_(c)exp functions by David Schultz.
+ *
+ * SCALED_CEXP_LOWER = log(FLT_MAX)
+ * SCALED_CEXP_UPPER = log(2) + log(FLT_MAX) - log(FLT_TRUE_MIN),
+ * where FLT_TRUE_MIN is the smallest possible subnormal number.
+ ','line_number':142,'multiline':True]
+['text':' r is nan ','line_number':230,'multiline':True]
+['text':' r is +- inf ','line_number':239,'multiline':True]
+['text':' x = +inf, y = +-inf | nan ','line_number':251,'multiline':True]
+['text':' x = -inf, y = nan | +i inf ','line_number':265,'multiline':True]
+['text':' algorithm from cpython, rev. d86f5686cef9
+ *
+ * The usual formula for the real part is log(hypot(z.real, z.imag)).
+ * There are four situations where this formula is potentially
+ * problematic:
+ *
+ * (1) the absolute value of z is subnormal.  Then hypot is subnormal,
+ * so has fewer than the usual number of bits of accuracy, hence may
+ * have large relative error.  This then gives a large absolute error
+ * in the log.  This can be solved by rescaling z by a suitable power
+ * of 2.
+ *
+ * (2) the absolute value of z is greater than DBL_MAX (e.g. when both
+ * z.real and z.imag are within a factor of 1/sqrt(2) of DBL_MAX)
+ * Again, rescaling solves this.
+ *
+ * (3) the absolute value of z is close to 1.  In this case it's
+ * difficult to achieve good accuracy, at least in part because a
+ * change of 1ulp in the real or imaginary part of z can result in a
+ * change of billions of ulps in the correctly rounded answer.
+ *
+ * (4) z = 0.  The simplest thing to do here is to call the
+ * floating-point log with an argument of 0, and let its behaviour
+ * (returning -infinity, signaling a floating-point exception, setting
+ * errno, or whatever) determine that of c_log.  So the usual formula
+ * is fine here.
+','line_number':276,'multiline':True]
+['text':' catch cases where hypot(ax, ay) is subnormal ','line_number':315,'multiline':True]
+['text':' log(+/-0 +/- 0i) ','line_number':320,'multiline':True]
+['text':' raise divide-by-zero floating point exception ','line_number':321,'multiline':True]
+['text':' max(ax, ay) ','line_number':331,'multiline':True]
+['text':' min(ax, ay) ','line_number':332,'multiline':True]
+['text':' We risk spurious overflow for components >= DBL_MAX / (1 + sqrt(2)). ','line_number':347,'multiline':True]
+['text':' Handle special cases. ','line_number':361,'multiline':True]
+['text':' raise invalid if b is not a NaN ','line_number':369,'multiline':True]
+['text':' return NaN + NaN i ','line_number':370,'multiline':True]
+['text':'
+         * csqrt(inf + NaN i)  = inf +  NaN i
+         * csqrt(inf + y i)    = inf +  0 i
+         * csqrt(-inf + NaN i) = NaN +- inf i
+         * csqrt(-inf + y i)   = 0   +  inf i
+         ','line_number':373,'multiline':True]
+['text':'
+     * The remaining special case (b is NaN) is handled just fine by
+     * the normal code path below.
+     ','line_number':386,'multiline':True]
+['text':' Scale to avoid overflow. ','line_number':391,'multiline':True]
+['text':' Algorithm 312, CACM vol 10, Oct 1967. ','line_number':401,'multiline':True]
+['text':' Rescale. ','line_number':411,'multiline':True]
+['text':'
+ * Always use this function because of the multiplication for small
+ * integer powers, but in the body use cpow if it is available.
+ ','line_number':422,'multiline':True]
+['text':' private function for use in npy_pow{f, ,l} ','line_number':427,'multiline':True]
+['text':'
+     * Checking if in a^b, if b is zero.
+     * If a is not zero then by definition of logarithm a^0 is 1.
+     * If a is also zero then 0^0 is best defined as 1.
+     ','line_number':447,'multiline':True]
+['text':' case 0^b
+     * If a is a complex zero (ai=ar=0), then the result depends 
+     * upon values of br and bi. The result is either:
+     * 0 (in magnitude), undefined or 1.
+     * The later case is for br=bi=0 and independent of ar and ai
+     * but is handled above).
+     ','line_number':455,'multiline':True]
+['text':' 
+         * If the real part of b is positive (br>0) then this is
+         * the zero complex with positive sign on both the
+         * real and imaginary part.
+         ','line_number':463,'multiline':True]
+['text':' else we are in the case where the
+         * real part of b is negative (br<0).
+         * Here we should return a complex nan
+         * and raise FloatingPointError: invalid value...
+         ','line_number':471,'multiline':True]
+['text':' Raise invalid value by calling inf - inf','line_number':477,'multiline':True]
+['text':' unroll: handle inf better ','line_number':487,'multiline':True]
+['text':' unroll: handle inf better ','line_number':491,'multiline':True]
+['text':' unroll: handle inf better ','line_number':495,'multiline':True]
+['text':' ccos(z) = ccosh(I * z) ','line_number':544,'multiline':True]
+['text':' csin(z) = -I * csinh(I * z) ','line_number':553,'multiline':True]
+['text':' ctan(z) = -I * ctanh(I * z) ','line_number':563,'multiline':True]
+['text':'
+ * Taken from the msun library in FreeBSD, rev 226599.
+ *
+ * Hyperbolic cosine of a complex argument z = x + i y.
+ *
+ * cosh(z) = cosh(x+iy)
+ *         = cosh(x) cos(y) + i sinh(x) sin(y).
+ *
+ * Exceptional values are noted in the comments within the source code.
+ * These values and the return value were taken from n1124.pdf.
+ *
+ * CCOSH_BIG is chosen such that
+ * spacing(0.5 * exp(CCOSH_BIG)) > 0.5*exp(-CCOSH_BIG)
+ * although the exact value assigned to CCOSH_BIG is not so important
+ ','line_number':570,'multiline':True]
+['text':' Handle the nearly-non-exceptional cases where x and y are finite. ','line_number':615,'multiline':True]
+['text':' small x: normal case ','line_number':622,'multiline':True]
+['text':' |x| >= 22, so cosh(x) ~= exp(|x|) ','line_number':627,'multiline':True]
+['text':' x < 710: exp(|x|) won't overflow ','line_number':629,'multiline':True]
+['text':' x < 1455: scale to avoid overflow ','line_number':635,'multiline':True]
+['text':' x >= 1455: the result always overflows ','line_number':641,'multiline':True]
+['text':'
+     * cosh(+-0 +- I Inf) = dNaN + I sign(d(+-0, dNaN))0.
+     * The sign of 0 in the result is unspecified.  Choice = normally
+     * the same as dNaN.  Raise the invalid floating-point exception.
+     *
+     * cosh(+-0 +- I NaN) = d(NaN) + I sign(d(+-0, NaN))0.
+     * The sign of 0 in the result is unspecified.  Choice = normally
+     * the same as d(NaN).
+     ','line_number':647,'multiline':True]
+['text':'
+     * cosh(+-Inf +- I 0) = +Inf + I (+-)(+-)0.
+     *
+     * cosh(NaN +- I 0)   = d(NaN) + I sign(d(NaN, +-0))0.
+     * The sign of 0 in the result is unspecified.
+     ','line_number':660,'multiline':True]
+['text':'
+     * cosh(x +- I Inf) = dNaN + I dNaN.
+     * Raise the invalid floating-point exception for finite nonzero x.
+     *
+     * cosh(x + I NaN) = d(NaN) + I d(NaN).
+     * Optionally raises the invalid floating-point exception for finite
+     * nonzero x.  Choice = don't raise (except for signaling NaNs).
+     ','line_number':670,'multiline':True]
+['text':'
+     * cosh(+-Inf + I NaN)  = +Inf + I d(NaN).
+     *
+     * cosh(+-Inf +- I Inf) = +Inf + I dNaN.
+     * The sign of Inf in the result is unspecified.  Choice = always +.
+     * Raise the invalid floating-point exception.
+     *
+     * cosh(+-Inf + I y)   = +Inf cos(y) +- I Inf sin(y)
+     ','line_number':682,'multiline':True]
+['text':'
+     * cosh(NaN + I NaN)  = d(NaN) + I d(NaN).
+     *
+     * cosh(NaN +- I Inf) = d(NaN) + I d(NaN).
+     * Optionally raises the invalid floating-point exception.
+     * Choice = raise.
+     *
+     * cosh(NaN + I y)    = d(NaN) + I d(NaN).
+     * Optionally raises the invalid floating-point exception for finite
+     * nonzero y.  Choice = don't raise (except for signaling NaNs).
+     ','line_number':698,'multiline':True]
+['text':'
+ * Taken from the msun library in FreeBSD, rev 226599.
+ *
+ * Hyperbolic sine of a complex argument z = x + i y.
+ *
+ * sinh(z) = sinh(x+iy)
+ *         = sinh(x) cos(y) + i cosh(x) sin(y).
+ *
+ * Exceptional values are noted in the comments within the source code.
+ * These values and the return value were taken from n1124.pdf.
+ ','line_number':716,'multiline':True]
+['text':' Handle the nearly-non-exceptional cases where x and y are finite. ','line_number':757,'multiline':True]
+['text':' small x: normal case ','line_number':764,'multiline':True]
+['text':' |x| >= 22, so cosh(x) ~= exp(|x|) ','line_number':769,'multiline':True]
+['text':' x < 710: exp(|x|) won't overflow ','line_number':771,'multiline':True]
+['text':' x < 1455: scale to avoid overflow ','line_number':777,'multiline':True]
+['text':' x >= 1455: the result always overflows ','line_number':783,'multiline':True]
+['text':'
+     * sinh(+-0 +- I Inf) = sign(d(+-0, dNaN))0 + I dNaN.
+     * The sign of 0 in the result is unspecified.  Choice = normally
+     * the same as dNaN.  Raise the invalid floating-point exception.
+     *
+     * sinh(+-0 +- I NaN) = sign(d(+-0, NaN))0 + I d(NaN).
+     * The sign of 0 in the result is unspecified.  Choice = normally
+     * the same as d(NaN).
+     ','line_number':789,'multiline':True]
+['text':'
+     * sinh(+-Inf +- I 0) = +-Inf + I +-0.
+     *
+     * sinh(NaN +- I 0)   = d(NaN) + I +-0.
+     ','line_number':802,'multiline':True]
+['text':'
+     * sinh(x +- I Inf) = dNaN + I dNaN.
+     * Raise the invalid floating-point exception for finite nonzero x.
+     *
+     * sinh(x + I NaN) = d(NaN) + I d(NaN).
+     * Optionally raises the invalid floating-point exception for finite
+     * nonzero x.  Choice = don't raise (except for signaling NaNs).
+     ','line_number':814,'multiline':True]
+['text':'
+     * sinh(+-Inf + I NaN)  = +-Inf + I d(NaN).
+     * The sign of Inf in the result is unspecified.  Choice = normally
+     * the same as d(NaN).
+     *
+     * sinh(+-Inf +- I Inf) = +Inf + I dNaN.
+     * The sign of Inf in the result is unspecified.  Choice = always +.
+     * Raise the invalid floating-point exception.
+     *
+     * sinh(+-Inf + I y)   = +-Inf cos(y) + I Inf sin(y)
+     ','line_number':826,'multiline':True]
+['text':'
+     * sinh(NaN + I NaN)  = d(NaN) + I d(NaN).
+     *
+     * sinh(NaN +- I Inf) = d(NaN) + I d(NaN).
+     * Optionally raises the invalid floating-point exception.
+     * Choice = raise.
+     *
+     * sinh(NaN + I y)    = d(NaN) + I d(NaN).
+     * Optionally raises the invalid floating-point exception for finite
+     * nonzero y.  Choice = don't raise (except for signaling NaNs).
+     ','line_number':845,'multiline':True]
+['text':'
+ * Taken from the msun library in FreeBSD, rev 226600.
+ *
+ * Hyperbolic tangent of a complex argument z = x + i y.
+ *
+ * The algorithm is from:
+ *
+ *   W. Kahan.  Branch Cuts for Complex Elementary Functions or Much
+ *   Ado About Nothing's Sign Bit.  In The State of the Art in
+ *   Numerical Analysis, pp. 165 ff.  Iserles and Powell, eds., 1987.
+ *
+ * Method:
+ *
+ *   Let t    = tan(x)
+ *       beta = 1/cos^2(y)
+ *       s    = sinh(x)
+ *       rho  = cosh(x)
+ *
+ *   We have:
+ *
+ *   tanh(z) = sinh(z) / cosh(z)
+ *
+ *             sinh(x) cos(y) + i cosh(x) sin(y)
+ *           = ---------------------------------
+ *             cosh(x) cos(y) + i sinh(x) sin(y)
+ *
+ *             cosh(x) sinh(x) / cos^2(y) + i tan(y)
+ *           = -------------------------------------
+ *                    1 + sinh^2(x) / cos^2(y)
+ *
+ *             beta rho s + i t
+ *           = ----------------
+ *               1 + beta s^2
+ *
+ * Modifications:
+ *
+ *   I omitted the original algorithm's handling of overflow in tan(x) after
+ *   verifying with nearpi.c that this can't happen in IEEE single or double
+ *   precision.  I also handle large x differently.
+ ','line_number':863,'multiline':True]
+['text':'
+     * ctanh(NaN + i 0) = NaN + i 0
+     *
+     * ctanh(NaN + i y) = NaN + i NaN        for y != 0
+     *
+     * The imaginary part has the sign of x*sin(2*y), but there's no
+     * special effort to get this right.
+     *
+     * ctanh(+-Inf +- i Inf) = +-1 +- 0
+     *
+     * ctanh(+-Inf + i y) = +-1 + 0 sin(2y)        for y finite
+     *
+     * The imaginary part of the sign is unspecified.  This special
+     * case is only needed to avoid a spurious invalid exception when
+     * y is infinite.
+     ','line_number':917,'multiline':True]
+['text':'
+     * ctanh(x + i NAN) = NaN + i NaN
+     * ctanh(x +- i Inf) = NaN + i NaN
+     ','line_number':943,'multiline':True]
+['text':'
+     * ctanh(+-huge + i +-y) ~= +-1 +- i 2sin(2y)/exp(2x), using the
+     * approximation sinh^2(huge) ~= exp(2*huge) / 4.
+     * We use a modified formula to avoid spurious overflow.
+     ','line_number':951,'multiline':True]
+['text':' Kahan's algorithm ','line_number':963,'multiline':True]
+['text':' = 1 / cos^2(y) ','line_number':965,'multiline':True]
+['text':' = cosh(x) ','line_number':967,'multiline':True]
+['text':'
+ * Complex inverse trig functions taken from the msum library in FreeBSD
+ * revision 251404
+ *
+ * The algorithm is very close to that in "Implementing the complex arcsine
+ * and arccosine functions using exception handling" by T. E. Hull, Thomas F.
+ * Fairgrieve, and Ping Tak Peter Tang, published in ACM Transactions on
+ * Mathematical Software, Volume 23 Issue 3, 1997, Pages 299-335,
+ * https://dl.acm.org/doi/10.1145/275323.275324.
+ *
+ * Throughout we use the convention z = x + I*y.
+ *
+ * casinh(z) = sign(x)*log(A+sqrt(A*A-1)) + I*asin(B)
+ * where
+ * A = (|z+I| + |z-I|) / 2
+ * B = (|z+I| - |z-I|) / 2 = y/A
+ *
+ * These formulas become numerically unstable:
+ *   (a) for Re(casinh(z)) when z is close to the line segment [-I, I] (that
+ *       is, Re(casinh(z)) is close to 0);
+ *   (b) for Im(casinh(z)) when z is close to either of the intervals
+ *       [I, I*infinity) or (-I*infinity, -I] (that is, |Im(casinh(z))| is
+ *       close to PI/2).
+ *
+ * These numerical problems are overcome by defining
+ * f(a, b) = (hypot(a, b) - b) / 2 = a*a / (hypot(a, b) + b) / 2
+ * Then if A < A_crossover, we use
+ *   log(A + sqrt(A*A-1)) = log1p((A-1) + sqrt((A-1)*(A+1)))
+ *   A-1 = f(x, 1+y) + f(x, 1-y)
+ * and if B > B_crossover, we use
+ *   asin(B) = atan2(y, sqrt(A*A - y*y)) = atan2(y, sqrt((A+y)*(A-y)))
+ *   A-y = f(x, y+1) + f(x, y-1)
+ * where without loss of generality we have assumed that x and y are
+ * non-negative.
+ *
+ * Much of the difficulty comes because the intermediate computations may
+ * produce overflows or underflows.  This is dealt with in the paper by Hull
+ * et al by using exception handling.  We do this by detecting when
+ * computations risk underflow or overflow.  The hardest part is handling the
+ * underflows when computing f(a, b).
+ *
+ * Note that the function f(a, b) does not appear explicitly in the paper by
+ * Hull et al, but the idea may be found on pages 308 and 309.  Introducing the
+ * function f(a, b) allows us to concentrate many of the clever tricks in this
+ * paper into one function.
+ ','line_number':977,'multiline':True]
+['text':'
+ * Function f(a, b, hypot_a_b) = (hypot(a, b) - b) / 2.
+ * Pass hypot(a, b) as the third argument.
+ ','line_number':1024,'multiline':True]
+['text':'
+ * All the hard work is contained in this function.
+ * x and y are assumed positive or zero, and less than RECIP_EPSILON.
+ * Upon return:
+ * rx = Re(casinh(z)) = -Im(cacos(y + I*x)).
+ * B_is_usable is set to 1 if the value of B is usable.
+ * If B_is_usable is set to 0, sqrt_A2my2 = sqrt(A*A - y*y), and new_y = y.
+ * If returning sqrt_A2my2 has potential to result in an underflow, it is
+ * rescaled, and new_y is similarly rescaled.
+ ','line_number':1040,'multiline':True]
+['text':' A, B, R, and S are as in Hull et al. ','line_number':1073,'multiline':True]
+['text':' A-1, A-y. ','line_number':1074,'multiline':True]
+['text':' |z+I| ','line_number':1076,'multiline':True]
+['text':' |z-I| ','line_number':1077,'multiline':True]
+['text':' A = (|z+I| + |z-I|) / 2 ','line_number':1079,'multiline':True]
+['text':'
+     * Mathematically A >= 1.  There is a small chance that this will not
+     * be so because of rounding errors.  So we will make certain it is
+     * so.
+     ','line_number':1081,'multiline':True]
+['text':'
+         * Am1 = fp + fm, where fp = f(x, 1+y), and fm = f(x, 1-y).
+         * rx = log1p(Am1 + sqrt(Am1*(A+1)))
+         ','line_number':1091,'multiline':True]
+['text':'
+             * fp is of order x^2, and fm = x/2.
+             * A = 1 (inexactly).
+             ','line_number':1096,'multiline':True]
+['text':'
+             * Underflow will not occur because
+             * x >= DBL_EPSILON^2/128 >= FOUR_SQRT_MIN
+             ','line_number':1103,'multiline':True]
+['text':'
+             * fp = x*x/(1+y)/4, fm = x*x/(1-y)/4, and
+             * A = 1 (inexactly).
+             ','line_number':1111,'multiline':True]
+['text':' if (y > 1) ','line_number':1117,'multiline':True]
+['text':'
+             * A-1 = y-1 (inexactly).
+             ','line_number':1118,'multiline':True]
+['text':'
+         * Avoid a possible underflow caused by y/A.  For casinh this
+         * would be legitimate, but will be picked up by invoking atan2
+         * later on.  For cacos this would not be legitimate.
+         ','line_number':1131,'multiline':True]
+['text':' B = (|z+I| - |z-I|) / 2 = y/A ','line_number':1142,'multiline':True]
+['text':'
+         * Amy = fp + fm, where fp = f(x, y+1), and fm = f(x, y-1).
+         * sqrt_A2my2 = sqrt(Amy*(A+y))
+         ','line_number':1148,'multiline':True]
+['text':'
+             * fp is of order x^2, and fm = x/2.
+             * A = 1 (inexactly).
+             ','line_number':1153,'multiline':True]
+['text':'
+             * Underflow will not occur because
+             * x >= DBL_EPSILON/128 >= FOUR_SQRT_MIN
+             * and
+             * x >= DBL_EPSILON^2 >= FOUR_SQRT_MIN
+             ','line_number':1160,'multiline':True]
+['text':'
+             * fp = x*x/(y+1)/4, fm = x*x/(y-1)/4, and
+             * A = y (inexactly).
+             *
+             * y < RECIP_EPSILON.  So the following
+             * scaling should avoid any underflow problems.
+             ','line_number':1170,'multiline':True]
+['text':' if (y < 1) ','line_number':1181,'multiline':True]
+['text':'
+             * fm = 1-y >= DBL_EPSILON, fp is of order x^2, and
+             * A = 1 (inexactly).
+             ','line_number':1182,'multiline':True]
+['text':'
+ * Optimized version of clog() for |z| finite and larger than ~RECIP_EPSILON.
+ ','line_number':1191,'multiline':True]
+['text':'
+     * Avoid overflow in hypot() when x and y are both very large.
+     * Divide x and y by E, and then add 1 to the logarithm.  This depends
+     * on E being larger than sqrt(2).
+     * Dividing by E causes an insignificant loss of accuracy; however
+     * this method is still poor since it is unnecessarily slow.
+     ','line_number':1225,'multiline':True]
+['text':'
+     * Avoid overflow when x or y is large.  Avoid underflow when x or
+     * y is small.
+     ','line_number':1235,'multiline':True]
+['text':' this is sqrt(6*EPS) ','line_number':1254,'multiline':True]
+['text':' chosen such that pio2_hi + pio2_lo == pio2_hi but causes FE_INEXACT. ','line_number':1256,'multiline':True]
+['text':' cacos(+-Inf + I*NaN) = NaN + I*opt(-)Inf ','line_number':1281,'multiline':True]
+['text':' cacos(NaN + I*+-Inf) = NaN + I*-+Inf ','line_number':1285,'multiline':True]
+['text':' cacos(0 + I*NaN) = PI/2 + I*NaN with inexact ','line_number':1289,'multiline':True]
+['text':'
+         * All other cases involving NaN return NaN + I*NaN.
+         * C99 leaves it optional whether to raise invalid if one of
+         * the arguments is not NaN, so we opt not to raise it.
+         ','line_number':1293,'multiline':True]
+['text':' clog...() will raise inexact unless x or y is infinite. ','line_number':1302,'multiline':True]
+['text':' Avoid spuriously raising inexact for z = 1. ','line_number':1312,'multiline':True]
+['text':' All remaining cases are inexact. ','line_number':1317,'multiline':True]
+['text':' casin(z) = I * conj( casinh(I * conj(z)) ) ','line_number':1352,'multiline':True]
+['text':' catan(z) = I * conj( catanh(I * conj(z)) ) ','line_number':1362,'multiline':True]
+['text':'
+     * cacosh(z) = I*cacos(z) or -I*cacos(z)
+     * where the sign is chosen so Re(cacosh(z)) >= 0.
+     ','line_number':1372,'multiline':True]
+['text':' cacosh(NaN + I*NaN) = NaN + I*NaN ','line_number':1382,'multiline':True]
+['text':' cacosh(NaN + I*+-Inf) = +Inf + I*NaN ','line_number':1386,'multiline':True]
+['text':' cacosh(+-Inf + I*NaN) = +Inf + I*NaN ','line_number':1387,'multiline':True]
+['text':' cacosh(0 + I*NaN) = NaN + I*NaN ','line_number':1391,'multiline':True]
+['text':'
+ * casinh(z) = z + O(z^3)   as z -> 0
+ *
+ * casinh(z) = sign(x)*clog(sign(x)*z) + O(1/z^2)   as z -> infinity
+ * The above formula works for the imaginary part as well, because
+ * Im(casinh(z)) = sign(x)*atan2(sign(x)*y, fabs(x)) + O(y/z^3)
+ *    as z -> infinity, uniformly in y
+ ','line_number':1400,'multiline':True]
+['text':' this is sqrt(6*EPS) ','line_number':1412,'multiline':True]
+['text':' casinh(+-Inf + I*NaN) = +-Inf + I*NaN ','line_number':1431,'multiline':True]
+['text':' casinh(NaN + I*+-Inf) = opt(+-)Inf + I*NaN ','line_number':1435,'multiline':True]
+['text':' casinh(NaN + I*0) = NaN + I*0 ','line_number':1439,'multiline':True]
+['text':'
+         * All other cases involving NaN return NaN + I*NaN.
+         * C99 leaves it optional whether to raise invalid if one of
+         * the arguments is not NaN, so we opt not to raise it.
+         ','line_number':1443,'multiline':True]
+['text':' clog...() will raise inexact unless x or y is infinite. ','line_number':1452,'multiline':True]
+['text':' Avoid spuriously raising inexact for z = 0. ','line_number':1464,'multiline':True]
+['text':' All remaining cases are inexact. ','line_number':1469,'multiline':True]
+['text':'
+ * sum_squares(x,y) = x*x + y*y (or just x*x if y*y would underflow).
+ * Assumes x*x and y*y will not overflow.
+ * Assumes x and y are finite.
+ * Assumes y is non-negative.
+ * Assumes fabs(x) >= DBL_EPSILON.
+ ','line_number':1488,'multiline':True]
+['text':' sqrt(DBL_MIN) ','line_number':1502,'multiline':True]
+['text':' sqrt(DBL_MIN) ','line_number':1506,'multiline':True]
+['text':' this is correct for 80 bit long doubles ','line_number':1508,'multiline':True]
+['text':' Avoid underflow when y is small. ','line_number':1512,'multiline':True]
+['text':'
+ * real_part_reciprocal(x, y) = Re(1/(x+I*y)) = x/(x*x + y*y).
+ * Assumes x and y are not NaN, and one of x and y is larger than
+ * RECIP_EPSILON.  We avoid unwarranted underflow.  It is important to not use
+ * the code creal(1/z), because the imaginary part may produce an unwanted
+ * underflow.
+ * This is only called in a context where inexact is always raised before
+ * the call, so no effort is made to avoid or force inexact.
+ ','line_number':1520,'multiline':True]
+['text':'  more guard digits are useful iff there is extra precision. ','line_number':1563,'multiline':True]
+['text':' just half or 1 guard digit ','line_number':1564,'multiline':True]
+['text':'
+     * This code is inspired by the C99 document n1124.pdf, Section G.5.1,
+     * example 2.
+     ','line_number':1572,'multiline':True]
+['text':' +-Inf -> +-0 is special ','line_number':1581,'multiline':True]
+['text':' should avoid double div, but hard ','line_number':1585,'multiline':True]
+['text':' 2**(1-ilogb(x)) ','line_number':1592,'multiline':True]
+['text':' this is sqrt(3*EPS) ','line_number':1654,'multiline':True]
+['text':' chosen such that pio2_hi + pio2_lo == pio2_hi but causes FE_INEXACT. ','line_number':1656,'multiline':True]
+['text':' This helps handle many cases. ','line_number':1676,'multiline':True]
+['text':' To ensure the same accuracy as atan(), and to filter out z = 0. ','line_number':1681,'multiline':True]
+['text':' catanh(+-Inf + I*NaN) = +-0 + I*NaN ','line_number':1687,'multiline':True]
+['text':' catanh(NaN + I*+-Inf) = sign(NaN)0 + I*+-PI/2 ','line_number':1691,'multiline':True]
+['text':'
+         * All other cases involving NaN return NaN + I*NaN.
+         * C99 leaves it optional whether to raise invalid if one of
+         * the arguments is not NaN, so we opt not to raise it.
+         ','line_number':1696,'multiline':True]
+['text':'
+         * z = 0 was filtered out above.  All other cases must raise
+         * inexact, but this is the only one that needs to do it
+         * explicitly.
+         ','line_number':1710,'multiline':True]
+['text':'*end repeat*','line_number':1739,'multiline':True]
+['text':'==========================================================
+ * Decorate all the functions which are available natively
+ *=========================================================','line_number':1741,'multiline':True]
+['text':'*begin repeat
+ * #type = npy_float, npy_double, npy_longdouble#
+ * #ctype = npy_cfloat, npy_cdouble, npy_clongdouble#
+ * #c = f, , l#
+ * #C = F, , L#
+ ','line_number':1745,'multiline':True]
+['text':'*begin repeat1
+ * #kind = cabs,carg#
+ * #KIND = CABS,CARG#
+ ','line_number':1752,'multiline':True]
+['text':'*end repeat1*','line_number':1763,'multiline':True]
+['text':'*begin repeat1
+ * #kind = cexp,clog,csqrt,ccos,csin,ctan,ccosh,csinh,ctanh,
+ *         cacos,casin,catan,cacosh,casinh,catanh#
+ * #KIND = CEXP,CLOG,CSQRT,CCOS,CSIN,CTAN,CCOSH,CSINH,CTANH,
+ *         CACOS,CASIN,CATAN,CACOSH,CASINH,CATANH#
+ ','line_number':1765,'multiline':True]
+['text':'*end repeat1*','line_number':1778,'multiline':True]
+['text':'*end repeat*','line_number':1781,'multiline':True]

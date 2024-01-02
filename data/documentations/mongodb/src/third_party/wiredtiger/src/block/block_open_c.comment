@@ -1,0 +1,159 @@
+['text':'-
+ * Copyright (c) 2014-present MongoDB, Inc.
+ * Copyright (c) 2008-2014 WiredTiger, Inc.
+ *	All rights reserved.
+ *
+ * See the file LICENSE for redistribution information.
+ ','line_number':1,'multiline':True]
+['text':'
+ * __wt_block_manager_drop --
+ *     Drop a file.
+ ','line_number':13,'multiline':True]
+['text':'
+ * __wt_block_manager_drop_object --
+ *     Drop a shared object file from the bucket directory and the cache directory.
+ ','line_number':23,'multiline':True]
+['text':' Generate the name of the shared object file with the bucket prefix. ','line_number':38,'multiline':True]
+['text':'
+     * Call directly into the bucket file system rather than wt_fs_remove because wt_fs_remove will
+     * prepend the home directory and then send an incorrect path into the storage layer. The bucket
+     * and cache directory should just get the prefixed name and it will do its own path management.
+     ','line_number':40,'multiline':True]
+['text':'
+ * __wt_block_manager_create --
+ *     Create a file.
+ ','line_number':55,'multiline':True]
+['text':'
+     * Create the underlying file and open a handle.
+     *
+     * Since WiredTiger schema operations are (currently) non-transactional, it's possible to see a
+     * partially-created file left from a previous create. Further, there's nothing to prevent users
+     * from creating files in our space. Move any existing files out of the way and complain.
+     ','line_number':70,'multiline':True]
+['text':' Write out the file's meta-data. ','line_number':95,'multiline':True]
+['text':'
+     * Ensure the truncated file has made it to disk, then the upper-level is never surprised.
+     ','line_number':98,'multiline':True]
+['text':' Close the file handle. ','line_number':103,'multiline':True]
+['text':' Undo any create on error. ','line_number':106,'multiline':True]
+['text':'
+ * __wt_block_close --
+ *     Close a block handle.
+ ','line_number':116,'multiline':True]
+['text':' Safety check, if failed to initialize. ','line_number':125,'multiline':True]
+['text':' We shouldn't have any read requests in progress. ','line_number':130,'multiline':True]
+['text':'
+ * __wt_block_configure_first_fit --
+ *     Configure first-fit allocation.
+ ','line_number':145,'multiline':True]
+['text':'
+     * Switch to first-fit allocation so we rewrite blocks at the start of the file; use atomic
+     * instructions because checkpoints also configure first-fit allocation, and this way we stay on
+     * first-fit allocation as long as any operation wants it.
+     ','line_number':152,'multiline':True]
+['text':'
+ * __wt_block_open --
+ *     Open a block handle.
+ ','line_number':163,'multiline':True]
+['text':' Block objects can be shared (although there can be only one writer). ','line_number':186,'multiline':True]
+['text':' Basic structure allocation, initialization. ','line_number':198,'multiline':True]
+['text':' If not passed an allocation size, get one from the configuration. ','line_number':205,'multiline':True]
+['text':' Configuration: optional OS buffer cache maximum size. ','line_number':215,'multiline':True]
+['text':' Configuration: optional immediate write scheduling flag. ','line_number':219,'multiline':True]
+['text':' Set the file extension information. ','line_number':223,'multiline':True]
+['text':'
+     * Open the underlying file handle.
+     *
+     * "direct_io=checkpoint" configures direct I/O for readonly data files.
+     ','line_number':226,'multiline':True]
+['text':'
+     * Tiered storage sets file permissions to readonly, but nobody else does. This flag means the
+     * underlying file is read-only, and NOT that the handle access pattern is read-only.
+     ','line_number':244,'multiline':True]
+['text':' Set the file's size. ','line_number':254,'multiline':True]
+['text':'
+     * If we're opening a file and it only contains a header and we're doing incremental backup
+     * indicate this so that the first checkpoint is sure to set all the bits as dirty to cover the
+     * header so that the header gets copied.
+     ','line_number':256,'multiline':True]
+['text':' Initialize the live checkpoint's lock. ','line_number':264,'multiline':True]
+['text':'
+     * Read the description information from the first block.
+     *
+     * Salvage is a special case: if we're forcing the salvage, we don't look at anything, including
+     * the description information.
+     ','line_number':267,'multiline':True]
+['text':' Block is valid, so make it visible in the connection. ','line_number':276,'multiline':True]
+['text':'
+ * __wt_desc_write --
+ *     Write a file's initial descriptor structure.
+ ','line_number':291,'multiline':True]
+['text':' If in-memory, we don't read or write the descriptor structure. ','line_number':302,'multiline':True]
+['text':' Use a scratch buffer to get correct alignment for direct I/O. ','line_number':306,'multiline':True]
+['text':'
+     * Checksum a little-endian version of the header, and write everything in little-endian format.
+     * The checksum is (potentially) returned in a big-endian format, swap it into place in a
+     * separate step.
+     ','line_number':310,'multiline':True]
+['text':'
+ * __file_is_wt_internal --
+ *     Check if a filename is one used by WiredTiger internal files.
+ ','line_number':331,'multiline':True]
+['text':'
+ * __desc_read --
+ *     Read and verify the file's metadata.
+ ','line_number':342,'multiline':True]
+['text':' If in-memory, we don't read or write the descriptor structure. ','line_number':355,'multiline':True]
+['text':'
+     * If a data file is smaller than the allocation size, we're not going to be able to read the
+     * descriptor block.
+     *
+     * If we're performing rollback to stable as part of recovery, we should treat this as if the
+     * file has been deleted; that is, to log an error but continue on.
+     *
+     * In the general case, we should return a generic error and signal that we've detected data
+     * corruption.
+     *
+     * FIXME-WT-5832: MongoDB relies heavily on the error codes reported when opening cursors (which
+     * hits this logic if the relevant data handle isn't already open). However this code gets run
+     * in rollback to stable as part of recovery where we want to skip any corrupted data files
+     * temporarily to allow MongoDB to initiate salvage. This is why we've been forced into this
+     * situation. We should address this as part of WT-5832 and clarify what error codes we expect
+     * to be returning across the API boundary.
+     ','line_number':359,'multiline':True]
+['text':' Use a scratch buffer to get correct alignment for direct I/O. ','line_number':388,'multiline':True]
+['text':' Read the first allocation-sized block and verify the file format. ','line_number':391,'multiline':True]
+['text':'
+     * Handle little- and big-endian objects. Objects are written in little- endian format: save the
+     * header checksum, and calculate the checksum for the header in its little-endian form. Then,
+     * restore the header's checksum, and byte-swap the whole thing as necessary, leaving us with a
+     * calculated checksum that should match the checksum in the header.
+     ','line_number':394,'multiline':True]
+['text':'
+     * We fail the open if the checksum fails, or the magic number is wrong or the major/minor
+     * numbers are unsupported for this version. This test is done even if the caller is verifying
+     * or salvaging the file: it makes sense for verify, and for salvage we don't overwrite files
+     * without some reason to believe they are WiredTiger files. The user may have entered the wrong
+     * file name, and is now frantically pounding their interrupt key.
+     ','line_number':410,'multiline':True]
+['text':'
+         * If we're doing an import, we can't expect to be able to verify checksums since we don't
+         * know the allocation size being used. This isn't an error so we should just return success
+         * and let import get whatever information it needs.
+         ','line_number':423,'multiline':True]
+['text':'
+ * __wt_block_stat --
+ *     Set the statistics for a live block handle.
+ ','line_number':453,'multiline':True]
+['text':'
+     * Reading from the live system's structure normally requires locking, but it's an 8B statistics
+     * read, there's no need.
+     ','line_number':460,'multiline':True]
+['text':'
+ * __wt_block_manager_size --
+ *     Return the size of a live block handle.
+ ','line_number':473,'multiline':True]
+['text':'
+ * __wt_block_manager_named_size --
+ *     Return the size of a named file.
+ ','line_number':486,'multiline':True]

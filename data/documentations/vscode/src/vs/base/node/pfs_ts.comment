@@ -1,0 +1,237 @@
+['text':'---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------','line_number':1,'multiline':True]
+['text':'#region rimraf','line_number':17,'multiline':False]
+['text':'*
+	 * Slow version that unlinks each file and folder.
+	 ','line_number':21,'multiline':True]
+['text':'*
+	 * Fast version that first moves the file/folder
+	 * into a temp directory and then deletes that
+	 * without waiting for it.
+	 ','line_number':26,'multiline':True]
+['text':'*
+ * Allows to delete the provided path (either file or folder) recursively
+ * with the options:
+ * - `UNLINK`: direct removal from disk
+ * - `MOVE`: faster variant that first moves the target to temp dir and then
+ *           deletes it in the background without waiting for that to finish.
+ *           the optional `moveToPath` allows to override where to rename the
+ *           path to before deleting it.
+ ','line_number':34,'multiline':True]
+['text':' delete: via rm','line_number':51,'multiline':False]
+['text':' delete: via move','line_number':56,'multiline':False]
+['text':' Intentionally using `fs.promises` here to skip','line_number':63,'multiline':False]
+['text':' the patched graceful-fs method that can result','line_number':64,'multiline':False]
+['text':' in very long running `rename` calls when the','line_number':65,'multiline':False]
+['text':' folder is locked by a file watcher. We do not','line_number':66,'multiline':False]
+['text':' really want to slow down this operation more','line_number':67,'multiline':False]
+['text':' than necessary and we have a fallback to delete','line_number':68,'multiline':False]
+['text':' via unlink.','line_number':69,'multiline':False]
+['text':' https://github.com/microsoft/vscode/issues/139908','line_number':70,'multiline':False]
+['text':' ignore - path to delete did not exist','line_number':74,'multiline':False]
+['text':' otherwise fallback to unlink','line_number':77,'multiline':False]
+['text':' Delete but do not return as promise','line_number':80,'multiline':False]
+['text':' ignore ','line_number':81,'multiline':True]
+['text':'#endregion','line_number':101,'multiline':False]
+['text':'#region readdir with NFC support (macos)','line_number':103,'multiline':False]
+['text':'*
+ * Drop-in replacement of `fs.readdir` with support
+ * for converting from macOS NFD unicon form to NFC
+ * (https://github.com/nodejs/node/issues/2165)
+ ','line_number':113,'multiline':True]
+['text':' Fallback to manually reading and resolving each','line_number':131,'multiline':False]
+['text':' children of the folder in case we hit an error','line_number':132,'multiline':False]
+['text':' previously.','line_number':133,'multiline':False]
+['text':' This can only really happen on exotic file systems','line_number':134,'multiline':False]
+['text':' such as explained in #115645 where we get entries','line_number':135,'multiline':False]
+['text':' from `readdir` that we can later not `lstat`.','line_number':136,'multiline':False]
+['text':'*
+ * Drop-in replacement of `fs.readdirSync` with support
+ * for converting from macOS NFD unicon form to NFC
+ * (https://github.com/nodejs/node/issues/2165)
+ ','line_number':165,'multiline':True]
+['text':' Mac: uses NFD unicode form on disk, but we want NFC','line_number':180,'multiline':False]
+['text':' See also https://github.com/nodejs/node/issues/2165','line_number':181,'multiline':False]
+['text':'*
+ * A convenience method to read all children of a path that
+ * are directories.
+ ','line_number':193,'multiline':True]
+['text':'#endregion','line_number':210,'multiline':False]
+['text':'#region whenDeleted()','line_number':212,'multiline':False]
+['text':'*
+ * A `Promise` that resolves when the provided `path`
+ * is deleted from disk.
+ ','line_number':214,'multiline':True]
+['text':'#endregion','line_number':237,'multiline':False]
+['text':'#region Methods with symbolic links support','line_number':239,'multiline':False]
+['text':' The stats of the file. If the file is a symbolic','line_number':245,'multiline':False]
+['text':' link, the stats will be of that target file and','line_number':246,'multiline':False]
+['text':' not the link itself.','line_number':247,'multiline':False]
+['text':' If the file is a symbolic link pointing to a non','line_number':248,'multiline':False]
+['text':' existing file, the stat will be of the link and','line_number':249,'multiline':False]
+['text':' the `dangling` flag will indicate this.','line_number':250,'multiline':False]
+['text':' Will be provided if the resource is a symbolic link','line_number':253,'multiline':False]
+['text':' on disk. Use the `dangling` flag to find out if it','line_number':254,'multiline':False]
+['text':' points to a resource that does not exist on disk.','line_number':255,'multiline':False]
+['text':'*
+	 * Resolves the `fs.Stats` of the provided path. If the path is a
+	 * symbolic link, the `fs.Stats` will be from the target it points
+	 * to. If the target does not exist, `dangling: true` will be returned
+	 * as `symbolicLink` value.
+	 ','line_number':259,'multiline':True]
+['text':' First stat the link','line_number':267,'multiline':False]
+['text':' Return early if the stat is not a symbolic link at all','line_number':272,'multiline':False]
+['text':' ignore - use stat() instead ','line_number':277,'multiline':True]
+['text':' If the stat is a symbolic link or failed to stat, use fs.stat()','line_number':280,'multiline':False]
+['text':' which for symbolic links will stat the target they point to','line_number':281,'multiline':False]
+['text':' If the link points to a nonexistent file we still want','line_number':288,'multiline':False]
+['text':' to return it as result while setting dangling: true flag','line_number':289,'multiline':False]
+['text':' Windows: workaround a node.js bug where reparse points','line_number':294,'multiline':False]
+['text':' are not supported (https://github.com/nodejs/node/issues/36790)','line_number':295,'multiline':False]
+['text':' If the link points to a nonexistent file we still want','line_number':303,'multiline':False]
+['text':' to return it as result while setting dangling: true flag','line_number':304,'multiline':False]
+['text':'*
+	 * Figures out if the `path` exists and is a file with support
+	 * for symlinks.
+	 *
+	 * Note: this will return `false` for a symlink that exists on
+	 * disk but is dangling (pointing to a nonexistent path).
+	 *
+	 * Use `exists` if you only care about the path existing on disk
+	 * or not without support for symbolic links.
+	 ','line_number':317,'multiline':True]
+['text':' Ignore, path might not exist','line_number':333,'multiline':False]
+['text':'*
+	 * Figures out if the `path` exists and is a directory with support for
+	 * symlinks.
+	 *
+	 * Note: this will return `false` for a symlink that exists on
+	 * disk but is dangling (pointing to a nonexistent path).
+	 *
+	 * Use `exists` if you only care about the path existing on disk
+	 * or not without support for symbolic links.
+	 ','line_number':339,'multiline':True]
+['text':' Ignore, path might not exist','line_number':355,'multiline':False]
+['text':'#endregion','line_number':362,'multiline':False]
+['text':'#region Write File','line_number':364,'multiline':False]
+['text':' According to node.js docs (https://nodejs.org/docs/v14.16.0/api/fs.html#fs_fs_writefile_file_data_options_callback)','line_number':366,'multiline':False]
+['text':' it is not safe to call writeFile() on the same path multiple times without waiting for the callback to return.','line_number':367,'multiline':False]
+['text':' Therefor we use a Queue on the path that is given to us to sequentialize calls to the same path properly.','line_number':368,'multiline':False]
+['text':'*
+ * Same as `fs.writeFile` but with an additional call to
+ * `fs.fdatasync` after writing to ensure changes are
+ * flushed to disk.
+ *
+ * In addition, multiple writes to the same path are queued.
+ ','line_number':371,'multiline':True]
+['text':' Calls fs.writeFile() followed by a fs.sync() call to flush the changes to disk','line_number':405,'multiline':False]
+['text':' We do this in cases where we want to make sure the data is really on disk and','line_number':406,'multiline':False]
+['text':' not in some cache.','line_number':407,'multiline':False]
+['text':'','line_number':408,'multiline':False]
+['text':' See https://github.com/nodejs/node/blob/v5.10.0/lib/fs.js#L1194','line_number':409,'multiline':False]
+['text':' Open the file with same flags and mode as fs.writeFile()','line_number':415,'multiline':False]
+['text':' It is valid to pass a fd handle to fs.writeFile() and this will keep the handle open!','line_number':421,'multiline':False]
+['text':' still need to close the handle on error!','line_number':424,'multiline':False]
+['text':' Flush contents (not metadata) of the file to disk','line_number':427,'multiline':False]
+['text':' https://github.com/microsoft/vscode/issues/9589','line_number':428,'multiline':False]
+['text':' In some exotic setups it is well possible that node fails to sync','line_number':431,'multiline':False]
+['text':' In that case we disable flushing and warn to the console','line_number':432,'multiline':False]
+['text':'*
+ * Same as `fs.writeFileSync` but with an additional call to
+ * `fs.fdatasyncSync` after writing to ensure changes are
+ * flushed to disk.
+ ','line_number':444,'multiline':True]
+['text':' Open the file with same flags and mode as fs.writeFile()','line_number':456,'multiline':False]
+['text':' It is valid to pass a fd handle to fs.writeFile() and this will keep the handle open!','line_number':461,'multiline':False]
+['text':' Flush contents (not metadata) of the file to disk','line_number':464,'multiline':False]
+['text':' https://github.com/microsoft/vscode/issues/9589','line_number':466,'multiline':False]
+['text':' default node.js mode for files ','line_number':478,'multiline':True]
+['text':' default node.js mode for files ','line_number':482,'multiline':True]
+['text':'#endregion','line_number':487,'multiline':False]
+['text':'#region Move / Copy','line_number':489,'multiline':False]
+['text':'*
+ * A drop-in replacement for `fs.rename` that:
+ * - allows to move across multiple disks
+ * - attempts to retry the operation for certain error codes on Windows
+ ','line_number':491,'multiline':True]
+['text':' matches graceful-fs ','line_number':496,'multiline':True]
+['text':' simulate node.js behaviour here and do a no-op if paths match','line_number':498,'multiline':False]
+['text':' On Windows, a rename can fail when either source or target','line_number':503,'multiline':False]
+['text':' is locked by AV software. We do leverage graceful-fs to iron','line_number':504,'multiline':False]
+['text':' out these issues, however in case the target file exists,','line_number':505,'multiline':False]
+['text':' graceful-fs will immediately return without retry for fs.rename().','line_number':506,'multiline':False]
+['text':' In two cases we fallback to classic copy and delete:','line_number':512,'multiline':False]
+['text':'','line_number':513,'multiline':False]
+['text':' 1.) The EXDEV error indicates that source and target are on different devices','line_number':514,'multiline':False]
+['text':' In this case, fallback to using a copy() operation as there is no way to','line_number':515,'multiline':False]
+['text':' rename() between different devices.','line_number':516,'multiline':False]
+['text':'','line_number':517,'multiline':False]
+['text':' 2.) The user tries to rename a file/folder that ends with a dot. This is not','line_number':518,'multiline':False]
+['text':' really possible to move then, at least on UNC devices.','line_number':519,'multiline':False]
+['text':' copying to another device ','line_number':521,'multiline':True]
+['text':' only for errors we think are temporary','line_number':534,'multiline':False]
+['text':' give up after configurable timeout','line_number':540,'multiline':False]
+['text':' if target is not a file, EPERM error may be raised and we should not attempt to retry','line_number':548,'multiline':False]
+['text':' Ignore','line_number':551,'multiline':False]
+['text':' Delay with incremental backoff up to 100ms','line_number':559,'multiline':False]
+['text':' Attempt again','line_number':562,'multiline':False]
+['text':'*
+ * Recursively copies all of `source` to `target`.
+ *
+ * The options `preserveSymlinks` configures how symbolic
+ * links should be handled when encountered. Set to
+ * `false` to not preserve them and `true` otherwise.
+ ','line_number':573,'multiline':True]
+['text':' When copying a file or folder, we want to preserve the mode','line_number':584,'multiline':False]
+['text':' it had and as such provide it when creating. However, modes','line_number':585,'multiline':False]
+['text':' can go beyond what we expect (see link below), so we mask it.','line_number':586,'multiline':False]
+['text':' (https://github.com/nodejs/node-v0.x-archive/issues/3045#issuecomment-4862588)','line_number':587,'multiline':False]
+['text':' Keep track of paths already copied to prevent','line_number':592,'multiline':False]
+['text':' cycles from symbolic links to cause issues','line_number':593,'multiline':False]
+['text':' Symlink','line_number':602,'multiline':False]
+['text':' Try to re-create the symlink unless `preserveSymlinks: false`','line_number':605,'multiline':False]
+['text':' in any case of an error fallback to normal copy via dereferencing','line_number':610,'multiline':False]
+['text':' skip dangling symbolic links from here on (https://github.com/microsoft/vscode/issues/111621)','line_number':615,'multiline':False]
+['text':' Folder','line_number':619,'multiline':False]
+['text':' File or file-like','line_number':624,'multiline':False]
+['text':' Create folder','line_number':632,'multiline':False]
+['text':' Copy each file recursively','line_number':635,'multiline':False]
+['text':' Copy file','line_number':644,'multiline':False]
+['text':' restore mode (https://github.com/nodejs/node/issues/1104)','line_number':647,'multiline':False]
+['text':' Figure out link target','line_number':653,'multiline':False]
+['text':' Special case: the symlink points to a target that is','line_number':656,'multiline':False]
+['text':' actually within the path that is being copied. In that','line_number':657,'multiline':False]
+['text':' case we want the symlink to point to the target and','line_number':658,'multiline':False]
+['text':' not the source','line_number':659,'multiline':False]
+['text':' Create symlink','line_number':664,'multiline':False]
+['text':'#endregion','line_number':668,'multiline':False]
+['text':'#region Promise based fs methods','line_number':670,'multiline':False]
+['text':'*
+ * Prefer this helper class over the `fs.promises` API to
+ * enable `graceful-fs` to function properly. Given issue
+ * https://github.com/isaacs/node-graceful-fs/issues/160 it
+ * is evident that the module only takes care of the non-promise
+ * based fs methods.
+ *
+ * Another reason is `realpath` being entirely different in
+ * the promise based implementation compared to the other
+ * one (https://github.com/microsoft/vscode/issues/118562)
+ *
+ * Note: using getters for a reason, since `graceful-fs`
+ * patching might kick in later after modules have been
+ * loaded we need to defer access to fs methods.
+ * (https://github.com/microsoft/vscode/issues/124176)
+ ','line_number':672,'multiline':True]
+['text':'#region Implemented by node.js','line_number':690,'multiline':False]
+['text':' Not using `promisify` here for a reason: the return','line_number':700,'multiline':False]
+['text':' type is not an object as indicated by TypeScript but','line_number':701,'multiline':False]
+['text':' just the bytes read, so we create our own wrapper.','line_number':702,'multiline':False]
+['text':' Not using `promisify` here for a reason: the return','line_number':720,'multiline':False]
+['text':' type is not an object as indicated by TypeScript but','line_number':721,'multiline':False]
+['text':' just the bytes written, so we create our own wrapper.','line_number':722,'multiline':False]
+['text':'#endregion','line_number':759,'multiline':False]
+['text':'#region Implemented by us','line_number':761,'multiline':False]
+['text':'#endregion','line_number':783,'multiline':False]
+['text':'#endregion','line_number':786,'multiline':False]

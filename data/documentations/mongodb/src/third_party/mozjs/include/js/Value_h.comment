@@ -1,0 +1,193 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' JS::Value implementation. ','line_number':7,'multiline':True]
+['text':' for std::numeric_limits ','line_number':18,'multiline':True]
+['text':' JS::Value can store a full int32_t. ','line_number':30,'multiline':True]
+['text':' Use enums so that printing a JS::Value in the debugger shows nice','line_number':41,'multiline':False]
+['text':' symbolic type tags.','line_number':42,'multiline':False]
+['text':' This type never appears in a Value; it's only an out-of-band value.','line_number':57,'multiline':False]
+['text':' See Bug 584653 for why we include 0xFFFFFFFF.','line_number':119,'multiline':False]
+['text':' This should only be used in toGCThing. See the 'Spectre mitigations' comment.','line_number':170,'multiline':False]
+['text':' JSVAL_TYPE_OBJECT and JSVAL_TYPE_NULL differ by one bit. We can use this to','line_number':187,'multiline':False]
+['text':' implement toObjectOrNull more efficiently.','line_number':188,'multiline':False]
+['text':' All 64-bit platforms that we support actually have a 48-bit address space','line_number':195,'multiline':False]
+['text':' for user-mode pointers, with the top 16 bits all set to zero.','line_number':196,'multiline':False]
+['text':' JS_PUNBOX64 ','line_number':200,'multiline':True]
+['text':' namespace detail','line_number':202,'multiline':False]
+['text':' namespace JS','line_number':203,'multiline':False]
+['text':'* a hole in a native object's elements ','line_number':208,'multiline':True]
+['text':'* there is not a pending iterator value ','line_number':211,'multiline':True]
+['text':'* exception value thrown when closing a generator ','line_number':214,'multiline':True]
+['text':'* used in debug builds to catch tracing errors ','line_number':217,'multiline':True]
+['text':'* an empty subnode in the AST serializer ','line_number':220,'multiline':True]
+['text':'* magic value passed to natives to indicate construction ','line_number':223,'multiline':True]
+['text':'* see class js::HashableValue ','line_number':226,'multiline':True]
+['text':'* error while running Ion code ','line_number':229,'multiline':True]
+['text':'* missing recover instruction result ','line_number':232,'multiline':True]
+['text':'* optimized out slot ','line_number':235,'multiline':True]
+['text':'* uninitialized lexical bindings that produce ReferenceError on touch. ','line_number':238,'multiline':True]
+['text':'* arguments object can't be created because environment is dead. ','line_number':241,'multiline':True]
+['text':'* standard constructors are not created for off-thread parsing. ','line_number':244,'multiline':True]
+['text':'* for local use ','line_number':247,'multiline':True]
+['text':'*
+   * Write records queued up in WritableStreamDefaultController.[[queue]] in the
+   * spec are either "close" (a String) or Record { [[chunk]]: chunk }, where
+   * chunk is an arbitrary user-provided (and therefore non-magic) value.
+   * Represent "close" the String as this magic value; represent Record records
+   * as the |chunk| value within each of them.
+   ','line_number':250,'multiline':True]
+['text':'*
+   * The ReadableStream pipe-to operation concludes with a "finalize" operation
+   * that accepts an optional |error| argument.  In certain cases that optional
+   * |error| must be stored in a handler function, for use after a promise has
+   * settled.  We represent the argument not being provided, in those cases,
+   * using this magic value.
+   ','line_number':259,'multiline':True]
+['text':'*
+   * When an error object is created without the error cause argument, we set
+   * the error's cause slot to this magic value.
+   ','line_number':268,'multiline':True]
+['text':' namespace js','line_number':279,'multiline':False]
+['text':' IEEE-754 bit pattern for double-precision positive infinity.','line_number':285,'multiline':False]
+['text':' This is a quiet NaN on IEEE-754[2008] compatible platforms, including X86,','line_number':290,'multiline':False]
+['text':' ARM, SPARC and modern MIPS.','line_number':291,'multiline':False]
+['text':'','line_number':292,'multiline':False]
+['text':' Note: The default sign bit for a hardware sythesized NaN differs between X86','line_number':293,'multiline':False]
+['text':'       and ARM. Both values are considered compatible values on both','line_number':294,'multiline':False]
+['text':'       platforms.','line_number':295,'multiline':False]
+['text':' Some architectures (not to name names) generate NaNs with bit patterns that','line_number':300,'multiline':False]
+['text':' are incompatible with JS::Value's bit pattern restrictions. Instead we must','line_number':301,'multiline':False]
+['text':' canonicalize all hardware values before storing in JS::Value.','line_number':302,'multiline':False]
+['text':' These builds may run on hardware that has differing polarity of the signaling','line_number':307,'multiline':False]
+['text':' NaN bit. While the kernel may handle the trap for us, it is a performance','line_number':308,'multiline':False]
+['text':' issue so instead we compute the NaN to use on startup. The runtime value must','line_number':309,'multiline':False]
+['text':' still meet `ValueIsDouble` requirements which are checked on startup.','line_number':310,'multiline':False]
+['text':' In particular, we expect one of the following values on MIPS:','line_number':312,'multiline':False]
+['text':'  - 0x7FF7FFFFFFFFFFFF    Legacy','line_number':313,'multiline':False]
+['text':'  - 0x7FF8000000000000    IEEE-754[2008]','line_number':314,'multiline':False]
+['text':' namespace detail','line_number':325,'multiline':False]
+['text':' Return a quiet NaN that is compatible with JS::Value restrictions.','line_number':327,'multiline':False]
+['text':' Convert an arbitrary double to one compatible with JS::Value representation','line_number':337,'multiline':False]
+['text':' by replacing any NaN value with a canonical one.','line_number':338,'multiline':False]
+['text':'*
+ * [SMDOC] JS::Value type
+ *
+ * JS::Value is the interface for a single JavaScript Engine value.  A few
+ * general notes on JS::Value:
+ *
+ * - JS::Value has setX() and isX() members for X in
+ *
+ *     { Int32, Double, String, Symbol, BigInt, Boolean, Undefined, Null,
+ *       Object, Magic }
+ *
+ *   JS::Value also contains toX() for each of the non-singleton types.
+ *
+ * - Magic is a singleton type whose payload contains either a JSWhyMagic
+ *   "reason" for the magic value or a uint32_t value. By providing JSWhyMagic
+ *   values when creating and checking for magic values, it is possible to
+ *   assert, at runtime, that only magic values with the expected reason flow
+ *   through a particular value. For example, if cx->exception has a magic
+ *   value, the reason must be JS_GENERATOR_CLOSING.
+ *
+ * - The JS::Value operations are preferred.  The JSVAL_* operations remain for
+ *   compatibility; they may be removed at some point.  These operations mostly
+ *   provide similar functionality.  But there are a few key differences.  One
+ *   is that JS::Value gives null a separate type.
+ *   Also, to help prevent mistakenly boxing a nullable JSObject* as an object,
+ *   Value::setObject takes a JSObject&. (Conversely, Value::toObject returns a
+ *   JSObject&.)  A convenience member Value::setObjectOrNull is provided.
+ *
+ * - Note that JS::Value is 8 bytes on 32 and 64-bit architectures. Thus, on
+ *   32-bit user code should avoid copying jsval/JS::Value as much as possible,
+ *   preferring to pass by const Value&.
+ *
+ * Spectre mitigations
+ * ===================
+ * To mitigate Spectre attacks, we do the following:
+ *
+ * - On 64-bit platforms, when unboxing a Value, we XOR the bits with the
+ *   expected type tag (instead of masking the payload bits). This guarantees
+ *   that toString, toObject, toSymbol will return an invalid pointer (because
+ *   some high bits will be set) when called on a Value with a different type
+ *   tag.
+ *
+ * - On 32-bit platforms,when unboxing an object/string/symbol Value, we use a
+ *   conditional move (not speculated) to zero the payload register if the type
+ *   doesn't match.
+ ','line_number':346,'multiline':True]
+['text':'*
+   * Returns false if creating a NumberValue containing the given type would
+   * be lossy, true otherwise.
+   ','line_number':443,'multiline':True]
+['text':'** Mutators **','line_number':452,'multiline':True]
+['text':' Note: the 'Spectre mitigations' comment at the top of this class','line_number':596,'multiline':False]
+['text':' explains why we use XOR here.','line_number':597,'multiline':False]
+['text':'** JIT-only interfaces to interact with and create raw Values **','line_number':604,'multiline':True]
+['text':'** Value type queries **','line_number':615,'multiline':True]
+['text':'
+   * N.B. GCC, in some but not all cases, chooses to emit signed comparison
+   * of JSValueTag even though its underlying type has been forced to be
+   * uint32_t.  Thus, all comparisons should explicitly cast operands to
+   * uint32_t.
+   ','line_number':617,'multiline':True]
+['text':' gcc sometimes generates signed < without explicit casts. ','line_number':688,'multiline':True]
+['text':'** Comparison **','line_number':741,'multiline':True]
+['text':'** Extract the value's typed payload **','line_number':749,'multiline':True]
+['text':' Note: the 'Spectre mitigations' comment at the top of this class','line_number':794,'multiline':False]
+['text':' explains why we use XOR here and in other to* methods.','line_number':795,'multiline':False]
+['text':'
+   * Private API
+   *
+   * Private setters/getters allow the caller to read/write arbitrary
+   * word-size pointers or uint32s.  After storing to a value with
+   * setPrivateX, it is the caller's responsibility to only read using
+   * toPrivateX. Private values are given a type which ensures they
+   * aren't marked by the GC.
+   ','line_number':848,'multiline':True]
+['text':'
+   * Private GC Thing API
+   *
+   * Non-JSObject, JSString, and JS::Symbol cells may be put into the 64-bit
+   * payload as private GC things. Such Values are considered isGCThing(), and
+   * as such, automatically marked. Their traceKind() is gotten via their
+   * cells.
+   ','line_number':881,'multiline':True]
+['text':' VisualStudio cannot contain parenthesized C++ style cast and shift','line_number':906,'multiline':False]
+['text':' inside decltype in template parameter:','line_number':907,'multiline':False]
+['text':'   AssertionConditionType<decltype((uintptr_t(x) >> 1))>','line_number':908,'multiline':False]
+['text':' It throws syntax error.','line_number':909,'multiline':False]
+['text':'**********************************************************************','line_number':933,'multiline':True]
+['text':' namespace JS','line_number':1073,'multiline':False]
+['text':'**********************************************************************','line_number':1075,'multiline':True]
+['text':' It's not safe to trace unbarriered pointers except as part of root','line_number':1086,'multiline':False]
+['text':' marking.','line_number':1087,'multiline':False]
+['text':' namespace JS','line_number':1098,'multiline':False]
+['text':'*
+ * A class designed for CRTP use in implementing the non-mutating parts of the
+ * Value interface in Value-like classes.  Wrapper must be a class inheriting
+ * ValueOperations<Wrapper> with a visible get() method returning a const
+ * reference to the Value abstracted by Wrapper.
+ ','line_number':1117,'multiline':True]
+['text':'*
+ * A class designed for CRTP use in implementing all the mutating parts of the
+ * Value interface in Value-like classes.  Wrapper must be a class inheriting
+ * MutableWrappedPtrOperations<Wrapper> with visible get() methods returning
+ * const and non-const references to the Value abstracted by Wrapper.
+ ','line_number':1178,'multiline':True]
+['text':' Call Wrapper::set to trigger any barriers.','line_number':1189,'multiline':False]
+['text':'
+ * Augment the generic Heap<T> interface when T = Value with
+ * type-querying, value-extracting, and mutating operations.
+ ','line_number':1218,'multiline':True]
+['text':' If the Value is a GC pointer type, call |f| with the pointer cast to that','line_number':1229,'multiline':False]
+['text':' type and return the result wrapped in a Maybe, otherwise return None().','line_number':1230,'multiline':False]
+['text':' If the Value is a GC pointer type, call |f| with the pointer cast to that','line_number':1273,'multiline':False]
+['text':' type. Return whether this happened.','line_number':1274,'multiline':False]
+['text':' namespace js','line_number':1291,'multiline':False]
+['text':' namespace JS','line_number':1306,'multiline':False]
+['text':'**********************************************************************','line_number':1309,'multiline':True]
+['text':' namespace JS','line_number':1319,'multiline':False]
+['text':' js_Value_h ','line_number':1321,'multiline':True]

@@ -1,0 +1,149 @@
+['text':'*
+ * Overrides the runCommand method to prefix all databases and namespaces ("config", "admin",
+ * "local" excluded) with a tenant prefix, so that the accessed data will be migrated by the
+ * background operations run by the ContinuousTenantMigration and ContinuousShardSplit hooks.
+ ','line_number':1,'multiline':True]
+['text':' Assert that some tenantIds are provided','line_number':18,'multiline':False]
+['text':' Save references to the original methods in the IIFE's scope.','line_number':22,'multiline':False]
+['text':' This scoping allows the original methods to be called by the overrides below.','line_number':23,'multiline':False]
+['text':' Save a reference to the connection created at shell startup. This will be used as a proxy for','line_number':27,'multiline':False]
+['text':' multiple internal routing connections for the lifetime of the test execution. If there is no','line_number':28,'multiline':False]
+['text':' initial connection, then we will not perform connection routing when using this override.','line_number':29,'multiline':False]
+['text':' For shard merge we need to use the local DB that is not blocked by tenant access blockers.','line_number':33,'multiline':False]
+['text':'*
+ * Asserts that the provided connection is an internal routing connection, not the top-level proxy
+ * connection. The proxy connection also has an internal routing connection, so it is excluded from
+ * this check.
+ ','line_number':36,'multiline':True]
+['text':'*
+ * @returns The internal routing connection for a provided connection
+ ','line_number':49,'multiline':True]
+['text':' Since we are patching the prototype below, there must eventually be a "base case" for','line_number':57,'multiline':False]
+['text':' determining which connection to run a method on. If the provided `conn` has no internal','line_number':58,'multiline':False]
+['text':' routing connection, we assume that it _is_ the internal routing connection, and return','line_number':59,'multiline':False]
+['text':' here.','line_number':60,'multiline':False]
+['text':' Sanity check ensuring we have not accidentally created an internal routing connection on an','line_number':65,'multiline':False]
+['text':' internal routing connection.','line_number':66,'multiline':False]
+['text':'*
+ * Assigns a newly establish connection as the internal routing connection for a Mongo instance.
+ *
+ * @param {Mongo} conn The original Mongo connection
+ * @param {Mongo} mongo The newly established, internal connection
+ ','line_number':71,'multiline':True]
+['text':' We need to close the initial connection differently, since we patch the close method','line_number':86,'multiline':False]
+['text':' below to always proxy calls to the internal routing connection.','line_number':87,'multiline':False]
+['text':' For all other connections we are safe to call close directly','line_number':91,'multiline':False]
+['text':'*
+ * @returns Whether we are running a shard split passthrough.
+ ','line_number':95,'multiline':True]
+['text':'*
+ * If the given response object contains the given tenant migration error, returns the error object.
+ * Otherwise, returns null.
+ ','line_number':102,'multiline':True]
+['text':' Commands, like createIndex and dropIndex, have TenantMigrationCommitted or','line_number':108,'multiline':False]
+['text':' TenantMigrationAborted error in the top level.','line_number':109,'multiline':False]
+['text':' BulkWrite command has errors contained in a cursor response. The error will always be','line_number':120,'multiline':False]
+['text':' in the first batch of the cursor response since getMore is not allowed to run with','line_number':121,'multiline':False]
+['text':' tenant migration / shard merge suites.','line_number':122,'multiline':False]
+['text':'*
+ * If the response contains the 'writeErrors' field, replaces it with a field named
+ * 'truncatedWriteErrors' which includes only the first and last error object in 'writeErrors'.
+ * To be used for logging.
+ ','line_number':135,'multiline':True]
+['text':'*
+ * If the command was a batch command where some of the operations failed, modifies the command
+ * object so that only failed operations are retried.
+ ','line_number':151,'multiline':True]
+['text':' If we get a top level error without writeErrors, retry the entire command.','line_number':157,'multiline':False]
+['text':' findAndModify may also have an update field, but is not a batched command.','line_number':175,'multiline':False]
+['text':' For bulkWrite tenant migration errors always act as if they are executed as','line_number':206,'multiline':False]
+['text':' `ordered:true` meaning we will have to retry every op from the one that errored.','line_number':207,'multiline':False]
+['text':'*
+ * Sets the keys of the given index map to consecutive non-negative integers starting from 0.
+ ','line_number':214,'multiline':True]
+['text':'*
+ * Remove the indices for non-upsert writes that succeeded.
+ ','line_number':235,'multiline':True]
+['text':' Optimization to only look through the indices in a set rather than in an array.','line_number':239,'multiline':False]
+['text':'*
+ * Rewrites a server connection string (ex: rsName/host,host,host) to a URI that the shell can
+ * connect to.
+ ','line_number':253,'multiline':True]
+['text':'${inputParts[1]}/?replicaSet=${inputParts[0]}`;','line_number':259,'multiline':False]
+['text':'*
+ * Returns the state document for the outgoing tenant migration or shard split operation. Asserts
+ * that there is only one such operation.
+ ','line_number':262,'multiline':True]
+['text':' There should only be one active migration at any given time.','line_number':279,'multiline':False]
+['text':'*
+ * Marks the outgoing tenant migration or shard split operation as having caused the shell to
+ * reroute commands by inserting a document for it into the testTenantMigration.rerouted collection
+ * or local.rerouted collection for the shard merge protocol.
+ ','line_number':291,'multiline':True]
+['text':' Throw non-retryable errors.','line_number':319,'multiline':False]
+['text':' Since the shell can throw custom errors that don't propagate the error code, check','line_number':323,'multiline':False]
+['text':' these exceptions for specific network error messages.','line_number':324,'multiline':False]
+['text':' TODO SERVER-54026: Remove check for network error messages once the shell reliably','line_number':325,'multiline':False]
+['text':' returns error codes.','line_number':326,'multiline':False]
+['text':'*
+ * Keeps executing 'cmdObjWithTenantId' by running 'originalRunCommandFunc' if 'this.reroutingMongo'
+ * is not none or 'reroutingRunCommandFunc' if it is none until the command succeeds or fails with
+ * errors other than TenantMigrationCommitted or TenantMigrationAborted. When the command fails
+ * with TenantMigrationCommitted, sets 'this.reroutingMongo' to the mongo connection to the
+ * recipient for the migration. 'dbNameWithTenantId' is only used for logging.
+ ','line_number':338,'multiline':True]
+['text':' Keep track of the write operations that were applied.','line_number':349,'multiline':False]
+['text':' 'indexMap' is a mapping from a write's index in the current cmdObj to its index in the','line_number':358,'multiline':False]
+['text':' original cmdObj.','line_number':359,'multiline':False]
+['text':' If the write didn't encounter a TenantMigrationCommitted or TenantMigrationAborted error','line_number':392,'multiline':False]
+['text':' at all, return the result directly.','line_number':393,'multiline':False]
+['text':' Add/modify the shells's n, nModified, upserted, and writeErrors, unless this command is','line_number':398,'multiline':False]
+['text':' part of a retryable write.','line_number':399,'multiline':False]
+['text':' bulkWrite case.','line_number':401,'multiline':False]
+['text':' First attempt store the whole response.','line_number':403,'multiline':False]
+['text':' The last item from the previous response is guaranteed to be a','line_number':407,'multiline':False]
+['text':' tenant migration error. Remove it to append the retried response.','line_number':408,'multiline':False]
+['text':' Iterate over new response and change the indexes to start with newIdx.','line_number':410,'multiline':False]
+['text':' Add the new responses (with modified indexes) onto the original responses.','line_number':415,'multiline':False]
+['text':' Add new numErrors onto old numErrors. Subtract one to account for the','line_number':419,'multiline':False]
+['text':' tenant migration error that was popped off.','line_number':420,'multiline':False]
+['text':' This is an optimization to make later lookups into 'indexMap' faster, since it','line_number':437,'multiline':False]
+['text':' removes any key that is not pertinent in the current cmdObj execution.','line_number':438,'multiline':False]
+['text':' Set the entry's index to the write's index in the original cmdObj.','line_number':446,'multiline':False]
+['text':' Track that this write resulted in an upsert.','line_number':449,'multiline':False]
+['text':' This write will not need to be retried, so remove it from 'indexMap'.','line_number':452,'multiline':False]
+['text':' If we encounter a TenantMigrationCommitted or TenantMigrationAborted','line_number':458,'multiline':False]
+['text':' error, the rest of the batch must have failed with the same code.','line_number':459,'multiline':False]
+['text':' Set the entry's index to the write's index in the original cmdObj.','line_number':466,'multiline':False]
+['text':' Track that this write resulted in a non-retryable error.','line_number':469,'multiline':False]
+['text':' This write will not need to be retried, so remove it from 'indexMap'.','line_number':472,'multiline':False]
+['text':' If the command was inside a transaction, skip modifying any objects or fields, since','line_number':480,'multiline':False]
+['text':' we will retry the entire transaction outside of this file.','line_number':481,'multiline':False]
+['text':' Update the command for reroute/retry.','line_number':483,'multiline':False]
+['text':' In the case of retryable writes, we should always retry the entire batch of','line_number':484,'multiline':False]
+['text':' operations instead of modifying the original command object to only include','line_number':485,'multiline':False]
+['text':' failed writes.','line_number':486,'multiline':False]
+['text':' It is safe to reformat this resObj since it will not be returned to the caller of','line_number':491,'multiline':False]
+['text':' runCommand.','line_number':492,'multiline':False]
+['text':' Build a new indexMap where the keys are the index that each write that needs to','line_number':495,'multiline':False]
+['text':' be retried will have in the next attempt's cmdObj.','line_number':496,'multiline':False]
+['text':' Store the connection to the recipient so the next commands can be rerouted.','line_number':503,'multiline':False]
+['text':' After getting a TenantMigrationCommitted error, wait for the python test fixture','line_number':515,'multiline':False]
+['text':' to do a dbhash check on the donor and recipient primaries before we retry the','line_number':516,'multiline':False]
+['text':' command on the recipient.','line_number':517,'multiline':False]
+['text':' If the result has a TransientTransactionError label, the entire transaction must be','line_number':544,'multiline':False]
+['text':' retried. Return immediately to let the retry be handled by','line_number':545,'multiline':False]
+['text':' 'network_error_and_txn_override.js'.','line_number':546,'multiline':False]
+['text':' Modify the resObj before returning the result.','line_number':555,'multiline':False]
+['text':' If the command is already prefixed, just run it','line_number':587,'multiline':False]
+['text':' Prepend a tenant prefix to all database names and namespaces, where applicable.','line_number':593,'multiline':False]
+['text':' Remove the tenant prefix from all database names and namespaces in the result since tests','line_number':599,'multiline':False]
+['text':' assume the command was run against the original database.','line_number':600,'multiline':False]
+['text':' Override base methods on the Mongo prototype to try to proxy the call to the underlying','line_number':622,'multiline':False]
+['text':' internal routing connection, if one exists.','line_number':623,'multiline':False]
+['text':' NOTE: This list is derived from scripting/mozjs/mongo.cpp:62.','line_number':624,'multiline':False]
+['text':' Don't override this method, since it is never called directly in jstests. The expectation of is','line_number':648,'multiline':False]
+['text':' that it will be run on the connection `Mongo.prototype.runCommand` chose.','line_number':649,'multiline':False]
+['text':' '_runCommandImpl',','line_number':650,'multiline':False]
+['text':' The following methods are overridden so that the method applies to both','line_number':658,'multiline':False]
+['text':' the proxy connection and the underlying internal routing connection, if one exists.','line_number':659,'multiline':False]

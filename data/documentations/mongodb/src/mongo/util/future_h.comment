@@ -1,0 +1,531 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' Keeping this first to ensure it compiles by itself','line_number':32,'multiline':False]
+['text':'*
+ * SemiFuture<T> is logically a possibly-deferred StatusWith<T> (or Status when T is void).
+ *
+ * Unlike Future<T> it only supports blocking operations, not directly chained continuations. You
+ * are only allowed to chain continuations by passing an executor to thenRunOn(). This is intended
+ * to protect the promise-completer's execution context from needing to perform arbitrary operations
+ * requested by other subsystem's continuations.
+ *
+ * SemiFutures can't convert to or be assigned to Futures since that would allow adding
+ * continuations which would defeat the purpose of SemiFuture.
+ *
+ * A future may be passed between threads, but only one thread may use it at a time.
+ *
+ * TODO decide if destroying a Future before extracting the result should cancel work or should
+ * cancellation be explicit. For now avoid unnecessarily throwing away active Futures since the
+ * behavior may change. End all Future chains with either a blocking call to get()/getNoThrow() or a
+ * non-blocking call to getAsync().
+ *
+ * SemiFuture<void> is the same as the generic SemiFuture<T> with the following exceptions:
+ *   - Anything mentioning StatusWith<T> will use Status instead.
+ *   - Anything returning references to T will just return void since there are no void references.
+ *   - Anything taking a T argument will receive no arguments.
+ ','line_number':49,'multiline':True]
+['text':'*
+     * For non-void T: Constructs a SemiFuture in a moved-from state that can only be assigned to
+     *                 or destroyed.
+     *
+     * For void T: Constructs a ready Semifuture for parity with SemiFuture<T>(T)
+     ','line_number':89,'multiline':True]
+['text':'*
+     * For non-void T: This must be passed a not-OK Status.
+     *
+     * For void T: This behaves like the StatusWith constructor and accepts any Status.
+     ','line_number':103,'multiline':True]
+['text':' implicit ','line_number':108,'multiline':True]
+['text':' These should not be used with T=void.','line_number':110,'multiline':False]
+['text':' implicit ','line_number':111,'multiline':True]
+['text':' implicit ','line_number':114,'multiline':True]
+['text':'*
+     * Make a ready SemiFuture<T> from a value for cases where you don't need to wait
+     * asynchronously.
+     *
+     * Calling this is faster than getting a SemiFuture out of a Promise, and is effectively free.
+     * It is
+     * fast enough that you never need to avoid returning a SemiFuture from an API, even if the
+     * result
+     * is ready 99.99% of the time.
+     *
+     * As an example, if you are handing out results from a batch, you can use this when for each
+     * result while you have a batch, then use a Promise to return a not-ready SemiFuture when you
+     * need
+     * to get another batch.
+     ','line_number':119,'multiline':True]
+['text':'*
+     * A no-op so that you can always do `return makesFutureOrSemiFuture().semi()` when you want to
+     * protect your execution context.
+     ','line_number':152,'multiline':True]
+['text':'*
+     * Convert this SemiFuture to a SharedSemiFuture.
+     ','line_number':160,'multiline':True]
+['text':'*
+     * If this returns true, get() is guaranteed not to block and callbacks will be immediately
+     * invoked. You can't assume anything if this returns false since it may be completed
+     * immediately after checking (unless you have independent knowledge that this SemiFuture can't
+     * complete in the background).
+     *
+     * Callers must still call get() or similar, even on SemiFuture<void>, to ensure that they are
+     * correctly sequenced with the completing task, and to be informed about whether the Promise
+     * completed successfully.
+     *
+     * This is generally only useful as an optimization to avoid prep work, such as setting up
+     * timeouts, that is unnecessary if the SemiFuture is ready already.
+     ','line_number':167,'multiline':True]
+['text':'*
+     * Returns whether this SemiFuture can or will be able to access a deferred status or value.
+     *
+     * TODO(SERVER-66010): Document validity semantics in `Future` member functions.
+     ','line_number':184,'multiline':True]
+['text':'*
+     * Returns when the Semifuture isReady().
+     *
+     * Throws if the interruptible passed is interrupted (explicitly or via deadline).
+     ','line_number':193,'multiline':True]
+['text':'*
+     * Returns Status::OK() when the Semifuture isReady().
+     *
+     * Returns a non-okay status if the interruptible is interrupted.
+     ','line_number':202,'multiline':True]
+['text':'*
+     * Gets the value out of this SemiFuture, blocking until it is ready.
+     *
+     * get() methods throw on error, while getNoThrow() returns a !OK status.
+     *
+     * These methods can be called multiple times, except for the rvalue overloads.
+     *
+     * Note: It is impossible to differentiate interruptible interruption from an error propagating
+     * down the Semifuture chain with these methods.  If you need to distinguish the two cases, call
+     * wait() first.
+     ','line_number':212,'multiline':True]
+['text':'*
+     * Ignores the return value of a future, transforming it down into a SemiFuture<void>.
+     *
+     * This only ignores values, not errors.  Those remain propagated to an onError handler.
+     ','line_number':243,'multiline':True]
+['text':'*
+     * Returns a future that allows you to add continuations that are guaranteed to run on the
+     * provided executor.
+     *
+     * Be sure to read the ExecutorFuture class comment.
+     ','line_number':252,'multiline':True]
+['text':'*
+     * Returns an inline Future type from this SemiFuture.
+     *
+     * WARNING: Do not use this unless you're extremely sure of what you're doing, as callbacks
+     * chained to the resulting Future may run in unexpected places.
+     ','line_number':260,'multiline':True]
+['text':' Deduction Guides','line_number':299,'multiline':False]
+['text':'*
+ * Future<T> is a SemiFuture<T> (which is logically a possibly deferred StatusOrStatusWith<T>),
+ * extended with the ability to chain additional continuations that will be invoked when the result
+ * is ready.
+ *
+ * All comments on SemiFuture<T> apply to Future<T> as well.
+ ','line_number':306,'multiline':True]
+['text':'*
+     * Re-export the API of SemiFuture. The API of Future is a superset, except you can't convert
+     * from a SemiFuture to a Future.
+     ','line_number':319,'multiline':True]
+['text':' Constructors.','line_number':324,'multiline':False]
+['text':'*
+     * Re-export makeReady, but return a Future<T>
+     ','line_number':335,'multiline':True]
+['text':'*
+     * Attaches a `func` callback that will consume the result of this `Future` when it completes. A
+     * `getAsync` call can be the tail end of a continuation chain, and that is only position at
+     * which it can appear.
+     *
+     * The result argument passed to `func` is `Status` if `T` is `void`, otherwise `StatusWith<T>`.
+     * The `func(result)` return type must be `void`, and not a discarded return value.
+     *
+     * `func` must not throw an exception. It is invoked as if by a `noexcept` function, and it will
+     * `std::terminate` the process. This is because there is no appropriate context in which to
+     * handle such an asynchronous exception.
+     *
+     * TODO decide how to handle func throwing.
+     ','line_number':357,'multiline':True]
+['text':'','line_number':377,'multiline':False]
+['text':' The remaining methods are all continuation-based and take a callback and return a Future-like','line_number':378,'multiline':False]
+['text':' type based on the return type of the callback, except for the "tap" methods that always','line_number':379,'multiline':False]
+['text':' return Future<T>. When passed a callback that returns a FutureLike<U> type, the return type','line_number':380,'multiline':False]
+['text':' of the method will be either Future<U> if FutureLike is Future, otherwise SemiFuture<U>. The','line_number':381,'multiline':False]
+['text':' result of the callback will be automatically unwrapped and connected to the returned','line_number':382,'multiline':False]
+['text':' FutureLike<U> rather than producing a Future<FutureLike<U>>. When the callback returns a','line_number':383,'multiline':False]
+['text':' non-FutureLike type U, the return type of the method will be Future<U>, with the adjustment','line_number':384,'multiline':False]
+['text':' for Status/StatusWith described below.','line_number':385,'multiline':False]
+['text':'','line_number':386,'multiline':False]
+['text':' Each method has a comment indicating the supported signatures for that callback, and a','line_number':387,'multiline':False]
+['text':' description of when the callback is invoked and how the impacts the returned Future. It may','line_number':388,'multiline':False]
+['text':' be helpful to think of Future continuation chains as a pipeline of stages that take input','line_number':389,'multiline':False]
+['text':' from earlier stages and produce output for later stages.','line_number':390,'multiline':False]
+['text':'','line_number':391,'multiline':False]
+['text':' Be aware that the callback may be invoked inline at the call-site or at the producer when','line_number':392,'multiline':False]
+['text':' setting the value. Therefore, you should avoid doing blocking work inside of a callback.','line_number':393,'multiline':False]
+['text':' Additionally, avoid acquiring any locks or mutexes that the caller already holds, otherwise','line_number':394,'multiline':False]
+['text':' you risk a deadlock. If either of these concerns apply to your callback, it should schedule','line_number':395,'multiline':False]
+['text':' itself on an executor, rather than doing work in the callback.','line_number':396,'multiline':False]
+['text':' TODO make this easier to do by having executor APIs return Futures.','line_number':397,'multiline':False]
+['text':'','line_number':398,'multiline':False]
+['text':' Error handling in callbacks: all exceptions thrown propagate to the returned Future','line_number':399,'multiline':False]
+['text':' automatically. Callbacks that return Status or StatusWith<T> behave as-if they were wrapped','line_number':400,'multiline':False]
+['text':' in something that called uassertStatusOK() on the return value. There is no way to','line_number':401,'multiline':False]
+['text':' distinguish between a function throwing or returning a !OK status.','line_number':402,'multiline':False]
+['text':'','line_number':403,'multiline':False]
+['text':'*
+     * Callbacks passed to then() are only called if the input Future completes successfully.
+     * Otherwise the error propagates automatically, bypassing the callback.
+     *
+     * The callback takes a T and can return anything (see above for how Statusy and Futurey returns
+     * are handled.)
+     ','line_number':405,'multiline':True]
+['text':'*
+     * Callbacks passed to onCompletion() are called if the input Future completes with or without
+     * an error.
+     *
+     * The callback takes a StatusOrStatusWith<T> and can return anything (see above for how Statusy
+     * and Futurey returns are handled.)
+     ','line_number':418,'multiline':True]
+['text':'*
+     * Callbacks passed to onError() are only called if the input Future completes with an error.
+     * Otherwise, the successful result propagates automatically, bypassing the callback.
+     *
+     * The callback can either produce a replacement value (which must be a T), return a replacement
+     * Future<T> (such as by retrying), or return/throw a replacement error.
+     *
+     * Note that this will only catch errors produced by earlier stages; it is not registering a
+     * general error handler for the entire chain.
+     *
+     * The callback takes a non-OK Status and returns a possibly-wrapped T (see above for how
+     * Statusy and Futurey returns are handled.)
+     ','line_number':432,'multiline':True]
+['text':'*
+     * Same as the other two onErrors but only calls the callback if the code matches the template
+     * parameter. Otherwise lets the error propagate unchanged.
+     *
+     * The callback takes a non-OK Status and returns a possibly-wrapped T (see above for how
+     * Statusy and Futurey returns are handled.)
+     ','line_number':451,'multiline':True]
+['text':'*
+     * Similar to the first two onErrors, but only calls the callback if the category matches
+     * the template parameter. Otherwise lets the error propagate unchanged.
+     *
+     * The callback takes a non-OK Status and returns a possibly-wrapped T (see above for how
+     * Statusy and Futurey returns are handled.)
+     ','line_number':465,'multiline':True]
+['text':'','line_number':481,'multiline':False]
+['text':' The tap/tapError/tapAll family of functions take callbacks to observe the flow through a','line_number':482,'multiline':False]
+['text':' future chain without affecting the propagating result, except possibly if they throw. If the','line_number':483,'multiline':False]
+['text':' naming seems odd, you can think of it like a "wire tap" in that it allows you to observe a','line_number':484,'multiline':False]
+['text':' conversation between two parties (the promise-producer and future-consumer) without adding','line_number':485,'multiline':False]
+['text':' messages of your own. This is why all callbacks are required to return void.','line_number':486,'multiline':False]
+['text':'','line_number':487,'multiline':False]
+['text':' TODO decide what to do if callback throws:','line_number':488,'multiline':False]
+['text':'  - transition the future chain to failure','line_number':489,'multiline':False]
+['text':'  - ignore','line_number':490,'multiline':False]
+['text':'  - fatal (current impl)','line_number':491,'multiline':False]
+['text':'','line_number':492,'multiline':False]
+['text':'*
+     * Callback is called if the input completes successfully.
+     *
+     * This can be used to inform some outside system of the result.
+     *
+     * The callback takes a const T& and must return void.
+     ','line_number':494,'multiline':True]
+['text':'*
+     * Callback is called if the input completes with an error.
+     *
+     * This can be used to log.
+     *
+     * The callback takes a non-OK Status and must return void.
+     ','line_number':507,'multiline':True]
+['text':'*
+     * Callback is called when the input completes, regardless of success or failure.
+     *
+     * This can be used for cleanup. Some other libraries name the equivalent method finally to
+     * match the common semantic from other languages.
+     *
+     * The callback takes a StatusOrStatusWith<T> and must return void.
+     ','line_number':520,'multiline':True]
+['text':' Calling this on a Future is never strictly necessary, since this is already an inline','line_number':534,'multiline':False]
+['text':' Future, but making this public helps for writing generic utilities which need to use','line_number':535,'multiline':False]
+['text':' unsafeToInlineFuture for some future types but not others.','line_number':536,'multiline':False]
+['text':'*
+     * Providing a Policy to continuation functions is optional. All callers should eventually
+     * use the default policy by removing the tag altogether.
+     *
+     * TODO(SERVER-66126): Remove all tag-taking methods and associated default implementations.
+     ','line_number':539,'multiline':True]
+['text':' Deduction Guides','line_number':610,'multiline':False]
+['text':'*
+ * An ExecutorFuture is like a Future that ensures that all callbacks are run on a supplied
+ * executor.
+ *
+ * IMPORTANT: Executors are allowed to refuse work by invoking their task callbacks with a non-OK
+ * Status. In that event, callbacks passed to continuation functions WILL NOT RUN. Instead, the
+ * error status will propagate down the future chain until it would run a callback on an executor
+ * that doesn't refuse the work, or it is extracted by calling a blocking get() method. Destructors
+ * for these callbacks can run in any context, so be suspicious of callbacks that capture Promises
+ * because they will propagate out BrokenPromise if the executor refuses work.
+ ','line_number':617,'multiline':True]
+['text':'*
+     * Default construction is disallowed to ensure that every ExecutorFuture has an associated
+     * Executor (unless it has been moved-from).
+     ','line_number':634,'multiline':True]
+['text':' These should not be used with T=void.','line_number':643,'multiline':False]
+['text':'*
+     * Re-export the accessor API of SemiFuture. The access API of ExecutorFuture is a superset, but
+     * you can't create an ExecutorFuture without supplying an executor.
+     ','line_number':657,'multiline':True]
+['text':'','line_number':676,'multiline':False]
+['text':' Provide the callback-taking API from Future (except for the taps). All callbacks will be run','line_number':677,'multiline':False]
+['text':' on the executor associated with this ExecutorFuture. See class comment for how we handle','line_number':678,'multiline':False]
+['text':' executors that refuse work.','line_number':679,'multiline':False]
+['text':'','line_number':680,'multiline':False]
+['text':' All methods that return non-void will return an ExecutorFuture bound to the same executor as','line_number':681,'multiline':False]
+['text':' this.','line_number':682,'multiline':False]
+['text':'','line_number':683,'multiline':False]
+['text':' There is no tap support because we can't easily be both non-intrusive in the value flow and','line_number':684,'multiline':False]
+['text':' schedule on an executor that is allowed to fail. In particular, the inability to copy','line_number':685,'multiline':False]
+['text':' move-only values means that we would need to refer directly into the internal SharedState','line_number':686,'multiline':False]
+['text':' objects and keep them alive longer that we otherwise would. If there is a real need for this,','line_number':687,'multiline':False]
+['text':' it should be doable, but will be fairly complicated.','line_number':688,'multiline':False]
+['text':'','line_number':689,'multiline':False]
+['text':'*
+     * Attach a completion callback to asynchronously consume this `ExecutorFuture`'s result.
+     * \see `Future<T>::getAsync()`.
+     ','line_number':691,'multiline':True]
+['text':' Can't use wrapCB since we don't want to return a future, just schedule a non-chainable','line_number':701,'multiline':False]
+['text':' callback.','line_number':702,'multiline':False]
+['text':' Unlike wrapCB this can move because we won't need it later.','line_number':707,'multiline':False]
+['text':'*
+     * Returns an inline Future type from this ExecutorFuture.
+     *
+     * WARNING: Do not use this unless you're extremely sure of what you're doing, as callbacks
+     * chained to the resulting Future may run in unexpected places.
+     ','line_number':763,'multiline':True]
+['text':'*
+     * Providing a Policy to continuation functions is optional. All callers should eventually
+     * use the default policy by removing the tag altogether.
+     *
+     * TODO(SERVER-66126): Remove all tag-taking methods and associated default implementations.
+     ','line_number':771,'multiline':True]
+['text':' This *must* take exec by ref to ensure it isn't moved from while evaluating wrapCB above.','line_number':810,'multiline':False]
+['text':'*
+     * Wraps func in a callback that takes the argument it would and returns an appropriately typed
+     * Future<U>, then schedules a task on _exec to complete the associated promise with the result
+     * of calling func with that argument.
+     ','line_number':815,'multiline':True]
+['text':' Have to take care to never put void in argument position, since that is a hard error.','line_number':823,'multiline':False]
+['text':'','line_number':827,'multiline':False]
+['text':'','line_number':830,'multiline':False]
+['text':' Deduction Guides','line_number':851,'multiline':False]
+['text':'* Constructor tag (see the corresponding `Promise` constructor). ','line_number':862,'multiline':True]
+['text':'*
+ * This class represents the producer side of a Future.
+ *
+ * This is a single-shot class: you may either set a value or error at most once. If no value or
+ * error has been set at the time this Promise is destroyed, a error will be set with
+ * ErrorCode::BrokenPromise. This should generally be considered a programmer error, and should not
+ * be relied upon. We may make it debug-fatal in the future.
+ *
+ * Only one thread can use a given Promise at a time, but another thread may be using the associated
+ * Future object.
+ *
+ * If the result is ready when producing the Future, it is more efficient to use
+ * makeReadyFutureWith() or Future<T>::makeReady() than to use a Promise<T>.
+ *
+ * A default constructed `Promise` is in a null state.  Null `Promises` can only be assigned over
+ * and destroyed. It is a programmer error to call any methods on a null `Promise`.  Any methods
+ * that complete a `Promise` leave it in the null state.
+ ','line_number':865,'multiline':True]
+['text':'*
+     * Creates a null `Promise`.
+     ','line_number':891,'multiline':True]
+['text':'* Makes a `Promise` that has a `Future`. ','line_number':896,'multiline':True]
+['text':'*
+     * Breaks this `Promise`, if not fulfilled and not in a null state.
+     ','line_number':907,'multiline':True]
+['text':'*
+     * Sets a value or error into this Promise by calling func, which must take no arguments and
+     * return one of T, StatusWith<T> (or Status when T is void), or Future<T>. All errors, whether
+     * returned or thrown, will be correctly propagated.
+     *
+     * If the function returns a Future<T>, this Promise's Future will complete when the returned
+     * Future<T> completes, as-if it was passed to Promise::setFrom().
+     *
+     * If any work is needed to produce the result, prefer doing something like:
+     *     promise.setWith([&]{ return makeResult(); });
+     * over code like:
+     *     promise.emplaceValue(makeResult());
+     * because this method will correctly propagate errors thrown from makeResult(), rather than
+     * ErrorCodes::BrokenPromise.
+     ','line_number':918,'multiline':True]
+['text':'*
+     * Sets the value into this Promise when the passed-in Future completes, which may have already
+     * happened. If it hasn't, it is still safe to destroy this Promise since it is no longer
+     * involved.
+     ','line_number':944,'multiline':True]
+['text':'*
+     * Sets the value into this Promise immediately.
+     *
+     * This accepts a Status for Promises<void> or a StatusWith<T> for Promise<T>.
+     ','line_number':955,'multiline':True]
+['text':' Use emplaceValue(Args&&...) instead.','line_number':966,'multiline':False]
+['text':' Use setError(Status) instead.','line_number':970,'multiline':False]
+['text':'*
+     * Create and return the Future corresponding to this Promise. Cannot be
+     * called more than once (but see `SharedPromise` which supports multiple
+     * `getFuture` calls).
+     *
+     * Caution: calling `getFuture` is only valid before the promise is
+     * completed, because a Promise is nullified upon completion. This Promise
+     * behavior is different from the semantics of other future libraries. The
+     * PromiseAndFuture helper avoids a potential data race by eagerly calling
+     * `getFuture`, returning the Promise together with its Future.
+     ','line_number':989,'multiline':True]
+['text':' Copy `_sharedState` into a SharedStateHolder to make a Future,','line_number':1001,'multiline':False]
+['text':' exploiting the knowledge that this Promise is its sole owner.','line_number':1002,'multiline':False]
+['text':' We keep `sharedState` as a stack local, to preserve ownership of the resource,','line_number':1017,'multiline':False]
+['text':' in case the code in `doSet` unblocks a thread which winds up causing','line_number':1018,'multiline':False]
+['text':' `~Promise` to be invoked.','line_number':1019,'multiline':False]
+['text':' Note: `this` is potentially dead, at this point.','line_number':1022,'multiline':False]
+['text':' The current promise will be broken, if not already fulfilled.','line_number':1025,'multiline':False]
+['text':'*
+ * SharedSemiFuture<T> is logically a possibly-deferred StatusWith<T> (or Status when T is void).
+ *
+ * All methods that are present do the same as on a Future<T> so see it for documentation.
+ *
+ * Unlike Future<T> it only supports blocking operation, not chained continuations. This is intended
+ * to protect the promise-completer's execution context from needing to perform arbitrary operations
+ * requested by other subsystem's continuations.
+ * TODO Support continuation chaining when supplied with an executor to run them on.
+ *
+ * A SharedSemiFuture may be passed between threads, but only one thread may use it at a time.
+ ','line_number':1035,'multiline':True]
+['text':'implicit','line_number':1074,'multiline':True]
+['text':'implicit','line_number':1075,'multiline':True]
+['text':'implicit','line_number':1076,'multiline':True]
+['text':' These should not be used with T=void.','line_number':1079,'multiline':False]
+['text':'implicit','line_number':1080,'multiline':True]
+['text':'implicit','line_number':1083,'multiline':True]
+['text':'*
+     * Makes a copy of this SharedSemiFuture that resolves at the same time as the original.
+     ','line_number':1119,'multiline':True]
+['text':'*
+     * Returns an inline Future type from this SharedSemiFuture.
+     *
+     * WARNING: Do not use this unless you're extremely sure of what you're doing, as callbacks
+     * chained to the resulting Future may run in unexpected places.
+     ','line_number':1130,'multiline':True]
+['text':' These are needed to support chaining where a SharedSemiFuture is returned from a','line_number':1154,'multiline':False]
+['text':' continuation.','line_number':1155,'multiline':False]
+['text':' Deduction Guides','line_number':1171,'multiline':False]
+['text':'*
+ * This class represents the producer of SharedSemiFutures.
+ *
+ * This is a single-shot class: you may either set a value or error at most once. However you may
+ * extract as many futures as you want and they will all be completed at the same time. Any number
+ * of threads can extract a future at the same time. It is also safe to extract a future
+ * concurrently with completing the promise. If you extract a future after the promise has been
+ * completed, a ready future will be returned. You must still ensure that all calls to getFuture()
+ * complete prior to destroying the Promise.
+ *
+ * If no value or error has been set at the time this Promise is destroyed, an error will be set
+ * with ErrorCode::BrokenPromise. This should generally be considered a programmer error, and should
+ * not be relied upon. We may make it debug-fatal in the future.
+ *
+ * Unless otherwise specified, all methods behave the same as on Promise<T>.
+ ','line_number':1178,'multiline':True]
+['text':'*
+     * Creates a `SharedPromise` ready for use.
+     ','line_number':1202,'multiline':True]
+['text':'*
+     * Returns a future associated with this promise. All returned futures will be completed when
+     * the promise is completed.
+     ','line_number':1218,'multiline':True]
+['text':'*
+     * Sets the value into this SharedPromise when the passed-in Future completes, which may have
+     * already happened.
+     ','line_number':1237,'multiline':True]
+['text':'*
+     * Sets the value into this SharedPromise immediately.
+     *
+     * This accepts a Status for SharedPromises<void> or a StatusWith<T> for SharedPromise<T>.
+     ','line_number':1246,'multiline':True]
+['text':' Use emplaceValue(Args&&...) instead.','line_number':1256,'multiline':False]
+['text':' Use setError(Status) instead.','line_number':1260,'multiline':False]
+['text':' This is slightly different from whether the SharedState is in kFinished, because this','line_number':1281,'multiline':False]
+['text':' SharedPromise may have been completed with a Future that isn't ready yet.','line_number':1282,'multiline':False]
+['text':'*
+ * Holds a Promise and its corresponding Future.
+ * Upon construction, contains a new Promise and its Future.
+ ','line_number':1287,'multiline':True]
+['text':'* Another way to write `PromiseAndFuture<T>{}`. ','line_number':1297,'multiline':True]
+['text':'*
+ * This metafunction allows APIs that take callbacks and return Future to avoid doing their own type
+ * calculus. This results in the base value_type that would result from passing Func to a
+ * Future<T>::then(), with the same normalizing of T/StatusWith<T>/Future<T> returns. This is
+ * primarily useful for implementations of executors rather than their users.
+ *
+ * This returns the unwrapped T rather than Future<T> so it will be easy to create a Promise<T>.
+ *
+ * Examples:
+ *
+ * FutureContinuationResult<std::function<void()>> == void
+ * FutureContinuationResult<std::function<Status()>> == void
+ * FutureContinuationResult<std::function<Future<void>()>> == void
+ *
+ * FutureContinuationResult<std::function<int()>> == int
+ * FutureContinuationResult<std::function<StatusWith<int>()>> == int
+ * FutureContinuationResult<std::function<Future<int>()>> == int
+ *
+ * FutureContinuationResult<std::function<int(bool)>, bool> == int
+ *
+ * FutureContinuationResult<std::function<int(bool)>, NotBool> SFINAE-safe substitution failure.
+ ','line_number':1303,'multiline':True]
+['text':'*
+ * This type transform is useful for coercing (T,StatusWith<T>)->Future<T> and Status->Future<void>.
+ ','line_number':1329,'multiline':True]
+['text':'*
+ * Makes a Future with the return value of a nullary function. This has the same semantics as
+ * Promise::setWith, and has the same reasons to prefer it over Future<T>::makeReady(). Also, it
+ * deduces the T, so it is easier to use.
+ *
+ * Note that if func returns an unready Future, this function will not block until it is ready.
+ ','line_number':1340,'multiline':True]
+['text':'','line_number':1360,'multiline':False]
+['text':' Implementations of methods that couldn't be defined in the class due to ordering requirements.','line_number':1361,'multiline':False]
+['text':'','line_number':1362,'multiline':False]
+['text':' Cheat and convert to an inline Future since we know we will schedule','line_number':1386,'multiline':False]
+['text':' further user callbacks onto an executor.','line_number':1387,'multiline':False]
+['text':' namespace future_details','line_number':1419,'multiline':False]
+['text':' namespace mongo','line_number':1421,'multiline':False]

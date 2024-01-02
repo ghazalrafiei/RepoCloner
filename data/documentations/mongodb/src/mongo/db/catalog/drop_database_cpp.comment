@@ -1,0 +1,103 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Removes database from catalog and writes dropDatabase entry to oplog.
+ *
+ * Ensures that the database's drop-pending flag is reset to false if the drop fails.
+ *
+ * Throws on errors.
+ ','line_number':113,'multiline':True]
+['text':' If DatabaseHolder::dropDb() fails, we should reset the drop-pending state on Database.','line_number':127,'multiline':False]
+['text':' Testing depends on this failpoint stopping execution before the dropDatabase oplog entry is','line_number':134,'multiline':False]
+['text':' written, as well as before the in-memory state is cleared.','line_number':135,'multiline':False]
+['text':' We need to replicate the dropDatabase oplog entry and clear the collection catalog in the','line_number':142,'multiline':False]
+['text':' same transaction. This is to prevent stepdown from interrupting between these two','line_number':143,'multiline':False]
+['text':' operations and leaving this node in an inconsistent state.','line_number':144,'multiline':False]
+['text':' As this code can potentially require replication we disallow holding locks entirely. Holding','line_number':164,'multiline':False]
+['text':' of any locks is disallowed while awaiting replication because this can potentially block for','line_number':165,'multiline':False]
+['text':' long time while doing network activity.','line_number':166,'multiline':False]
+['text':' As of SERVER-32205, dropping the admin database is prohibited.','line_number':173,'multiline':False]
+['text':' We have to wait for the last drop-pending collection to be removed if there are no','line_number':189,'multiline':False]
+['text':' collections to drop.','line_number':190,'multiline':False]
+['text':' database lock mode','line_number':197,'multiline':True]
+['text':' If Database::dropCollectionEvenIfSystem() fails, we should reset the drop-pending state','line_number':221,'multiline':False]
+['text':' on Database.','line_number':222,'multiline':False]
+['text':' We need to keep aborting all the active index builders for this database until there','line_number':227,'multiline':False]
+['text':' are none left when we retrieve the exclusive database lock again.','line_number':228,'multiline':False]
+['text':' Create a scope guard to reset the drop-pending state on the database to false if','line_number':230,'multiline':False]
+['text':' there is a replica state change that kills this operation while the locks were','line_number':231,'multiline':False]
+['text':' yielded.','line_number':232,'multiline':False]
+['text':' This scope guard must succeed in acquiring locks and reverting the drop','line_number':235,'multiline':False]
+['text':' pending state even when the failure is due to an interruption.','line_number':236,'multiline':False]
+['text':' NOLINT.','line_number':237,'multiline':False]
+['text':' database lock mode','line_number':240,'multiline':True]
+['text':' Drop locks. The drop helper will acquire locks on our behalf.','line_number':247,'multiline':False]
+['text':' Sends the abort signal to all the active index builders for this database. Waits','line_number':250,'multiline':False]
+['text':' for aborted index builds to complete.','line_number':251,'multiline':False]
+['text':' database lock mode','line_number':261,'multiline':True]
+['text':' Abandon the snapshot as the index catalog will compare the in-memory state to the','line_number':266,'multiline':False]
+['text':' disk state, which may have changed when we released the collection lock','line_number':267,'multiline':False]
+['text':' temporarily.','line_number':268,'multiline':False]
+['text':' Drop the database views collection first, to ensure that time-series view namespaces are','line_number':280,'multiline':False]
+['text':' removed before their underlying buckets collections. This ensures oplog order, such that','line_number':281,'multiline':False]
+['text':' a time-series view may be missing while the buckets collection exists, but a time-series','line_number':282,'multiline':False]
+['text':' view is never present without its corresponding buckets collection.','line_number':283,'multiline':False]
+['text':' The system.profile collection is created using an untimestamped write to the catalog when','line_number':301,'multiline':False]
+['text':' enabling profiling on a database. So we drop it untimestamped as well to avoid mixed-mode','line_number':302,'multiline':False]
+['text':' timestamp usage.','line_number':303,'multiline':False]
+['text':' Ensure this block exits with the same commit timestamp state that it was called with.','line_number':312,'multiline':False]
+['text':' Refresh the catalog so the views and profile collections aren't present.','line_number':333,'multiline':False]
+['text':' Dropping a database on a primary replicates individual collection drops followed','line_number':369,'multiline':False]
+['text':' by a database drop oplog entry. When a secondary observes the database drop oplog','line_number':370,'multiline':False]
+['text':' entry, all of the replicated collections that were dropped must have been','line_number':371,'multiline':False]
+['text':' processed. Only non-replicated collections should be left to remove. Collections','line_number':372,'multiline':False]
+['text':' with the `tmp.mr` namespace may or may not be getting replicated; be conservative','line_number':373,'multiline':False]
+['text':' and assume they are not.','line_number':374,'multiline':False]
+['text':' A primary processing this will assign a timestamp when the operation is written','line_number':385,'multiline':False]
+['text':' to the oplog. As stated above, a secondary processing must only observe','line_number':386,'multiline':False]
+['text':' non-replicated collections, thus this should not be timestamped.','line_number':387,'multiline':False]
+['text':' _finishDropDatabase creates its own scope guard to ensure drop-pending is unset.','line_number':394,'multiline':False]
+['text':' If there are no collection drops to wait for, we complete the drop database operation.','line_number':397,'multiline':False]
+['text':' Create a scope guard to reset the drop-pending state on the Database to false if there are','line_number':404,'multiline':False]
+['text':' any errors while we await the replication of any collection drops and then reacquire the','line_number':405,'multiline':False]
+['text':' locks (which can throw) needed to finish the drop database.','line_number':406,'multiline':False]
+['text':' This scope guard must succeed in acquiring locks and reverting the drop pending state','line_number':408,'multiline':False]
+['text':' even when the failure is due to an interruption.','line_number':409,'multiline':False]
+['text':' NOLINT.','line_number':410,'multiline':False]
+['text':' Verify again that we haven't obtained any other locks before replication.','line_number':418,'multiline':False]
+['text':' The user-supplied wTimeout should be used when waiting for majority write concern.','line_number':430,'multiline':False]
+['text':' This is used to wait for the collection drops to replicate to a majority of the replica','line_number':436,'multiline':False]
+['text':' set. Note: Even though we're setting UNSET here, kMajority implies JOURNAL if journaling','line_number':437,'multiline':False]
+['text':' is supported by mongod and writeConcernMajorityJournalDefault is set to true in the','line_number':438,'multiline':False]
+['text':' ReplSetConfig.','line_number':439,'multiline':False]
+['text':' If the user-provided write concern is weaker than majority, this is effectively a no-op.','line_number':453,'multiline':False]
+['text':' database lock mode','line_number':486,'multiline':True]
+['text':' _finishDropDatabase creates its own scope guard to ensure drop-pending is unset.','line_number':507,'multiline':False]
+['text':' namespace','line_number':515,'multiline':False]
+['text':' namespace mongo','line_number':527,'multiline':False]

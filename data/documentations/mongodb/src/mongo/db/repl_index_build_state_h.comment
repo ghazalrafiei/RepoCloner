@@ -1,0 +1,332 @@
+['text':'*
+ *    Copyright (C) 2018-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':' Indicates which protocol an index build is using.','line_number':67,'multiline':False]
+['text':'*
+     * Refers to the legacy index build protocol for building indexes in replica sets. Index builds
+     * must complete on the primary before replicating, and are not resumable in any scenario.
+     ','line_number':69,'multiline':True]
+['text':'*
+     * Refers to the two-phase index build protocol for building indexes in replica sets. Indexes
+     * are built simultaneously on all nodes.
+     ','line_number':74,'multiline':True]
+['text':' Indicates the type of abort or commit signal that will be received by primary and secondaries.','line_number':81,'multiline':False]
+['text':'*
+     * Does nothing. And, we set on shutdown.
+     ','line_number':83,'multiline':True]
+['text':'*
+     * Commit signal set by oplog applier.
+     ','line_number':87,'multiline':True]
+['text':'*
+     * Abort signal set by oplog applier.
+     ','line_number':91,'multiline':True]
+['text':'*
+     * Abort signal set on rollback.
+     ','line_number':95,'multiline':True]
+['text':'*
+     * Abort signal set on initial sync.
+     ','line_number':99,'multiline':True]
+['text':'*
+     * Abort signal set on donor when tenant migration starts.
+     ','line_number':103,'multiline':True]
+['text':'*
+     * Abort signal set by createIndexes cmd or by drop databases/collections/indexes cmds
+     ','line_number':107,'multiline':True]
+['text':'*
+     * Commit signal set by an index build for a single-phase build.
+     ','line_number':111,'multiline':True]
+['text':'*
+     * Commit signal set by "voteCommitIndexBuild" cmd and step up.
+     ','line_number':115,'multiline':True]
+['text':'*
+ * Returns string representation of IndexBuildAction.
+ ','line_number':121,'multiline':True]
+['text':'*
+ * Represents the index build state. See _checkIfValidTransition() for valid state transitions.
+ ','line_number':126,'multiline':True]
+['text':'*
+         * Initial state, the index build is registered, but still not completely setup. Setup
+         * implies instantiating all the required in-memory state for the index builder thread. For
+         * primaries, it also implies persisting the index build entry to
+         * 'config.system.indexBuilds' and replicating the 'startIndexBuild' oplog entry.
+         ','line_number':132,'multiline':True]
+['text':'*
+         * This state indicates all in-memory and durable state is prepared, but the index build is
+         * not yet in progress. Some additional verification and configuration is performed, during
+         * which we might end up with a killed index build thread. Transitioning to this state
+         * immediately after setup is crucial to know when it is actually required to perform
+         * teardown. An index build in kPostSetup or later is elegible for being aborted by an
+         * external thread.
+         ','line_number':139,'multiline':True]
+['text':'*
+         * Once an index build is in-progress it is eligible for transition to any of the commit
+         * states. It is also abortable.
+         ','line_number':148,'multiline':True]
+['text':'*
+         * Below state indicates that IndexBuildsCoordinator thread was externally asked to commit.
+         * For kApplyCommitOplogEntry, this can come from an oplog entry.
+         ','line_number':153,'multiline':True]
+['text':'*
+         * Below state indicates that index build was successfully able to commit. For kCommitted,
+         * the state is set immediately before it commits the index build.
+         ','line_number':158,'multiline':True]
+['text':'*
+         * Below state indicates that index build was successfully able to abort. For kAborted, this
+         * state is set after the build is cleaned up and the abort oplog entry is replicated.
+         ','line_number':163,'multiline':True]
+['text':'*
+         * Indicates that an internal error caused the index build to fail, or that an internal
+         * operation or user killOp forced the index build abort by itself. In this state,
+         * concurrent external aborts are not allowed. The index builder thread is responsible for
+         * handling clean up. If it is determined that voting for abort is allowed, transitions to
+         * kAwaitPrimaryAbort. Otherwise it attemps to cleanup directly.
+         ','line_number':168,'multiline':True]
+['text':'*
+         * Below state indicates that the index build thread has voted for an abort to the current
+         * primary, and is waiting for the index build to actually be aborted either because the
+         * command is a loopback to itself (vote issuer is primary itself) or due to
+         * 'abortIndexBuild' oplog entry being replicated by the primary. Concurrent external aborts
+         * are allowed again (after being disallowed in kFailureCleanUp), as both loopback and
+         * 'abortIndexBuild' are external aborts.
+         ','line_number':176,'multiline':True]
+['text':'*
+         * Indicates that an external abort is ongoing. It is the responsibility of the external
+         * aborter to clean up the resources.
+         ','line_number':185,'multiline':True]
+['text':'*
+     * Transitions this index build to new 'state'.
+     * Invariants if the requested transition is not valid and 'skipCheck' is true.
+     * 'timestamp', 'abortStatus' may be provided for certain states such as 'commit' and
+     * 'abort'.
+     ','line_number':192,'multiline':True]
+['text':'*
+     * Appends the current state information of the index build to the builder.
+     ','line_number':280,'multiline':True]
+['text':'*
+     * Returns true if the requested IndexBuildState transition is allowed.
+     ','line_number':286,'multiline':True]
+['text':' Represents the index build state.','line_number':292,'multiline':False]
+['text':' Timestamp will be populated only if the node is secondary.','line_number':294,'multiline':False]
+['text':' It represents the commit or abort timestamp communicated via','line_number':295,'multiline':False]
+['text':' commitIndexBuild and abortIndexBuild oplog entry.','line_number':296,'multiline':False]
+['text':' Reason for abort, if any.','line_number':298,'multiline':False]
+['text':'*
+ * Tracks the cross replica set progress of a particular index build identified by a build UUID.
+ *
+ * This is intended to only be used by the IndexBuildsCoordinator class.
+ *
+ * TODO: pass in commit quorum setting.
+ ','line_number':302,'multiline':True]
+['text':'*
+     * The index build thread has been scheduled, from now on it should be possible to interrupt the
+     * index build by its opId.
+     ','line_number':320,'multiline':True]
+['text':'*
+     * The index build setup is complete, but not yet in progress. From now onwards, teardown of
+     * index build state must be performed. This makes it eligible to be aborted in 'tryAbort'. Use
+     * the current OperationContext's opId as the means for interrupting the index build.
+     ','line_number':326,'multiline':True]
+['text':'*
+     * Try to set the index build to in-progress state, does an interrupt check and throws if the
+     * build is already killed.
+     ','line_number':333,'multiline':True]
+['text':'*
+     * Transition the index build to kFailureCleanUp state if the build isn't already in kAborted,
+     * kExternalAbort, or kFailureCleanUp state. In case it already is in an abort state, does
+     * nothing and preserves the previous status.
+     ','line_number':339,'multiline':True]
+['text':'*
+     * Indicate that the index build has attempted to vote for commit readiness. After calling this,
+     * the index build cannot vote for abort. Performs an interrupt check, in case the build was
+     * concurrently forced to self abort or received a killop, in which case the vote for abort is
+     * necessary.
+     ','line_number':346,'multiline':True]
+['text':'*
+     * Returns true if this index build can still vote for abort. Voting for abort is not possible
+     * after the index build has voted for commit.
+     ','line_number':354,'multiline':True]
+['text':'*
+     * This index build has completed successfully and there is no further work to be done.
+     ','line_number':360,'multiline':True]
+['text':'*
+     * Only for two-phase index builds. Requests the primary to abort the build, and transitions
+     * into kAwaitPrimaryAbort state.
+     ','line_number':365,'multiline':True]
+['text':'*
+     * Returns timestamp for committing this index build.
+     * Returns null timestamp if not set.
+     ','line_number':371,'multiline':True]
+['text':'*
+     * Called when handling a commitIndexIndexBuild oplog entry.
+     * This signal can be received during primary (drain phase), secondary,
+     * startup (startup recovery) and startup2 (initial sync).
+     ','line_number':377,'multiline':True]
+['text':'*
+     * This index build has failed while running in the builder thread due to a non-shutdown reason.
+     ','line_number':384,'multiline':True]
+['text':'*
+     * This index build was interrupted because the server is shutting down.
+     ','line_number':389,'multiline':True]
+['text':'*
+     * Called when handling an abortIndexIndexBuild oplog entry.
+     * This signal can be received during primary (drain phase), secondary,
+     * startup (startup recovery) and startup2 (initial sync).
+     ','line_number':394,'multiline':True]
+['text':'*
+     * Returns true if the index build requires reverting the setup after an abort.
+     ','line_number':401,'multiline':True]
+['text':'*
+     * Returns true if this index build has been aborted.
+     ','line_number':406,'multiline':True]
+['text':'*
+     * Returns true if this index is in the process of aborting.
+     ','line_number':411,'multiline':True]
+['text':'*
+     * Returns true if this index build has been committed.
+     ','line_number':416,'multiline':True]
+['text':'*
+     * Returns true if this index build is being set up.
+     ','line_number':421,'multiline':True]
+['text':'*
+     * Returns true if this index build is being externally aborted.
+     ','line_number':426,'multiline':True]
+['text':'*
+     * Returns true if this index build is performing self cleanup.
+     ','line_number':431,'multiline':True]
+['text':'*
+     * Returns abort reason.
+     ','line_number':436,'multiline':True]
+['text':'*
+     * Returns abort status. Returns Status::OK() if not in aborted state.
+     ','line_number':441,'multiline':True]
+['text':'*
+     * Called when commit quorum is satisfied.
+     ','line_number':446,'multiline':True]
+['text':'*
+     * Called when we are about to complete a single-phased index build.
+     * Single-phase builds don't support commit quorum, but they must go through the process of
+     * updating their state to synchronize with concurrent abort operations
+     ','line_number':451,'multiline':True]
+['text':'*
+     * Attempt to signal the index build to commit and advance the index build to the
+     * kApplyCommitOplogEntry state. Returns true if successful and false if the attempt was
+     * unnecessful and the caller should retry.
+     ','line_number':458,'multiline':True]
+['text':'*
+     * Attempt to abort an index build. Returns a flag indicating how the caller should proceed.
+     ','line_number':465,'multiline':True]
+['text':'*
+     * Force an index build to abort on its own. Will return after signalling the index build or if
+     * the index build is already in progress of aborting. Does not wait.
+     *
+     * Returns true if we signalled the index build. Returns false if we did not, like when the
+     * index build is past a point of no return, like committing.
+     ','line_number':473,'multiline':True]
+['text':'*
+     * Called when the vote request command is scheduled by the task executor.
+     * Skips voting if we have already received commit or abort signal.
+     ','line_number':482,'multiline':True]
+['text':'*
+     * Clears vote request callback handle set in onVoteRequestScheduled().
+     ','line_number':489,'multiline':True]
+['text':'*
+     * (Re-)initializes promise for next action.
+     ','line_number':494,'multiline':True]
+['text':'*
+     * Returns a future that can be used to wait on 'waitForNextAction' for the next action to be
+     * available.
+     ','line_number':500,'multiline':True]
+['text':'*
+     * Gets next action from future if available.
+     * Returns boost::none if future is not ready.
+     ','line_number':506,'multiline':True]
+['text':'*
+     * Called when we are trying to add a new index build 'other' that conflicts with this one.
+     * Returns a status that reflects whether this index build has been aborted or still active.
+     ','line_number':512,'multiline':True]
+['text':'*
+     * Accessor and mutator for last optime in the oplog before the interceptors were installed.
+     * This supports resumable index builds.
+     ','line_number':519,'multiline':True]
+['text':'*
+     * Appends index build info to builder.
+     ','line_number':528,'multiline':True]
+['text':' Uniquely identifies this index build across replica set members.','line_number':533,'multiline':False]
+['text':' Identifies the collection for which the index is being built. Collections can be renamed, so','line_number':536,'multiline':False]
+['text':' the collection UUID is used to maintain correct association.','line_number':537,'multiline':False]
+['text':' Identifies the database containing the index being built. Unlike collections, databases','line_number':540,'multiline':False]
+['text':' cannot be renamed.','line_number':541,'multiline':False]
+['text':' The names of the indexes being built.','line_number':544,'multiline':False]
+['text':' The specs of the index(es) being built. Facilitates new callers joining an active index','line_number':547,'multiline':False]
+['text':' build.','line_number':548,'multiline':False]
+['text':' Whether to do a two phase index build or a single phase index build like in v4.0. The FCV','line_number':551,'multiline':False]
+['text':' at the start of the index build will determine this setting.','line_number':552,'multiline':False]
+['text':'
+     * Readers who read the commit quorum value from "config.system.indexBuilds" collection
+     * to decide if the commit quorum got satisfied for an index build, should take this lock in
+     * shared mode.
+     *
+     * Writers (setCommitQuorum) who update the commit quorum value of an existing index build
+     * entry in "config.system.indexBuilds" collection should take this lock in exclusive mode.
+     *
+     * Resource mutex will be initialized only for 2 phase index protocol.
+     * Mutex lock order:
+     * commitQuorumLock -> mutex.
+     ','line_number':555,'multiline':True]
+['text':' Tracks the index build stats that are returned to the caller upon success.','line_number':574,'multiline':False]
+['text':' Used only by the thread pool task for the index build. No synchronization necessary.','line_number':575,'multiline':False]
+['text':' Communicates the final outcome of the index build to any callers waiting upon the associated','line_number':578,'multiline':False]
+['text':' SharedSemiFuture(s).','line_number':579,'multiline':False]
+['text':'
+     * Determines whether to skip the index build state transition check.
+     * Index builder not using ReplIndexBuildState::waitForNextAction to signal primary and
+     * secondaries to commit or abort signal will violate index build state transition. So, we
+     * should skip state transition verification. Otherwise, we would invariant.
+     ','line_number':583,'multiline':True]
+['text':'*
+     * Updates the next action signal and cancels the vote request under lock.
+     * Used by IndexBuildsCoordinatorMongod only.
+     ','line_number':591,'multiline':True]
+['text':'*
+     * Clears vote request callback handle set in onVoteRequestScheduled().
+     ','line_number':599,'multiline':True]
+['text':'*
+     * Cancels the vote request if valid and clears its callback handle.
+     ','line_number':604,'multiline':True]
+['text':' Protects the state below.','line_number':609,'multiline':False]
+['text':' Primary and secondaries gets their commit or abort signal via this promise future pair.','line_number':612,'multiline':False]
+['text':' Maintains the state of the index build.','line_number':615,'multiline':False]
+['text':' Represents the callback handle for scheduled remote command "voteCommitIndexBuild".','line_number':618,'multiline':False]
+['text':' The OperationId of the index build. This allows external callers to interrupt the index build','line_number':621,'multiline':False]
+['text':' thread. Initialized in start() as we transition from setup to in-progress.','line_number':622,'multiline':False]
+['text':' The last optime in the oplog before the interceptors were installed. If this is a single','line_number':625,'multiline':False]
+['text':' phase index build, isn't running a hybrid index build, or isn't running during oplog','line_number':626,'multiline':False]
+['text':' application, this will be null.','line_number':627,'multiline':False]
+['text':' Set once setup is complete, indicating that a clean up is required in case of abort.','line_number':630,'multiline':False]
+['text':' Set once before attempting to vote for commit readiness.','line_number':633,'multiline':False]
+['text':' namespace mongo','line_number':637,'multiline':False]

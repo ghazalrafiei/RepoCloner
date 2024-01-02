@@ -1,0 +1,137 @@
+['text':'*
+ *    Copyright (C) 2021-present MongoDB, Inc.
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the Server Side Public License, version 1,
+ *    as published by MongoDB, Inc.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    Server Side Public License for more details.
+ *
+ *    You should have received a copy of the Server Side Public License
+ *    along with this program. If not, see
+ *    <http://www.mongodb.com/licensing/server-side-public-license>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the Server Side Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ ','line_number':1,'multiline':True]
+['text':'*
+ * Carries parameters for unpacking a bucket. The order of operations applied to determine which
+ * fields are in the final document are:
+ * If we are in include mode:
+ *   1. Unpack all fields from the bucket.
+ *   2. Remove any fields not in _fieldSet, since we are in include mode.
+ *   3. Add fields from _computedMetaProjFields.
+ * If we are in exclude mode:
+ *   1. Unpack all fields from the bucket.
+ *   2. Add fields from _computedMetaProjFields.
+ *   3. Remove any fields in _fieldSet, since we are in exclude mode.
+ ','line_number':50,'multiline':True]
+['text':' When unpacking buckets with kInclude we must produce measurements that contain the','line_number':64,'multiline':False]
+['text':' set of fields. Otherwise, if the kExclude option is used, the measurements will include the','line_number':65,'multiline':False]
+['text':' set difference between all fields in the bucket and the provided fields.','line_number':66,'multiline':False]
+['text':' The user-supplied timestamp field name specified during time-series collection creation.','line_number':83,'multiline':False]
+['text':' An optional user-supplied metadata field name specified during time-series collection','line_number':88,'multiline':False]
+['text':' creation. This field name is used during materialization of metadata fields of a measurement','line_number':89,'multiline':False]
+['text':' after unpacking.','line_number':90,'multiline':False]
+['text':' Returns whether 'field' depends on a pushed down $addFields or computed $project.','line_number':139,'multiline':False]
+['text':' Says what to do when an event-level predicate cannot be mapped to a bucket-level predicate.','line_number':142,'multiline':False]
+['text':' When optimizing a query, it's fine if some predicates can't be pushed down. We'll still','line_number':144,'multiline':False]
+['text':' run the predicate after unpacking, so the results will be correct.','line_number':145,'multiline':False]
+['text':' When creating a partial index, it's misleading if we can't handle a predicate: the user','line_number':147,'multiline':False]
+['text':' expects every predicate in the partialFilterExpression to contribute, somehow, to making','line_number':148,'multiline':False]
+['text':' the index smaller.','line_number':149,'multiline':False]
+['text':' A loose predicate is a predicate which returns true when any measures of a bucket','line_number':154,'multiline':False]
+['text':' matches.','line_number':155,'multiline':False]
+['text':' A tight predicate is a predicate which returns true when all measures of a bucket','line_number':158,'multiline':False]
+['text':' matches.','line_number':159,'multiline':False]
+['text':' Is true iff all the predicates in the original match expression are rounded by','line_number':162,'multiline':False]
+['text':' 'bucketRoundingSeconds', the bucket parameters have not changed, and the predicate is not','line_number':163,'multiline':False]
+['text':' a date in the "extended range".','line_number':164,'multiline':False]
+['text':'*
+     * Takes a predicate after $_internalUnpackBucket as an argument and attempts to rewrite it as
+     * new predicates on the 'control' field. There will be a 'loose' predicate that will match if
+     * some of the event field matches, also a 'tight' predicate that will match if all of the event
+     * field matches.
+     *
+     * For example, the event level predicate {a: {$gt: 5}} will generate the loose predicate
+     * {control.max.a: {$_internalExprGt: 5}}. The loose predicate will be added before the
+     * $_internalUnpackBucket stage to filter out buckets with no match.
+     *
+     * Ideally, we'd like to add a tight predicate such as {control.min.a: {$_internalExprGt: 5}} to
+     * evaluate the filter on bucket level to avoid unnecessary event level evaluation. However, a
+     * bucket might contain events with missing fields that are skipped when computing the controls,
+     * so in reality we only add a tight predicate on timeField which is required to exist.
+     *
+     * If the original predicate is on the bucket's timeField we may also create a new loose
+     * predicate on the '_id' field (as it incorporates min time for the bucket) to assist in index
+     * utilization. For example, the predicate {time: {$lt: new Date(...)}} will generate the
+     * following predicate:
+     * {$and: [
+     *      {_id: {$lt: ObjectId(...)}},
+     *      {control.min.time: {$_internalExprLt: new Date(...)}}
+     * ]}
+     *
+     * If the provided predicate is ineligible for this mapping and using
+     * IneligiblePredicatePolicy::kIgnore, both loose and tight predicates will be set to nullptr.
+     * When using IneligiblePredicatePolicy::kError it raises a user error.
+     *
+     * If fixedBuckets is true and the predicate is on the timeField, the generated 'loose'
+     * predicate on the 'control.min.time' field will not be subtracted by 'bucketMaxSpanSeconds',
+     * and some queries will not have an 'eventFilter' nor 'wholeBucketFilter'.
+     ','line_number':172,'multiline':True]
+['text':'*
+     * Converts an event-level predicate to a bucket-level predicate, such that
+     *
+     *     {$unpackBucket ...} {$match: <event-level predicate>}
+     *
+     * gives the same result as
+     *
+     *     {$match: <bucket-level predict>} {$unpackBucket ...} {$match: <event-level predicate>}
+     *
+     * This means the bucket-level predicate must include every bucket that might contain an event
+     * matching the event-level predicate.
+     *
+     * This helper is used when creating a partial index on a time-series collection: logically,
+     * we index only events that match the event-level partialFilterExpression, but physically we
+     * index any bucket that matches the bucket-level partialFilterExpression.
+     *
+     * When using IneligiblePredicatePolicy::kIgnore, if the predicate can't be pushed down, it
+     * returns null. When using IneligiblePredicatePolicy::kError it raises a user error.
+     *
+     * Returns a boolean (alongside the bucket-level predicate) describing if the result contains
+     * a metric predicate.
+     *
+     * If fixedBuckets is true, the bounds for the bucket-level predicates can be tighter, and
+     * therefore match fewer irrelevant buckets.
+     ','line_number':215,'multiline':True]
+['text':'*
+     * Splits out a predicate on the meta field from a predicate on the bucket metric field.
+     ','line_number':250,'multiline':True]
+['text':' Used as the return value of getPushdownPredicates().','line_number':257,'multiline':False]
+['text':'*
+     * Decomposes a predicate into three parts: a predicate on the meta field, a predicate on the
+     * bucket metric field(s), and a residual predicate. The predicate on the meta field is a
+     * predicate that can be evaluated on the meta field. The predicate on the bucket metric
+     * field(s) is a predicate that can be evaluated on the bucket metric field(s) like
+     * control.min|max.[field]. The residual predicate is a predicate that cannot be evaluated on
+     * either the meta field or the bucket metric field and exactly matches desired measurements.
+     ','line_number':264,'multiline':True]
+['text':' The set of field names in the data region that should be included or excluded.','line_number':286,'multiline':False]
+['text':' Set of computed meta field projection names. Added at the end of materialized','line_number':290,'multiline':False]
+['text':' measurements.','line_number':291,'multiline':False]
+['text':'*
+ * Determines if an arbitrary field should be included in the materialized measurements.
+ ','line_number':302,'multiline':True]
+['text':' namespace mongo::timeseries','line_number':313,'multiline':False]

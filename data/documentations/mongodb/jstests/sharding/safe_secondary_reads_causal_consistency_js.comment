@@ -1,0 +1,59 @@
+['text':'*
+ * Tests that donor shard's secondaries correctly
+ * block reads and refresh metadata cache when migration occurs.
+ *
+ * @tags: [
+ * ]
+ ','line_number':1,'multiline':True]
+['text':'*
+ * @summary This function executes a count command with read preference "secondary" and returns the
+ * command response
+ * @param {DBObject} db - The DB connection gotten from the shardingTest object that contains
+ *     the collection the query will be run against.
+ * @param {String} collectionName - The string name of the collection the read query will be run
+ *     against
+ * @param {Object} query the fields by which the read command should query by. For example {_id: 1,
+ *     x: 4}, etc
+ * @param {Object} optionalParams - non-required additional parameters to include into the read
+ *     query.
+ * * ^ Currently only supports readConcern and maxTimeMS
+ * @returns {Object} - returns the an object with the total number of documents that matched the
+ *     query on property 'n'
+ ','line_number':18,'multiline':True]
+['text':'*
+ * @summary This function does three things
+ * 1.) Enables sharding for the database,
+ * 2.) Shard the collection with the given namespace and uses _id as the shardkey,
+ * 3.) Splits the chunk on the sharded collection based of {_id} as the middle of the chunk split.
+ * @param {ShardingTest} shardingTest The instance of the initialized shardingTest
+ * @param {String} dbName The string name of the database in which sharding will be enabled. Also
+ *     the DB that contains the collection that will be sharded
+ * @param {String} collectionNamespace The namespace (DB Name + Collection Name) of the collection
+ *     that will be sharded. After sharding the namespace will be used for chunk splitting
+ * @param {String} primaryShardName - Used to ensure the desired shard becomes the primary shard.
+ ','line_number':43,'multiline':True]
+['text':' Starts a migration in a parallel shell to move the chunk [0, maxKey) in ns1 from shard0 to','line_number':95,'multiline':False]
+['text':' shard1. Then it pauses the migration right before it enters the commit phase.','line_number':96,'multiline':False]
+['text':'* expectSuccess ','line_number':102,'multiline':True]
+['text':' Sends a versioned read through mongos1, the second router, to cause a refresh on the secondary of','line_number':107,'multiline':False]
+['text':' the donor shard. Since it runs while the migration is paused on 'chunkDataCommitted' the primary','line_number':108,'multiline':False]
+['text':' is only blocking writes and if the secondary isn't checking for writes being blocked when sending','line_number':109,'multiline':False]
+['text':' 'flushRoutingTableCacheUpdates' the secondary will serve reads for stale mongoses.','line_number':110,'multiline':False]
+['text':' Allow the migration to commit and pause it before the donor shard's primary refreshes from the','line_number':119,'multiline':False]
+['text':' config server.','line_number':120,'multiline':False]
+['text':' Write to the migrated ns1 chunk. Run flushRouterConfig on the mongos to force it to refresh from','line_number':126,'multiline':False]
+['text':' the config server when it does the write since otherwise it will route the request shard0 which','line_number':127,'multiline':False]
+['text':' will be blocked behind the critical section. This insert will be used to test causal consistency','line_number':128,'multiline':False]
+['text':' in the later read.','line_number':129,'multiline':False]
+['text':' Wait for effects of _configsvrCommitChunkMigration to be majority-committed snapshot on all','line_number':132,'multiline':False]
+['text':' config server members since the mongos may refresh from a node other than the primary.','line_number':133,'multiline':False]
+['text':' Bump the clusterTime of mongos1 to at least equal to the operationTime T for the','line_number':140,'multiline':False]
+['text':' above write by writing to shard1. This is required for the afterClusterTime read','line_number':141,'multiline':False]
+['text':' below to work since the 'afterCluterTime' of a command cannot be larger than the','line_number':142,'multiline':False]
+['text':' current clusterTime of the mongod (i.e. shard0's secondary) that executes the','line_number':143,'multiline':False]
+['text':' command. By bumping the clusterTime of mongos1, the clusterTime of shard0's','line_number':144,'multiline':False]
+['text':' secondary will also get bumped to >= T due to clusterTime gossiping when we do','line_number':145,'multiline':False]
+['text':' the afterClusterTime read.','line_number':146,'multiline':False]
+['text':' If the secondary doesn't wait behind the critical section like it should,','line_number':158,'multiline':False]
+['text':' this read will find no matching documents because mongos1 will target','line_number':159,'multiline':False]
+['text':' shard0 instead of shard1 (since mongos1's cache is stale).','line_number':160,'multiline':False]

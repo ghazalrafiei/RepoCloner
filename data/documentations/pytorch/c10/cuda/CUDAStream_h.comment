@@ -1,0 +1,121 @@
+['text':'
+ * Stream pool note.
+ *
+ * A CUDAStream is an abstraction of an actual cuStream on the GPU. CUDAStreams
+ * are backed by cuStreams, but they use several pools to minimize the costs
+ * associated with creating, retaining, and destroying cuStreams.
+ *
+ * There are three pools per device, and a device's pools are lazily created.
+ *
+ * The first pool contains only the default stream. When the default stream
+ * is requested it's returned.
+ *
+ * The second pool is the "low priority" or "default priority" streams. In
+ * HIP builds there is no distinction between streams in this pool and streams
+ * in the third pool (below). There are 32 of these streams per device, and
+ * when a stream is requested one of these streams is returned round-robin.
+ * That is, the first stream requested is at index 0, the second at index 1...
+ * to index 31, then index 0 again.
+ *
+ * This means that if 33 low priority streams are requested, the first and
+ * last streams requested are actually the same stream (under the covers)
+ * and kernels enqueued on them cannot run concurrently.
+ *
+ * The third pool is the "high priority" streams. The third pool acts like
+ * the second pool except the streams are created with a higher priority.
+ *
+ * These pools suggest that stream users should prefer many short-lived streams,
+ * as the cost of acquiring and releasing streams is effectively zero. If
+ * many longer-lived streams are required in performance critical scenarios
+ * then the functionality here may need to be extended to allow, for example,
+ * "reserving" a subset of the pool so that other streams do not accidentally
+ * overlap the performance critical streams.
+ *
+ * Note: although the notion of "current stream for device" is thread local
+ * (every OS thread has a separate current stream, as one might expect),
+ * the stream pool is global across all threads; stream 0 is always stream 0
+ * no matter which thread you use it on.  Multiple threads can synchronize
+ * on the same stream.  Although the CUDA documentation is not very clear
+ * on the matter, streams are thread safe; e.g., it is safe to enqueue
+ * a kernel on the same stream from two different threads.
+ ','line_number':13,'multiline':True]
+['text':' Value object representing a CUDA stream.  This is just a wrapper','line_number':60,'multiline':False]
+['text':' around c10::Stream, but it comes with a little extra CUDA-specific','line_number':61,'multiline':False]
+['text':' functionality (conversion to cudaStream_t), and a guarantee that','line_number':62,'multiline':False]
+['text':' the wrapped c10::Stream really is a CUDA stream.','line_number':63,'multiline':False]
+['text':'/ Construct a CUDAStream from a Stream.  This construction is checked,','line_number':68,'multiline':False]
+['text':'/ and will raise an error if the Stream is not, in fact, a CUDA stream.','line_number':69,'multiline':False]
+['text':'/ Construct a CUDAStream from a Stream with no error checking.','line_number':74,'multiline':False]
+['text':'/ This constructor uses the "named" constructor idiom, and can','line_number':75,'multiline':False]
+['text':'/ be invoked as: CUDAStream(CUDAStream::UNCHECKED, stream)','line_number':76,'multiline':False]
+['text':'/ Implicit conversion to cudaStream_t.','line_number':87,'multiline':False]
+['text':'/ Implicit conversion to Stream (a.k.a., forget that the stream is a','line_number':92,'multiline':False]
+['text':'/ CUDA stream).','line_number':93,'multiline':False]
+['text':'/ Used to avoid baking in device type explicitly to Python-side API.','line_number':98,'multiline':False]
+['text':'/ Get the CUDA device index that this stream is associated with.','line_number':103,'multiline':False]
+['text':'/ Get the full Device that this stream is associated with.  The Device','line_number':108,'multiline':False]
+['text':'/ is guaranteed to be a CUDA device.','line_number':109,'multiline':False]
+['text':'/ Return the stream ID corresponding to this particular stream.','line_number':114,'multiline':False]
+['text':' ignore and clear the error if not ready','line_number':128,'multiline':False]
+['text':'/ Explicit conversion to cudaStream_t.','line_number':147,'multiline':False]
+['text':'/ Explicit conversion to Stream.','line_number':150,'multiline':False]
+['text':'/ Reversibly pack a CUDAStream into a struct representation.','line_number':155,'multiline':False]
+['text':'/ Previously the stream's data was packed into a single int64_t,','line_number':156,'multiline':False]
+['text':'/ as it was assumed the fields would not require more than','line_number':157,'multiline':False]
+['text':'/ 64 bits of storage in total.','line_number':158,'multiline':False]
+['text':'/ See https://github.com/pytorch/pytorch/issues/75854','line_number':159,'multiline':False]
+['text':'/ for more information regarding newer platforms that may violate','line_number':160,'multiline':False]
+['text':'/ this assumption.','line_number':161,'multiline':False]
+['text':'/','line_number':162,'multiline':False]
+['text':'/ The CUDAStream can be unpacked using unpack().','line_number':163,'multiline':False]
+['text':' Unpack a CUDAStream from the 3 fields generated by pack().','line_number':168,'multiline':False]
+['text':' Note: this returns the range of priority **supported by PyTorch**, not','line_number':177,'multiline':False]
+['text':' the range of priority **supported by CUDA**. The former is a subset of','line_number':178,'multiline':False]
+['text':' the latter.','line_number':179,'multiline':False]
+['text':' See Note [HIP stream priorities]','line_number':184,'multiline':False]
+['text':' Deleted for now; use CUDAEvent::block instead','line_number':199,'multiline':False]
+['text':' void synchronize_with(const CUDAEvent& event) const;','line_number':200,'multiline':False]
+['text':'*
+ * Get a new stream from the CUDA stream pool.  You can think of this
+ * as "creating" a new stream, but no such creation actually happens;
+ * instead, streams are preallocated from the pool and returned in a
+ * round-robin fashion.
+ *
+ * You can request a stream from the high priority pool by setting
+ * isHighPriority to true, or a stream for a specific device by setting device
+ * (defaulting to the current CUDA stream.)
+ ','line_number':206,'multiline':True]
+['text':' no default priority to disambiguate overloads','line_number':218,'multiline':False]
+['text':'*
+ * Get a CUDAStream from a externally allocated one.
+ *
+ * This is mainly for interoperability with different libraries where we
+ * want to operate on a non-torch allocated stream for data exchange or similar
+ * purposes
+ ','line_number':222,'multiline':True]
+['text':'*
+ * Get the default CUDA stream, for the passed CUDA device, or for the
+ * current device if no device index is passed.  The default stream is
+ * where most computation occurs when you aren't explicitly using
+ * streams.
+ ','line_number':232,'multiline':True]
+['text':'*
+ * Get the current CUDA stream, for the passed CUDA device, or for the
+ * current device if no device index is passed.  The current CUDA stream
+ * will usually be the default CUDA stream for the device, but it may
+ * be different if someone called 'setCurrentCUDAStream' or used 'StreamGuard'
+ * or 'CUDAStreamGuard'.
+ ','line_number':240,'multiline':True]
+['text':'*
+ * Set the current stream on the device of the passed in stream to be
+ * the passed in stream.  Yes, you read that right: this function
+ * has *nothing* to do with the current device: it toggles the current
+ * stream of the device of the passed stream.
+ *
+ * Confused?  Avoid using this function; prefer using 'CUDAStreamGuard' instead
+ * (which will switch both your current device and current stream in the way you
+ * expect, and reset it back to its original state afterwards).
+ ','line_number':249,'multiline':True]
+['text':' namespace cuda','line_number':263,'multiline':False]
+['text':' namespace c10','line_number':264,'multiline':False]
+['text':' namespace std','line_number':273,'multiline':False]

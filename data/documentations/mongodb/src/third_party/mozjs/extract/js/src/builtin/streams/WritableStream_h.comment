@@ -1,0 +1,105 @@
+['text':' -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. ','line_number':1,'multiline':True]
+['text':' Class WritableStream. ','line_number':7,'multiline':True]
+['text':' MOZ_ASSERT','line_number':12,'multiline':False]
+['text':' mozilla::AssertedCast','line_number':13,'multiline':False]
+['text':' mozilla::IsPowerOfTwo','line_number':14,'multiline':False]
+['text':' uint32_t','line_number':16,'multiline':False]
+['text':' JS_PUBLIC_API','line_number':18,'multiline':False]
+['text':' JSClass, js::ClassSpec','line_number':19,'multiline':False]
+['text':' JS::Handle','line_number':20,'multiline':False]
+['text':' JS::{,Int32,Object,Undefined}Value','line_number':21,'multiline':False]
+['text':' js::ListObject','line_number':22,'multiline':False]
+['text':' js::NativeObject','line_number':23,'multiline':False]
+['text':'*
+     * A WritableStream's associated controller is always created from under the
+     * stream's constructor and thus cannot be in a different compartment.
+     ','line_number':36,'multiline':True]
+['text':'*
+     * Either |undefined| if no writer has been created yet for |this|, or a
+     * |WritableStreamDefaultWriter| object that writes to this.  Writers are
+     * created under |WritableStream.prototype.getWriter|, which may not be
+     * same-compartment with |this|, so this object may be a wrapper.
+     ','line_number':42,'multiline':True]
+['text':'*
+     * A bit field that stores both [[state]] and the [[backpressure]] spec
+     * fields in a WritableStream::State 32-bit integer.
+     ','line_number':50,'multiline':True]
+['text':'*
+     * Either |undefined| if this stream hasn't yet started erroring, or an
+     * arbitrary value indicating the reason for the error (e.g. the
+     * reason-value passed to a related |abort(reason)| or |error(e)| function).
+     *
+     * This value can be an arbitrary user-provided value, so it might be a
+     * cross-comaprtment wrapper.
+     ','line_number':56,'multiline':True]
+['text':'*
+     * Very briefly for newborn writable streams before they are initialized,
+     * |undefined|.
+     *
+     * After initialization, a |ListObject| consisting of the value of the
+     * [[inFlightWriteRequest]] spec field (if it is not |undefined|) followed
+     * by the elements of the [[queue]] List.  |this| and the |ListObject| are
+     * same-compartment.
+     *
+     * After a stream has gone irrevocably into an error state (specifically,
+     * |stream.[[state]]| is "errored") and requests can no longer be enqueued,
+     * |undefined| yet again.
+     *
+     * If the |HaveInFlightWriteRequest| flag is set, the first element of this
+     * List is the non-|undefined| value of [[inFlightWriteRequest]].  If it is
+     * unset, [[inFlightWriteRequest]] has the value |undefined|.
+     ','line_number':66,'multiline':True]
+['text':'*
+     * A slot storing both [[closeRequest]] and [[inFlightCloseRequest]].  This
+     * value is created under |WritableStreamDefaultWriterClose|, so it may be a
+     * wrapper around a promise rather than directly a |PromiseObject|.
+     *
+     * If this slot has the value |undefined|, then [[inFlightCloseRequest]]
+     * and [[closeRequest]] are both |undefined|.  Otherwise one field has the
+     * value |undefined| and the other has the value of this slot, and the value
+     * of the |HaveInFlightCloseRequest| flag indicates which field is set.
+     ','line_number':85,'multiline':True]
+['text':'*
+     * In the spec the [[pendingAbortRequest]] field is either |undefined| or
+     * Record { [[promise]]: Object, [[reason]]: value, [[wasAlreadyErroring]]:
+     * boolean }.  We represent this as follows:
+     *
+     *   1) If Slot_PendingAbortRequestPromise contains |undefined|, then the
+     *      spec field is |undefined|;
+     *   2) Otherwise Slot_PendingAbortRequestPromise contains the value of
+     *      [[pendingAbortRequest]].[[promise]], Slot_PendingAbortRequestReason
+     *      contains the value of [[pendingAbortRequest]].[[reason]], and the
+     *      |PendingAbortRequestWasAlreadyErroring| flag stores the value of
+     *      [[pendingAbortRequest]].[[wasAlreadyErroring]].
+     ','line_number':97,'multiline':True]
+['text':' The in-flight write request is the first element of |writeRequests()| --','line_number':261,'multiline':False]
+['text':' if there is a request in flight.','line_number':262,'multiline':False]
+['text':' In principle |haveInFlightCloseRequest()| only distinguishes whether','line_number':276,'multiline':False]
+['text':' the close-request slot is [[closeRequest]] or [[inFlightCloseRequest]].','line_number':277,'multiline':False]
+['text':' In practice, for greater implementation strictness to try to head off','line_number':278,'multiline':False]
+['text':' more bugs, we require that the HaveInFlightCloseRequest flag be unset','line_number':279,'multiline':False]
+['text':' when [[closeRequest]] and [[inFlightCloseRequest]] are both undefined.','line_number':280,'multiline':False]
+['text':' In principle |haveInFlightCloseRequest()| only distinguishes whether','line_number':307,'multiline':False]
+['text':' the close-request slot is [[closeRequest]] or [[inFlightCloseRequest]].','line_number':308,'multiline':False]
+['text':' In practice, for greater implementation strictness to try to head off','line_number':309,'multiline':False]
+['text':' more bugs, we require that the HaveInFlightCloseRequest flag be unset','line_number':310,'multiline':False]
+['text':' when [[closeRequest]] and [[inFlightCloseRequest]] are both undefined.','line_number':311,'multiline':False]
+['text':' Slot_CloseRequest suffices to store both [[closeRequest]] and','line_number':324,'multiline':False]
+['text':' [[inFlightCloseRequest]], with the precisely-set field determined by','line_number':325,'multiline':False]
+['text':' |haveInFlightCloseRequest()|.  If both are undefined, then per above, for','line_number':326,'multiline':False]
+['text':' extra implementation rigor, |haveInFlightCloseRequest()| will be false,','line_number':327,'multiline':False]
+['text':' so additionally assert that.','line_number':328,'multiline':False]
+['text':' As noted above, for greater rigor we require HaveInFlightCloseRequest be','line_number':349,'multiline':False]
+['text':' unset when [[closeRequest]] and [[inFlightCloseRequest]] are both','line_number':350,'multiline':False]
+['text':' undefined.','line_number':351,'multiline':False]
+['text':' Setting [[writeRequests]] to an empty List in the irrevocably-in-error','line_number':364,'multiline':False]
+['text':' case (in which [[writeRequests]] is never again accessed) is optimized to','line_number':365,'multiline':False]
+['text':' just clearing the field.  See the comment on the slot constant above.','line_number':366,'multiline':False]
+['text':' [[pendingAbortRequest]] is { [[promise]], [[reason]] } in the spec but','line_number':404,'multiline':False]
+['text':' separate slots in our implementation, so both must be cleared.','line_number':405,'multiline':False]
+['text':' namespace js','line_number':422,'multiline':False]
+['text':' builtin_streams_WritableStream_h','line_number':424,'multiline':False]

@@ -1,0 +1,35 @@
+['text':'*
+ * Tests that tenant migrations will invalid transactions that are stored in-memory when fetching
+ * committed transactions from the donor. We do this by first running a transaction with txnNum 0 on
+ * the donor and migrating it to the recipient. After the migration commits, we then run a read-only
+ * transaction on the recipient. We expect the read-only transaction to only advance the in-memory
+ * state of the transaction -- it should not update the 'config.transaction' entry on the recipient.
+ * Then, we run a second migration. By this point, the recipient has an in-memory transaction number
+ * of 1 for the session, which is ahead of the donor. However, the migration should still complete,
+ * because the recipient will invalidate its in-memory understanding and refetch the on-disk
+ * transaction state instead.
+ *
+ * Note: incompatible_with_shard_merge because (1) this test runs back-to-back migrations, and
+ * (2) because of the two-phase nature of the database drop between migrations, wt files will
+ * still be present on the recipient during the second migration, leading to errors.
+ *
+ * @tags: [
+ *   incompatible_with_macos,
+ *   incompatible_with_windows_tls,
+ *   incompatible_with_shard_merge,
+ *   requires_majority_read_concern,
+ *   requires_persistence,
+ *   serverless,
+ *   requires_fcv_71,
+ * ]
+ ','line_number':1,'multiline':True]
+['text':' readOnly ','line_number':78,'multiline':True]
+['text':' Verify that the config.transaction entry was migrated successfully.','line_number':89,'multiline':False]
+['text':' Run a read-only txn on the recipient with the same sessionId. The read-only','line_number':94,'multiline':False]
+['text':' transaction should not update the on-disk 'config.transaction' entry, but it will update the','line_number':95,'multiline':False]
+['text':' in-memory txnNum to 1 for the session.','line_number':96,'multiline':False]
+['text':' readOnly ','line_number':98,'multiline':True]
+['text':' The transaction number should still be 0, since transaction with txnNum 1 was read-only and thus','line_number':102,'multiline':False]
+['text':' will only be updated in memory.','line_number':103,'multiline':False]
+['text':' The migration should have committed successfully even though the in-memory transaction number was','line_number':116,'multiline':False]
+['text':' higher, since the higher number should have been invalidated.','line_number':117,'multiline':False]

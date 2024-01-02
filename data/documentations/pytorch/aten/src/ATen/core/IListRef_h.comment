@@ -1,0 +1,314 @@
+['text':'
+ * [Note: IListRef]
+ * Wrapper around different API containers (e.g. boxed and unboxed).
+ *
+ * What is it?
+ * ===========
+ * It is a tagged union of both boxed and unboxed API containers.
+ * Working implementations:
+ *
+ * - `IListRef<at::Tensor>`
+ * - `IListRef<at::OptionalTensorRef>`
+ *
+ * Note that `IListRef` is a view type. Meaning that it won't own the
+ * tensors it holds. It's intended to be used only as argument parameters.
+ * Specifically, where these 2 worlds overlap.
+ *
+ * What is this for?
+ * =================
+ * Historically, PyTorch has maintained 2 different APIs: the unboxed
+ * (called from C++ API and Python eager mode) and boxed APIs (called
+ * from the TorchScript JIT, mobile interpreter, and boxed fallbacks).
+ *
+ * Calling unboxed kernels from the boxed "world" and vice-versa may
+ * result in non-negligible overhead. Lists are one of those types:
+ *
+ * - Boxed world: `c10::List`
+ * - Unboxed world: `c10::ArrayRef`
+ *
+ * In this context, `c10::IListRef` solves this problem by wrapping those
+ * 2 container types, so that we don't need to convert from one to
+ * the other.
+ *
+ * (see https://github.com/pytorch/pytorch/issues/66328)
+ *
+ * What does it do?
+ * ================
+ * This container wraps around the different tagged containers
+ * (currently, only boxed and unboxed), without incurring in extra
+ * overhead for converting from one to another. It does so while
+ * exposing usual container methods, which dispatch to corresponding
+ * implementations.
+ *
+ * While it works with different container types, it introduces
+ * overhead for repeatedly calling member functions (since those will
+ * get dispatched, again). Therefore, you should only use it to iterate
+ * through the list up to one time. If you need to do more complex things,
+ * call `materialize()` first.
+ *
+ * Adding support for a new Tag
+ * ============================
+ * Suppose we want to add a new tag: `Chest`. Here are the steps
+ * we would have to go through:
+ *
+ * 1. Add a line for it in the macro `TORCH_ILISTREF_FORALL_TAGS`.
+ *
+ *   #define TORCH_ILISTREF_FORALL_TAGS(_, ...) \
+ *     ...
+ *     _(Chest, ##__VA_ARGS__)
+ *
+ * 2. Add type aliases, union members, and constructors.
+ *
+ *   template <typename T>
+ *   class IListRef {
+ *     ...
+ *     using chest_type =
+ *       typename detail::IListRefTagImpl<T, IListRefTag::Chest>::list_type;
+ *     ...
+ *     IListRef(...) : tag_(IListRefTag::Chest) {
+ *       ...
+ *     }
+ *     ...
+ *     union Payload {
+ *       ...
+ *       chest_type chest;
+ *       ...
+ *     };
+ *     ...
+ *   };
+ *
+ * 3. Add a default implementation for it (in 'IListRef_inl.h'). It's
+ *    preferable to make the default implementation work for `T = Tensor`
+ *    (both `Unboxed` and `Boxed` do it).
+ *
+ *   template <typename T, typename ListElemT>
+ *   class IListRefTagImplBase<IListRefTag::Chest, T, ListElemT> {
+ *    public:
+ *     using elem_type = ListElemT;
+ *     using list_type = ChestContainer<elem_type>;
+ *
+ *     static const list_type& unwrap(const IListRef<T>& ilist) { ... }
+ *
+ *     static typename list_type::const_iterator& unwrap(
+ *         IListRefIterator<T>& it) { ... }
+ *
+ *     static const typename list_type::const_iterator& unwrap(
+ *         const IListRefIterator<T>& it) { ... }
+ *
+ *     static IListRefConstRef<T> iterator_get(
+ *         const typename list_type::const_iterator& it) { ... }
+ *   }
+ *
+ * 4. Add an specialization for each of the already supported types.
+ *    Finally, for consistency, add them to the tracking list.
+ *    (see [Note: IListRefTagImpl Specializations])
+ *
+ *   template <>
+ *   class IListRefTagImpl<IListRefTag::Chest, at::Tensor>
+ *       : public IListRefTagImplBase<IListRefTag::Chest, at::Tensor> {};
+ *
+ * Adding support for a new Type
+ * =============================
+ * Suppose we want to add support for a new type: `Matrix`.
+ * Here are the steps we would have to go through:
+ *
+ * 1. Add an specialization for each of the existing tags.
+ *    For consistency, add them to the tracking list.
+ *    (see [Note: IListRefTagImpl Specializations])
+ *
+ *   template <>
+ *   class IListRefTagImpl<IListRefTag::Unboxed, Matrix>
+ *       : public IListRefTagImplBase<IListRefTag::Unboxed, Matrix> {};
+ *
+ *   template <>
+ *   class IListRefTagImpl<Matrix, IListRefTag::Boxed>
+ *       : public IListRefTagImplBase<IListRefTag::Boxed, Matrix> {};
+ *
+ * Common Problems
+ * ===============
+ * 1. One of `IListRef(Iterator)` methods are failing to compile.
+ *
+ *     That may be happening because the container type you added
+ *     is not compatible with the code written for that method. If
+ *     that's true, then you might have to transform that code into
+ *     a static method call (see `List::operator[]` method).
+ *
+ * 2. Can't make `IListRefIterator<T>::operator*` return a const-reference.
+ *
+ *    First, keep in mind that we assume that boxed containers will
+ *    have to deal with `IValue` (e.g. `c10::List`). In this context,
+ *    what may be happening is that `IValue` doesn't store internally
+ *    your type `T`. Instead, it constructs a type new `T` everytime
+ *    you try to get `T` for it (see `IListRef<at::OptinalTensorRef>`).
+ ','line_number':12,'multiline':True]
+['text':'
+ * Applies arbitrary macros to each `IListRefTag`.
+ ','line_number':160,'multiline':True]
+['text':'
+ * Defines a "switch-case" for `TAG`. Inside, it executes `BODY`,
+ * while bringing to scope:
+ *
+ * - `ImplT`: the implementation class for `TAG`
+ * - `this_`: the result of unwrapping `this`
+ ','line_number':168,'multiline':True]
+['text':'
+ * Dispatches the unwrap call, depending on `TAG`, followed by
+ * the execution of `BODY`. It aborts if `TAG` is not a `IListRefTag`.
+ *
+ * This macro is useful because it allows us to handle different
+ * types (that correspond to different tags) to be implemented
+ * only once. We can do it even when the implementation of the
+ * different tags aren't syntatically the same, by dispatching
+ * it to a function (e.g. `ImplT::<dispatch-function>(this_)`).
+ ','line_number':182,'multiline':True]
+['text':'
+ * Type alias that specifies whether we return a reference or a copy of `T`.
+ *
+ * What is this for?
+ * =================
+ * Since values in the boxed world are represented by an `IValue`, we also
+ * depend on whether it can be converted to a const-reference (`Tensor`) or
+ * has to create a new copy of `T` (`OptionalTensorRef`).
+ ','line_number':208,'multiline':True]
+['text':'
+ * Interface that implements key functions for each `IListRefTag` type.
+ *
+ * What is this for?
+ * =================
+ * Given an `IListRef(Iterator)<T>`, some methods have to be implemented
+ * differently for each `TAG`. Therefore, the methods inside this class
+ * are used as dispatch targets for the different `IListRefTag` values.
+ *
+ * You should create an specialization of this class for each possible
+ * combination of `IListRefTag` type (except `None`) and element types
+ * (e.g. `Tensor`).
+ *
+ * What does it do?
+ * ================
+ * 1. defines static methods to be used as dispatch targets by both
+ *    `IListRef<T>` and `IListRefIterator<T>` (see the implementation of
+ *    `IListRefTagImplBase`).
+ *
+ * 2. defines the `elem_type` and `list_type` aliases that will be
+ *    used in the definition of `IListRef<T>`. In general, we should do
+ *    so by inheriting from `IListRefTagImplBase<TAG, T, ListElemT>`.
+ *
+ * [Note: IListRefTagImpl Specialization]
+ * ======================================
+ * For `IListRef(Iterator)<at::Tensor>`:
+ * - <IListRefTag::Unboxed, at::Tensor>
+ * - <IListRefTag::Boxed, at::Tensor>
+ * - <IListRefTag::Materialized, at::Tensor>
+ *
+ * For `IListRef(Iterator)<at::OptionalTensorRef>`:
+ * - <IListRefTag::Unboxed, at::OptionalTensorRef>
+ * - <IListRefTag::Boxed, at::OptionalTensorRef>
+ * - <IListRefTag::Materialized, at::OptionalTensorRef>
+ ','line_number':220,'multiline':True]
+['text':'
+ * Base implementation of `IListRefTagImpl<TAG, T>` methods.
+ *
+ * What is this for?
+ * =================
+ * This should make adding specializations for new types easier. For
+ * example, one should be able to add a new type just by making its
+ * `IListRefTagImpl` specialization inherit from `IListRefTagImplBase`.
+ *
+ * You should create a partial specialization for this class only if
+ * you introduce a new `IListRefTag`. The idea being that there is one
+ * default implementation for each possible value of `IListRefTag`.
+ *
+ * What does it do?
+ * ================
+ * 1. defines `elem_type` as an alias to `ListElemT`.
+ *
+ * 1. defines `list_type` as an alias to the default container type
+ *    that will hold a collection of `elem_type`. The idea being that
+ *    all types tagged as `TAG` will have `list_type` as its container,
+ *    with different `elem_type`.
+ *
+ * 3. defines the default implementation for each of the methods that
+ *    are supposed to be defined on `IListRefTagImpl` specializations.
+ *
+ * 4. inheriting from `IListRefTagImplBase<TAG, T, ListElemT>` also means
+ *    that the payload of the type `IListRef<T>` will be of type `list_type`
+ *    when it is tagged as `TAG`.
+ ','line_number':258,'multiline':True]
+['text':'
+ * Materialized container for `IListRef<T>`.
+ *
+ * What is this for?
+ * =================
+ * Container that groups `T` references together. This exchanges the
+ * overhead of every method call from `IListRef<T>` for a dynamic allocation.
+ *
+ * You should use this container instead of `IListRef<T>` if:
+ *
+ *   - You are going to iterate the list more than once
+ *   - You need to repeatedly access arbitrary elements (using `operator[]`)
+ * What does it do?
+
+ * ================
+ * Removes the reference (&) from the type, and wraps it into a
+ * `std::reference_wrapper`. If `IListRefConstRef<T>` is not a
+ * reference type, then it's left unchanged.
+ ','line_number':290,'multiline':True]
+['text':' namespace detail','line_number':321,'multiline':False]
+['text':'
+ * Iterator for `IListRef<T>`.
+ *
+ * What is it?
+ * ===========
+ * Currently, a `std::bidirectional_iterator` that wraps the iterator
+ * types defined for each of the `IListRefTag`.
+ *
+ * One should be able to use it, as if it were the unwrapped
+ * iterators themselves.
+
+ * What does it do?
+ * ================
+ * Similarly to `IListRef<T>`, this is a wrapper class. Specifically, it
+ * wraps each container's `const_iterator` type alias. So, for example,
+ * given that the container for `IListRefTag::Boxed` is `c10::List`, this
+ * iterator will wrap a `c10::List::const_iterator`.
+ *
+ * [Note: MSVC Iterator Debug]
+ * ===========================
+ * MSVC `vector<T>::iterator` implementation (used in the boxed variant)
+ * makes it so this union's destructor, copy-constructor (assignment), and
+ * move-constructor (assignment) are implicitly deleted.
+ *
+ * Therefore, we need to explicitly define them as needed. Follows a list
+ * of places where these are needed and their reason:
+ *
+ *   - `Payload` destructor:
+ *     it is deleted only if the macro `_ITERATOR_DEBUG_LEVEL` is set to 2.
+ *
+ *   - `IListRefIterator` destructor:
+ *     same as above. However, we need to explicitly call the variant
+ *     destructor explicitly.
+ *
+ *   - `IListRefIterator` copy-constructor:
+ *     it is deleted only if the macro `_ITERATOR_DEBUG_LEVEL` is different
+ *     than 0.
+ ','line_number':323,'multiline':True]
+['text':' C++17 friendly std::iterator implementation','line_number':374,'multiline':False]
+['text':' See [Note: MSVC Iterator Debug]','line_number':391,'multiline':False]
+['text':' See [Note: MSVC Iterator Debug]','line_number':411,'multiline':False]
+['text':' See [Note: MSVC Iterator Debug]','line_number':489,'multiline':False]
+['text':'
+ * See [Note: IListRef]
+ ','line_number':498,'multiline':True]
+['text':'
+   * Materializes the `IListRef` into a `std::vector`.
+   *
+   * This should be used when one wishes to either:
+   *
+   *   - iterate over the list more than once: each `IListRefIterator`
+   *     member function call has to go through a switch, introducing
+   *     non-negligible overhead
+   *
+   *   - randomly access an arbitrary element using `operator[]`:
+   *     same reason as above
+   ','line_number':572,'multiline':True]
+['text':' namespace c10','line_number':629,'multiline':False]

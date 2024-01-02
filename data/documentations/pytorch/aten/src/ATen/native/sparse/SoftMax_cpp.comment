@@ -1,0 +1,229 @@
+['text':' Return the number of entries in the dense part of a sparse tensor.
+
+     `sizes` is a vector of sparse tensor dimensions.
+     `sparse_dim` is the dimension of the sparse part of a sparse tensor.
+   ','line_number':35,'multiline':True]
+['text':'
+    Given the indices of a sparse tensor, return a vector of offsets
+    for the entries in the equivalent dense tensor:
+
+      If
+        offsets = get_offsets(A._indices(), A.sizes(), -1)
+        data = A.to_dense().resize((nnz,))
+      then
+        data[offsets[n]] == A._values()[n]
+
+    `indices` must be a contiguous 2-d tensor with int64_t entries.
+    `sizes` must be a vector with at least ndim entries.
+
+    `dim` is an integer. When >= 0 and < ndim, the indices of all
+    entries in the given dimension will be mapped to the index of the
+    first entry before computing the offset. Otherwise, the value is
+    ignored.
+
+    For example, consider a sparse tensor
+
+      11 ** ** 14 15
+      ** 22 ** 24 **
+
+    with
+
+      indices = [[0, 0, 0, 1, 1],
+                 [0, 3, 4, 1, 3]]
+
+    then
+
+      get_offsets(indices, (2, 5), -1) -> [0, 3, 4, 6, 8]
+      get_offsets(indices, (2, 5), 0) -> [0, 3, 4, 1, 3]
+      get_offsets(indices, (2, 5), 1) -> [0, 0, 0, 5, 5]
+
+  ','line_number':44,'multiline':True]
+['text':'
+    Return pools of indices that align with the given dimension.
+
+    Parameters:
+      `indices` - sparse tensor indices
+      `sizes`   - sparse tensor dimensions
+      `dim`     - given dimension
+
+    Returns:
+      `pools`   - a ragged array of indices
+
+    A pool is defined as a list of indices (of sparse tensor values)
+    that participate in the same softmax computation:
+
+    - pools[i] intersection with pools[j] is empty iff i != j
+    - union of all pools is set(range(nnz))
+    - X.values[k], k in pools[i], does not affect the result of softmax(X)[n], n in pools[j], iff i != j
+
+  ','line_number':107,'multiline':True]
+['text':'
+    See test/test_sparse.py:test_softmax:sparse_softmax for the Python
+    prototype of the sparse softmax algorithm that this implementation
+    is based on.
+
+    Derivation of the sparse softmax algorithm with an example
+    ----------------------------------------------------------
+
+    Consider the following 2-D sparse tensor with 0-D dense part as an
+    example, denote it by X:
+
+      11 ** ** 14 15
+      ** 22 ** 24 **
+
+    where `**` represent unspecified entries. The COO sparse tensor
+    representation of X is:
+
+      indices = [[0, 1, 0, 1, 0],
+                 [0, 1, 3, 3, 4]]
+      values = [11, 22, 14, 24, 15]
+
+    that after coalescing becomes
+
+      indices = [[0, 0, 0, 1, 1],
+                 [0, 3, 4, 1, 3]]
+      values = [11, 14, 15, 22, 24]
+
+    The softmax of X along the given dimension d is defined as
+
+      S_d[i, j] = exp(X[i, j]) / sum(exp(X[I_d[k]]), k=0..X.shape[d]-1)
+
+    where the index tuple I_d[k] is defined as
+
+      I_0[k] = k, j
+      I_1[k] = i, k
+
+    For sparse tensors, the unspecified entries are skipped in the
+    softmax sum of exponents so that the result will be sparse tensor
+    with the same indices as the input. Mathematically, this
+    corresponds to the case where the unspecified entries are
+    interpreted as negative infinities rather than zeros.
+
+    To minimize the defects from numerical evaluation of exponents
+    with very large or small arguments, the softmax implementation
+    uses the following a numerically stable definition:
+
+      S_d[i, j] = exp(X[i, j] - maxX_d) / sum(exp(X[I_d[k]] - maxX_d), k=0...X.shape[d]-1)
+
+    where
+
+      maxX_d = max(X[I_d[k]], k=0...X.shape[d]-1)
+
+    is the maximum tensor along the direction d (it has dimensionality
+    `maxX_d.ndim = X.ndim - 1`).
+
+    For the example sparse tensor X, we have:
+
+      S_0._indices() == S_1._indices() == X._indices()
+
+      maxX_0 = [11, 22, -inf, 24, 15]
+      maxX_1 = [15, 24]
+
+      S_0._values() = [exp(11 - maxX_0[0]) / exp(11 - maxX_0[0]),
+                       exp(14 - maxX_0[3]) / (exp(14 - maxX_0[3]) + exp(24 - maxX_0[3])),
+                       exp(15 - maxX_0[4]) / exp(15 - maxX_0[4]),
+                       exp(22 - maxX_0[1]) / exp(22 - maxX_0[1]),
+                       exp(24 - maxX_0[3]) / (exp(14 - maxX_0[3]) + exp(24 - maxX_0[3]))]
+                    = [1, exp(-10)/(exp(-10) + 1), 1, 1, 1/(exp(-10) + 1)]
+
+      (note that `maxX_0[2] == -inf` not used to obtain S_0)
+
+      S_1._values() = [exp(11 - maxX_1[0]) / (exp(11 - maxX_1[0]) + exp(14 - maxX_1[0]) + exp(15 - maxX_1[0])),
+                       exp(14 - maxX_1[0]) / (exp(11 - maxX_1[0]) + exp(14 - maxX_1[0]) + exp(15 - maxX_1[0])),
+                       exp(15 - maxX_1[0]) / (exp(11 - maxX_1[0]) + exp(14 - maxX_1[0]) + exp(15 - maxX_1[0])),
+                       exp(22 - maxX_1[1]) / (exp(22 - maxX_1[1]) + exp(24 - maxX_1[1])),
+                       exp(24 - maxX_1[1]) / (exp(22 - maxX_1[1]) + exp(24 - maxX_1[1]))]
+                    = [exp(-4) / (exp(-4) + exp(-1) + 1),
+                       exp(-1) / (exp(-4) + exp(-1) + 1),
+                       1 / (exp(-4) + exp(-1) + 1),
+                       exp(-2) / (exp(-2) + 1),
+                       1 / (exp(-2) + 1)]
+
+    To obtain the above via the for-loop over
+    `nnz(=len(X._values()))`, we introduce the indices mapping `pool`
+    as follows:
+
+      indices = X._indices()
+      for i in range(nnz):
+          for j in range(nnz):
+              if indices[d, i] == indices[d, j]:
+                  assert pool_d[i] == pool_d[j]
+              else:
+                  assert pool_d[i] != pool_d[j]
+
+    that is, the entries with values indices i and j are in the same
+    pool iff their locations in the grid of tensor indices align with
+    the direction along which the softmax is calculated. The `pool`
+    mapping maps the X._values() indices to the corresponding pool
+    index.
+
+    To save memory and processor resources, we pre-compute the entries
+    of maxX tensor and the sums of exponents as follows:
+
+      mx_d = [max(values[i] for i in range(nnz) if pool_0[i] == k) for k in pool_d]
+      exp_sum_d = [sum(exp(values[i] - mx_d[k]) for i in range(nnz) if pool_d[i] == k) for k in pool_d]
+
+    For example, if
+
+      pool_0 = [0, 1, 2, 3, 1]
+      pool_1 = [0, 0, 0, 1, 1]
+
+    then
+
+      mx_0 = [11, 24, 15, 22]
+      mx_1 = [15, 24]
+      exp_sum_0 = [1, (exp(-10) + 1), 1, 1]
+      exp_sum_1 = [(exp(-4) + exp(-1) + 1), (exp(-2) + 1)]
+
+    and
+
+      S_0._values() = [exp(11 - mx_0[pool_0[0]]) / exp_sum_0[pool_0[0]]
+                       exp(14 - mx_0[pool_0[1]]) / exp_sum_0[pool_0[1]]
+                       exp(15 - mx_0[pool_0[2]]) / exp_sum_0[pool_0[2]]
+                       exp(22 - mx_0[pool_0[3]]) / exp_sum_0[pool_0[3]]
+                       exp(24 - mx_0[pool_0[4]]) / exp_sum_0[pool_0[4]]
+
+    or in general,
+
+      S_d._values() = [exp(values[i] - mx_d[pool_d[i]]) / exp_sum_d[pool_d[i] for i in range(nnz)]
+
+    The above algorithm can be easily extended for cases with
+    non-scalar dense part of the sparse tensor where all scalar
+    operations become element-wise tensor operations.
+
+    The implementation below has more optimizations such as that
+    collect pool indices for enabling concurrency, minimize the calls
+    to exp functions as well as reuse of softmax implementation for
+    log_softmax.
+  ','line_number':159,'multiline':True]
+['text':' Prepare accessors ','line_number':323,'multiline':True]
+['text':' Compute independent pools of indices ','line_number':330,'multiline':True]
+['text':' Skip empty pools','line_number':338,'multiline':False]
+['text':' Prepare scratch space ','line_number':342,'multiline':True]
+['text':' Compute mx ','line_number':346,'multiline':True]
+['text':' Apply exp to (v - mx) and sum the results ','line_number':354,'multiline':True]
+['text':' Normalize with the sum of exponents ','line_number':375,'multiline':True]
+['text':'
+
+    If LogSoftMax == false, then
+
+      gI_i = sum_j d<output_j>/d<input_i> * grad_j = sum_j output_i * (1[i==j] - output_j) * grad_j
+           = output_i * (grad_i - sum_j output_j * grad_j)
+
+    else
+
+      gI_i = (1-exp(output_i)) * grad_i - sum_{j} 1[i!=j] * exp(output_i) * grad_j
+           = grad_i - exp(output_i) * sum_j grad_j.
+
+    where
+
+      i, j in range(shape[dim])
+      x_i = x[..., i_dim, ...]
+      output.sparse_dim() == grad.sparse_dim()
+  ','line_number':393,'multiline':True]
+['text':' Compute independent pools of indices ','line_number':471,'multiline':True]
+['text':' Skip empty pools','line_number':479,'multiline':False]
+['text':' Compute tmp = - sum_j output_j * grad_j ','line_number':485,'multiline':True]
+['text':' Compute grad_input = output * (grad + tmp)','line_number':503,'multiline':True]
+['text':' anonymous namespace','line_number':533,'multiline':False]
+['text':' namespace at::native','line_number':663,'multiline':False]
