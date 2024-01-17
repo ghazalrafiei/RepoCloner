@@ -38,12 +38,13 @@ Default: keeps the current version of the repo and downloads only when the repo 
 python document_extractor.py
 ```
 #### Output
-See [documentations/]().
+See [data/documentations/]().
 
 #### Methods
 ```
 naive_document_extractor()
 raw_comment_extractor()
+docstring_extractor
 ```
 
 ### Naive Documentation Extractor:

@@ -79,29 +79,40 @@ def get_size_label(repo_dir, esloc=None):
             return label
     return 'Huge'
 
+def get_ctag_size(repo_dir):
+    os.system(f'ctags -R --format=2 -n {repo_dir} > /dev/null 2>&1')
+    line_counts = os.popen(f'wc -l tags').read()
+    os.system(f'cat tags > {os.path.join(repo_dir, "tags")}')
+    os.system('rm tags')
+    print(line_counts)
+
+    return line_counts.split()[0]
 
 def main():
     stat_df = pd.DataFrame()
 
-    for repname, replink in GITHUB_REPOS_LINKS.items():
-        repo_dir = os.path.join(DATA_DIR, repname)
+    for repo_name, replink in GITHUB_REPOS_LINKS.items():
+        repo_dir = os.path.join(DATA_DIR, repo_name)
         if not os.path.exists(repo_dir):
-            print(f'Cloning {repname} ...')
+            print(f'Cloning {repo_name} ...')
             git.Repo.clone_from(replink, repo_dir)
 
         stat = {}
-        stat['name'] = repname
+        stat['name'] = repo_name
         stat['ESLOC'] = get_esloc(repo_dir)
         stat['SLOC'] = get_sloc(repo_dir)
         stat['size_label'] = get_size_label(repo_dir, stat['ESLOC'])
-        stat['top_k_selected_languages'] = str(
-            get_top_selected_languages(repo_dir))
+        stat['ctag_size'] = get_ctag_size(repo_dir)
+        stat['index_factor'] = round(int(stat['ESLOC']) / int(stat['ctag_size']), 2)# what does it mean?
+        stat['top_k_selected_languages'] = str(get_top_selected_languages(repo_dir))
         stat['top_k_languages'] = str(get_top_languages(repo_dir))
         stat['tag'] = get_tag(repo_dir)
         stat['link'] = replink
 
         stat_df = pd.concat(
             [stat_df, pd.DataFrame.from_records([stat])], ignore_index=True)
+        
+        print(f'{repo_name} done.')
 
     stat_df.sort_values(by='ESLOC', inplace=True)
     stat_df.to_csv(STATS_FILE_DIR, index=False)

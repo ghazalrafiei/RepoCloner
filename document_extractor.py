@@ -1,9 +1,12 @@
 import os
 import shutil
+import ast
+import numpy
 from config import GITHUB_REPOS_LINKS, DATA_DIR, DOCS_DIR, DOC_FILE_FORMATS, DOC_FOLDER_NAMES
 from utils import recursive_file_finder
 from comment_parser import comment_parser
 
+numpy.sort_complex()
 def copy_files_with_same_structure(src_dir, dst_dir, file_format):
     """
     src_dir: str
@@ -19,13 +22,13 @@ def copy_files_with_same_structure(src_dir, dst_dir, file_format):
 def naive_document_extractor(repo_dir):
     """
     Methods:
-    1. all readme files
+    1. all readme and .rst files
     2. docs/
-    3. docstrings
     """
 
     repo_name = repo_dir.split('/')[-1]
     doc_dir = os.path.join(DOCS_DIR, repo_name)
+    
     if not os.path.exists(doc_dir):
         os.mkdir(doc_dir)
     
@@ -39,10 +42,6 @@ def naive_document_extractor(repo_dir):
             shutil.copytree(src_dir, dest_dir, dirs_exist_ok=True)
 
 def raw_comment_extractor(repo_dir):
-    """
-    src_dir: str
-    dst_dir: str
-    """
 
     files = recursive_file_finder(repo_dir,'.**')
     for src in files:
@@ -66,11 +65,28 @@ def raw_comment_extractor(repo_dir):
                 for c in comments:
                     f.write(f"['text':'{c._text}','line_number':{c._line_number},'multiline':{c._multiline}]".strip()+'\n')
 
+# def docstring_extractor(repo_dir):
+#     # Python
+#     files = recursive_file_finder( repo_dir, '.py')
+#     print(len(files))
+#     for src in files:
+#         # dest = src.replace()
+#         # os.makedirs(os.path.dirname(dest), exist_ok=True)
+#         docstrings = extract_docstrings(open(src).read())
+#         print(docstrings)
+#         print('!')
+    
+#     # Java
+#     # files = recursive_file_finder(os.path.join(DATA_DIR, repo_dir), '.java')
+
+
 def main():
     for repo in GITHUB_REPOS_LINKS.keys():
         repo_dir = os.path.join(DATA_DIR, repo)
         naive_document_extractor(repo_dir)
         raw_comment_extractor(repo_dir)
+        # docstring_extractor(repo_dir)
+
 
 if __name__ == '__main__':
     main()
