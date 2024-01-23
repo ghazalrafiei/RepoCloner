@@ -1,4 +1,4 @@
-# Document Evaluation
+# Source Code Cloner and Analyser
 
 ## 1. Repo Gatherer
 
